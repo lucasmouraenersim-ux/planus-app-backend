@@ -183,9 +183,17 @@ export async function saveChatMessage(
 export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
   const normalizedIncomingNumber = phoneNumber.replace(/\D/g, '');
 
-  // This is a temporary, inefficient workaround for un-normalized data.
-  // A data migration to a normalized `phone_normalized` field is the proper long-term solution.
-  console.warn(`[Firestore] Performing potentially inefficient search for phone number: ${normalizedIncomingNumber}.`);
+  // A phone number in Brazil can have 8 (landline) or 9 (mobile) digits, plus 2 for DDD.
+  // We'll check for matches on the last 9 digits, which is standard for mobiles with the '9' prefix.
+  // This is more robust against missing/present DDD or country codes.
+  const significantIncomingDigits = normalizedIncomingNumber.slice(-9);
+
+  if (significantIncomingDigits.length < 8) {
+      console.log(`[Firestore] Incoming phone number (${phoneNumber}) is too short to match. Skipping search.`);
+      return null; // Not a valid number to search for.
+  }
+
+  console.warn(`[Firestore] Performing search for phone number ending in: ...${significantIncomingDigits}`);
 
   const leadsCollectionRef = collection(db, "crm_leads");
   const querySnapshot = await getDocs(leadsCollectionRef);
@@ -194,8 +202,10 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
     const data = docSnap.data();
     if (data.phone) {
       const normalizedDbNumber = data.phone.replace(/\D/g, '');
-      if (normalizedDbNumber.endsWith(normalizedIncomingNumber) || normalizedIncomingNumber.endsWith(normalizedDbNumber)) {
-        console.log(`Found matching lead ID: ${docSnap.id} for phone ${phoneNumber}`);
+      const significantDbDigits = normalizedDbNumber.slice(-9);
+      
+      if (significantDbDigits === significantIncomingDigits) {
+        console.log(`[Firestore] Found matching lead ID: ${docSnap.id} for phone ${phoneNumber}`);
         return {
           id: docSnap.id,
           ...(data as LeadDocumentData),
@@ -206,6 +216,7 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
     }
   }
 
+  console.log(`[Firestore] No match found for phone number ending in ...${significantIncomingDigits}.`);
   return null;
 }
 
