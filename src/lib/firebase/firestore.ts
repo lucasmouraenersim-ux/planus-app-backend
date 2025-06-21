@@ -23,7 +23,7 @@ export async function createCrmLead(
     userId,
     createdAt: Timestamp.now(),
     lastContact: Timestamp.now(),
-    needsAdminApproval: leadData.needsAdminApproval ?? false,
+    needsAdminApproval: leadData.needsAdminApproval ?? true, // Require approval for manual creation too
   };
 
   const docRef = await addDoc(collection(db, "crm_leads"), fullLeadData);
@@ -183,17 +183,13 @@ export async function saveChatMessage(
 export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
   const normalizedIncomingNumber = phoneNumber.replace(/\D/g, '');
 
-  // A phone number in Brazil can have 8 (landline) or 9 (mobile) digits, plus 2 for DDD.
-  // We'll check for matches on the last 9 digits, which is standard for mobiles with the '9' prefix.
-  // This is more robust against missing/present DDD or country codes.
-  const significantIncomingDigits = normalizedIncomingNumber.slice(-9);
-
-  if (significantIncomingDigits.length < 8) {
-      console.log(`[Firestore] Incoming phone number (${phoneNumber}) is too short to match. Skipping search.`);
-      return null; // Not a valid number to search for.
+  // A phone number needs at least 8 digits (without DDD) to be considered valid for a search.
+  if (normalizedIncomingNumber.length < 8) {
+    console.log(`[Firestore] Incoming phone number (${phoneNumber}) is too short to match. Skipping search.`);
+    return null;
   }
 
-  console.warn(`[Firestore] Performing search for phone number ending in: ...${significantIncomingDigits}`);
+  console.log(`[Firestore] Searching for lead with normalized number: ${normalizedIncomingNumber}`);
 
   const leadsCollectionRef = collection(db, "crm_leads");
   const querySnapshot = await getDocs(leadsCollectionRef);
@@ -202,10 +198,17 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
     const data = docSnap.data();
     if (data.phone) {
       const normalizedDbNumber = data.phone.replace(/\D/g, '');
-      const significantDbDigits = normalizedDbNumber.slice(-9);
       
-      if (significantDbDigits === significantIncomingDigits) {
-        console.log(`[Firestore] Found matching lead ID: ${docSnap.id} for phone ${phoneNumber}`);
+      if (normalizedDbNumber.length < 8) {
+        continue; // Skip invalid or short numbers in the DB
+      }
+
+      console.log(`[Firestore] Comparing with lead ${docSnap.id}. DB phone: ${data.phone} -> Normalized: ${normalizedDbNumber}`);
+      
+      // The most robust check: one number must be a suffix of the other.
+      // This handles cases where one has country code/DDD and the other doesn't.
+      if (normalizedIncomingNumber.endsWith(normalizedDbNumber) || normalizedDbNumber.endsWith(normalizedIncomingNumber)) {
+        console.log(`[Firestore] >>> MATCH FOUND (suffix match) <<< Lead ID: ${docSnap.id}`);
         return {
           id: docSnap.id,
           ...(data as LeadDocumentData),
@@ -216,7 +219,7 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
     }
   }
 
-  console.log(`[Firestore] No match found for phone number ending in ...${significantIncomingDigits}.`);
+  console.log(`[Firestore] No match found for phone number ${phoneNumber}.`);
   return null;
 }
 
