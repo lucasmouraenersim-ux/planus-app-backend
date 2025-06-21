@@ -192,9 +192,21 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
 }
 
 export async function createLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
+  // First, check if a lead with this phone number already exists.
+  const existingLead = await findLeadByPhoneNumber(phoneNumber);
+  
+  if (existingLead) {
+    console.log(`[Firestore] Lead with phone ${phoneNumber} already exists (ID: ${existingLead.id}). Appending message.`);
+    if (firstMessageText) {
+      // Save the message to the existing lead's chat history
+      await saveChatMessage(existingLead.id, { text: firstMessageText, sender: 'lead' });
+    }
+    return existingLead.id; // Return the ID of the existing lead
+  }
+
+  // If no existing lead, create a new one.
   const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
   const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
-
   const now = Timestamp.now();
 
   const leadData: Omit<LeadDocumentData, 'id'> = {
@@ -202,23 +214,23 @@ export async function createLeadFromWhatsapp(contactName: string, phoneNumber: s
     phone: phoneNumber,
     email: '',
     company: '',
-    stageId: 'contato', // Start in 'contato', but approval is needed
-    sellerName: DEFAULT_ADMIN_EMAIL, // Assign to a default seller/admin
+    stageId: 'contato',
+    sellerName: DEFAULT_ADMIN_EMAIL,
     userId: DEFAULT_ADMIN_UID,
     leadSource: 'WhatsApp',
     value: 0, 
     kwh: 0,
     createdAt: now,
     lastContact: now,
-    needsAdminApproval: true, // New leads from WhatsApp require approval
+    needsAdminApproval: true,
     correctionReason: ''
   };
 
   try {
     const docRef = await addDoc(collection(db, "crm_leads"), leadData);
-    console.log(`[Firestore] Lead document created successfully with ID: ${docRef.id}`);
+    console.log(`[Firestore] New lead document created successfully with ID: ${docRef.id}`);
 
-    // Save the first message to the chat history for this new lead
+    // Save the first message to the new lead's chat history
     if (firstMessageText) {
       await saveChatMessage(docRef.id, { text: firstMessageText, sender: 'lead' });
     }
