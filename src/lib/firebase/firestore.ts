@@ -107,7 +107,7 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
 export async function approveCrmLead(leadId: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
-    stageId: 'assinado',
+    stageId: 'contato', // Move to the first active stage after approval
     needsAdminApproval: false,
     correctionReason: '', // Clear correction reason
     lastContact: Timestamp.now(),
@@ -117,7 +117,7 @@ export async function approveCrmLead(leadId: string): Promise<void> {
 export async function requestCrmLeadCorrection(leadId: string, reason: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
-    stageId: 'contrato', // Revert to a previous stage
+    stageId: 'contato', // Revert to a previous stage to be handled by seller
     correctionReason: reason,
     needsAdminApproval: false, 
     lastContact: Timestamp.now(),
@@ -131,10 +131,14 @@ export async function fetchChatHistory(leadId: string): Promise<ChatMessageType[
   const chatDocRef = doc(db, "crm_lead_chats", leadId);
   const chatDoc = await getDoc(chatDocRef);
   if (chatDoc.exists()) {
-    const messages = (chatDoc.data().messages || []) as ChatMessageType[];
+    const messages = (chatDoc.data().messages || []) as any[]; // Use any[] to handle Firestore Timestamps
     return messages
-      .map(msg => ({...msg, timestamp: (msg.timestamp as Timestamp).toDate().toISOString()}))
-      .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      .map(msg => ({
+        ...msg,
+        // Ensure timestamp is a string for the client
+        timestamp: (msg.timestamp as Timestamp).toDate().toISOString() 
+      }))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
   return [];
 }
@@ -147,7 +151,7 @@ export async function saveChatMessage(
   
   // 1. Reference to the chat document
   const chatDocRef = doc(db, "crm_lead_chats", leadId);
-  const newMessage: ChatMessageType = {
+  const newMessage: Omit<ChatMessageType, 'timestamp'> & { timestamp: Timestamp } = {
     id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     ...messageData,
     timestamp: Timestamp.now(),
@@ -162,7 +166,10 @@ export async function saveChatMessage(
   // 3. Commit both operations atomically
   await batch.commit();
 
-  return {...newMessage, timestamp: (newMessage.timestamp as Timestamp).toDate().toISOString() };
+  return {
+    ...newMessage,
+    timestamp: newMessage.timestamp.toDate().toISOString() 
+  };
 }
 
 
@@ -185,8 +192,6 @@ export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWi
 }
 
 export async function createLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
-  // Simplified Lead creation for debugging. Does not save chat history.
-  // In a real app, you might assign to a default user or have a more complex logic.
   const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
   const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
 
@@ -195,23 +200,29 @@ export async function createLeadFromWhatsapp(contactName: string, phoneNumber: s
   const leadData: Omit<LeadDocumentData, 'id'> = {
     name: contactName || phoneNumber,
     phone: phoneNumber,
-    email: '', // Add email field if available or needed
-    company: '', // Add company field if available or needed
-    stageId: 'contato',
+    email: '',
+    company: '',
+    stageId: 'contato', // Start in 'contato', but approval is needed
     sellerName: DEFAULT_ADMIN_EMAIL, // Assign to a default seller/admin
     userId: DEFAULT_ADMIN_UID,
     leadSource: 'WhatsApp',
-    value: 0, // Default value, can be updated later
-    kwh: 0, // Default kWh, can be updated later
+    value: 0, 
+    kwh: 0,
     createdAt: now,
     lastContact: now,
-    needsAdminApproval: false,
+    needsAdminApproval: true, // New leads from WhatsApp require approval
     correctionReason: ''
   };
 
   try {
     const docRef = await addDoc(collection(db, "crm_leads"), leadData);
     console.log(`[Firestore] Lead document created successfully with ID: ${docRef.id}`);
+
+    // Save the first message to the chat history for this new lead
+    if (firstMessageText) {
+      await saveChatMessage(docRef.id, { text: firstMessageText, sender: 'lead' });
+    }
+
     return docRef.id;
   } catch (error) {
     console.error("[Firestore] Error creating lead from WhatsApp:", error);

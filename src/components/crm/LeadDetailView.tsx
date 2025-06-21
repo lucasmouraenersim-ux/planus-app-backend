@@ -11,10 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState, useEffect } from 'react';
-import { DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, CheckCircle, XCircle, AlertTriangle, X } from 'lucide-react';
-// Placeholder for actual Firebase functions
-// import { fetchChatHistory, saveChatMessage, approveCrmLead, requestCrmLeadCorrection } from '@/lib/firebase/firestore';
+import { useState, useEffect, useRef } from 'react';
+import { 
+    DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
+    CheckCircle, XCircle, AlertTriangle, X, Loader2 
+} from 'lucide-react';
+import { fetchChatHistory, saveChatMessage } from '@/lib/firebase/firestore';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -22,49 +24,61 @@ interface LeadDetailViewProps {
   lead: LeadWithId;
   onClose: () => void;
   onEdit: (lead: LeadWithId) => void;
-  // For admin actions - to be implemented with actual auth and roles
   isAdmin?: boolean; 
   onApprove?: (leadId: string) => Promise<void>;
   onRequestCorrection?: (leadId: string, reason: string) => Promise<void>;
 }
 
-// Mock chat messages
-const MOCK_CHAT_MESSAGES: ChatMessageType[] = [
-    { id: '1', text: 'Olá! Tenho interesse na proposta.', sender: 'lead', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-    { id: '2', text: 'Excelente! Qual sua média de consumo?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString() },
-    { id: '3', text: 'Cerca de 500 kWh.', sender: 'lead', timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString() },
-];
-
-
 export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRequestCorrection }: LeadDetailViewProps) {
-  const [chatMessages, setChatMessages] = useState<ChatMessageType[]>(MOCK_CHAT_MESSAGES);
+  const [chatMessages, setChatMessages] = useState<ChatMessageType[]>([]);
+  const [isLoadingChat, setIsLoadingChat] = useState(true);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [correctionReason, setCorrectionReason] = useState('');
   const [showCorrectionInput, setShowCorrectionInput] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // useEffect(() => {
-  //   const loadChat = async () => {
-  //     // const history = await fetchChatHistory(lead.id);
-  //     // setChatMessages(history);
-  //     setChatMessages(MOCK_CHAT_MESSAGES); // Using mock for now
-  //   };
-  //   loadChat();
-  // }, [lead.id]);
+  useEffect(() => {
+    if (!lead.id) return;
+    
+    const loadChat = async () => {
+      setIsLoadingChat(true);
+      setChatError(null);
+      try {
+        const history = await fetchChatHistory(lead.id);
+        setChatMessages(history);
+      } catch (error) {
+        console.error("Error fetching chat history:", error);
+        setChatError("Não foi possível carregar o histórico de mensagens.");
+      } finally {
+        setIsLoadingChat(false);
+      }
+    };
+    
+    loadChat();
+  }, [lead.id]);
+
+  useEffect(() => {
+    // Scroll to bottom of chat when messages change
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   const handleSendMessage = async () => {
-    if (newMessage.trim() === '') return;
+    if (newMessage.trim() === '' || isSendingMessage) return;
+    setIsSendingMessage(true);
     const messageData = { text: newMessage, sender: 'user' as const };
-    // const savedMessage = await saveChatMessage(lead.id, messageData);
-    // if (savedMessage) {
-    //   setChatMessages(prev => [...prev, savedMessage]);
-    // }
-    const mockSavedMessage: ChatMessageType = {
-        id: String(Date.now()),
-        ...messageData,
-        timestamp: new Date().toISOString()
+    
+    try {
+      const savedMessage = await saveChatMessage(lead.id, messageData);
+      setChatMessages(prev => [...prev, savedMessage]);
+      setNewMessage('');
+    } catch (error) {
+        console.error("Error sending message:", error);
+        // In a real app, you might show a toast notification for the error.
+    } finally {
+      setIsSendingMessage(false);
     }
-    setChatMessages(prev => [...prev, mockSavedMessage]);
-    setNewMessage('');
   };
   
   const handleRequestCorrection = async () => {
@@ -72,7 +86,6 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     await onRequestCorrection(lead.id, correctionReason);
     setCorrectionReason('');
     setShowCorrectionInput(false);
-    // Optionally refetch lead or update UI
   };
 
   const stageInfo = STAGES_CONFIG.find(s => s.id === lead.stageId);
@@ -158,17 +171,30 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <div className="mt-6 pt-4 border-t">
               <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center"><MessageSquare className="w-5 h-5 mr-2 text-primary"/>Histórico de Contato</h3>
               <ScrollArea className="h-48 mb-3 p-3 border rounded-md bg-background">
-                {chatMessages.length === 0 && <p className="text-sm text-muted-foreground text-center">Nenhuma mensagem ainda.</p>}
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className={`mb-2 p-2 rounded-lg max-w-[80%] text-sm ${
-                    msg.sender === 'user' ? 'bg-primary/80 text-primary-foreground ml-auto text-right' : 'bg-muted text-muted-foreground mr-auto text-left'
-                  }`}>
-                    <p>{msg.text}</p>
-                    <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
-                      {format(parseISO(String(msg.timestamp)), "dd/MM HH:mm", { locale: ptBR })}
-                    </p>
-                  </div>
-                ))}
+                 {isLoadingChat ? (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <p className="ml-2 text-muted-foreground">Carregando chat...</p>
+                    </div>
+                ) : chatError ? (
+                    <div className="flex items-center justify-center h-full text-destructive">
+                        <p>{chatError}</p>
+                    </div>
+                ) : chatMessages.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center">Nenhuma mensagem ainda.</p>
+                ) : (
+                    chatMessages.map(msg => (
+                    <div key={msg.id} className={`mb-2 p-2 rounded-lg max-w-[80%] text-sm ${
+                        msg.sender === 'user' ? 'bg-primary/80 text-primary-foreground ml-auto text-right' : 'bg-muted text-muted-foreground mr-auto text-left'
+                    }`}>
+                        <p>{msg.text}</p>
+                        <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
+                        {format(parseISO(String(msg.timestamp)), "dd/MM HH:mm", { locale: ptBR })}
+                        </p>
+                    </div>
+                    ))
+                )}
+                <div ref={chatEndRef} />
               </ScrollArea>
               <div className="flex gap-2">
                 <Input 
@@ -176,8 +202,12 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                   onChange={(e) => setNewMessage(e.target.value)} 
                   placeholder="Digite uma mensagem..."
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  disabled={isSendingMessage}
                 />
-                <Button onClick={handleSendMessage}><Send className="w-4 h-4 mr-0 md:mr-2"/><span className="hidden md:inline">Enviar</span></Button>
+                <Button onClick={handleSendMessage} disabled={isSendingMessage}>
+                  {isSendingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-0 md:mr-2"/>}
+                  <span className="hidden md:inline">{isSendingMessage ? "" : "Enviar"}</span>
+                </Button>
               </div>
             </div>
           </ScrollArea>
@@ -190,6 +220,3 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     </div>
   );
 }
-
-
-    
