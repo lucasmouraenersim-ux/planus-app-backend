@@ -19,6 +19,7 @@ export async function createCrmLead(
 
   const fullLeadData: Omit<LeadDocumentData, 'photoDocumentUrl' | 'billDocumentUrl'> = {
     ...leadData,
+    phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
     createdAt: Timestamp.now(),
     lastContact: Timestamp.now(),
@@ -87,6 +88,10 @@ export async function updateCrmLeadDetails(
 ): Promise<void> {
   console.log("Placeholder: updateCrmLeadDetails called for lead:", leadId, "with updates:", updates);
   const { lastContactIso, ...otherUpdates } = updates;
+  // Normalize phone number if it's being updated
+  if (otherUpdates.phone) {
+    otherUpdates.phone = otherUpdates.phone.replace(/\D/g, '');
+  }
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
     ...otherUpdates,
@@ -176,42 +181,58 @@ export async function saveChatMessage(
 // --- WhatsApp Integration Helpers ---
 
 export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
-  const q = query(collection(db, "crm_leads"), where("phone", "==", phoneNumber));
-  const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    const docSnap = querySnapshot.docs[0];
-    const data = docSnap.data() as LeadDocumentData;
-    return { 
-      id: docSnap.id, 
-      ...data,
-      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-      lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-    } as LeadWithId;
+  const normalizedIncomingNumber = phoneNumber.replace(/\D/g, '');
+
+  // This is a temporary, inefficient workaround for un-normalized data.
+  // A data migration to a normalized `phone_normalized` field is the proper long-term solution.
+  console.warn(`[Firestore] Performing potentially inefficient search for phone number: ${normalizedIncomingNumber}.`);
+
+  const leadsCollectionRef = collection(db, "crm_leads");
+  const querySnapshot = await getDocs(leadsCollectionRef);
+
+  for (const docSnap of querySnapshot.docs) {
+    const data = docSnap.data();
+    if (data.phone) {
+      const normalizedDbNumber = data.phone.replace(/\D/g, '');
+      if (normalizedDbNumber.endsWith(normalizedIncomingNumber) || normalizedIncomingNumber.endsWith(normalizedDbNumber)) {
+        console.log(`Found matching lead ID: ${docSnap.id} for phone ${phoneNumber}`);
+        return {
+          id: docSnap.id,
+          ...(data as LeadDocumentData),
+          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+          lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+        } as LeadWithId;
+      }
+    }
   }
+
   return null;
 }
 
+
 export async function createLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
-  // First, check if a lead with this phone number already exists.
+  // First, check if a lead with this phone number already exists using the robust search function.
   const existingLead = await findLeadByPhoneNumber(phoneNumber);
   
   if (existingLead) {
     console.log(`[Firestore] Lead with phone ${phoneNumber} already exists (ID: ${existingLead.id}). Appending message.`);
     if (firstMessageText) {
-      // Save the message to the existing lead's chat history
+      // Save the message to the existing lead's chat history, which also updates lastContact.
       await saveChatMessage(existingLead.id, { text: firstMessageText, sender: 'lead' });
     }
     return existingLead.id; // Return the ID of the existing lead
   }
 
   // If no existing lead, create a new one.
+  console.log(`[Firestore] No existing lead found for ${phoneNumber}. Creating new lead.`);
   const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
   const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
   const now = Timestamp.now();
+  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
 
   const leadData: Omit<LeadDocumentData, 'id'> = {
-    name: contactName || phoneNumber,
-    phone: phoneNumber,
+    name: contactName || normalizedPhoneNumber,
+    phone: normalizedPhoneNumber, // Save the normalized number
     email: '',
     company: '',
     stageId: 'contato',
