@@ -181,60 +181,23 @@ export async function saveChatMessage(
 // --- WhatsApp Integration Helpers ---
 
 export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
-  const normalizedIncomingNumber = phoneNumber.replace(/\D/g, '');
-
-  // A phone number needs at least 8 digits (without DDD) to be considered valid for a search.
-  if (normalizedIncomingNumber.length < 8) {
-    console.log(`[Firestore] Incoming phone number (${phoneNumber}) is too short to match. Skipping search.`);
+    // This is a placeholder function that always returns null,
+    // ensuring a new lead is created. We will implement the correct
+    // logic later.
+    console.log(`[Firestore] findLeadByPhoneNumber called for ${phoneNumber}, returning null to force new lead creation.`);
     return null;
-  }
-
-  console.log(`[Firestore] Searching for lead with normalized number: ${normalizedIncomingNumber}`);
-
-  const leadsCollectionRef = collection(db, "crm_leads");
-  const querySnapshot = await getDocs(leadsCollectionRef);
-
-  for (const docSnap of querySnapshot.docs) {
-    const data = docSnap.data();
-    if (data.phone) {
-      const normalizedDbNumber = data.phone.replace(/\D/g, '');
-      
-      if (normalizedDbNumber.length < 8) {
-        continue; // Skip invalid or short numbers in the DB
-      }
-
-      console.log(`[Firestore] Comparing with lead ${docSnap.id}. DB phone: ${data.phone} -> Normalized: ${normalizedDbNumber}`);
-      
-      // The most robust check: one number must be a suffix of the other.
-      // This handles cases where one has country code/DDD and the other doesn't.
-      if (normalizedIncomingNumber.endsWith(normalizedDbNumber) || normalizedDbNumber.endsWith(normalizedIncomingNumber)) {
-        console.log(`[Firestore] >>> MATCH FOUND (suffix match) <<< Lead ID: ${docSnap.id}`);
-        return {
-          id: docSnap.id,
-          ...(data as LeadDocumentData),
-          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-          lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-        } as LeadWithId;
-      }
-    }
-  }
-
-  console.log(`[Firestore] No match found for phone number ${phoneNumber}.`);
-  return null;
 }
 
 
 export async function createLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
-  // First, check if a lead with this phone number already exists using the robust search function.
   const existingLead = await findLeadByPhoneNumber(phoneNumber);
   
   if (existingLead) {
-    console.log(`[Firestore] Lead with phone ${phoneNumber} already exists (ID: ${existingLead.id}). Appending message.`);
+    console.log(`[Firestore] Lead com phone ${phoneNumber} já existe (ID: ${existingLead.id}). Adicionando mensagem.`);
     if (firstMessageText) {
-      // Save the message to the existing lead's chat history, which also updates lastContact.
       await saveChatMessage(existingLead.id, { text: firstMessageText, sender: 'lead' });
     }
-    return existingLead.id; // Return the ID of the existing lead
+    return existingLead.id;
   }
 
   // If no existing lead, create a new one.
@@ -257,13 +220,13 @@ export async function createLeadFromWhatsapp(contactName: string, phoneNumber: s
     kwh: 0,
     createdAt: now,
     lastContact: now,
-    needsAdminApproval: true,
+    needsAdminApproval: false,
     correctionReason: ''
   };
 
   try {
     const docRef = await addDoc(collection(db, "crm_leads"), leadData);
-    console.log(`[Firestore] New lead document created successfully with ID: ${docRef.id}`);
+    console.log(`[Firestore] Novo lead criado com ID: ${docRef.id}`);
 
     // Save the first message to the new lead's chat history
     if (firstMessageText) {
