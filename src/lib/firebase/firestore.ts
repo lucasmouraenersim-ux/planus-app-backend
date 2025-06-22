@@ -181,10 +181,10 @@ export async function saveChatMessage(
 // --- WhatsApp Integration Helpers ---
 
 export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
-    // This is a placeholder function that always returns null,
-    // ensuring a new lead is created. We will implement the correct
-    // logic later.
-    console.log(`[Firestore] findLeadByPhoneNumber called for ${phoneNumber}, returning null to force new lead creation.`);
+    // This is a placeholder function that always returns null to force new lead creation.
+    // This ensures leads are being created while we debug other issues.
+    // The duplicate lead bug will be addressed next.
+    console.log(`[Firestore] findLeadByPhoneNumber called for ${phoneNumber}. Forcing new lead creation for now.`);
     return null;
 }
 

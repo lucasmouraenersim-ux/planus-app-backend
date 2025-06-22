@@ -3,10 +3,6 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  experimental: {
-    // This is required to allow Project IDX/Firebase Studio to access the preview
-    allowedDevOrigins: ["*.cloudworkstations.dev", "*.app.github.dev"],
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
