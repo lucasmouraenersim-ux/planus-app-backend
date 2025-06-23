@@ -17,6 +17,8 @@ import {
     CheckCircle, XCircle, AlertTriangle, X, Loader2 
 } from 'lucide-react';
 import { fetchChatHistory, saveChatMessage } from '@/lib/firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { sendWhatsappMessage } from '@/ai/flows/send-whatsapp-message-flow';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -30,6 +32,7 @@ interface LeadDetailViewProps {
 }
 
 export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRequestCorrection }: LeadDetailViewProps) {
+  const { toast } = useToast();
   const [chatMessages, setChatMessages] = useState<ChatMessageType[]>([]);
   const [isLoadingChat, setIsLoadingChat] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -60,22 +63,57 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   }, [lead.id]);
 
   useEffect(() => {
-    // Scroll to bottom of chat when messages change
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
   const handleSendMessage = async () => {
     if (newMessage.trim() === '' || isSendingMessage) return;
+    
+    if (!lead.phone) {
+        toast({
+            title: "Envio Falhou",
+            description: "Este lead não possui um número de telefone cadastrado.",
+            variant: "destructive",
+        });
+        return;
+    }
+    
     setIsSendingMessage(true);
     const messageData = { text: newMessage, sender: 'user' as const };
+    const messageToSend = newMessage;
+    setNewMessage('');
     
     try {
       const savedMessage = await saveChatMessage(lead.id, messageData);
       setChatMessages(prev => [...prev, savedMessage]);
-      setNewMessage('');
+
+      const result = await sendWhatsappMessage({
+          to: lead.phone,
+          body: messageToSend,
+      });
+
+      if (result.success) {
+        toast({
+            title: "Mensagem Enviada",
+            description: `A mensagem foi enviada para ${lead.name} (simulação).`,
+        });
+      } else {
+         toast({
+            title: "Falha no Envio",
+            description: result.error || "Não foi possível enviar a mensagem via WhatsApp (simulação).",
+            variant: "destructive",
+        });
+        setNewMessage(messageToSend);
+      }
+
     } catch (error) {
         console.error("Error sending message:", error);
-        // In a real app, you might show a toast notification for the error.
+        toast({
+            title: "Erro",
+            description: "Ocorreu um erro ao processar o envio da mensagem.",
+            variant: "destructive",
+        });
+        setNewMessage(messageToSend);
     } finally {
       setIsSendingMessage(false);
     }
