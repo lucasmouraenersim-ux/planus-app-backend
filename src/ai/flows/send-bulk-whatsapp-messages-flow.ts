@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Template call with an IMAGE in the header.
+        // Static template call (no components)
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -91,19 +91,6 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
           template: {
             name: templateName,
             language: { "code": "pt_BR" },
-            components: [
-              {
-                "type": "header",
-                "parameters": [
-                  {
-                    "type": "image",
-                    "image": {
-                      "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/imagem_novocontato.png"
-                    }
-                  }
-                ]
-              }
-            ]
           },
         };
         

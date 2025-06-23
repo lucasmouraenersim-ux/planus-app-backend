@@ -50,7 +50,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Template 'novocontato' with an IMAGE in the header.
+    // Static template 'novocontato' call (no components)
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
@@ -58,19 +58,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       template: {
         name: "novocontato",
         language: { "code": "pt_BR" },
-        components: [
-          {
-            "type": "header",
-            "parameters": [
-              {
-                "type": "image",
-                "image": {
-                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/imagem_novocontato.png"
-                }
-              }
-            ]
-          }
-        ]
       }
     };
 
