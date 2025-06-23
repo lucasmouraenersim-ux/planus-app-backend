@@ -5,10 +5,10 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
 
-// Define the schema for a single CSV row
+// Schema is less strict now, just checks for presence. Validation happens in the logic.
 const CsvRowSchema = z.object({
-  nome: z.string().min(1, 'A coluna "nome" não pode estar vazia.'),
-  numero: z.string().min(10, 'A coluna "numero" deve ter pelo menos 10 dígitos.'),
+  nome: z.string().optional(),
+  numero: z.string().optional(),
 });
 
 // Define the schema for the action's return type
@@ -42,41 +42,56 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
         transformHeader: header => header.toLowerCase().trim(),
         complete: (results) => {
           const validLeads: OutboundLead[] = [];
-          const errorRows: number[] = [];
+          const errorDetails: { row: number; reason: string }[] = [];
 
           results.data.forEach((row, index) => {
+            const rowNum = index + 2; // +2 because index is 0-based and header is line 1
+
             // Skip if row is essentially empty
-            if (!row.nome && !row.numero) {
+            if (!row.nome?.trim() && !row.numero?.trim()) {
               return;
             }
+
             const validation = CsvRowSchema.safeParse(row);
-            if (validation.success) {
-              validLeads.push({
-                id: `csv-${Date.now()}-${index}`,
-                name: validation.data.nome.trim(),
-                phone: validation.data.numero.replace(/\D/g, ''), // Normalize phone number
-                consumption: 0, // Default value as it's not in the CSV
-                company: undefined,
-              });
-            } else {
-              errorRows.push(index + 2); // +2 because index is 0-based and header is line 1
+            if (!validation.success || !validation.data.nome || !validation.data.numero) {
+              errorDetails.push({ row: rowNum, reason: "Colunas 'nome' ou 'numero' ausentes ou vazias." });
+              return;
             }
+
+            const normalizedPhone = validation.data.numero.replace(/\D/g, '');
+
+            // Basic phone number validation for Brazil (10-13 digits)
+            if (normalizedPhone.length < 10 || normalizedPhone.length > 13) {
+                errorDetails.push({ row: rowNum, reason: `Número '${validation.data.numero}' inválido.` });
+                return;
+            }
+
+            validLeads.push({
+              id: `csv-${Date.now()}-${index}`,
+              name: validation.data.nome.trim(),
+              phone: normalizedPhone,
+              consumption: 0,
+              company: undefined,
+            });
           });
 
           if (validLeads.length === 0) {
-            resolve({ success: false, error: `Nenhum lead válido encontrado. Verifique o arquivo CSV na linha ${errorRows[0]} ou se as colunas 'nome' e 'numero' existem.` });
+            const firstErrorReason = errorDetails.length > 0
+              ? `Exemplo de erro na linha ${errorDetails[0].row}: ${errorDetails[0].reason}`
+              : "Verifique se as colunas 'nome' e 'numero' existem e estão preenchidas.";
+            resolve({ success: false, error: `Nenhum lead válido encontrado no arquivo. ${firstErrorReason}` });
             return;
           }
 
           let infoMessage = undefined;
-          if (errorRows.length > 0) {
-            infoMessage = `${errorRows.length} linha(s) foram ignoradas por conterem erros.`;
+          if (errorDetails.length > 0) {
+            infoMessage = `${errorDetails.length} linha(s) foram ignoradas por conterem erros (ex: número inválido na linha ${errorDetails[0].row}).`;
           }
 
           resolve({ success: true, leads: validLeads, info: infoMessage });
         },
         error: (error: Error) => {
-          resolve({ success: false, error: `Erro ao parsear o CSV: ${error.message}` });
+          resolve({ success: false, error: `Erro ao processar o CSV: ${error.message}` });
         },
       });
     });
