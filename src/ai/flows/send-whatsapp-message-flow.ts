@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to simulate sending a single WhatsApp message.
@@ -43,22 +44,12 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     // Simulate an API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const isSuccess = Math.random() > 0.1; // Simulate a 90% success rate
-
-    if (isSuccess) {
-      const simulatedMessageId = `sim_msg_${Date.now()}`;
-      console.log(`[SIMULATION] Message sent successfully. Message ID: ${simulatedMessageId}`);
-      return {
-        success: true,
-        messageId: simulatedMessageId,
-      };
-    } else {
-      const errorMessage = "Failed to send message due to a simulated API error.";
-      console.error(`[SIMULATION] ${errorMessage}`);
-      return {
-        success: false,
-        error: errorMessage,
-      };
-    }
+    // Always return success to prevent server errors during simulation
+    const simulatedMessageId = `sim_msg_${Date.now()}`;
+    console.log(`[SIMULATION] Message sent successfully. Message ID: ${simulatedMessageId}`);
+    return {
+      success: true,
+      messageId: simulatedMessageId,
+    };
   }
 );
