@@ -83,7 +83,6 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Static template call (no components)
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -91,6 +90,19 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
           template: {
             name: templateName,
             language: { "code": "pt_BR" },
+            components: [
+              {
+                "type": "header",
+                "parameters": [
+                  {
+                    "type": "image",
+                    "image": {
+                      "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/imagem_novocontato.png"
+                    }
+                  }
+                ]
+              }
+            ]
           },
         };
         
@@ -107,14 +119,13 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
 
         const responseData = await response.json();
         
-        if (response.ok) {
+        if (response.ok && responseData.messages?.[0]?.id) {
             sentCount++;
             console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
         } else {
             const errorMessage = responseData?.error?.message || JSON.stringify(responseData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
             
-            // Return the specific error from the Meta API to the frontend
             return {
               success: false,
               message: `Erro da API do WhatsApp: ${errorMessage}`,

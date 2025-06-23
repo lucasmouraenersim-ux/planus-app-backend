@@ -50,7 +50,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Static template 'novocontato' call (no components)
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
@@ -58,6 +57,19 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       template: {
         name: "novocontato",
         language: { "code": "pt_BR" },
+        components: [
+          {
+            "type": "header",
+            "parameters": [
+              {
+                "type": "image",
+                "image": {
+                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/imagem_novocontato.png"
+                }
+              }
+            ]
+          }
+        ]
       }
     };
 
@@ -78,7 +90,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
       console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
 
-      if (!response.ok) {
+      if (!response.ok || !responseData.messages?.[0]?.id) {
         const errorDetails = responseData?.error?.message || JSON.stringify(responseData);
         console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Details: ${errorDetails}`);
         return {
@@ -87,7 +99,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
         };
       }
 
-      const messageId = responseData.messages?.[0]?.id || `api_resp_${Date.now()}`;
+      const messageId = responseData.messages[0].id;
       console.log(`[WHATSAPP_API] Message sent successfully. Message ID: ${messageId}`);
       
       return {
