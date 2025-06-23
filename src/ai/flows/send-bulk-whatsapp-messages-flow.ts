@@ -126,6 +126,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             const errorMessage = errorData?.error?.message || JSON.stringify(errorData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
             
+            // Stop the entire flow on the first error and report it clearly.
             return {
               success: false,
               message: `Erro da API do WhatsApp: ${errorMessage}`,
@@ -133,6 +134,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             };
         }
 
+        // Wait between messages if an interval is set
         if (i < totalLeads - 1 && sendInterval > 0) {
           await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
         }
