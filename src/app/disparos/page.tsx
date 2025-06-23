@@ -23,7 +23,7 @@ export default function DisparosPage() {
 
   const [leads, setLeads] = useState<OutboundLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
-  const [templateName, setTemplateName] = useState("hello_world");
+  const [templateName, setTemplateName] = useState("novocontato");
   const [sendingConfig, setSendingConfig] = useState<SendingConfiguration>({
     sendPerChip: 25,
     sendInterval: 10,
@@ -207,7 +207,7 @@ export default function DisparosPage() {
                 <Label htmlFor="templateName">Nome do Template</Label>
                 <Input
                     id="templateName"
-                    placeholder="Ex: hello_world"
+                    placeholder="Ex: novocontato"
                     value={templateName}
                     onChange={e => setTemplateName(e.target.value)}
                 />

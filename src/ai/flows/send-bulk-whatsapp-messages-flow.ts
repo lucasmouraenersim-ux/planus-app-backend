@@ -86,7 +86,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         type: "template",
         template: {
           name: templateName,
-          language: { "code": "en_US" } // Can be parameterized later if needed
+          language: { "code": "pt_BR" } // Changed to Brazilian Portuguese
         }
       };
 
