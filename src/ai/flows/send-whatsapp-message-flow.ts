@@ -50,7 +50,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Template 'novocontato' with an image in the header.
+    // Template 'novocontato' with a VIDEO in the header.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
@@ -63,9 +63,10 @@ const sendWhatsappMessageFlow = ai.defineFlow(
             "type": "header",
             "parameters": [
               {
-                "type": "image",
-                "image": {
-                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/6fcd1f5f2911ab2dce68546d03c967214790d0ba/LOGO_LOGO_BRANCA.png"
+                "type": "video",
+                "video": {
+                  // Using a generic placeholder video URL
+                  "link": "https://videos.pexels.com/video-files/4434242/4434242-sd_640_360_30fps.mp4"
                 }
               }
             ]

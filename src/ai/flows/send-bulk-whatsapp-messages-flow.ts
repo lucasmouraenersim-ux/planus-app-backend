@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Template call with ONLY an image in the header.
+        // Template call with a VIDEO in the header.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -96,9 +96,10 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
                 "type": "header",
                 "parameters": [
                   {
-                    "type": "image",
-                    "image": {
-                      "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/6fcd1f5f2911ab2dce68546d03c967214790d0ba/LOGO_LOGO_BRANCA.png"
+                    "type": "video",
+                    "video": {
+                      // Using a generic placeholder video URL
+                      "link": "https://videos.pexels.com/video-files/4434242/4434242-sd_640_360_30fps.mp4"
                     }
                   }
                 ]
@@ -127,6 +128,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             const errorMessage = responseData?.error?.message || JSON.stringify(responseData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
             
+            // Return the specific error from the Meta API to the frontend
             return {
               success: false,
               message: `Erro da API do WhatsApp: ${errorMessage}`,
