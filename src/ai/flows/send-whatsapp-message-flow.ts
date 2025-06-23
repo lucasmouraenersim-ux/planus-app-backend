@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
   to: z.string().describe("The recipient's phone number, including country code but no '+', e.g., '5511999998888'."),
-  body: z.string().describe("The text content of the message."),
+  body: z.string().describe("The text content of the message. Note: For now, this is saved to history, but a pre-defined template is sent."),
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
 
@@ -37,7 +37,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
   async (input) => {
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
     const accessToken = process.env.META_PERMANENT_TOKEN;
-    const apiVersion = 'v20.0'; // Updated to a current stable version
+    const apiVersion = 'v20.0'; 
 
     if (!phoneNumberId || !accessToken) {
       const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis META_PHONE_NUMBER_ID e META_PERMANENT_TOKEN no arquivo .env.";
@@ -49,17 +49,22 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     }
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+    
+    // Using a template as per the curl command example.
+    // The "input.body" is saved in the chat history by the frontend, 
+    // but here we send the approved template.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
-      type: "text",
-      text: {
-        body: input.body
+      type: "template",
+      template: {
+        name: "hello_world", // Using the template from the user's example
+        language: { "code": "en_US" }
       }
     };
 
     try {
-      console.log(`[WHATSAPP_API] Preparing to send to URL: ${apiUrl}`);
+      console.log(`[WHATSAPP_API] Preparing to send template message to URL: ${apiUrl}`);
       console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
       
       const response = await fetch(apiUrl, {
@@ -76,7 +81,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
 
       if (!response.ok) {
-        // This block handles API errors returned by Meta (e.g., bad request, invalid token)
         const errorDetails = responseData?.error?.message || JSON.stringify(responseData);
         console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Details: ${errorDetails}`);
         return {
@@ -94,7 +98,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       };
 
     } catch (error: any) {
-      // This block handles critical network errors or other unexpected issues during the fetch itself.
       console.error("[WHATSAPP_API] Critical fetch/processing error:", error);
       return {
         success: false,
