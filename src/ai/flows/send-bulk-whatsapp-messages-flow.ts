@@ -92,7 +92,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             language: { "code": "pt_BR" },
             components: [
               {
-                type: "body",
+                type: "header",
                 parameters: [
                   {
                     type: "text",
