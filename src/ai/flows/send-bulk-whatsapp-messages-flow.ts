@@ -124,14 +124,9 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             const errorMessage = errorData?.error?.message || JSON.stringify(errorData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
 
-            let friendlyMessage = `Falha no envio para ${lead.phone}. Resposta da API: ${errorMessage}`;
+            // Pass the raw error message from the API directly to the user for better debugging.
+            const friendlyMessage = `Erro da API do WhatsApp: ${errorMessage}`;
             
-            if (String(errorMessage).includes("Session has expired") || String(errorMessage).includes("Error validating access token")) {
-                friendlyMessage = "O token de acesso do WhatsApp expirou. Por favor, gere um novo token permanente no Gerenciador de Negócios da Meta e me envie.";
-            } else if (String(errorMessage).includes("template")) {
-                 friendlyMessage = `Ocorreu um erro com o template '${templateName}'. Verifique se ele está aprovado e se a estrutura enviada corresponde à do template. Erro: ${errorMessage}`;
-            }
-
             return {
               success: false,
               message: friendlyMessage,
