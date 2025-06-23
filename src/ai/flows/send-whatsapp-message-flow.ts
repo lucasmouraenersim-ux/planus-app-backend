@@ -37,7 +37,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
   async (input) => {
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
     const accessToken = process.env.META_PERMANENT_TOKEN;
-    const apiVersion = 'v19.0'; // Use a recent, valid API version
+    const apiVersion = 'v20.0'; // Updated to a current stable version
 
     if (!phoneNumberId || !accessToken) {
       const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis META_PHONE_NUMBER_ID e META_PERMANENT_TOKEN no arquivo .env.";
@@ -72,6 +72,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       const responseData = await response.json();
 
       if (!response.ok) {
+        // This block handles API errors returned by Meta (e.g., bad request, invalid token)
         const errorDetails = responseData?.error?.message || JSON.stringify(responseData);
         console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Details: ${errorDetails}`);
         return {
@@ -89,10 +90,11 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       };
 
     } catch (error: any) {
-      console.error("[WHATSAPP_API] Critical fetch error:", error);
+      // This block handles critical network errors or other unexpected issues during the fetch itself.
+      console.error("[WHATSAPP_API] Critical fetch/processing error:", error);
       return {
         success: false,
-        error: `Erro de rede ou crítico ao tentar contatar a API do WhatsApp: ${error.message}`,
+        error: `Erro de rede ou crítico ao tentar contatar a API do WhatsApp: ${error.message || 'Erro desconhecido.'}`,
       };
     }
   }
