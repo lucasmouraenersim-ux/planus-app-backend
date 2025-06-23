@@ -126,11 +126,8 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             const errorMessage = responseData?.error?.message || JSON.stringify(responseData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
             
-            return {
-              success: false,
-              message: `Erro da API do WhatsApp: ${errorMessage}`,
-              sentCount: sentCount,
-            };
+            // Do not stop the whole process for a single error
+            // Log it and continue
         }
 
         if (i < totalLeads - 1 && sendInterval > 0) {
@@ -140,7 +137,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
 
       return {
         success: true,
-        message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso.`,
+        message: `Disparo concluído. ${sentCount} de ${totalLeads} mensagens foram aceitas para envio.`,
         sentCount: sentCount,
       };
 
