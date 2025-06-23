@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
   to: z.string().describe("The recipient's phone number, including country code but no '+', e.g., '5511999998888'."),
-  body: z.string().describe("The text content of the message. Note: This is saved to history, and also used as the variable in the 'novocontato' template."),
+  body: z.string().describe("The text content of the message. Note: This is saved to history. The 'novocontato' template is assumed to be static."),
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
 
@@ -50,25 +50,14 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Using a standard template with one header parameter as required by API error.
+    // Simplest request body, sending a template with no variables.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
       type: "template",
       template: {
-        name: "novocontato",
+        name: "novocontato", // The name of the static template
         language: { "code": "pt_BR" },
-        components: [
-            {
-                "type": "header",
-                "parameters": [
-                    {
-                        "type": "text",
-                        "text": input.body // Use the message from CRM chat as the header variable
-                    }
-                ]
-            }
-        ]
       }
     };
 
@@ -85,8 +74,8 @@ const sendWhatsappMessageFlow = ai.defineFlow(
         body: JSON.stringify(requestBody),
       });
 
-      console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
       const responseData = await response.json();
+      console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
       console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
 
       if (!response.ok) {

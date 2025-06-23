@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Template call with a header parameter as required by the error message.
+        // Simplest template call with no variables/components.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -91,17 +91,6 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
           template: {
             name: templateName,
             language: { "code": "pt_BR" },
-            components: [
-                {
-                    "type": "header",
-                    "parameters": [
-                        {
-                            "type": "text",
-                            "text": lead.name
-                        }
-                    ]
-                }
-            ]
           },
         };
         
@@ -116,14 +105,14 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             body: JSON.stringify(requestBody),
         });
 
+        const responseData = await response.json();
+        
         if (response.ok) {
             sentCount++;
-            const responseData = await response.json();
             console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
         } else {
-            const errorData = await response.json();
             // Display the exact error from Meta API for better debugging
-            const errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+            const errorMessage = responseData?.error?.message || JSON.stringify(responseData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
             
             // Stop the entire flow on the first error and report it clearly.
