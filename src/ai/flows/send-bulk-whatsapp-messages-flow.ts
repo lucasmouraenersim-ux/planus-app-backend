@@ -90,17 +90,6 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
           template: {
             name: templateName,
             language: { "code": "pt_BR" },
-            components: [
-              {
-                type: "header",
-                parameters: [
-                  {
-                    type: "text",
-                    text: lead.name,
-                  },
-                ],
-              },
-            ],
           },
         };
         
