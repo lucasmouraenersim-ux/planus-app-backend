@@ -83,18 +83,29 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Simplified template call for debugging
+        // Standard template call with one body parameter
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
           type: "template",
           template: {
-            name: "hello_world", // Using the simplest template
+            name: templateName,
             language: { "code": "en_US" },
+            components: [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": lead.name
+                        }
+                    ]
+                }
+            ]
           },
         };
         
-        console.log(`[WHATSAPP_BULK_SEND] Sending template 'hello_world' to ${lead.phone}. Body:`, JSON.stringify(requestBody));
+        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}. Body:`, JSON.stringify(requestBody));
         
         const response = await fetch(apiUrl, {
             method: 'POST',

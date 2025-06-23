@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
   to: z.string().describe("The recipient's phone number, including country code but no '+', e.g., '5511999998888'."),
-  body: z.string().describe("The text content of the message. Note: For now, this is saved to history, but a pre-defined template is sent."),
+  body: z.string().describe("The text content of the message. Note: This is saved to history, and also used as the variable in the 'novocontato' template."),
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
 
@@ -40,7 +40,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     const apiVersion = 'v20.0'; 
 
     if (!phoneNumberId || !accessToken) {
-      const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis META_PHONE_NUMBER_ID e META_PERMANENT_TOKEN no arquivo .env.";
+      const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis META_PHONE_NUMBER_ID e META_PERMANENT_TOKEN no arquivo apphosting.yaml.";
       console.error(`[WHATSAPP_API] Error: ${errorMessage}`);
       return {
         success: false,
@@ -50,16 +50,26 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Using a template as per the curl command example.
-    // The "input.body" is saved in the chat history by the frontend, 
-    // but here we send the approved template.
+    // Using a standard template with one body parameter.
+    // The CRM sends the message content in 'input.body'.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
       type: "template",
       template: {
-        name: "hello_world", // Using the template from the user's example
-        language: { "code": "en_US" }
+        name: "novocontato", // Using a consistent template name
+        language: { "code": "en_US" },
+        components: [
+            {
+                "type": "body",
+                "parameters": [
+                    {
+                        "type": "text",
+                        "text": input.body // Use the message from CRM chat as the variable
+                    }
+                ]
+            }
+        ]
       }
     };
 
