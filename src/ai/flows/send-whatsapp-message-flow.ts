@@ -50,22 +50,21 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Using a standard template with one body parameter.
-    // The CRM sends the message content in 'input.body'.
+    // Using a standard template with one header parameter as required by API error.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
       type: "template",
       template: {
-        name: "novocontato", // Using a consistent template name
+        name: "novocontato",
         language: { "code": "pt_BR" },
         components: [
             {
-                "type": "body",
+                "type": "header",
                 "parameters": [
                     {
                         "type": "text",
-                        "text": input.body // Use the message from CRM chat as the variable
+                        "text": input.body // Use the message from CRM chat as the header variable
                     }
                 ]
             }

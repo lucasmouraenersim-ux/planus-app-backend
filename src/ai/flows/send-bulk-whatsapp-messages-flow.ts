@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Standard template call with one body parameter
+        // Template call with a header parameter as required by the error message.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -93,7 +93,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             language: { "code": "pt_BR" },
             components: [
                 {
-                    "type": "body",
+                    "type": "header",
                     "parameters": [
                         {
                             "type": "text",
