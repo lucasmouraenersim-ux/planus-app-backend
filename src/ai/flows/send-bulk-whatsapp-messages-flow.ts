@@ -65,7 +65,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
       const apiVersion = 'v20.0';
 
       if (!phoneNumberId || !accessToken) {
-        const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente no painel do Firebase App Hosting.";
+        const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente no arquivo apphosting.yaml.";
         console.error(`[WHATSAPP_BULK_SEND] Error: ${errorMessage}`);
         return {
           success: false,
