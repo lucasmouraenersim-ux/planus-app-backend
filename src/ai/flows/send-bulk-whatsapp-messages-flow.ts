@@ -56,89 +56,107 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
     outputSchema: SendBulkWhatsappMessagesOutputSchema,
   },
   async (input) => {
-    const { leads, templateName, configuration } = input;
-    const { sendInterval } = configuration;
+    try { // Add a top-level try-catch to prevent the server from crashing
+      const { leads, templateName, configuration } = input;
+      const { sendInterval } = configuration;
 
-    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
-    const accessToken = process.env.META_PERMANENT_TOKEN;
-    const apiVersion = 'v20.0';
+      const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+      const accessToken = process.env.META_PERMANENT_TOKEN;
+      const apiVersion = 'v20.0';
 
-    if (!phoneNumberId || !accessToken) {
-      const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente.";
-      console.error(`[WHATSAPP_BULK_SEND] Error: ${errorMessage}`);
-      return {
-        success: false,
-        message: errorMessage,
-        sentCount: 0,
-      };
-    }
+      if (!phoneNumberId || !accessToken) {
+        const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente no painel do Firebase App Hosting.";
+        console.error(`[WHATSAPP_BULK_SEND] Error: ${errorMessage}`);
+        return {
+          success: false,
+          message: errorMessage,
+          sentCount: 0,
+        };
+      }
 
-    const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
-    let sentCount = 0;
-    let failedCount = 0;
+      const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+      let sentCount = 0;
+      let failedCount = 0;
+      let firstErrorDetails = '';
 
-    for (const lead of leads) {
-      // Assuming the template requires one variable in the body, which is the lead's name.
-      const requestBody = {
-        messaging_product: "whatsapp",
-        to: lead.phone,
-        type: "template",
-        template: {
-          name: templateName,
-          language: { "code": "pt_BR" },
-          components: [
-            {
-              type: "body",
-              parameters: [
-                {
-                  type: "text",
-                  text: lead.name,
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      try {
-        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}. URL: ${apiUrl}`);
-        console.log(`[WHATSAPP_BULK_SEND] Body: ${JSON.stringify(requestBody)}`);
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
+      for (const lead of leads) {
+        const requestBody = {
+          messaging_product: "whatsapp",
+          to: lead.phone,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { "code": "pt_BR" },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: lead.name,
+                  },
+                ],
+              },
+            ],
           },
-          body: JSON.stringify(requestBody),
-        });
-        
-        console.log(`[WHATSAPP_BULK_SEND] Response Status for ${lead.phone}: ${response.status}`);
+        };
 
-        if (response.ok) {
-          sentCount++;
-          const responseData = await response.json();
-          console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
-        } else {
+        try {
+          console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}.`);
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(requestBody),
+          });
+          
+          if (response.ok) {
+            sentCount++;
+            const responseData = await response.json();
+            console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
+          } else {
+            failedCount++;
+            const errorText = await response.text();
+            console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorText);
+            if (!firstErrorDetails) {
+              firstErrorDetails = `Falha no envio para ${lead.phone} (Status: ${response.status}). Resposta: ${errorText}`;
+            }
+          }
+        } catch (error: any) {
           failedCount++;
-          const errorText = await response.text();
-          console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorText);
+          console.error(`[WHATSAPP_BULK_SEND] Critical fetch/processing error for ${lead.phone}:`, error.message, error.stack);
+           if (!firstErrorDetails) {
+              firstErrorDetails = `Erro crítico ao contatar a API para o número ${lead.phone}: ${error.message}`;
+            }
         }
-      } catch (error: any) {
-        failedCount++;
-        console.error(`[WHATSAPP_BULK_SEND] Critical fetch/processing error for ${lead.phone}:`, error.message, error.stack);
+
+        if (leads.indexOf(lead) < leads.length - 1 && sendInterval > 0) {
+          await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
+        }
       }
 
-      // Wait for the specified interval before sending the next message
-      if (leads.length > 1 && sendInterval > 0) {
-        await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
+      if (failedCount > 0) {
+        return {
+          success: false,
+          message: `Disparo concluído com ${failedCount} falha(s). ${sentCount} mensagens enviadas. Primeiro erro: ${firstErrorDetails}`,
+          sentCount: sentCount,
+        };
       }
+
+      return {
+        success: true,
+        message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso.`,
+        sentCount: sentCount,
+      };
+    } catch (e: any) {
+        console.error('[WHATSAPP_BULK_SEND] Critical flow error:', e);
+        return {
+            success: false,
+            message: `Ocorreu um erro crítico no servidor: ${e.message}. Verifique os logs do Firebase.`,
+            sentCount: 0
+        };
     }
-
-    return {
-      success: failedCount === 0,
-      message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso, ${failedCount} falharam.`,
-      sentCount: sentCount,
-    };
   }
 );
