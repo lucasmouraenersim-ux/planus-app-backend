@@ -83,6 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
+        // This structure, with the image parameter, is what the API expects for this specific template.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,

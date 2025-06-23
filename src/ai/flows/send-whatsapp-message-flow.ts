@@ -50,6 +50,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
+    // This structure, with the image parameter, is what the API expects for this specific template.
     const requestBody = {
       messaging_product: "whatsapp",
       to: input.to,
