@@ -56,7 +56,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
     outputSchema: SendBulkWhatsappMessagesOutputSchema,
   },
   async (input) => {
-    try { // Add a top-level try-catch to prevent the server from crashing
+    try {
       const { leads, templateName, configuration } = input;
       const { sendInterval } = configuration;
 
@@ -76,10 +76,13 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
 
       const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
       let sentCount = 0;
-      let failedCount = 0;
-      let firstErrorDetails = '';
+      const totalLeads = leads.length;
 
-      for (const lead of leads) {
+      for (let i = 0; i < totalLeads; i++) {
+        const lead = leads[i];
+        
+        console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
+
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -100,61 +103,53 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             ],
           },
         };
-
-        try {
-          console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}.`);
-          const response = await fetch(apiUrl, {
+        
+        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}. Body:`, JSON.stringify(requestBody));
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify(requestBody),
-          });
-          
-          if (response.ok) {
+        });
+
+        if (response.ok) {
             sentCount++;
             const responseData = await response.json();
             console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
-          } else {
-            failedCount++;
+        } else {
             const errorText = await response.text();
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorText);
-            if (!firstErrorDetails) {
-              firstErrorDetails = `Falha no envio para ${lead.phone} (Status: ${response.status}). Resposta: ${errorText}`;
-            }
-          }
-        } catch (error: any) {
-          failedCount++;
-          console.error(`[WHATSAPP_BULK_SEND] Critical fetch/processing error for ${lead.phone}:`, error.message, error.stack);
-           if (!firstErrorDetails) {
-              firstErrorDetails = `Erro crítico ao contatar a API para o número ${lead.phone}: ${error.message}`;
-            }
+            // This lead failed, so we stop and report the first error.
+            return {
+              success: false,
+              message: `Falha no envio para ${lead.phone} (Status: ${response.status}). Resposta: ${errorText}`,
+              sentCount: sentCount,
+            };
         }
 
-        if (leads.indexOf(lead) < leads.length - 1 && sendInterval > 0) {
+        // Wait before sending the next message, if it's not the last one.
+        if (i < totalLeads - 1 && sendInterval > 0) {
           await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
         }
       }
 
-      if (failedCount > 0) {
-        return {
-          success: false,
-          message: `Disparo concluído com ${failedCount} falha(s). ${sentCount} mensagens enviadas. Primeiro erro: ${firstErrorDetails}`,
-          sentCount: sentCount,
-        };
-      }
-
+      // If loop completes without errors
       return {
         success: true,
         message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso.`,
         sentCount: sentCount,
       };
-    } catch (e: any) {
+
+    } catch (e: unknown) { // Use unknown for better type safety
         console.error('[WHATSAPP_BULK_SEND] Critical flow error:', e);
+        // Ensure we always return a valid error object.
+        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
         return {
             success: false,
-            message: `Ocorreu um erro crítico no servidor: ${e.message}. Verifique os logs do Firebase.`,
+            message: `Ocorreu um erro crítico no servidor: ${errorMessage}. Verifique os logs do Firebase.`,
             sentCount: 0
         };
     }
