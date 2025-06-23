@@ -98,8 +98,8 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
                   {
                     "type": "video",
                     "video": {
-                      // Using a reliable public video URL
-                      "link": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4"
+                      // Using a reliable public video URL under 16MB
+                      "link": "https://archive.org/download/BigBuckBunny_320x180/BigBuckBunny_320x180.mp4"
                     }
                   }
                 ]
