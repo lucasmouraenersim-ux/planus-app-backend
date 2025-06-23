@@ -78,14 +78,26 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
     let failedCount = 0;
 
     for (const lead of leads) {
+      // Assuming the template requires one variable in the body, which is the lead's name.
       const requestBody = {
         messaging_product: "whatsapp",
         to: lead.phone,
         type: "template",
         template: {
           name: templateName,
-          language: { "code": "pt_BR" }
-        }
+          language: { "code": "pt_BR" },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                {
+                  type: "text",
+                  text: lead.name,
+                },
+              ],
+            },
+          ],
+        },
       };
 
       try {

@@ -16,6 +16,7 @@ const ActionResultSchema = z.object({
   success: z.boolean(),
   leads: z.array(z.custom<OutboundLead>()).optional(),
   error: z.string().optional(),
+  info: z.string().optional(),
 });
 type ActionResult = z.infer<typeof ActionResultSchema>;
 
@@ -40,34 +41,39 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
         skipEmptyLines: true,
         transformHeader: header => header.toLowerCase().trim(),
         complete: (results) => {
-          // Check for parsing errors from Papaparse itself
-          if (results.errors.length > 0) {
-             const firstError = results.errors[0];
-             resolve({ success: false, error: `Erro na linha ${firstError.row}: ${firstError.message}` });
-             return;
-          }
+          const validLeads: OutboundLead[] = [];
+          const errorRows: number[] = [];
 
-          const parsedData = results.data;
-          const validation = z.array(CsvRowSchema).safeParse(parsedData);
+          results.data.forEach((row, index) => {
+            // Skip if row is essentially empty
+            if (!row.nome && !row.numero) {
+              return;
+            }
+            const validation = CsvRowSchema.safeParse(row);
+            if (validation.success) {
+              validLeads.push({
+                id: `csv-${Date.now()}-${index}`,
+                name: validation.data.nome.trim(),
+                phone: validation.data.numero.replace(/\D/g, ''), // Normalize phone number
+                consumption: 0, // Default value as it's not in the CSV
+                company: undefined,
+              });
+            } else {
+              errorRows.push(index + 2); // +2 because index is 0-based and header is line 1
+            }
+          });
 
-          if (!validation.success) {
-            // Provide a more detailed error message from Zod
-            const firstError = validation.error.errors[0];
-            const errorPath = firstError.path;
-            const errorMessage = `Erro na linha ${ (errorPath[0] as number) + 2 }: ${firstError.message} (na coluna '${errorPath[1]}').`;
-            resolve({ success: false, error: errorMessage });
+          if (validLeads.length === 0) {
+            resolve({ success: false, error: `Nenhum lead válido encontrado. Verifique o arquivo CSV na linha ${errorRows[0]} ou se as colunas 'nome' e 'numero' existem.` });
             return;
           }
-          
-          const outboundLeads: OutboundLead[] = validation.data.map((row, index) => ({
-            id: `csv-${Date.now()}-${index}`,
-            name: row.nome.trim(),
-            phone: row.numero.replace(/\D/g, ''), // Normalize phone number
-            consumption: 0, // Default value as it's not in the CSV
-            company: undefined,
-          }));
 
-          resolve({ success: true, leads: outboundLeads });
+          let infoMessage = undefined;
+          if (errorRows.length > 0) {
+            infoMessage = `${errorRows.length} linha(s) foram ignoradas por conterem erros.`;
+          }
+
+          resolve({ success: true, leads: validLeads, info: infoMessage });
         },
         error: (error: Error) => {
           resolve({ success: false, error: `Erro ao parsear o CSV: ${error.message}` });

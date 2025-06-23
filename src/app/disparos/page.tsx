@@ -88,7 +88,10 @@ export default function DisparosPage() {
       setLeads(result.leads);
       setSelectedLeads(new Set());
       setLastDataSource('csv');
-      toast({ title: "Sucesso!", description: `${result.leads.length} leads carregados do arquivo CSV.` });
+      toast({ 
+        title: "Sucesso!", 
+        description: `${result.leads.length} leads carregados do arquivo CSV. ${result.info || ''}` 
+      });
     } else {
       toast({ title: "Erro no Upload", description: result.error, variant: "destructive" });
     }
@@ -169,6 +172,7 @@ export default function DisparosPage() {
       toast({
         title: "Disparo Finalizado",
         description: result.message,
+        variant: result.success ? "default" : "destructive"
       });
     } catch (error) {
       console.error("Bulk send failed:", error);
