@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview A flow to simulate sending a single WhatsApp message.
+ * @fileOverview A flow to send a single WhatsApp message via a real API.
  *
- * - sendWhatsappMessage - Simulates sending a message to a phone number.
+ * - sendWhatsappMessage - Sends a message to a phone number.
  * - SendWhatsappMessageInput - The input type for the function.
  * - SendWhatsappMessageOutput - The return type for the function.
  */
@@ -35,21 +35,59 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     outputSchema: SendWhatsappMessageOutputSchema,
   },
   async (input) => {
-    // This is a simulation. We are not actually sending messages.
-    // In a real implementation, you would use the WhatsApp Business API here.
-    
-    console.log(`[SIMULATION] Sending WhatsApp message to: ${input.to}`);
-    console.log(`[SIMULATION] Message body: "${input.body}"`);
+    const apiUrl = process.env.WHATSAPP_API_URL;
+    const apiKey = process.env.WHATSAPP_API_KEY;
 
-    // Simulate an API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Always return success to prevent server errors during simulation
-    const simulatedMessageId = `sim_msg_${Date.now()}`;
-    console.log(`[SIMULATION] Message sent successfully. Message ID: ${simulatedMessageId}`);
-    return {
-      success: true,
-      messageId: simulatedMessageId,
-    };
+    if (!apiUrl || !apiKey) {
+      console.error("[WHATSAPP_API] Error: WHATSAPP_API_URL or WHATSAPP_API_KEY is not defined in .env file.");
+      return {
+        success: false,
+        error: "API de WhatsApp não configurada no servidor.",
+      };
+    }
+
+    try {
+      console.log(`[WHATSAPP_API] Sending message to: ${input.to} via ${apiUrl}`);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`, // Assumindo autenticação Bearer Token, ajuste se necessário.
+        },
+        body: JSON.stringify({
+          // Ajuste este corpo de requisição para corresponder ao que sua API espera.
+          // Exemplo comum:
+          to: input.to,
+          message: input.body,
+        }),
+      });
+
+      if (!response.ok) {
+        // Tenta ler a resposta de erro da sua API
+        const errorBody = await response.text();
+        console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Body: ${errorBody}`);
+        return {
+          success: false,
+          error: `Falha ao enviar mensagem. A API respondeu com status ${response.status}.`,
+        };
+      }
+
+      const responseData = await response.json();
+      const messageId = responseData.messageId || `api_resp_${Date.now()}`; // Pegue o ID da resposta da sua API
+
+      console.log(`[WHATSAPP_API] Message sent successfully. API Response:`, responseData);
+      return {
+        success: true,
+        messageId: messageId,
+      };
+
+    } catch (error) {
+      console.error("[WHATSAPP_API] Critical fetch error:", error);
+      return {
+        success: false,
+        error: "Erro de rede ou crítico ao tentar contatar a API de WhatsApp.",
+      };
+    }
   }
 );
