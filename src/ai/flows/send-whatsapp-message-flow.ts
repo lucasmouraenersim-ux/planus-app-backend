@@ -58,7 +58,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
       type: "template",
       template: {
         name: "novocontato", // Using a consistent template name
-        language: { "code": "en_US" },
+        language: { "code": "pt_BR" },
         components: [
             {
                 "type": "body",
