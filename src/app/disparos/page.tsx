@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBulkWhatsappMessages, type SendBulkWhatsappMessagesOutput, type SendingConfiguration, type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
-import type { LeadWithId } from '@/types/crm';
+import { uploadLeadsFromCSV } from './actions';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,9 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, ListFilter, PlayCircle, BarChart2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, MessageSquare, PlayCircle, BarChart2, CheckCircle, AlertCircle, Upload, Database } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 export default function DisparosPage() {
   const { fetchAllCrmLeadsGlobally } = useAuth();
@@ -33,19 +34,21 @@ export default function DisparosPage() {
   });
 
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
   const [simulationResult, setSimulationResult] = useState<SendBulkWhatsappMessagesOutput | null>(null);
+  const [lastDataSource, setLastDataSource] = useState<'none' | 'crm' | 'csv'>('none');
 
-  const loadLeads = async () => {
+  const loadLeadsFromCrm = async () => {
     setIsLoadingLeads(true);
     setSimulationResult(null);
     try {
       const allLeads = await fetchAllCrmLeadsGlobally();
       const validLeads = allLeads
         .filter(lead => lead.phone && lead.phone.trim() !== '')
-        .map((lead: LeadWithId): OutboundLead => ({
+        .map((lead): OutboundLead => ({
           id: lead.id,
           name: lead.name,
           phone: lead.phone || 'N/A',
@@ -53,6 +56,8 @@ export default function DisparosPage() {
           company: lead.company,
         }));
       setLeads(validLeads);
+      setSelectedLeads(new Set());
+      setLastDataSource('crm');
     } catch (error) {
       console.error("Failed to load leads:", error);
       toast({
@@ -63,6 +68,31 @@ export default function DisparosPage() {
     } finally {
       setIsLoadingLeads(false);
     }
+  };
+
+  const handleCsvUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const fileInput = e.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        toast({ title: "Nenhum Arquivo", description: "Por favor, selecione um arquivo CSV para carregar.", variant: "destructive" });
+        return;
+    }
+
+    setIsUploading(true);
+    setSimulationResult(null);
+    const result = await uploadLeadsFromCSV(formData);
+    
+    if (result.success && result.leads) {
+      setLeads(result.leads);
+      setSelectedLeads(new Set());
+      setLastDataSource('csv');
+      toast({ title: "Sucesso!", description: `${result.leads.length} leads carregados do arquivo CSV.` });
+    } else {
+      toast({ title: "Erro no Upload", description: result.error, variant: "destructive" });
+    }
+    setIsUploading(false);
   };
 
   const handleSelectLead = (leadId: string) => {
@@ -148,29 +178,98 @@ export default function DisparosPage() {
         <p className="text-muted-foreground mt-2">Configure e envie mensagens para seus leads usando templates aprovados.</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Column - Setup */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>1. Seleção de Leads</CardTitle>
-              <CardDescription>Carregue e selecione os leads do CRM para o disparo.</CardDescription>
+              <CardTitle>1. Fonte dos Leads</CardTitle>
+              <CardDescription>Carregue leads do CRM ou suba um arquivo CSV.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={loadLeads} disabled={isLoadingLeads}>
-                {isLoadingLeads && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button onClick={loadLeadsFromCrm} disabled={isLoadingLeads || isUploading} className="w-full">
+                {isLoadingLeads ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
                 Carregar Leads do CRM
               </Button>
-              {leads.length > 0 && <p className="text-sm text-muted-foreground mt-2">{selectedLeads.size} de {leads.length} leads selecionados.</p>}
             </CardContent>
+            <Separator className="my-4" />
             <CardContent>
-              <ScrollArea className="h-72 border rounded-md">
+              <form onSubmit={handleCsvUpload} className="space-y-3">
+                <Label htmlFor="csvFile">Ou suba um arquivo CSV</Label>
+                <Input id="csvFile" name="csvFile" type="file" accept=".csv" disabled={isLoadingLeads || isUploading} />
+                <Button type="submit" disabled={isLoadingLeads || isUploading} className="w-full">
+                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Carregar do CSV
+                </Button>
+                <p className="text-xs text-muted-foreground">O arquivo CSV deve conter as colunas: 'nome' e 'numero'.</p>
+              </form>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>2. Template da Mensagem</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+                <Label htmlFor="templateName">Nome do Template Aprovado</Label>
+                <Input
+                    id="templateName"
+                    placeholder="Ex: novocontato"
+                    value={templateName}
+                    onChange={e => setTemplateName(e.target.value)}
+                />
+            </CardContent>
+          </Card>
+          
+           <Card>
+            <CardHeader>
+              <CardTitle>3. Configurações de Envio</CardTitle>
+              <CardDescription>Ajuste os parâmetros para o disparo.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="sendPerChip">Envios por chip</Label>
+                <Input id="sendPerChip" name="sendPerChip" type="number" value={sendingConfig.sendPerChip} onChange={handleConfigChange} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sendInterval">Intervalo (s)</Label>
+                <Input id="sendInterval" name="sendInterval" type="number" value={sendingConfig.sendInterval} onChange={handleConfigChange} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="randomDelay">Atraso aleatório (s)</Label>
+                <Input id="randomDelay" name="randomDelay" type="number" value={sendingConfig.randomDelay} onChange={handleConfigChange} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="restAfterRound">Descanso (min)</Label>
+                <Input id="restAfterRound" name="restAfterRound" type="text" value={sendingConfig.restAfterRound} onChange={handleConfigChange} />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label htmlFor="numberOfSimultaneousWhatsapps">Nº de WhatsApps simultâneos</Label>
+                <Input id="numberOfSimultaneousWhatsapps" name="numberOfSimultaneousWhatsapps" type="number" value={sendingConfig.numberOfSimultaneousWhatsapps} onChange={handleConfigChange} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Selection & Execution */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>4. Seleção de Leads</CardTitle>
+              <CardDescription>
+                {leads.length > 0
+                  ? `${selectedLeads.size} de ${leads.length} leads selecionados da fonte: ${lastDataSource.toUpperCase()}`
+                  : "Carregue os leads para visualizá-los aqui."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-96 border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[50px]">
                         <Checkbox
-                          checked={selectedLeads.size > 0 && selectedLeads.size === leads.length}
+                          checked={leads.length > 0 && selectedLeads.size === leads.length}
                           onCheckedChange={handleSelectAllLeads}
                           aria-label="Selecionar todos"
                         />
@@ -180,7 +279,7 @@ export default function DisparosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoadingLeads ? (
+                    {isLoadingLeads || isUploading ? (
                       <TableRow><TableCell colSpan={3} className="h-24 text-center">Carregando...</TableCell></TableRow>
                     ) : leads.length > 0 ? (
                       leads.map(lead => (
@@ -201,57 +300,7 @@ export default function DisparosPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>2. Template da Mensagem</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-                <Label htmlFor="templateName">Nome do Template</Label>
-                <Input
-                    id="templateName"
-                    placeholder="Ex: novocontato"
-                    value={templateName}
-                    onChange={e => setTemplateName(e.target.value)}
-                />
-                <p className="text-sm text-muted-foreground">
-                    Digite o nome exato do seu template aprovado na Meta.
-                </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>3. Configurações de Envio</CardTitle>
-              <CardDescription>Ajuste os parâmetros do disparo.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="sendPerChip">Envios por chip</Label>
-                <Input id="sendPerChip" name="sendPerChip" type="number" value={sendingConfig.sendPerChip} onChange={handleConfigChange} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="sendInterval">Intervalo (s)</Label>
-                <Input id="sendInterval" name="sendInterval" type="number" value={sendingConfig.sendInterval} onChange={handleConfigChange} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="randomDelay">Atraso aleatório (s)</Label>
-                <Input id="randomDelay" name="randomDelay" type="number" value={sendingConfig.randomDelay} onChange={handleConfigChange} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="restAfterRound">Descanso após rodada</Label>
-                <Input id="restAfterRound" name="restAfterRound" type="text" value={sendingConfig.restAfterRound} onChange={handleConfigChange} />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label htmlFor="numberOfSimultaneousWhatsapps">Nº de WhatsApps simultâneos</Label>
-                <Input id="numberOfSimultaneousWhatsapps" name="numberOfSimultaneousWhatsapps" type="number" value={sendingConfig.numberOfSimultaneousWhatsapps} onChange={handleConfigChange} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>4. Execução e Resultados</CardTitle>
+              <CardTitle>5. Execução e Resultados</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-center">
               <Button
