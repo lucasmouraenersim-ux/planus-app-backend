@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Template call with a VIDEO in the header.
+        // Template call with an IMAGE in the header.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -96,10 +96,9 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
                 "type": "header",
                 "parameters": [
                   {
-                    "type": "video",
-                    "video": {
-                      // Using a reliable public video URL under 16MB
-                      "link": "https://archive.org/download/BigBuckBunny_320x180/BigBuckBunny_320x180.mp4"
+                    "type": "image",
+                    "image": {
+                      "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/imagem_novocontato.png"
                     }
                   }
                 ]
