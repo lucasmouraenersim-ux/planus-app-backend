@@ -75,47 +75,46 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     setNewMessage('');
     
     try {
-      // Salva a mensagem no histórico do Firestore
+      // First, save the message to our own history. This is critical.
       const savedMessage = await saveChatMessage(lead.id, messageData);
       setChatMessages(prev => [...prev, savedMessage]);
 
-      toast({
-        title: "Mensagem Salva",
-        description: `Sua mensagem foi salva no histórico deste lead.`,
+      // Now, try to send it via the WhatsApp simulation flow.
+      if (!lead.phone || lead.phone.trim() === '') {
+        toast({
+            title: "Aviso: Apenas salvo no histórico",
+            description: "Este lead não possui um número de telefone para envio. A mensagem foi salva no chat.",
+            variant: "default",
+        });
+        setIsSendingMessage(false);
+        return; // Stop here, but the message is saved.
+      }
+      
+      const result = await sendWhatsappMessage({
+          to: lead.phone,
+          body: messageToSend,
       });
 
-      // Temporarily disable the WhatsApp call to fix the 500 error
-      // if (!lead.phone) {
-      //   toast({
-      //       title: "Aviso",
-      //       description: "Este lead não possui um número de telefone para envio via WhatsApp.",
-      //       variant: "default",
-      //   });
-      //   return;
-      // }
-      // const result = await sendWhatsappMessage({
-      //     to: lead.phone,
-      //     body: messageToSend,
-      // });
-      // if (result.success) {
-      //   toast({
-      //       title: "Mensagem Enviada (Simulação)",
-      //       description: `A mensagem foi enviada para ${lead.name}.`,
-      //   });
-      // } else {
-      //    toast({
-      //       title: "Falha na Simulação de Envio",
-      //       description: result.error || "Não foi possível enviar a mensagem via WhatsApp.",
-      //       variant: "destructive",
-      //   });
-      //   setNewMessage(messageToSend);
-      // }
+      if (result.success) {
+        toast({
+            title: "Simulação de Envio OK",
+            description: `A mensagem para ${lead.name} foi enviada para a fila de simulação.`,
+        });
+      } else {
+         toast({
+            title: "Falha na Simulação de Envio",
+            description: result.error || "Não foi possível simular o envio da mensagem via WhatsApp.",
+            variant: "destructive",
+        });
+        // Restore message on failure so user can retry
+        setNewMessage(messageToSend);
+      }
 
     } catch (error) {
         console.error("Error processing message:", error);
         toast({
-            title: "Erro",
-            description: "Ocorreu um erro ao processar o envio da mensagem.",
+            title: "Erro Inesperado",
+            description: "Ocorreu um erro ao processar a mensagem. Verifique o console.",
             variant: "destructive",
         });
         setNewMessage(messageToSend); // Restore message on error
