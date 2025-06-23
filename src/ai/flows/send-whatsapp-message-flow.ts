@@ -65,7 +65,8 @@ const sendWhatsappMessageFlow = ai.defineFlow(
               {
                 "type": "image",
                 "image": {
-                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg"
+                  // Using a simpler, cleaner URL to avoid encoding issues on the server.
+                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/6fcd1f5f2911ab2dce68546d03c967214790d0ba/LOGO_LOGO_BRANCA.png"
                 }
               }
             ]
