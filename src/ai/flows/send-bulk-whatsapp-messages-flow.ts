@@ -83,7 +83,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Template call with an image in the header and the lead's name in the body.
+        // Template call with ONLY an image in the header.
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
@@ -100,15 +100,6 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
                     "image": {
                       "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/6fcd1f5f2911ab2dce68546d03c967214790d0ba/LOGO_LOGO_BRANCA.png"
                     }
-                  }
-                ]
-              },
-              {
-                "type": "body",
-                "parameters": [
-                  {
-                    "type": "text",
-                    "text": lead.name
                   }
                 ]
               }
