@@ -49,9 +49,18 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     }
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+    const requestBody = {
+      messaging_product: "whatsapp",
+      to: input.to,
+      type: "text",
+      text: {
+        body: input.body
+      }
+    };
 
     try {
-      console.log(`[WHATSAPP_API] Sending message to: ${input.to} via Meta Graph API`);
+      console.log(`[WHATSAPP_API] Preparing to send to URL: ${apiUrl}`);
+      console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -59,17 +68,12 @@ const sendWhatsappMessageFlow = ai.defineFlow(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: input.to,
-          type: "text",
-          text: {
-            body: input.body
-          }
-        }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
       const responseData = await response.json();
+      console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
 
       if (!response.ok) {
         // This block handles API errors returned by Meta (e.g., bad request, invalid token)
