@@ -65,7 +65,7 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
       const apiVersion = 'v20.0';
 
       if (!phoneNumberId || !accessToken) {
-        const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente no arquivo apphosting.yaml.";
+        const errorMessage = "Credenciais da API do WhatsApp não configuradas no servidor. Verifique as variáveis de ambiente no arquivo apphosting.yaml.";
         console.error(`[WHATSAPP_BULK_SEND] Error: ${errorMessage}`);
         return {
           success: false,
@@ -120,32 +120,38 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             const responseData = await response.json();
             console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
         } else {
-            const errorText = await response.text();
-            console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorText);
-            // This lead failed, so we stop and report the first error.
+            const errorData = await response.json();
+            const errorMessage = errorData?.error?.message || JSON.stringify(errorData);
+            console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
+
+            let friendlyMessage = `Falha no envio para ${lead.phone}. Resposta da API: ${errorMessage}`;
+            
+            if (String(errorMessage).includes("Session has expired") || String(errorMessage).includes("Error validating access token")) {
+                friendlyMessage = "O token de acesso do WhatsApp expirou. Por favor, gere um novo token permanente no Gerenciador de Negócios da Meta e me envie.";
+            } else if (String(errorMessage).includes("template")) {
+                 friendlyMessage = `Ocorreu um erro com o template '${templateName}'. Verifique se ele está aprovado e se a estrutura enviada corresponde à do template. Erro: ${errorMessage}`;
+            }
+
             return {
               success: false,
-              message: `Falha no envio para ${lead.phone} (Status: ${response.status}). Resposta: ${errorText}`,
+              message: friendlyMessage,
               sentCount: sentCount,
             };
         }
 
-        // Wait before sending the next message, if it's not the last one.
         if (i < totalLeads - 1 && sendInterval > 0) {
           await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
         }
       }
 
-      // If loop completes without errors
       return {
         success: true,
         message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso.`,
         sentCount: sentCount,
       };
 
-    } catch (e: unknown) { // Use unknown for better type safety
+    } catch (e: unknown) {
         console.error('[WHATSAPP_BULK_SEND] Critical flow error:', e);
-        // Ensure we always return a valid error object.
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
         return {
             success: false,
