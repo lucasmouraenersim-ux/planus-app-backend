@@ -83,17 +83,18 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
+        // Simplified template call for debugging
         const requestBody = {
           messaging_product: "whatsapp",
           to: lead.phone,
           type: "template",
           template: {
-            name: templateName,
-            language: { "code": "pt_BR" },
+            name: "hello_world", // Using the simplest template
+            language: { "code": "en_US" },
           },
         };
         
-        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}. Body:`, JSON.stringify(requestBody));
+        console.log(`[WHATSAPP_BULK_SEND] Sending template 'hello_world' to ${lead.phone}. Body:`, JSON.stringify(requestBody));
         
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -110,15 +111,13 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
             console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
         } else {
             const errorData = await response.json();
+            // Display the exact error from Meta API for better debugging
             const errorMessage = errorData?.error?.message || JSON.stringify(errorData);
             console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorMessage);
-
-            // Pass the raw error message from the API directly to the user for better debugging.
-            const friendlyMessage = `Erro da API do WhatsApp: ${errorMessage}`;
             
             return {
               success: false,
-              message: friendlyMessage,
+              message: `Erro da API do WhatsApp: ${errorMessage}`,
               sentCount: sentCount,
             };
         }
