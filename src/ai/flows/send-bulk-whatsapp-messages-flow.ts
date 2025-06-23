@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview A bulk WhatsApp message sending simulation flow.
+ * @fileOverview A bulk WhatsApp message sending flow using the Meta API.
  *
- * - sendBulkWhatsappMessages - A function that simulates sending bulk messages.
+ * - sendBulkWhatsappMessages - A function that sends bulk messages.
  * - SendBulkWhatsappMessagesInput - The input type for the function.
  * - SendBulkWhatsappMessagesOutput - The return type for the function.
  */
@@ -31,7 +31,7 @@ export type SendingConfiguration = z.infer<typeof SendingConfigurationSchema>;
 
 const SendBulkWhatsappMessagesInputSchema = z.object({
   leads: z.array(OutboundLeadSchema),
-  messageTemplate: z.string(),
+  templateName: z.string().describe("The name of the pre-approved WhatsApp message template."),
   configuration: SendingConfigurationSchema,
 });
 export type SendBulkWhatsappMessagesInput = z.infer<typeof SendBulkWhatsappMessagesInputSchema>;
@@ -56,21 +56,72 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
     outputSchema: SendBulkWhatsappMessagesOutputSchema,
   },
   async (input) => {
-    // This is a simulation. We are not actually sending messages.
-    // We'll just log the action and return a success response.
-    
-    console.log(`Simulating bulk message send for ${input.leads.length} leads.`);
-    console.log(`Message Template: ${input.messageTemplate}`);
-    console.log('Sending Configuration:', input.configuration);
+    const { leads, templateName, configuration } = input;
+    const { sendInterval } = configuration;
 
-    // Simulate some processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+    const accessToken = process.env.META_PERMANENT_TOKEN;
+    const apiVersion = 'v20.0';
 
-    const sentCount = input.leads.length;
+    if (!phoneNumberId || !accessToken) {
+      const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis de ambiente.";
+      console.error(`[WHATSAPP_BULK_SEND] Error: ${errorMessage}`);
+      return {
+        success: false,
+        message: errorMessage,
+        sentCount: 0,
+      };
+    }
+
+    const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const lead of leads) {
+      // NOTE: For templates with variables, the `components` array would be populated here.
+      // For `hello_world`, no components are needed.
+      const requestBody = {
+        messaging_product: "whatsapp",
+        to: lead.phone,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { "code": "en_US" } // Can be parameterized later if needed
+        }
+      };
+
+      try {
+        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}`);
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (response.ok) {
+          sentCount++;
+        } else {
+          failedCount++;
+          const responseData = await response.json();
+          console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response:`, responseData);
+        }
+      } catch (error) {
+        failedCount++;
+        console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}:`, error);
+      }
+
+      // Wait for the specified interval before sending the next message
+      if (leads.length > 1 && sendInterval > 0) {
+        await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
+      }
+    }
 
     return {
-      success: true,
-      message: `Simulação de disparo concluída com sucesso para ${sentCount} contatos.`,
+      success: failedCount === 0,
+      message: `Disparo concluído. ${sentCount} mensagens enviadas com sucesso, ${failedCount} falharam.`,
       sentCount: sentCount,
     };
   }

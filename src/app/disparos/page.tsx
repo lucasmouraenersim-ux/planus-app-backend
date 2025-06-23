@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBulkWhatsappMessages, type SendBulkWhatsappMessagesOutput, type SendingConfiguration, type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
 import type { LeadWithId } from '@/types/crm';
@@ -12,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, MessageSquare, ListFilter, PlayCircle, BarChart2, CheckCircle, AlertCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,7 +23,7 @@ export default function DisparosPage() {
 
   const [leads, setLeads] = useState<OutboundLead[]>([]);
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
-  const [messageTemplate, setMessageTemplate] = useState("Olá, {{nome_do_cliente}}! Temos uma oferta especial de economia de energia para você. Gostaria de saber mais?");
+  const [templateName, setTemplateName] = useState("hello_world");
   const [sendingConfig, setSendingConfig] = useState<SendingConfiguration>({
     sendPerChip: 25,
     sendInterval: 10,
@@ -92,11 +92,11 @@ export default function DisparosPage() {
     }));
   };
 
-  const handleStartSimulation = async () => {
-    if (selectedLeads.size === 0 || !messageTemplate) {
+  const handleStartSending = async () => {
+    if (selectedLeads.size === 0 || !templateName) {
       toast({
         title: "Dados Incompletos",
-        description: "Selecione ao menos um lead e preencha o modelo da mensagem.",
+        description: "Selecione ao menos um lead e informe o nome do template.",
         variant: "destructive",
       });
       return;
@@ -105,12 +105,11 @@ export default function DisparosPage() {
     setIsSending(true);
     setProgress(0);
     setSimulationResult(null);
-    setStatusText("Iniciando simulação...");
+    setStatusText("Iniciando disparos...");
 
-    // Animate progress bar
     const progressInterval = setInterval(() => {
       setProgress(prev => (prev < 90 ? prev + 10 : 90));
-    }, 200);
+    }, 500);
 
     const leadsToSend = leads.filter(lead => selectedLeads.has(lead.id));
     setStatusText(`Preparando para enviar para ${leadsToSend.length} contatos...`);
@@ -118,44 +117,35 @@ export default function DisparosPage() {
     try {
       const result = await sendBulkWhatsappMessages({
         leads: leadsToSend,
-        messageTemplate,
+        templateName: templateName,
         configuration: sendingConfig,
       });
       setSimulationResult(result);
       toast({
-        title: "Simulação Concluída",
+        title: "Disparo Finalizado",
         description: result.message,
       });
     } catch (error) {
-      console.error("Simulation failed:", error);
+      console.error("Bulk send failed:", error);
       toast({
-        title: "Erro na Simulação",
-        description: "Ocorreu um erro ao executar a simulação.",
+        title: "Erro no Disparo",
+        description: "Ocorreu um erro ao executar o disparo em massa.",
         variant: "destructive",
       });
-      setSimulationResult({ success: false, message: "A simulação falhou.", sentCount: 0 });
+      setSimulationResult({ success: false, message: "O disparo falhou.", sentCount: 0 });
     } finally {
       clearInterval(progressInterval);
       setProgress(100);
       setIsSending(false);
-      setStatusText("Simulação finalizada.");
+      setStatusText("Disparo finalizado.");
     }
   };
-
-  const previewMessage = useMemo(() => {
-    if (selectedLeads.size === 0) {
-      return messageTemplate.replace(/{{nome_do_cliente}}/g, "[Nome do Cliente]");
-    }
-    const firstSelectedId = Array.from(selectedLeads)[0];
-    const firstLead = leads.find(l => l.id === firstSelectedId);
-    return messageTemplate.replace(/{{nome_do_cliente}}/g, `**${firstLead?.name || '[Nome do Cliente]'}**`);
-  }, [messageTemplate, selectedLeads, leads]);
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">
       <header className="text-center">
-        <h1 className="text-3xl font-bold text-primary">Simulador de Disparos em Massa</h1>
-        <p className="text-muted-foreground mt-2">Configure e simule o envio de mensagens para seus leads.</p>
+        <h1 className="text-3xl font-bold text-primary">Disparos em Massa via WhatsApp</h1>
+        <p className="text-muted-foreground mt-2">Configure e envie mensagens para seus leads usando templates aprovados.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -211,20 +201,19 @@ export default function DisparosPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>2. Modelo da Mensagem</CardTitle>
+              <CardTitle>2. Template da Mensagem</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="Digite sua mensagem aqui..."
-                value={messageTemplate}
-                onChange={e => setMessageTemplate(e.target.value)}
-                className="min-h-[120px]"
-              />
-              <p className="text-sm text-muted-foreground">{'Use `{{nome_do_cliente}}` para personalizar a mensagem.'}</p>
-              <Card className="p-4 bg-muted/50">
-                <Label className="text-xs font-semibold text-muted-foreground">Pré-visualização</Label>
-                <p className="text-sm mt-1">{previewMessage}</p>
-              </Card>
+            <CardContent className="space-y-2">
+                <Label htmlFor="templateName">Nome do Template</Label>
+                <Input
+                    id="templateName"
+                    placeholder="Ex: hello_world"
+                    value={templateName}
+                    onChange={e => setTemplateName(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                    Digite o nome exato do seu template aprovado na Meta.
+                </p>
             </CardContent>
           </Card>
         </div>
@@ -234,7 +223,7 @@ export default function DisparosPage() {
           <Card>
             <CardHeader>
               <CardTitle>3. Configurações de Envio</CardTitle>
-              <CardDescription>Ajuste os parâmetros da simulação.</CardDescription>
+              <CardDescription>Ajuste os parâmetros do disparo.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -267,8 +256,8 @@ export default function DisparosPage() {
             <CardContent className="space-y-4 text-center">
               <Button
                 size="lg"
-                onClick={handleStartSimulation}
-                disabled={isSending || selectedLeads.size === 0 || !messageTemplate}
+                onClick={handleStartSending}
+                disabled={isSending || selectedLeads.size === 0 || !templateName}
                 className="w-full"
               >
                 {isSending ? (
@@ -276,7 +265,7 @@ export default function DisparosPage() {
                 ) : (
                   <PlayCircle className="mr-2 h-5 w-5" />
                 )}
-                Iniciar Disparo Simulado
+                Iniciar Disparo Real
               </Button>
               {isSending && (
                 <div className="space-y-2 pt-4">
@@ -290,7 +279,7 @@ export default function DisparosPage() {
                     {simulationResult.success ? <CheckCircle className="h-6 w-6 text-green-500 mr-2" /> : <AlertCircle className="h-6 w-6 text-red-500 mr-2" />}
                     <div>
                       <p className="font-semibold">{simulationResult.message}</p>
-                      <p className="text-sm text-muted-foreground">Contatos processados: {simulationResult.sentCount}</p>
+                      <p className="text-sm text-muted-foreground">Contatos processados: {simulationResult.sentCount} de {selectedLeads.size}</p>
                     </div>
                   </div>
                 </Card>
