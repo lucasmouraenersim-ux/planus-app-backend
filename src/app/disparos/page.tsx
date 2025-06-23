@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, MessageSquare, PlayCircle, BarChart2, CheckCircle, AlertCircle, Upload, Database } from 'lucide-react';
+import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
@@ -93,6 +93,21 @@ export default function DisparosPage() {
       toast({ title: "Erro no Upload", description: result.error, variant: "destructive" });
     }
     setIsUploading(false);
+  };
+  
+  const handleDownloadTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,nome,numero\nJoão da Silva,5511999998888\nMaria Souza,5521987654321";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "modelo_leads.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({
+      title: "Download Iniciado",
+      description: "O arquivo modelo_leads.csv está sendo baixado.",
+    });
   };
 
   const handleSelectLead = (leadId: string) => {
@@ -201,7 +216,13 @@ export default function DisparosPage() {
                   {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                   Carregar do CSV
                 </Button>
-                <p className="text-xs text-muted-foreground">O arquivo CSV deve conter as colunas: 'nome' e 'numero'.</p>
+                <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs text-muted-foreground">O CSV deve ter as colunas: 'nome' e 'numero'.</p>
+                    <Button type="button" variant="link" size="sm" onClick={handleDownloadTemplate} className="text-primary p-0 h-auto">
+                        <Download className="mr-1 h-3 w-3" />
+                        Baixar Modelo
+                    </Button>
+                </div>
               </form>
             </CardContent>
           </Card>

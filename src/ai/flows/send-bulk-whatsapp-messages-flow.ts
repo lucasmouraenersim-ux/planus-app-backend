@@ -78,20 +78,20 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
     let failedCount = 0;
 
     for (const lead of leads) {
-      // NOTE: For templates with variables, the `components` array would be populated here.
-      // For `hello_world`, no components are needed.
       const requestBody = {
         messaging_product: "whatsapp",
         to: lead.phone,
         type: "template",
         template: {
           name: templateName,
-          language: { "code": "pt_BR" } // Changed to Brazilian Portuguese
+          language: { "code": "pt_BR" }
         }
       };
 
       try {
-        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}`);
+        console.log(`[WHATSAPP_BULK_SEND] Sending template '${templateName}' to ${lead.phone}. URL: ${apiUrl}`);
+        console.log(`[WHATSAPP_BULK_SEND] Body: ${JSON.stringify(requestBody)}`);
+
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
@@ -100,17 +100,21 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
           },
           body: JSON.stringify(requestBody),
         });
+        
+        console.log(`[WHATSAPP_BULK_SEND] Response Status for ${lead.phone}: ${response.status}`);
 
         if (response.ok) {
           sentCount++;
+          const responseData = await response.json();
+          console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Response:`, responseData);
         } else {
           failedCount++;
-          const responseData = await response.json();
-          console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response:`, responseData);
+          const errorText = await response.text();
+          console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Status: ${response.status}. Response Body:`, errorText);
         }
-      } catch (error) {
+      } catch (error: any) {
         failedCount++;
-        console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}:`, error);
+        console.error(`[WHATSAPP_BULK_SEND] Critical fetch/processing error for ${lead.phone}:`, error.message, error.stack);
       }
 
       // Wait for the specified interval before sending the next message

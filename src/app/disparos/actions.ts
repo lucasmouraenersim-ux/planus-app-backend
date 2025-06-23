@@ -38,6 +38,7 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
       Papa.parse<z.infer<typeof CsvRowSchema>>(fileContent, {
         header: true,
         skipEmptyLines: true,
+        transformHeader: header => header.toLowerCase().trim(),
         complete: (results) => {
           // Check for parsing errors from Papaparse itself
           if (results.errors.length > 0) {
