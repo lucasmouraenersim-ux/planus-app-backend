@@ -22,6 +22,7 @@ import { sendChatMessage } from '@/ai/flows/send-chat-message-flow';
 import { fetchChatHistory } from '@/ai/flows/fetch-chat-history-flow';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -51,25 +52,46 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
 
   useEffect(() => {
     if (!lead.id) return;
-    
+
+    let isMounted = true;
     const loadChat = async () => {
-      setIsLoadingChat(true);
-      setChatError(null);
+      // Don't set loading to true on every poll, only on initial load.
+      if (isLoadingChat) {
+        setChatError(null);
+      }
       try {
         const history = await fetchChatHistory(lead.id);
-        setChatMessages(history);
+        if (isMounted) {
+          setChatMessages(history);
+        }
       } catch (error) {
         console.error("Error fetching chat history:", error);
-        setChatError("Não foi possível carregar o histórico de mensagens.");
+        if (isMounted) {
+          setChatError("Não foi possível carregar o histórico de mensagens.");
+        }
       } finally {
-        setIsLoadingChat(false);
+        if (isMounted && isLoadingChat) {
+          setIsLoadingChat(false);
+        }
       }
     };
     
+    // Fetch immediately on component mount
     loadChat();
+
+    // Then, set up polling to refresh every 5 seconds
+    const intervalId = setInterval(loadChat, 5000);
+
+    // Clean up the interval when the component unmounts
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
   useEffect(() => {
+    // Scroll to bottom only when new messages are added
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
@@ -257,7 +279,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <div className="mt-6 pt-4 border-t">
               <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center"><MessageSquare className="w-5 h-5 mr-2 text-primary"/>Histórico de Contato</h3>
               <ScrollArea className="h-48 mb-3 p-3 border rounded-md bg-background">
-                 {isLoadingChat ? (
+                 {isLoadingChat && chatMessages.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         <p className="ml-2 text-muted-foreground">Carregando chat...</p>
