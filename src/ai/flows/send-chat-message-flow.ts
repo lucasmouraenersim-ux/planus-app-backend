@@ -6,10 +6,23 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 import type { ChatMessage } from '@/types/crm';
-import { adminDb, getFirebaseAdmin } from '@/lib/firebase/admin';
+
+// Direct initialization of Firebase Admin SDK
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+  } catch (e) {
+    console.error('Firebase admin initialization error', e);
+  }
+}
+const adminDb = admin.firestore();
+
 
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
@@ -44,8 +57,7 @@ const sendChatMessageFlow = ai.defineFlow(
     outputSchema: SendChatMessageOutputSchema,
   },
   async ({ leadId, phone, text, sender }) => {
-    const admin = getFirebaseAdmin(); // Get initialized admin instance
-
+    
     // 1. Save the message to Firestore using Admin SDK
     const batch = adminDb.batch();
     const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);

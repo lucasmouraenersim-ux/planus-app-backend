@@ -12,12 +12,27 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
-import { adminDb } from '@/lib/firebase/admin';
-import { getFirebaseAdmin } from '@/lib/firebase/admin';
 
-// We use z.any() because the webhook payload is complex and we only care about a few fields.
+
+// Direct initialization of Firebase Admin SDK
+if (!admin.apps.length) {
+  try {
+    console.log('[INGEST_FLOW] Initializing Firebase Admin SDK...');
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+    console.log('[INGEST_FLOW] Firebase Admin SDK initialized successfully.');
+  } catch (e: any) {
+    console.error('[INGEST_FLOW] CRITICAL: Firebase admin initialization error.', e);
+  }
+}
+
+const adminDb = admin.firestore();
+
+
 const IngestWhatsappMessageInputSchema = z.any();
 export type IngestWhatsappMessageInput = z.infer<typeof IngestWhatsappMessageInputSchema>;
 
@@ -42,11 +57,11 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
   },
   async (payload) => {
     try {
+        console.log(`[INGEST_FLOW] Admin SDK Initialized: ${admin.apps.length > 0}`);
         const entry = payload.entry?.[0];
         const change = entry?.changes?.[0];
         const value = change?.value;
-        const admin = getFirebaseAdmin(); // Get initialized admin instance
-
+        
         // Handle user text messages
         if (value?.messages?.[0]) {
             const message = value.messages[0];
@@ -65,19 +80,30 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
             const leadsRef = adminDb.collection("crm_leads");
             
             let leadId: string | null = null;
+            let leadDoc;
             
-            // 1. Find existing lead using Admin SDK (bypasses security rules)
-            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
-            const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
-            const querySnapshot = await q.get();
+            // 1. Find existing lead using Admin SDK
+            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone} using Admin SDK.`);
             
-            if (!querySnapshot.empty) {
-                const leadDoc = querySnapshot.docs[0];
-                leadId = leadDoc.id;
-                console.log(`[INGEST_FLOW] Found existing lead for ${from}: ID ${leadId}`);
-            } else {
+            try {
+              const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
+              const querySnapshot = await q.get();
+
+              if (!querySnapshot.empty) {
+                  leadDoc = querySnapshot.docs[0];
+                  leadId = leadDoc.id;
+                  console.log(`[INGEST_FLOW] SUCCESS: Found existing lead for ${from}: ID ${leadId}`);
+              } else {
+                  console.log(`[INGEST_FLOW] No lead found for phone ${normalizedPhone}. Will create a new one.`);
+              }
+            } catch (error: any) {
+              console.error(`[INGEST_FLOW] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
+              return { success: false, message: `Admin SDK query failed: ${error.message}` };
+            }
+            
+            if (!leadId) {
                 // 2. Create new lead if not found using Admin SDK
-                console.log(`[INGEST_FLOW] No lead found. Creating new lead for ${from}.`);
+                console.log(`[INGEST_FLOW] Creating new lead for ${from}.`);
                 const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
                 const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
                 const now = admin.firestore.Timestamp.now();
@@ -108,7 +134,7 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
             if (leadId) {
                 const batch = adminDb.batch();
                 const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
-                const leadRef = adminDb.collection("crm_leads").doc(leadId);
+                const leadRefToUpdate = adminDb.collection("crm_leads").doc(leadId);
                 
                 const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
                     text: messageText,
@@ -116,14 +142,13 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
                     timestamp: admin.firestore.Timestamp.now(),
                 };
                 
-                // Add a random ID to the message object before saving
                 const finalMessage = {
                     ...newMessage,
                     id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 };
                 
                 batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(finalMessage) }, { merge: true });
-                batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
+                batch.update(leadRefToUpdate, { lastContact: admin.firestore.Timestamp.now() });
 
                 await batch.commit();
                 console.log(`[INGEST_FLOW] Message saved and lastContact updated for lead ${leadId}.`);

@@ -11,9 +11,22 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
-import { adminDb } from '@/lib/firebase/admin';
+
+// Direct initialization of Firebase Admin SDK
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+  } catch (e) {
+    console.error('Firebase admin initialization error', e);
+  }
+}
+const adminDb = admin.firestore();
+
 
 const ChatMessageSchema = z.object({
   id: z.string(),
