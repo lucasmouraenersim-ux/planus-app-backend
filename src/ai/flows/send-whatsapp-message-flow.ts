@@ -18,6 +18,7 @@ const SendWhatsappMessageInputSchema = z.object({
     template: z.object({
       name: z.string().describe("The name of the pre-approved WhatsApp message template."),
       bodyParams: z.array(z.string()).optional().describe("An array of strings to replace the variables {{1}}, {{2}}, etc., in the template's body."),
+      headerImageUrl: z.string().url().optional().describe("A URL for an image to be used in the template's header."),
     }).optional().describe("The template to use for the message."),
   }).refine(m => m.text || m.template, {
     message: "Either a 'text' or a 'template' object must be provided in the message.",
@@ -84,13 +85,33 @@ const sendWhatsappMessageFlow = ai.defineFlow(
           language: { "code": "pt_BR" },
         }
       };
-      // Only add components if there are parameters to pass
+
+      const components = [];
+
+      // Add header component if an image URL is provided
+      if (input.message.template.headerImageUrl) {
+        components.push({
+          type: 'header',
+          parameters: [{
+            type: 'image',
+            image: { link: input.message.template.headerImageUrl }
+          }]
+        });
+      }
+
+      // Add body component if body parameters are provided
       if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
-        requestBody.template.components = [{
+        components.push({
           type: 'body',
           parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
-        }];
+        });
       }
+      
+      // Attach components array to the request body if it's not empty
+      if (components.length > 0) {
+        requestBody.template.components = components;
+      }
+
     } else if (input.message.text) {
       requestBody = {
         messaging_product: "whatsapp",

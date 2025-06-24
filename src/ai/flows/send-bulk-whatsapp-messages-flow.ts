@@ -61,6 +61,9 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
       const { leads, templateName, configuration } = input;
       const { sendInterval, numberOfSimultaneousWhatsapps } = configuration;
 
+      // This hardcoded URL matches the one from the working production logs for the 'novocontato' template.
+      const headerImageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
+
       let sentCount = 0;
       const totalLeads = leads.length;
 
@@ -74,7 +77,9 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
               message: {
                   template: {
                       name: templateName,
-                      bodyParams: [lead.name] 
+                      // The production logs for 'novocontato' template show it expects a header image, not body parameters.
+                      // Sending bodyParams would cause an error.
+                      headerImageUrl: headerImageUrl,
                   }
               }
           }).then(result => {
