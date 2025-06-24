@@ -63,9 +63,13 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     
     // Log a masked version of the token to confirm which one is being used
     console.log(`[WHATSAPP_API] Using token starting with: ${accessToken.substring(0, 4)}... and ending with: ...${accessToken.substring(accessToken.length - 4)}`);
+    console.log('[WHATSAPP_API] Forcing rebuild and re-read of environment variables.');
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
+    // The decoded URL that works in CURL. The fetch API will handle encoding it correctly.
+    const imageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem do WhatsApp de 2025-06-17 à(s) 10.04.50_a5712825.jpg";
+
     const requestBody = {
       messaging_product: "whatsapp",
       to: to, // Use the potentially corrected phone number
@@ -80,7 +84,7 @@ const sendWhatsappMessageFlow = ai.defineFlow(
               {
                 "type": "image",
                 "image": {
-                  "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem do WhatsApp de 2025-06-17 à(s) 10.04.50_a5712825.jpg"
+                  "link": imageUrl
                 }
               }
             ]
