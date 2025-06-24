@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -16,35 +17,39 @@ service cloud.firestore {
 
     // Regras para a coleção 'crm_leads'
     match /crm_leads/{leadId} {
+      // PERMITE que o webhook verifique se um lead existe (get) mas não que liste todos
+      allow get: if request.auth == null; 
+      
       allow list: if request.auth != null &&
                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor');
 
-      allow get: if request.auth != null &&
-                   (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' && resource.data.userId == request.auth.uid));
+      allow create: if request.auth != null || request.auth == null; // Permite criação pelo webhook
 
-      // Permite que um usuário autenticado crie um lead para si mesmo (ou admin crie para qualquer um)
-      // E permite que o webhook (não autenticado) crie um lead se tiver os campos necessários.
-      allow create: if (request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' || request.resource.data.userId == request.auth.uid))
-                    || (request.auth == null && request.resource.data.phone != null && request.resource.data.userId != null);
+      allow update: if 
+        (request.auth != null &&
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid)
+          )
+        ) ||
+        // Permite que o webhook atualize apenas o campo lastContact
+        (request.auth == null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastContact'])
+        );
 
-      // Permite que o dono do lead ou um admin atualize.
-      // E permite que o webhook (não autenticado) atualize APENAS o campo lastContact.
-      allow update: if (request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' || resource.data.userId == request.auth.uid))
-                    || (request.auth == null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastContact']));
-
-      allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
+      allow delete: if request.auth != null &&
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
     }
 
-    // Regras para a subcoleção de chats
+    // Regras para a coleção 'crm_lead_chats'
     match /crm_lead_chats/{leadId} {
-        // Permite que o webhook (não autenticado) escreva o histórico
-        allow write: if request.auth == null;
-        
-        // Permite que usuários autenticados leiam o histórico
-        allow read: if request.auth != null;
+      // Permite que o webhook (não autenticado) crie e atualize o histórico de chat
+      allow create, write: if request.auth == null;
+
+      // Permite que usuários autenticados leiam
+      allow get, list: if request.auth != null;
     }
+
 
     // Regras para a coleção 'withdrawal_requests'
     match /withdrawal_requests/{requestId} {
