@@ -50,12 +50,10 @@ export default function DisparosPage() {
         .map((lead): OutboundLead => {
           let phone = lead.phone?.replace(/\D/g, '') || '';
           
-          // Adiciona 55 se for um número brasileiro sem o código
           if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
               phone = '55' + phone;
           }
           
-          // Adiciona o 9º dígito se for um celular brasileiro e estiver faltando
           if (phone.startsWith('55') && phone.length === 12) {
               const areaCode = phone.substring(2, 4);
               const numberPart = phone.substring(4);
@@ -65,7 +63,7 @@ export default function DisparosPage() {
           return {
             id: lead.id,
             name: lead.name,
-            phone: phone, // Usa o número normalizado
+            phone: phone, 
             consumption: lead.kwh,
             company: lead.company,
           };
@@ -213,7 +211,6 @@ export default function DisparosPage() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left Column - Setup */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -291,7 +288,6 @@ export default function DisparosPage() {
           </Card>
         </div>
 
-        {/* Right Column - Selection & Execution */}
         <div className="space-y-6">
           <Card>
             <CardHeader>

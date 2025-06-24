@@ -5,13 +5,11 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
 
-// Schema is less strict now, just checks for presence. Validation happens in the logic.
 const CsvRowSchema = z.object({
   nome: z.string().optional(),
   numero: z.string().optional(),
 });
 
-// Define the schema for the action's return type
 const ActionResultSchema = z.object({
   success: z.boolean(),
   leads: z.array(z.custom<OutboundLead>()).optional(),
@@ -45,9 +43,8 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
           const errorDetails: { row: number; reason: string }[] = [];
 
           results.data.forEach((row, index) => {
-            const rowNum = index + 2; // +2 because index is 0-based and header is line 1
+            const rowNum = index + 2; 
 
-            // Skip if row is essentially empty
             if (!row.nome?.trim() && !row.numero?.trim()) {
               return;
             }
@@ -60,19 +57,16 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
 
             let phone = validation.data.numero.replace(/\D/g, '');
 
-            // Adiciona 55 se for um número brasileiro sem o código
             if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
                 phone = '55' + phone;
             }
             
-            // Adiciona o 9º dígito se for um celular brasileiro e estiver faltando
             if (phone.startsWith('55') && phone.length === 12) {
                 const areaCode = phone.substring(2, 4);
                 const numberPart = phone.substring(4);
                 phone = `55${areaCode}9${numberPart}`;
             }
 
-            // Basic phone number validation for Brazil (10-13 digits)
             if (phone.length < 10 || phone.length > 13) {
                 errorDetails.push({ row: rowNum, reason: `Número '${validation.data.numero}' inválido.` });
                 return;
@@ -81,7 +75,7 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
             validLeads.push({
               id: `csv-${Date.now()}-${index}`,
               name: validation.data.nome.trim(),
-              phone: phone, // Usa o número normalizado
+              phone: phone, 
               consumption: 0,
               company: undefined,
             });
