@@ -9,13 +9,16 @@ import * as admin from 'firebase-admin';
 function ensureAdminInitialized() {
   if (!admin.apps.length) {
     try {
+      console.log("[ADMIN_SDK_LIB] Attempting to initialize Firebase Admin SDK...");
       // Explicitly use Application Default Credentials. This is the standard for GCP environments.
       admin.initializeApp({
         credential: admin.credential.applicationDefault(),
       });
       console.log("[ADMIN_SDK_LIB] Firebase Admin SDK initialized successfully.");
-    } catch (e) {
-      console.error('[ADMIN_SDK_LIB] Firebase admin initialization error. This can happen if the server is not running in a GCP environment with default credentials.', e);
+    } catch (e: any) {
+      console.error('[ADMIN_SDK_LIB] CRITICAL: Firebase admin initialization error.', e.message);
+      // This can happen in local dev if GOOGLE_APPLICATION_CREDENTIALS is not set.
+      // It's a critical error for production.
     }
   }
 }
@@ -35,7 +38,7 @@ export function getFirebaseAdmin() {
  * Call this to perform database operations with admin privileges.
  * @returns The Firestore instance.
  */
-export function getAdminFirestore() {
+export const adminDb = (() => {
   ensureAdminInitialized();
   return admin.firestore();
-}
+})();

@@ -12,23 +12,10 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
-
-// Robust Admin SDK Initialization
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-    console.log("[INGEST_FLOW_ADMIN] Firebase Admin SDK initialized successfully.");
-  } catch(e: any) {
-    console.error("[INGEST_FLOW_ADMIN] Firebase admin initialization error.", e.message);
-  }
-}
-const adminDb = admin.firestore();
-
+import { adminDb } from '@/lib/firebase/admin';
+import { getFirebaseAdmin } from '@/lib/firebase/admin';
 
 // We use z.any() because the webhook payload is complex and we only care about a few fields.
 const IngestWhatsappMessageInputSchema = z.any();
@@ -58,6 +45,7 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
         const entry = payload.entry?.[0];
         const change = entry?.changes?.[0];
         const value = change?.value;
+        const admin = getFirebaseAdmin(); // Get initialized admin instance
 
         // Handle user text messages
         if (value?.messages?.[0]) {

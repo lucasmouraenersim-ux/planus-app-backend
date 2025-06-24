@@ -11,23 +11,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
-
-// Robust Admin SDK Initialization
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-    console.log("[FETCH_CHAT_FLOW_ADMIN] Firebase Admin SDK initialized successfully.");
-  } catch(e: any) {
-    console.error("[FETCH_CHAT_FLOW_ADMIN] Firebase admin initialization error.", e.message);
-  }
-}
-
-const adminDb = admin.firestore();
+import { adminDb } from '@/lib/firebase/admin';
 
 const ChatMessageSchema = z.object({
   id: z.string(),
