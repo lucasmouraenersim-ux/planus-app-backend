@@ -1,16 +1,15 @@
 
 'use server';
 /**
- * @fileOverview A flow to ingest and process incoming WhatsApp messages from the Meta webhook.
- * This flow now uses the Firebase Admin SDK to bypass Firestore security rules,
- * which is necessary as it's triggered by an unauthenticated webhook.
+ * @fileOverview A server action to ingest and process incoming WhatsApp messages.
+ * This now uses the Firebase Admin SDK directly as a standard server function
+ * to avoid Genkit auth conflicts.
  *
  * - ingestWhatsappMessage - Processes a webhook payload to find or create a lead and save the message.
  * - IngestWhatsappMessageInput - The input type for the function.
  * - IngestWhatsappMessageOutput - The return type for the function.
  */
 
-import { firebaseAi as ai } from '@/ai/firebase-genkit'; // Use the clean Firebase-only instance
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
@@ -21,11 +20,11 @@ import type { Timestamp } from 'firebase-admin/firestore';
 try {
   if (!admin.apps.length) {
     admin.initializeApp();
-    console.log('[INGEST_FLOW] Firebase Admin SDK initialized.');
+    console.log('[INGEST_ACTION] Firebase Admin SDK initialized.');
   }
 } catch (e: any) {
   if (e.code !== 'app/duplicate-app') {
-    console.error('[INGEST_FLOW] CRITICAL: Firebase admin initialization error.', e);
+    console.error('[INGEST_ACTION] CRITICAL: Firebase admin initialization error.', e);
   }
 }
 const adminDb = admin.firestore();
@@ -41,138 +40,127 @@ const IngestWhatsappMessageOutputSchema = z.object({
 });
 export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOutputSchema>;
 
-// --- Main Flow ---
+// --- Main Server Action ---
 
-export async function ingestWhatsappMessage(input: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
-  return ingestWhatsappMessageFlow(input);
-}
+export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
+  try {
+      const entry = payload.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
+      
+      // Handle user text messages
+      if (value?.messages?.[0]) {
+          const message = value.messages[0];
+          const from = message.from;
+          const contactName = value.contacts?.[0]?.profile?.name || from;
+          const messageText = message.text?.body;
 
-const ingestWhatsappMessageFlow = ai.defineFlow(
-  {
-    name: 'ingestWhatsappMessageFlow',
-    inputSchema: IngestWhatsappMessageInputSchema,
-    outputSchema: IngestWhatsappMessageOutputSchema,
-  },
-  async (payload) => {
-    try {
-        const entry = payload.entry?.[0];
-        const change = entry?.changes?.[0];
-        const value = change?.value;
-        
-        // Handle user text messages
-        if (value?.messages?.[0]) {
-            const message = value.messages[0];
-            const from = message.from;
-            const contactName = value.contacts?.[0]?.profile?.name || from;
-            const messageText = message.text?.body;
+          if (!messageText) {
+              console.log("[INGEST_ACTION] Ignoring notification without text (e.g., status, media).");
+              return { success: true, message: "Notification without text ignored." };
+          }
+          
+          console.log(`[INGEST_ACTION] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
+          
+          const normalizedPhone = from.replace(/\D/g, '');
+          const leadsRef = adminDb.collection("crm_leads");
+          
+          let leadId: string | null = null;
+          let leadDoc;
+          
+          // 1. Find existing lead using Admin SDK
+          console.log(`[INGEST_ACTION] Searching for lead with phone: ${normalizedPhone}`);
+          
+          try {
+            const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
+            const querySnapshot = await q.get();
 
-            if (!messageText) {
-                console.log("[INGEST_FLOW] Ignoring notification without text (e.g., status, media).");
-                return { success: true, message: "Notification without text ignored." };
-            }
-            
-            console.log(`[INGEST_FLOW] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
-            
-            const normalizedPhone = from.replace(/\D/g, '');
-            const leadsRef = adminDb.collection("crm_leads");
-            
-            let leadId: string | null = null;
-            let leadDoc;
-            
-            // 1. Find existing lead using Admin SDK
-            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
-            
-            try {
-              const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
-              const querySnapshot = await q.get();
-
-              if (!querySnapshot.empty) {
-                  leadDoc = querySnapshot.docs[0];
-                  leadId = leadDoc.id;
-                  console.log(`[INGEST_FLOW] Found existing lead for ${from}: ID ${leadId}`);
-              } else {
-                  console.log(`[INGEST_FLOW] No lead found for phone ${normalizedPhone}. Will create a new one.`);
-              }
-            } catch (error: any) {
-              console.error(`[INGEST_FLOW] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
-              return { success: false, message: `Admin SDK query failed: ${error.message}` };
-            }
-            
-            if (!leadId) {
-                // 2. Create new lead if not found using Admin SDK
-                console.log(`[INGEST_FLOW] Creating new lead for ${from}.`);
-                const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
-                const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
-                const now = admin.firestore.Timestamp.now();
-
-                const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
-                    name: contactName || from,
-                    phone: normalizedPhone,
-                    email: '',
-                    company: '',
-                    stageId: 'contato',
-                    sellerName: DEFAULT_ADMIN_EMAIL,
-                    userId: DEFAULT_ADMIN_UID,
-                    leadSource: 'WhatsApp',
-                    value: 0,
-                    kwh: 0,
-                    createdAt: now,
-                    lastContact: now,
-                    needsAdminApproval: true,
-                    correctionReason: ''
-                };
-                
-                const docRef = await adminDb.collection("crm_leads").add(leadData);
-                leadId = docRef.id;
-                console.log(`[INGEST_FLOW] New lead created with ID: ${leadId}`);
-            }
-
-            // 3. Save message to the lead's chat document using a batch write
-            if (leadId) {
-                const batch = adminDb.batch();
-                const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
-                const leadRefToUpdate = adminDb.collection("crm_leads").doc(leadId);
-                
-                const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
-                    text: messageText,
-                    sender: 'lead',
-                    timestamp: admin.firestore.Timestamp.now(),
-                };
-                
-                const finalMessage = {
-                    ...newMessage,
-                    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                };
-                
-                batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(finalMessage) }, { merge: true });
-                batch.update(leadRefToUpdate, { lastContact: admin.firestore.Timestamp.now() });
-
-                await batch.commit();
-                console.log(`[INGEST_FLOW] Message saved and lastContact updated for lead ${leadId}.`);
-                return { success: true, message: "Message processed and saved.", leadId: leadId };
+            if (!querySnapshot.empty) {
+                leadDoc = querySnapshot.docs[0];
+                leadId = leadDoc.id;
+                console.log(`[INGEST_ACTION] Found existing lead for ${from}: ID ${leadId}`);
             } else {
-                throw new Error(`CRITICAL FAILURE: Could not create or find lead for ${from}.`);
+                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will create a new one.`);
             }
+          } catch (error: any) {
+            console.error(`[INGEST_ACTION] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
+            return { success: false, message: `Admin SDK query failed: ${error.message}` };
+          }
+          
+          if (!leadId) {
+              // 2. Create new lead if not found using Admin SDK
+              console.log(`[INGEST_ACTION] Creating new lead for ${from}.`);
+              const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
+              const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
+              const now = admin.firestore.Timestamp.now();
 
-        // Handle message status updates
-        } else if (value?.statuses?.[0]) {
-            const statusInfo = value.statuses[0];
-            if (statusInfo.status === 'failed') {
-                 console.error(`[INGEST_FLOW_STATUS] ERROR: Message to ${statusInfo.recipient_id} failed. Cause:`, statusInfo.errors?.[0]);
-            } else {
-                 console.log(`[INGEST_FLOW_STATUS] Message status for ${statusInfo.recipient_id}: ${statusInfo.status}`);
-            }
-            return { success: true, message: "Status processed." };
-        
-        // Handle irrelevant payloads
-        } else {
-            console.log('[INGEST_FLOW] Payload did not contain a valid user message or status. Ignoring.');
-            return { success: true, message: "Irrelevant payload ignored." };
-        }
-    } catch (error) {
-        console.error('[INGEST_FLOW] CRITICAL ERROR in flow processing:', error);
-        const errorMessage = error instanceof Error ? error.message : "Unknown error.";
-        return { success: false, message: `Critical flow error: ${errorMessage}` };
-    }
+              const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
+                  name: contactName || from,
+                  phone: normalizedPhone,
+                  email: '',
+                  company: '',
+                  stageId: 'contato',
+                  sellerName: DEFAULT_ADMIN_EMAIL,
+                  userId: DEFAULT_ADMIN_UID,
+                  leadSource: 'WhatsApp',
+                  value: 0,
+                  kwh: 0,
+                  createdAt: now,
+                  lastContact: now,
+                  needsAdminApproval: true,
+                  correctionReason: ''
+              };
+              
+              const docRef = await adminDb.collection("crm_leads").add(leadData);
+              leadId = docRef.id;
+              console.log(`[INGEST_ACTION] New lead created with ID: ${leadId}`);
+          }
+
+          // 3. Save message to the lead's chat document using a batch write
+          if (leadId) {
+              const batch = adminDb.batch();
+              const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
+              const leadRefToUpdate = adminDb.collection("crm_leads").doc(leadId);
+              
+              const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
+                  text: messageText,
+                  sender: 'lead',
+                  timestamp: admin.firestore.Timestamp.now(),
+              };
+              
+              const finalMessage = {
+                  ...newMessage,
+                  id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              };
+              
+              batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(finalMessage) }, { merge: true });
+              batch.update(leadRefToUpdate, { lastContact: admin.firestore.Timestamp.now() });
+
+              await batch.commit();
+              console.log(`[INGEST_ACTION] Message saved and lastContact updated for lead ${leadId}.`);
+              return { success: true, message: "Message processed and saved.", leadId: leadId };
+          } else {
+              throw new Error(`CRITICAL FAILURE: Could not create or find lead for ${from}.`);
+          }
+
+      // Handle message status updates
+      } else if (value?.statuses?.[0]) {
+          const statusInfo = value.statuses[0];
+          if (statusInfo.status === 'failed') {
+               console.error(`[INGEST_ACTION_STATUS] ERROR: Message to ${statusInfo.recipient_id} failed. Cause:`, statusInfo.errors?.[0]);
+          } else {
+               console.log(`[INGEST_ACTION_STATUS] Message status for ${statusInfo.recipient_id}: ${statusInfo.status}`);
+          }
+          return { success: true, message: "Status processed." };
+      
+      // Handle irrelevant payloads
+      } else {
+          console.log('[INGEST_ACTION] Payload did not contain a valid user message or status. Ignoring.');
+          return { success: true, message: "Irrelevant payload ignored." };
+      }
+  } catch (error) {
+      console.error('[INGEST_ACTION] CRITICAL ERROR processing:', error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+      return { success: false, message: `Critical action error: ${errorMessage}` };
   }
-);
+}

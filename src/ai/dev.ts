@@ -1,9 +1,6 @@
-// Flows will be imported for their side effects in this file.
-// These flows use the Admin SDK and are defined with a clean Genkit instance
-// to avoid auth conflicts with the googleAI plugin.
-import './flows/ingest-whatsapp-message-flow';
-import './flows/fetch-chat-history-flow';
-import './flows/send-chat-message-flow';
+// This file is used for local development with `genkit:dev`.
+// Since the Firebase flows have been converted to standard server actions,
+// they no longer need to be imported here for their side effects.
 
 // You can add imports for other, AI-related flows here as needed.
 // Example: import './flows/some-ai-feature-flow';
