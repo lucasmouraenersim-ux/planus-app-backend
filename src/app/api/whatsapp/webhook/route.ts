@@ -1,4 +1,4 @@
-// src/app/api/whatsapp/webhook/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestWhatsappMessage } from '@/ai/flows/ingest-whatsapp-message-flow'; // Import the new flow
 
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
         // Asynchronously call the Genkit flow to handle the logic.
         // We do NOT await the result here because the webhook needs to return 200 OK immediately.
-        // The flow will run in the background.
+        // The flow will run in the background with server permissions.
         ingestWhatsappMessage(body).catch(error => {
             // Log any critical errors from the flow invocation itself
             console.error('[WHATSAPP_WEBHOOK] Erro CRÍTICO ao invocar o flow ingestWhatsappMessage:', error);

@@ -10,7 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { Timestamp, collection, addDoc, getDocs, doc, updateDoc, query, where, writeBatch, arrayUnion } from 'firebase/firestore';
+import { Timestamp, collection, addDoc, getDocs, doc, query, where, writeBatch, arrayUnion } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { LeadDocumentData, LeadWithId, ChatMessage } from '@/types/crm';
 
@@ -25,7 +25,7 @@ const IngestWhatsappMessageOutputSchema = z.object({
 });
 export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOutputSchema>;
 
-// --- Internal Helper Functions (moved from webhook route) ---
+// --- Internal Helper Functions ---
 
 async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
     const normalizedPhone = phoneNumber.replace(/\D/g, '');
@@ -56,7 +56,7 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | 
     }
 }
 
-async function saveLeadMessage(leadId: string, messageText: string): Promise<void> {
+async function saveLeadMessage(leadId: string, messageText: string, sender: 'lead' | 'user'): Promise<void> {
     const batch = writeBatch(db);
     const chatDocRef = doc(db, "crm_lead_chats", leadId);
     const leadRef = doc(db, "crm_leads", leadId);
@@ -64,7 +64,7 @@ async function saveLeadMessage(leadId: string, messageText: string): Promise<voi
     const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         text: messageText,
-        sender: 'lead',
+        sender: sender,
         timestamp: Timestamp.now(),
     };
     
@@ -81,7 +81,7 @@ async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: st
   if (existingLead) {
     console.log(`[INGEST_FLOW] Lead ${existingLead.id} já existe. Adicionando mensagem ao histórico.`);
     if (firstMessageText) {
-      await saveLeadMessage(existingLead.id, firstMessageText);
+      await saveLeadMessage(existingLead.id, firstMessageText, 'lead');
     }
     return existingLead.id;
   }
@@ -113,12 +113,11 @@ async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: st
     console.log(`[INGEST_FLOW] Novo lead criado com ID: ${docRef.id}`);
 
     if (firstMessageText) {
-      await saveLeadMessage(docRef.id, firstMessageText);
+      await saveLeadMessage(docRef.id, firstMessageText, 'lead');
     }
     return docRef.id;
   } catch (error) {
     console.error("[INGEST_FLOW] Erro ao criar lead no Firestore:", error);
-    // This is the other place the PERMISSION_DENIED error happened.
     return null;
   }
 }
