@@ -33,3 +33,5 @@ Se a sua implantação no Firebase App Hosting falhar com um erro como `package.
     *   Altere o valor de `/` para o nome da pasta onde seu código está. Por exemplo, se a pasta for `planus-app-backend`, o valor deve ser `/planus-app-backend`.
 3.  **Salve as alterações.** O Firebase iniciará uma nova implantação, que agora deverá encontrar os arquivos e ser concluída com sucesso.
 # planus-app-backend
+
+Backend configurado para implantação estável.
