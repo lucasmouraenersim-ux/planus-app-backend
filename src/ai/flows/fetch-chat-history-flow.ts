@@ -14,20 +14,6 @@ import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
 
-// Use a robust, idempotent initialization for serverless environments
-try {
-  if (!admin.apps.length) {
-    admin.initializeApp();
-    console.log('[FETCH_CHAT_ACTION] Firebase Admin SDK initialized.');
-  }
-} catch (e: any) {
-  if (e.code !== 'app/duplicate-app') {
-    console.error('[FETCH_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
-  }
-}
-const adminDb = admin.firestore();
-
-
 const ChatMessageSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -42,6 +28,19 @@ const FetchChatHistoryOutputSchema = z.array(ChatMessageSchema);
 export type FetchChatHistoryOutput = z.infer<typeof FetchChatHistoryOutputSchema>;
 
 export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<FetchChatHistoryOutput> {
+  // Use a robust, idempotent initialization for serverless environments
+  try {
+    if (!admin.apps.length) {
+      admin.initializeApp();
+      console.log('[FETCH_CHAT_ACTION] Firebase Admin SDK initialized.');
+    }
+  } catch (e: any) {
+    if (e.code !== 'app/duplicate-app') {
+      console.error('[FETCH_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
+    }
+  }
+  const adminDb = admin.firestore();
+  
   console.log(`[FETCH_CHAT_ACTION] Initiated with leadId: '${leadId}'`);
 
   if (!leadId) {
