@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to send a single WhatsApp message (template or text) via the Meta Graph API.
@@ -11,7 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
-  to: z.string().describe("The recipient's phone number, including country code but no '+', e.g., '5511999998888'."),
+  to: z.string().describe("The recipient's phone number."),
   message: z.object({
     text: z.string().optional().describe("The text content for a plain text message."),
     template: z.object({
@@ -42,13 +43,20 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     outputSchema: SendWhatsappMessageOutputSchema,
   },
   async (input) => {
-    let to = input.to.replace(/\D/g, ''); // Normalize phone number
+    // Robust phone number normalization
+    let to = input.to.replace(/\D/g, ''); // 1. Remove non-digits
+    
+    // 2. Add country code if missing
+    if (to.length === 10 || to.length === 11) {
+        to = '55' + to;
+    }
 
+    // 3. Add the 9th digit for mobile numbers if missing
     if (to.startsWith('55') && to.length === 12) {
       const areaCode = to.substring(2, 4);
       const numberPart = to.substring(4);
       const correctedTo = `55${areaCode}9${numberPart}`;
-      console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${to} to ${correctedTo}`);
+      console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${input.to} to ${correctedTo}`);
       to = correctedTo;
     }
 
@@ -67,7 +75,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     let requestBody: any;
 
     if (input.message.template) {
-      // Build a template message
       requestBody = {
         messaging_product: "whatsapp",
         to: to,
@@ -75,22 +82,22 @@ const sendWhatsappMessageFlow = ai.defineFlow(
         template: {
           name: input.message.template.name,
           language: { "code": "pt_BR" },
-          components: [],
         }
       };
+      // Only add components if there are parameters to pass
       if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
-        requestBody.template.components.push({
+        requestBody.template.components = [{
           type: 'body',
           parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
-        });
+        }];
       }
     } else if (input.message.text) {
-      // Build a text message
       requestBody = {
         messaging_product: "whatsapp",
         to: to,
         type: "text",
         text: {
+          preview_url: false, // Good practice for system messages
           body: input.message.text
         }
       };
@@ -98,9 +105,8 @@ const sendWhatsappMessageFlow = ai.defineFlow(
         return { success: false, error: "Invalid message payload. Must be text or template." };
     }
 
-
     try {
-      console.log(`[WHATSAPP_API] Preparing to send message to URL: ${apiUrl}`);
+      console.log(`[WHATSAPP_API] Preparing to send message to: ${to}. API URL: ${apiUrl}`);
       console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
       
       const response = await fetch(apiUrl, {

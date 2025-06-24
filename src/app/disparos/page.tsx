@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -47,27 +48,13 @@ export default function DisparosPage() {
       const allLeads = await fetchAllCrmLeadsGlobally();
       const validLeads = allLeads
         .filter(lead => lead.phone && lead.phone.trim() !== '')
-        .map((lead): OutboundLead => {
-          let phone = lead.phone?.replace(/\D/g, '') || '';
-          
-          if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
-              phone = '55' + phone;
-          }
-          
-          if (phone.startsWith('55') && phone.length === 12) {
-              const areaCode = phone.substring(2, 4);
-              const numberPart = phone.substring(4);
-              phone = `55${areaCode}9${numberPart}`;
-          }
-
-          return {
+        .map((lead): OutboundLead => ({
             id: lead.id,
             name: lead.name,
-            phone: phone, 
+            phone: lead.phone!, // The filter ensures phone is not null/empty
             consumption: lead.kwh,
             company: lead.company,
-          };
-        });
+        }));
       setLeads(validLeads);
       setSelectedLeads(new Set());
       setLastDataSource('crm');

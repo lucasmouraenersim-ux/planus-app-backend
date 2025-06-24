@@ -54,20 +54,11 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
               errorDetails.push({ row: rowNum, reason: "Colunas 'nome' ou 'numero' ausentes ou vazias." });
               return;
             }
-
-            let phone = validation.data.numero.replace(/\D/g, '');
-
-            if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
-                phone = '55' + phone;
-            }
             
-            if (phone.startsWith('55') && phone.length === 12) {
-                const areaCode = phone.substring(2, 4);
-                const numberPart = phone.substring(4);
-                phone = `55${areaCode}9${numberPart}`;
-            }
+            // Phone number is passed as-is; normalization happens in the flow
+            const phone = validation.data.numero;
 
-            if (phone.length < 10 || phone.length > 13) {
+            if (phone.replace(/\D/g, '').length < 10) {
                 errorDetails.push({ row: rowNum, reason: `Número '${validation.data.numero}' inválido.` });
                 return;
             }

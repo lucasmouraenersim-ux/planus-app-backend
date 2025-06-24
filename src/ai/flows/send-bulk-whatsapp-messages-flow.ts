@@ -59,44 +59,48 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
   async (input) => {
     try {
       const { leads, templateName, configuration } = input;
-      const { sendInterval } = configuration;
+      const { sendInterval, numberOfSimultaneousWhatsapps } = configuration;
 
       let sentCount = 0;
       const totalLeads = leads.length;
 
-      for (let i = 0; i < totalLeads; i++) {
-        const lead = leads[i];
-        
-        console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
+      for (let i = 0; i < totalLeads; i += numberOfSimultaneousWhatsapps) {
+        const chunk = leads.slice(i, i + numberOfSimultaneousWhatsapps);
+        console.log(`[WHATSAPP_BULK_SEND] Processing chunk starting at index ${i}. Chunk size: ${chunk.length}`);
 
-        // Call the single-send flow with a template message payload
-        const result = await sendWhatsappMessage({ 
-            to: lead.phone,
-            message: {
-                template: {
-                    name: templateName,
-                    bodyParams: [lead.name] // Pass the lead's name as the first parameter {{1}}
-                }
-            }
-        });
+        const sendPromises = chunk.map(lead => 
+          sendWhatsappMessage({ 
+              to: lead.phone,
+              message: {
+                  template: {
+                      name: templateName,
+                      bodyParams: [lead.name] 
+                  }
+              }
+          }).then(result => {
+              if (result.success) {
+                  sentCount++;
+                  console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Message ID: ${result.messageId}`);
+              } else {
+                  console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Reason:`, result.error);
+              }
+          }).catch(e => {
+            console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}. Reason:`, e);
+          })
+        );
 
-        if (result.success) {
-            sentCount++;
-            console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Message ID: ${result.messageId}`);
-        } else {
-            console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Reason:`, result.error);
-            // Do not stop the whole process for a single error. Log it and continue.
-        }
+        await Promise.all(sendPromises);
 
-        // Apply delay between sends, if configured.
-        if (i < totalLeads - 1 && sendInterval > 0) {
+        // Apply delay between chunks, if configured.
+        if (i + numberOfSimultaneousWhatsapps < totalLeads && sendInterval > 0) {
+          console.log(`[WHATSAPP_BULK_SEND] Waiting for ${sendInterval} seconds before next chunk.`);
           await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
         }
       }
 
       return {
         success: true,
-        message: `Disparo concluído. ${sentCount} de ${totalLeads} mensagens foram aceitas para envio.`,
+        message: `Disparo concluído. ${sentCount} de ${totalLeads} mensagens foram processadas. Verifique os logs para detalhes.`,
         sentCount: sentCount,
       };
 
