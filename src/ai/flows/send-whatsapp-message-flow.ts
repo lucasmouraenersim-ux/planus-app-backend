@@ -60,6 +60,9 @@ const sendWhatsappMessageFlow = ai.defineFlow(
         error: errorMessage,
       };
     }
+    
+    // Log a masked version of the token to confirm which one is being used
+    console.log(`[WHATSAPP_API] Using token starting with: ${accessToken.substring(0, 4)}... and ending with: ...${accessToken.substring(accessToken.length - 4)}`);
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
