@@ -1,14 +1,13 @@
 
 'use server';
 /**
- * @fileOverview A bulk WhatsApp message sending flow using the Meta API.
+ * @fileOverview A server action for bulk WhatsApp message sending using the Meta API.
  *
  * - sendBulkWhatsappMessages - A function that sends bulk messages.
  * - SendBulkWhatsappMessagesInput - The input type for the function.
  * - SendBulkWhatsappMessagesOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 
@@ -46,77 +45,65 @@ export type SendBulkWhatsappMessagesOutput = z.infer<typeof SendBulkWhatsappMess
 
 
 export async function sendBulkWhatsappMessages(input: SendBulkWhatsappMessagesInput): Promise<SendBulkWhatsappMessagesOutput> {
-  return sendBulkWhatsappMessagesFlow(input);
-}
+  try {
+    const { leads, templateName, configuration } = input;
+    const { sendInterval, numberOfSimultaneousWhatsapps } = configuration;
 
+    // This hardcoded URL matches the one from the working production logs for the 'novocontato' template.
+    const headerImageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
 
-const sendBulkWhatsappMessagesFlow = ai.defineFlow(
-  {
-    name: 'sendBulkWhatsappMessagesFlow',
-    inputSchema: SendBulkWhatsappMessagesInputSchema,
-    outputSchema: SendBulkWhatsappMessagesOutputSchema,
-  },
-  async (input) => {
-    try {
-      const { leads, templateName, configuration } = input;
-      const { sendInterval, numberOfSimultaneousWhatsapps } = configuration;
+    let sentCount = 0;
+    const totalLeads = leads.length;
 
-      // This hardcoded URL matches the one from the working production logs for the 'novocontato' template.
-      const headerImageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
+    for (let i = 0; i < totalLeads; i += numberOfSimultaneousWhatsapps) {
+      const chunk = leads.slice(i, i + numberOfSimultaneousWhatsapps);
+      console.log(`[WHATSAPP_BULK_SEND] Processing chunk starting at index ${i}. Chunk size: ${chunk.length}`);
 
-      let sentCount = 0;
-      const totalLeads = leads.length;
+      const sendPromises = chunk.map(lead => 
+        sendWhatsappMessage({ 
+            to: lead.phone,
+            message: {
+                template: {
+                    name: templateName,
+                    // The production logs for 'novocontato' template show it expects a header image, not body parameters.
+                    // Sending bodyParams would cause an error.
+                    headerImageUrl: headerImageUrl,
+                }
+            }
+        }).then(result => {
+            if (result.success) {
+                sentCount++;
+                console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Message ID: ${result.messageId}`);
+            } else {
+                console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Reason:`, result.error);
+            }
+        }).catch(e => {
+          console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}. Reason:`, e);
+        })
+      );
 
-      for (let i = 0; i < totalLeads; i += numberOfSimultaneousWhatsapps) {
-        const chunk = leads.slice(i, i + numberOfSimultaneousWhatsapps);
-        console.log(`[WHATSAPP_BULK_SEND] Processing chunk starting at index ${i}. Chunk size: ${chunk.length}`);
+      await Promise.all(sendPromises);
 
-        const sendPromises = chunk.map(lead => 
-          sendWhatsappMessage({ 
-              to: lead.phone,
-              message: {
-                  template: {
-                      name: templateName,
-                      // The production logs for 'novocontato' template show it expects a header image, not body parameters.
-                      // Sending bodyParams would cause an error.
-                      headerImageUrl: headerImageUrl,
-                  }
-              }
-          }).then(result => {
-              if (result.success) {
-                  sentCount++;
-                  console.log(`[WHATSAPP_BULK_SEND] Success sending to ${lead.phone}. Message ID: ${result.messageId}`);
-              } else {
-                  console.error(`[WHATSAPP_BULK_SEND] Failed to send to ${lead.phone}. Reason:`, result.error);
-              }
-          }).catch(e => {
-            console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}. Reason:`, e);
-          })
-        );
-
-        await Promise.all(sendPromises);
-
-        // Apply delay between chunks, if configured.
-        if (i + numberOfSimultaneousWhatsapps < totalLeads && sendInterval > 0) {
-          console.log(`[WHATSAPP_BULK_SEND] Waiting for ${sendInterval} seconds before next chunk.`);
-          await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
-        }
+      // Apply delay between chunks, if configured.
+      if (i + numberOfSimultaneousWhatsapps < totalLeads && sendInterval > 0) {
+        console.log(`[WHATSAPP_BULK_SEND] Waiting for ${sendInterval} seconds before next chunk.`);
+        await new Promise(resolve => setTimeout(resolve, sendInterval * 1000));
       }
-
-      return {
-        success: true,
-        message: `Disparo concluído. ${sentCount} de ${totalLeads} mensagens foram processadas. Verifique os logs para detalhes.`,
-        sentCount: sentCount,
-      };
-
-    } catch (e: unknown) {
-        console.error('[WHATSAPP_BULK_SEND] Critical flow error:', e);
-        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
-        return {
-            success: false,
-            message: `Ocorreu um erro crítico no servidor: ${errorMessage}. Verifique os logs do Firebase.`,
-            sentCount: 0
-        };
     }
+
+    return {
+      success: true,
+      message: `Disparo concluído. ${sentCount} de ${totalLeads} mensagens foram processadas. Verifique os logs para detalhes.`,
+      sentCount: sentCount,
+    };
+
+  } catch (e: unknown) {
+      console.error('[WHATSAPP_BULK_SEND] Critical flow error:', e);
+      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
+      return {
+          success: false,
+          message: `Ocorreu um erro crítico no servidor: ${errorMessage}. Verifique os logs do Firebase.`,
+          sentCount: 0
+      };
   }
-);
+}

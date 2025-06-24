@@ -1,14 +1,13 @@
 
 'use server';
 /**
- * @fileOverview A flow to send a single WhatsApp message (template or text) via the Meta Graph API.
+ * @fileOverview A server action to send a single WhatsApp message (template or text) via the Meta Graph API.
  *
  * - sendWhatsappMessage - Sends a message to a phone number.
  * - SendWhatsappMessageInput - The input type for the function.
  * - SendWhatsappMessageOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
@@ -34,134 +33,123 @@ const SendWhatsappMessageOutputSchema = z.object({
 export type SendWhatsappMessageOutput = z.infer<typeof SendWhatsappMessageOutputSchema>;
 
 export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Promise<SendWhatsappMessageOutput> {
-  return sendWhatsappMessageFlow(input);
-}
+  // Robust phone number normalization
+  let to = input.to.replace(/\D/g, ''); // 1. Remove non-digits
+  
+  // 2. Add country code if missing
+  if (to.length === 10 || to.length === 11) {
+      to = '55' + to;
+  }
 
-const sendWhatsappMessageFlow = ai.defineFlow(
-  {
-    name: 'sendWhatsappMessageFlow',
-    inputSchema: SendWhatsappMessageInputSchema,
-    outputSchema: SendWhatsappMessageOutputSchema,
-  },
-  async (input) => {
-    // Robust phone number normalization
-    let to = input.to.replace(/\D/g, ''); // 1. Remove non-digits
-    
-    // 2. Add country code if missing
-    if (to.length === 10 || to.length === 11) {
-        to = '55' + to;
-    }
+  // 3. Add the 9th digit for mobile numbers if missing
+  if (to.startsWith('55') && to.length === 12) {
+    const areaCode = to.substring(2, 4);
+    const numberPart = to.substring(4);
+    const correctedTo = `55${areaCode}9${numberPart}`;
+    console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${input.to} to ${correctedTo}`);
+    to = correctedTo;
+  }
 
-    // 3. Add the 9th digit for mobile numbers if missing
-    if (to.startsWith('55') && to.length === 12) {
-      const areaCode = to.substring(2, 4);
-      const numberPart = to.substring(4);
-      const correctedTo = `55${areaCode}9${numberPart}`;
-      console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${input.to} to ${correctedTo}`);
-      to = correctedTo;
-    }
+  // Using hardcoded values as a temporary measure to unblock the user.
+  // Best practice is to use environment variables/secrets.
+  const phoneNumberId = "750855334768614";
+  const accessToken = "EAA4IDY7gn5sBO3smoXO2mWvVI2uOTy2wVfJdpEKqC3b3notoDRwGvezNFbmqhPaKEZA0Aoag0ZCovdvRGJDZAGgLfHuftgBbehB2ZC7WvhhRSfrK8QW7s6n8W82zG0h7ZAt3PDd5al3cIwIN5rkYpirlzMOijUTcZAIku9GPy1ZCi1ZAFLp80TDMbHlpWUlJKE2aump5evhSzHWLv8MfDiKinA51mBmD5fZCZBDZAGZBZCLIqCZCAD";
+  const apiVersion = 'v20.0'; 
 
-    // Using hardcoded values as a temporary measure to unblock the user.
-    // Best practice is to use environment variables/secrets.
-    const phoneNumberId = "750855334768614";
-    const accessToken = "EAA4IDY7gn5sBO3smoXO2mWvVI2uOTy2wVfJdpEKqC3b3notoDRwGvezNFbmqhPaKEZA0Aoag0ZCovdvRGJDZAGgLfHuftgBbehB2ZC7WvhhRSfrK8QW7s6n8W82zG0h7ZAt3PDd5al3cIwIN5rkYpirlzMOijUTcZAIku9GPy1ZCi1ZAFLp80TDMbHlpWUlJKE2aump5evhSzHWLv8MfDiKinA51mBmD5fZCZBDZAGZBZCLIqCZCAD";
-    const apiVersion = 'v20.0'; 
+  const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
+  
+  let requestBody: any;
 
-    const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
-    
-    let requestBody: any;
-
-    if (input.message.template) {
-      requestBody = {
-        messaging_product: "whatsapp",
-        to: to,
-        type: "template",
-        template: {
-          name: input.message.template.name,
-          language: { "code": "pt_BR" },
-        }
-      };
-
-      const components = [];
-
-      // Add header component if an image URL is provided
-      if (input.message.template.headerImageUrl) {
-        components.push({
-          type: 'header',
-          parameters: [{
-            type: 'image',
-            image: { link: input.message.template.headerImageUrl }
-          }]
-        });
+  if (input.message.template) {
+    requestBody = {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "template",
+      template: {
+        name: input.message.template.name,
+        language: { "code": "pt_BR" },
       }
+    };
 
-      // Add body component if body parameters are provided
-      if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
-        components.push({
-          type: 'body',
-          parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
-        });
-      }
-      
-      // Attach components array to the request body if it's not empty
-      if (components.length > 0) {
-        requestBody.template.components = components;
-      }
+    const components = [];
 
-    } else if (input.message.text) {
-      requestBody = {
-        messaging_product: "whatsapp",
-        to: to,
-        type: "text",
-        text: {
-          preview_url: false, // Good practice for system messages
-          body: input.message.text
-        }
-      };
-    } else {
-        return { success: false, error: "Invalid message payload. Must be text or template." };
-    }
-
-    try {
-      console.log(`[WHATSAPP_API] Preparing to send message to: ${to}. API URL: ${apiUrl}`);
-      console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestBody),
+    // Add header component if an image URL is provided
+    if (input.message.template.headerImageUrl) {
+      components.push({
+        type: 'header',
+        parameters: [{
+          type: 'image',
+          image: { link: input.message.template.headerImageUrl }
+        }]
       });
+    }
 
-      const responseData = await response.json();
-      console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
-      console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
+    // Add body component if body parameters are provided
+    if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
+      components.push({
+        type: 'body',
+        parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
+      });
+    }
+    
+    // Attach components array to the request body if it's not empty
+    if (components.length > 0) {
+      requestBody.template.components = components;
+    }
 
-      if (!response.ok || !responseData.messages?.[0]?.id) {
-        const errorDetails = responseData?.error?.message || JSON.stringify(responseData);
-        console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Details: ${errorDetails}`);
-        return {
-          success: false,
-          error: `Falha ao enviar mensagem. A API respondeu com: ${errorDetails}`,
-        };
+  } else if (input.message.text) {
+    requestBody = {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "text",
+      text: {
+        preview_url: false, // Good practice for system messages
+        body: input.message.text
       }
+    };
+  } else {
+      return { success: false, error: "Invalid message payload. Must be text or template." };
+  }
 
-      const messageId = responseData.messages[0].id;
-      console.log(`[WHATSAPP_API] Message sent successfully. Message ID: ${messageId}`);
-      
-      return {
-        success: true,
-        messageId: messageId,
-      };
+  try {
+    console.log(`[WHATSAPP_API] Preparing to send message to: ${to}. API URL: ${apiUrl}`);
+    console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-    } catch (error: any) {
-      console.error("[WHATSAPP_API] Critical fetch/processing error:", error);
+    const responseData = await response.json();
+    console.log(`[WHATSAPP_API] Response Status: ${response.status}`);
+    console.log(`[WHATSAPP_API] Response Data: ${JSON.stringify(responseData)}`);
+
+    if (!response.ok || !responseData.messages?.[0]?.id) {
+      const errorDetails = responseData?.error?.message || JSON.stringify(responseData);
+      console.error(`[WHATSAPP_API] API Error: Status ${response.status}. Details: ${errorDetails}`);
       return {
         success: false,
-        error: `Erro de rede ou crítico ao tentar contatar a API do WhatsApp: ${error.message || 'Erro desconhecido.'}`,
+        error: `Falha ao enviar mensagem. A API respondeu com: ${errorDetails}`,
       };
     }
+
+    const messageId = responseData.messages[0].id;
+    console.log(`[WHATSAPP_API] Message sent successfully. Message ID: ${messageId}`);
+    
+    return {
+      success: true,
+      messageId: messageId,
+    };
+
+  } catch (error: any) {
+    console.error("[WHATSAPP_API] Critical fetch/processing error:", error);
+    return {
+      success: false,
+      error: `Erro de rede ou crítico ao tentar contatar a API do WhatsApp: ${error.message || 'Erro desconhecido.'}`,
+    };
   }
-);
+}
