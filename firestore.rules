@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -8,7 +7,6 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if request.auth != null;
       allow list: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
-      // Permite criação de usuário por admin ou no processo de signup inicial (se houver)
       allow create: if request.auth != null && 
                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' || request.auth.uid == userId);
       allow update: if request.auth != null && 
@@ -21,63 +19,50 @@ service cloud.firestore {
       allow list: if request.auth != null &&
                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor');
+
       allow get: if request.auth != null &&
                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor');
+                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' && resource.data.userId == request.auth.uid));
 
-      // Vendedores e Admins podem criar leads.
-      // Webhook também pode criar leads se certas condições forem atendidas.
-      allow create: if (request.auth != null &&
-                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' && request.resource.data.userId == request.auth.uid)
-                       )
-                      ) ||
-                      (request.auth == null && // Condição para webhook
-                       request.resource.data.name != null &&
-                       request.resource.data.phone != null &&
-                       request.resource.data.stageId == 'contato' &&
-                       request.resource.data.leadSource == 'WhatsApp' &&
-                       request.resource.data.userId != null // Garante que o backend atribuiu um vendedor via userId
-                      );
+      // Permite que um usuário autenticado crie um lead para si mesmo (ou admin crie para qualquer um)
+      // E permite que o webhook (não autenticado) crie um lead se tiver os campos necessários.
+      allow create: if (request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' || request.resource.data.userId == request.auth.uid))
+                    || (request.auth == null && request.resource.data.phone != null && request.resource.data.userId != null);
 
-      // Admin pode atualizar qualquer lead.
-      // Vendedor pode atualizar seu próprio lead (verificando o userId do lead).
-      allow update: if request.auth != null &&
-                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid));
-      
-      allow delete: if request.auth != null &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
+      // Permite que o dono do lead ou um admin atualize.
+      // E permite que o webhook (não autenticado) atualize APENAS o campo lastContact.
+      allow update: if (request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' || resource.data.userId == request.auth.uid))
+                    || (request.auth == null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastContact']));
+
+      allow delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
     }
 
-    // Regras para a coleção 'crm_lead_chats'
+    // Regras para a subcoleção de chats
     match /crm_lead_chats/{leadId} {
-        allow read, write: if request.auth != null &&
-                           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                            (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
-                             exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-                             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid 
-                            )
-                           );
+        // Permite que o webhook (não autenticado) escreva o histórico
+        allow write: if request.auth == null;
+        
+        // Permite que usuários autenticados leiam o histórico
+        allow read: if request.auth != null;
     }
 
     // Regras para a coleção 'withdrawal_requests'
     match /withdrawal_requests/{requestId} {
       allow create: if request.auth != null && 
-                       request.resource.data.userId == request.auth.uid; // Usuário só pode criar para si mesmo
+                       request.resource.data.userId == request.auth.uid;
 
       allow list: if request.auth != null &&
-                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin'; // Apenas admin lista todos
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
 
       allow get: if request.auth != null &&
                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                    resource.data.userId == request.auth.uid); // Admin ou dono do request
+                    resource.data.userId == request.auth.uid);
 
       allow update: if request.auth != null &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin'; // Apenas admin atualiza
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
 
       allow delete: if request.auth != null &&
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin'; // Apenas admin deleta
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
     }
   }
 }
