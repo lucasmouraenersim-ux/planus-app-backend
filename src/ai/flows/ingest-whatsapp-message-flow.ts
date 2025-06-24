@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to ingest and process incoming WhatsApp messages from the Meta webhook.
@@ -42,6 +43,7 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | 
                 ...leadData,
                 createdAt: (leadData.createdAt as Timestamp).toDate().toISOString(),
                 lastContact: (leadData.lastContact as Timestamp).toDate().toISOString(),
+                signedAt: leadData.signedAt ? (leadData.signedAt as Timestamp).toDate().toISOString() : undefined,
             };
         }
         console.log(`[INGEST_FLOW] Nenhum lead encontrado para o número ${phoneNumber}`);
@@ -89,7 +91,7 @@ async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: st
   const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
   const now = Timestamp.now();
 
-  const leadData: Omit<LeadDocumentData, 'id'> = {
+  const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
     name: contactName || phoneNumber,
     phone: phoneNumber.replace(/\D/g, ''),
     email: '',

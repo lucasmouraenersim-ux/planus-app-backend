@@ -44,6 +44,7 @@ function CrmPageContent() {
                 ...data,
                 createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
                 lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
             } as LeadWithId;
             fetchedLeads.push(lead);
             currentLeadIds.add(lead.id);

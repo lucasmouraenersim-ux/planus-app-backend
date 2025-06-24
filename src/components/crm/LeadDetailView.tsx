@@ -16,9 +16,11 @@ import {
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
     CheckCircle, XCircle, AlertTriangle, X, Loader2 
 } from 'lucide-react';
-import { fetchChatHistory, saveChatMessage } from '@/lib/firebase/firestore';
+import { fetchChatHistory, saveChatMessage, updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { sendWhatsappMessage } from '@/ai/flows/send-whatsapp-message-flow';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -41,6 +43,10 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [correctionReason, setCorrectionReason] = useState('');
   const [showCorrectionInput, setShowCorrectionInput] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [newSignedDate, setNewSignedDate] = useState<Date | undefined>(
+    lead.signedAt ? parseISO(lead.signedAt) : undefined
+  );
 
   useEffect(() => {
     if (!lead.id) return;
@@ -75,11 +81,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     setNewMessage('');
     
     try {
-      // First, save the message to our own history. This is critical.
       const savedMessage = await saveChatMessage(lead.id, messageData);
       setChatMessages(prev => [...prev, savedMessage]);
 
-      // Now, try to send it via the WhatsApp simulation flow.
       if (!lead.phone || lead.phone.trim() === '') {
         toast({
             title: "Aviso: Apenas salvo no histórico",
@@ -87,7 +91,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             variant: "default",
         });
         setIsSendingMessage(false);
-        return; // Stop here, but the message is saved.
+        return; 
       }
       
       const result = await sendWhatsappMessage({
@@ -106,7 +110,6 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             description: result.error || "Não foi possível enviar a mensagem via WhatsApp.",
             variant: "destructive",
         });
-        // Restore message on failure so user can retry
         setNewMessage(messageToSend);
       }
 
@@ -117,7 +120,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             description: "Ocorreu um erro ao processar a mensagem. Verifique o console.",
             variant: "destructive",
         });
-        setNewMessage(messageToSend); // Restore message on error
+        setNewMessage(messageToSend); 
     } finally {
       setIsSendingMessage(false);
     }
@@ -129,6 +132,26 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     setCorrectionReason('');
     setShowCorrectionInput(false);
   };
+  
+  const handleUpdateDate = async () => {
+    if (!newSignedDate || !lead.id) return;
+    try {
+        await updateCrmLeadSignedAt(lead.id, newSignedDate.toISOString());
+        toast({
+            title: "Data de Assinatura Atualizada",
+            description: "A data foi salva com sucesso.",
+        });
+        setIsEditingDate(false);
+        // The parent onSnapshot listener will handle the UI update automatically.
+    } catch (error) {
+        console.error("Error updating signature date:", error);
+        toast({
+            title: "Erro ao Salvar",
+            description: "Não foi possível salvar a nova data.",
+            variant: "destructive",
+        });
+    }
+  };
 
   const stageInfo = STAGES_CONFIG.find(s => s.id === lead.stageId);
 
@@ -139,9 +162,32 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
           <div>
             <CardTitle className="text-2xl font-bold text-primary mb-1">{lead.name}</CardTitle>
             {lead.company && <CardDescription className="text-sm text-muted-foreground">{lead.company}</CardDescription>}
-             {stageInfo && (
-              <Badge className={`mt-2 text-xs ${stageInfo.colorClass} text-white`}>{stageInfo.title}</Badge>
-            )}
+            <div className="flex items-center gap-2 mt-2">
+              {stageInfo && (
+                <Badge className={`text-xs ${stageInfo.colorClass} text-white`}>{stageInfo.title}</Badge>
+              )}
+              {lead.stageId === 'assinado' && (
+                <div className="flex items-center text-sm text-muted-foreground bg-background px-2 py-1 rounded-md">
+                  <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" />
+                  <span className="font-medium">{lead.signedAt ? format(parseISO(lead.signedAt), "dd/MM/yyyy", { locale: ptBR }) : 'Assinado'}</span>
+                  {isAdmin && (
+                    <Popover open={isEditingDate} onOpenChange={setIsEditingDate}>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="ml-1 h-6 w-6">
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-card border-border">
+                        <Calendar mode="single" selected={newSignedDate} onSelect={setNewSignedDate} initialFocus locale={ptBR} />
+                        <div className="p-2 border-t border-border flex justify-end">
+                          <Button size="sm" onClick={handleUpdateDate} disabled={!newSignedDate}>Salvar Data</Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />

@@ -60,12 +60,14 @@ export interface LeadDocumentData {
   createdAt: Timestamp | string; // Obrigatório - Timestamp for Firestore, string for client
   lastContact: Timestamp | string; // Obrigatório - Timestamp for Firestore, string for client
   userId: string; // UID do Firebase Auth do vendedor/usuário que criou o lead - Obrigatório
+  signedAt?: Timestamp | string; // Data de assinatura do contrato
 }
 
-export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact'> {
+export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt'> {
   id: string;
   createdAt: string; // Always string on client
   lastContact: string; // Always string on client
+  signedAt?: string; // Always string on client
 }
 
 export interface OutboundLead {

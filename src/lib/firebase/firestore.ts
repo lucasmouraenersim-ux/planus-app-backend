@@ -10,14 +10,14 @@ import { uploadFile } from './storage';
 // --- Leads ---
 
 export async function createCrmLead(
-  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>,
+  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt'>,
   photoDocumentFile?: File, 
   billDocumentFile?: File
 ): Promise<LeadWithId> {
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error("Usuário não autenticado para criar o lead.");
 
-  const fullLeadData: Omit<LeadDocumentData, 'photoDocumentUrl' | 'billDocumentUrl'> = {
+  const fullLeadData: Omit<LeadDocumentData, 'photoDocumentUrl' | 'billDocumentUrl' | 'signedAt'> = {
     ...leadData,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
@@ -112,9 +112,10 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
 export async function approveCrmLead(leadId: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
-    stageId: 'contato', // Move to the first active stage after approval
+    stageId: 'assinado', // Move to 'signed' stage
     needsAdminApproval: false,
     correctionReason: '', // Clear correction reason
+    signedAt: Timestamp.now(), // Set the signature date to now
     lastContact: Timestamp.now(),
   });
 }
@@ -125,6 +126,14 @@ export async function requestCrmLeadCorrection(leadId: string, reason: string): 
     stageId: 'contato', // Revert to a previous stage to be handled by seller
     correctionReason: reason,
     needsAdminApproval: false, 
+    lastContact: Timestamp.now(),
+  });
+}
+
+export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: string): Promise<void> {
+  const leadRef = doc(db, "crm_leads", leadId);
+  await updateDoc(leadRef, {
+    signedAt: Timestamp.fromDate(new Date(newSignedAtIso)),
     lastContact: Timestamp.now(),
   });
 }
@@ -175,69 +184,6 @@ export async function saveChatMessage(
     ...newMessage,
     timestamp: newMessage.timestamp.toDate().toISOString() 
   };
-}
-
-
-// --- WhatsApp Integration Helpers ---
-
-export async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
-    // This is a placeholder function that always returns null to force new lead creation.
-    // This ensures leads are being created while we debug other issues.
-    // The duplicate lead bug will be addressed next.
-    console.log(`[Firestore] findLeadByPhoneNumber called for ${phoneNumber}. Forcing new lead creation for now.`);
-    return null;
-}
-
-
-export async function createLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
-  const existingLead = await findLeadByPhoneNumber(phoneNumber);
-  
-  if (existingLead) {
-    console.log(`[Firestore] Lead com phone ${phoneNumber} já existe (ID: ${existingLead.id}). Adicionando mensagem.`);
-    if (firstMessageText) {
-      await saveChatMessage(existingLead.id, { text: firstMessageText, sender: 'lead' });
-    }
-    return existingLead.id;
-  }
-
-  // If no existing lead, create a new one.
-  console.log(`[Firestore] No existing lead found for ${phoneNumber}. Creating new lead.`);
-  const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
-  const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
-  const now = Timestamp.now();
-  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
-
-  const leadData: Omit<LeadDocumentData, 'id'> = {
-    name: contactName || normalizedPhoneNumber,
-    phone: normalizedPhoneNumber, // Save the normalized number
-    email: '',
-    company: '',
-    stageId: 'contato',
-    sellerName: DEFAULT_ADMIN_EMAIL,
-    userId: DEFAULT_ADMIN_UID,
-    leadSource: 'WhatsApp',
-    value: 0, 
-    kwh: 0,
-    createdAt: now,
-    lastContact: now,
-    needsAdminApproval: false,
-    correctionReason: ''
-  };
-
-  try {
-    const docRef = await addDoc(collection(db, "crm_leads"), leadData);
-    console.log(`[Firestore] Novo lead criado com ID: ${docRef.id}`);
-
-    // Save the first message to the new lead's chat history
-    if (firstMessageText) {
-      await saveChatMessage(docRef.id, { text: firstMessageText, sender: 'lead' });
-    }
-
-    return docRef.id;
-  } catch (error) {
-    console.error("[Firestore] Error creating lead from WhatsApp:", error);
-    return null;
-  }
 }
 
 // --- Wallet / Commission Functions (Placeholders) ---
