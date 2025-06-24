@@ -14,11 +14,15 @@ import type { ChatMessage } from '@/types/crm';
 // Direct initialization of Firebase Admin SDK
 if (!admin.apps.length) {
   try {
+    console.log('[SEND_CHAT_FLOW] Initializing Firebase Admin SDK...');
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
     });
-  } catch (e) {
-    console.error('Firebase admin initialization error', e);
+    console.log('[SEND_CHAT_FLOW] Firebase Admin SDK initialized successfully.');
+  } catch (e: any) {
+    if (e.code !== 'app/duplicate-app') {
+       console.error('[SEND_CHAT_FLOW] CRITICAL: Firebase admin initialization error.', e);
+    }
   }
 }
 const adminDb = admin.firestore();

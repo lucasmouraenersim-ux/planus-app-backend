@@ -18,11 +18,17 @@ import type { ChatMessage } from '@/types/crm';
 // Direct initialization of Firebase Admin SDK
 if (!admin.apps.length) {
   try {
+    console.log('[FETCH_CHAT_FLOW] Initializing Firebase Admin SDK...');
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
     });
-  } catch (e) {
-    console.error('Firebase admin initialization error', e);
+     console.log('[FETCH_CHAT_FLOW] Firebase Admin SDK initialized successfully.');
+  } catch (e: any) {
+    // In a serverless environment, the app might already be initialized in a previous
+    // invocation. We can safely ignore the "already exists" error.
+    if (e.code !== 'app/duplicate-app') {
+       console.error('[FETCH_CHAT_FLOW] CRITICAL: Firebase admin initialization error.', e);
+    }
   }
 }
 const adminDb = admin.firestore();
