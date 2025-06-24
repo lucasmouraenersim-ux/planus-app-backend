@@ -139,53 +139,6 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
 }
 
 
-// --- Chat ---
-
-export async function fetchChatHistory(leadId: string): Promise<ChatMessageType[]> {
-  const chatDocRef = doc(db, "crm_lead_chats", leadId);
-  const chatDoc = await getDoc(chatDocRef);
-  if (chatDoc.exists()) {
-    const messages = (chatDoc.data().messages || []) as any[]; // Use any[] to handle Firestore Timestamps
-    return messages
-      .map(msg => ({
-        ...msg,
-        // Ensure timestamp is a string for the client
-        timestamp: (msg.timestamp as Timestamp).toDate().toISOString() 
-      }))
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  }
-  return [];
-}
-
-export async function saveChatMessage(
-  leadId: string, 
-  messageData: { text: string; sender: 'user' | 'lead' }
-): Promise<ChatMessageType> {
-  const batch = writeBatch(db);
-  
-  // 1. Reference to the chat document
-  const chatDocRef = doc(db, "crm_lead_chats", leadId);
-  const newMessage: Omit<ChatMessageType, 'timestamp'> & { timestamp: Timestamp } = {
-    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    ...messageData,
-    timestamp: Timestamp.now(),
-  };
-  // Add the new message to the chat document, creating it if it doesn't exist.
-  batch.set(chatDocRef, { messages: arrayUnion(newMessage) }, { merge: true });
-
-  // 2. Reference to the lead document to update lastContact
-  const leadRef = doc(db, "crm_leads", leadId);
-  batch.update(leadRef, { lastContact: Timestamp.now() });
-
-  // 3. Commit both operations atomically
-  await batch.commit();
-
-  return {
-    ...newMessage,
-    timestamp: newMessage.timestamp.toDate().toISOString() 
-  };
-}
-
 // --- Wallet / Commission Functions (Placeholders) ---
 
 export async function requestWithdrawal(userId: string, userEmail: string, userName: string | undefined, amount: number, pixKeyType: PixKeyType, pixKey: string, withdrawalType: WithdrawalType): Promise<string | null> {

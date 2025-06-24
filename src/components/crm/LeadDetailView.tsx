@@ -16,9 +16,10 @@ import {
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
     CheckCircle, XCircle, AlertTriangle, X, Loader2 
 } from 'lucide-react';
-import { fetchChatHistory, saveChatMessage, updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { sendWhatsappMessage } from '@/ai/flows/send-whatsapp-message-flow';
+import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
+import { sendChatMessage } from '@/ai/flows/send-chat-message-flow';
+import { fetchChatHistory } from '@/ai/flows/fetch-chat-history-flow';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 
@@ -76,41 +77,38 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     if (newMessage.trim() === '' || isSendingMessage) return;
     
     setIsSendingMessage(true);
-    const messageData = { text: newMessage, sender: 'user' as const };
     const messageToSend = newMessage;
     setNewMessage('');
     
     try {
-      const savedMessage = await saveChatMessage(lead.id, messageData);
-      setChatMessages(prev => [...prev, savedMessage]);
-
-      if (!lead.phone || lead.phone.trim() === '') {
-        toast({
-            title: "Aviso: Apenas salvo no histórico",
-            description: "Este lead não possui um número de telefone para envio. A mensagem foi salva no chat.",
-            variant: "default",
-        });
-        setIsSendingMessage(false);
-        return; 
-      }
-      
-      const result = await sendWhatsappMessage({
-          to: lead.phone,
-          message: { text: messageToSend },
+      const result = await sendChatMessage({
+        leadId: lead.id,
+        phone: lead.phone,
+        text: messageToSend,
+        sender: 'user',
       });
 
-      if (result.success) {
-        toast({
-            title: "Mensagem Enviada",
-            description: `A mensagem para ${lead.name} foi enviada para a fila.`,
-        });
+      if (result.success && result.chatMessage) {
+        setChatMessages(prev => [...prev, result.chatMessage!]);
+        if (result.message && result.message.includes('no phone number')) {
+             toast({
+                title: "Aviso: Apenas salvo no histórico",
+                description: "Este lead não possui um número de telefone para envio. A mensagem foi salva no chat.",
+                variant: "default",
+            });
+        } else {
+            toast({
+                title: "Mensagem Enviada",
+                description: `A mensagem para ${lead.name} foi enviada.`,
+            });
+        }
       } else {
-         toast({
-            title: "Falha no Envio",
-            description: result.error || "Não foi possível enviar a mensagem via WhatsApp.",
-            variant: "destructive",
+        toast({
+          title: "Falha no Envio",
+          description: result.message || "Não foi possível enviar a mensagem.",
+          variant: "destructive",
         });
-        setNewMessage(messageToSend);
+        setNewMessage(messageToSend); // Put message back in input on failure
       }
 
     } catch (error) {
