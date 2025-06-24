@@ -25,36 +25,7 @@ const IngestWhatsappMessageOutputSchema = z.object({
 });
 export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOutputSchema>;
 
-// --- Internal Helper Functions ---
-
-async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
-    const adminDb = getAdminFirestore();
-    const normalizedPhone = phoneNumber.replace(/\D/g, '');
-    const leadsRef = adminDb.collection("crm_leads");
-    const q = leadsRef.where("phone", "==", normalizedPhone);
-    
-    try {
-        const querySnapshot = await q.get();
-        if (!querySnapshot.empty) {
-            const leadDoc = querySnapshot.docs[0];
-            const leadData = leadDoc.data() as LeadDocumentData;
-            console.log(`[INGEST_FLOW] Lead encontrado para ${phoneNumber}: ID ${leadDoc.id}`);
-            return {
-                id: leadDoc.id,
-                ...leadData,
-                createdAt: (leadData.createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (leadData.lastContact as Timestamp).toDate().toISOString(),
-                signedAt: leadData.signedAt ? (leadData.signedAt as Timestamp).toDate().toISOString() : undefined,
-            };
-        }
-        console.log(`[INGEST_FLOW] Nenhum lead encontrado para o número ${phoneNumber}`);
-        return null;
-    } catch (error) {
-        console.error(`[INGEST_FLOW] Erro ao buscar lead por telefone ${phoneNumber}:`, error);
-        return null; 
-    }
-}
-
+// This helper function can remain separate as it's a self-contained batch operation.
 async function saveLeadMessage(leadId: string, messageText: string, sender: 'lead' | 'user'): Promise<void> {
     const admin = getFirebaseAdmin();
     const adminDb = getAdminFirestore();
@@ -69,62 +40,13 @@ async function saveLeadMessage(leadId: string, messageText: string, sender: 'lea
         timestamp: admin.firestore.Timestamp.now(),
     };
     
-    // Using FieldValue.arrayUnion to append to the messages array atomically.
     batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
     batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
 
     await batch.commit();
-    console.log(`[INGEST_FLOW] Mensagem salva e lastContact atualizado para o lead ${leadId}.`);
+    console.log(`[INGEST_FLOW] Message saved and lastContact updated for lead ${leadId}.`);
 }
 
-async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
-  const admin = getFirebaseAdmin();
-  const adminDb = getAdminFirestore();
-  const existingLead = await findLeadByPhoneNumber(phoneNumber);
-  
-  if (existingLead) {
-    console.log(`[INGEST_FLOW] Lead ${existingLead.id} já existe. Adicionando mensagem ao histórico.`);
-    if (firstMessageText) {
-      await saveLeadMessage(existingLead.id, firstMessageText, 'lead');
-    }
-    return existingLead.id;
-  }
-
-  console.log(`[INGEST_FLOW] Criando novo lead para ${phoneNumber}.`);
-  const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
-  const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
-  const now = admin.firestore.Timestamp.now();
-
-  const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
-    name: contactName || phoneNumber,
-    phone: phoneNumber.replace(/\D/g, ''),
-    email: '',
-    company: '',
-    stageId: 'contato',
-    sellerName: DEFAULT_ADMIN_EMAIL,
-    userId: DEFAULT_ADMIN_UID,
-    leadSource: 'WhatsApp',
-    value: 0,
-    kwh: 0,
-    createdAt: now,
-    lastContact: now,
-    needsAdminApproval: true,
-    correctionReason: ''
-  };
-
-  try {
-    const docRef = await adminDb.collection("crm_leads").add(leadData);
-    console.log(`[INGEST_FLOW] Novo lead criado com ID: ${docRef.id}`);
-
-    if (firstMessageText) {
-      await saveLeadMessage(docRef.id, firstMessageText, 'lead');
-    }
-    return docRef.id;
-  } catch (error) {
-    console.error("[INGEST_FLOW] Erro ao criar lead no Firestore:", error);
-    return null;
-  }
-}
 
 // --- Main Flow ---
 
@@ -144,40 +66,92 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
         const change = entry?.changes?.[0];
         const value = change?.value;
 
+        // Handle user text messages
         if (value?.messages?.[0]) {
             const message = value.messages[0];
             const from = message.from;
             const contactName = value.contacts?.[0]?.profile?.name || from;
             const messageText = message.text?.body;
 
-            if (messageText) {
-                console.log(`[INGEST_FLOW] MENSAGEM DE TEXTO: De '${contactName}' (${from}). Conteúdo: "${messageText}"`);
-                const leadId = await findOrCreateLeadFromWhatsapp(contactName, from, messageText);
-                if (leadId) {
-                    return { success: true, message: "Mensagem processada e salva.", leadId: leadId };
-                } else {
-                    return { success: false, message: `FALHA: Não foi possível criar ou encontrar lead para ${from}.` };
-                }
-            } else {
-                 console.log("[INGEST_FLOW] Ignorando notificação sem texto (ex: status, mídia).");
-                 return { success: true, message: "Notificação sem texto ignorada." };
+            if (!messageText) {
+                console.log("[INGEST_FLOW] Ignoring notification without text (e.g., status, media).");
+                return { success: true, message: "Notification without text ignored." };
             }
+            
+            console.log(`[INGEST_FLOW] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
+            
+            const adminDb = getAdminFirestore();
+            const normalizedPhone = from.replace(/\D/g, '');
+            const leadsRef = adminDb.collection("crm_leads");
+            
+            // 1. Find existing lead
+            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
+            const q = leadsRef.where("phone", "==", normalizedPhone);
+            const querySnapshot = await q.get();
+            let leadId: string | null = null;
+            
+            if (!querySnapshot.empty) {
+                const leadDoc = querySnapshot.docs[0];
+                leadId = leadDoc.id;
+                console.log(`[INGEST_FLOW] Found existing lead for ${from}: ID ${leadId}`);
+                await saveLeadMessage(leadId, messageText, 'lead');
+            } else {
+                // 2. Create new lead if not found
+                console.log(`[INGEST_FLOW] No lead found. Creating new lead for ${from}.`);
+                const admin = getFirebaseAdmin();
+                const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
+                const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
+                const now = admin.firestore.Timestamp.now();
+
+                const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
+                    name: contactName || from,
+                    phone: normalizedPhone,
+                    email: '',
+                    company: '',
+                    stageId: 'contato',
+                    sellerName: DEFAULT_ADMIN_EMAIL,
+                    userId: DEFAULT_ADMIN_UID,
+                    leadSource: 'WhatsApp',
+                    value: 0,
+                    kwh: 0,
+                    createdAt: now,
+                    lastContact: now,
+                    needsAdminApproval: true,
+                    correctionReason: ''
+                };
+                
+                const docRef = await adminDb.collection("crm_leads").add(leadData);
+                leadId = docRef.id;
+                console.log(`[INGEST_FLOW] New lead created with ID: ${leadId}`);
+                await saveLeadMessage(leadId, messageText, 'lead');
+            }
+            
+            if (leadId) {
+                return { success: true, message: "Message processed and saved.", leadId: leadId };
+            } else {
+                // This case should theoretically not be reached with the logic above
+                return { success: false, message: `CRITICAL FAILURE: Could not create or find lead for ${from}.` };
+            }
+
+        // Handle message status updates
         } else if (value?.statuses?.[0]) {
             const statusInfo = value.statuses[0];
             if (statusInfo.status === 'failed') {
-                 console.error(`[INGEST_FLOW_STATUS] ERRO: A mensagem para ${statusInfo.recipient_id} falhou. Causa:`, statusInfo.errors?.[0]);
+                 console.error(`[INGEST_FLOW_STATUS] ERROR: Message to ${statusInfo.recipient_id} failed. Cause:`, statusInfo.errors?.[0]);
             } else {
-                 console.log(`[INGEST_FLOW_STATUS] Status da mensagem para ${statusInfo.recipient_id}: ${statusInfo.status}`);
+                 console.log(`[INGEST_FLOW_STATUS] Message status for ${statusInfo.recipient_id}: ${statusInfo.status}`);
             }
-            return { success: true, message: "Status processado." };
+            return { success: true, message: "Status processed." };
+        
+        // Handle irrelevant payloads
         } else {
-            console.log('[INGEST_FLOW] Payload não continha uma mensagem de usuário ou status válido. Ignorando.');
-            return { success: true, message: "Payload irrelevante ignorado." };
+            console.log('[INGEST_FLOW] Payload did not contain a valid user message or status. Ignoring.');
+            return { success: true, message: "Irrelevant payload ignored." };
         }
     } catch (error) {
-        console.error('[INGEST_FLOW] ERRO CRÍTICO no processamento do flow:', error);
-        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
-        return { success: false, message: `Erro crítico no flow: ${errorMessage}` };
+        console.error('[INGEST_FLOW] CRITICAL ERROR in flow processing:', error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error.";
+        return { success: false, message: `Critical flow error: ${errorMessage}` };
     }
   }
 );
