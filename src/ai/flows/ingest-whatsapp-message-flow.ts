@@ -12,20 +12,19 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-// Directly import and initialize admin sdk here
 import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
 
-// Initialize admin SDK right in this file to ensure context
+// Robust Admin SDK Initialization
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
     });
-    console.log("[INGEST_FLOW_ADMIN] Firebase Admin SDK initialized successfully in-flow.");
-  } catch(e) {
-    console.error("[INGEST_FLOW_ADMIN] In-flow admin initialization error.", e);
+    console.log("[INGEST_FLOW_ADMIN] Firebase Admin SDK initialized successfully.");
+  } catch(e: any) {
+    console.error("[INGEST_FLOW_ADMIN] Firebase admin initialization error.", e.message);
   }
 }
 const adminDb = admin.firestore();

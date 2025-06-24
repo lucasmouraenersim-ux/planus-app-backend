@@ -2,6 +2,7 @@
 'use server';
 /**
  * @fileOverview A flow to fetch the chat history for a specific lead.
+ * This flow now uses the Firebase Admin SDK to bypass Firestore security rules.
  *
  * - fetchChatHistory - Fetches the chat messages for a given lead ID.
  * - FetchChatHistoryInput - The input type for the function.
@@ -10,9 +11,23 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getAdminFirestore } from '@/lib/firebase/admin';
+import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
+
+// Robust Admin SDK Initialization
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+    console.log("[FETCH_CHAT_FLOW_ADMIN] Firebase Admin SDK initialized successfully.");
+  } catch(e: any) {
+    console.error("[FETCH_CHAT_FLOW_ADMIN] Firebase admin initialization error.", e.message);
+  }
+}
+
+const adminDb = admin.firestore();
 
 const ChatMessageSchema = z.object({
   id: z.string(),
@@ -43,8 +58,6 @@ const fetchChatHistoryFlow = ai.defineFlow(
       return [];
     }
 
-    const adminDb = getAdminFirestore();
-
     try {
       const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
       const chatDoc = await chatDocRef.get();
@@ -55,6 +68,7 @@ const fetchChatHistoryFlow = ai.defineFlow(
       }
 
       const messagesData = chatDoc.data()?.messages || [];
+      // Ensure all timestamps are converted correctly before sorting
       const formattedMessages = messagesData.map((msg: any) => ({
         ...msg,
         timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),

@@ -1,14 +1,29 @@
 
 'use server';
 /**
- * @fileOverview A flow to save a chat message and send it via WhatsApp.
+ * @fileOverview A flow to save a chat message and send it via WhatsApp using the Admin SDK.
+ * This ensures the operation has sufficient permissions regardless of Firestore rules.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getFirebaseAdmin, getAdminFirestore } from '@/lib/firebase/admin';
+import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 import type { ChatMessage } from '@/types/crm';
+
+// Robust Admin SDK Initialization
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+    console.log("[SEND_CHAT_FLOW_ADMIN] Firebase Admin SDK initialized successfully.");
+  } catch(e: any) {
+    console.error("[SEND_CHAT_FLOW_ADMIN] Firebase admin initialization error.", e.message);
+  }
+}
+
+const adminDb = admin.firestore();
 
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
@@ -43,9 +58,6 @@ const sendChatMessageFlow = ai.defineFlow(
     outputSchema: SendChatMessageOutputSchema,
   },
   async ({ leadId, phone, text, sender }) => {
-    const admin = getFirebaseAdmin();
-    const adminDb = getAdminFirestore();
-
     // 1. Save the message to Firestore using Admin SDK
     const batch = adminDb.batch();
     const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
@@ -58,17 +70,19 @@ const sendChatMessageFlow = ai.defineFlow(
         timestamp: admin.firestore.Timestamp.now(),
     };
     
+    // Add message to the chat subcollection and update the lastContact on the lead
     batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
     batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
 
     try {
         await batch.commit();
         console.log(`[CHAT_FLOW] Message for lead ${leadId} saved to Firestore.`);
-    } catch (error) {
+    } catch (error: any) {
         console.error(`[CHAT_FLOW] Firestore error for lead ${leadId}:`, error);
-        return { success: false, message: 'Failed to save message to database.' };
+        return { success: false, message: `Failed to save message to database: ${error.message}` };
     }
 
+    // Prepare the message object to be returned to the client
     const savedChatMessage: ChatMessage = {
         ...newMessage,
         timestamp: newMessage.timestamp.toDate().toISOString(),
@@ -77,7 +91,8 @@ const sendChatMessageFlow = ai.defineFlow(
     // 2. If sender is 'user', send the message via WhatsApp
     if (sender === 'user') {
         if (!phone || phone.trim() === '') {
-            return { success: true, message: 'Message saved to history, but lead has no phone number.', chatMessage: savedChatMessage };
+            console.log(`[CHAT_FLOW] Message for ${leadId} saved to history, but lead has no phone number.`);
+            return { success: true, message: 'Message saved, but lead has no phone number to send to.', chatMessage: savedChatMessage };
         }
 
         const whatsappResult = await sendWhatsappMessage({
@@ -86,10 +101,11 @@ const sendChatMessageFlow = ai.defineFlow(
         });
 
         if (!whatsappResult.success) {
+            console.error(`[CHAT_FLOW] WhatsApp send failed for ${leadId}:`, whatsappResult.error);
             return { success: false, message: `Failed to send WhatsApp message: ${whatsappResult.error}`, chatMessage: savedChatMessage };
         }
     }
     
-    return { success: true, message: 'Message sent and saved.', chatMessage: savedChatMessage };
+    return { success: true, message: 'Message sent and saved successfully.', chatMessage: savedChatMessage };
   }
 );
