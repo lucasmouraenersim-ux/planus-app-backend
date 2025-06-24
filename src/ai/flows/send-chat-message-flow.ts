@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A server action to save a chat message and send it via WhatsApp.
@@ -48,6 +47,7 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
+  console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
   
   // 1. Save the message to Firestore using Admin SDK
   const batch = adminDb.batch();
@@ -67,9 +67,9 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
 
   try {
       await batch.commit();
-      console.log(`[CHAT_ACTION] Message for lead ${leadId} saved to Firestore.`);
+      console.log(`[SEND_CHAT_ACTION] Successfully committed message to Firestore for lead ${leadId}.`);
   } catch (error: any) {
-      console.error(`[CHAT_ACTION] Firestore error for lead ${leadId}:`, error);
+      console.error(`[SEND_CHAT_ACTION] Firestore batch commit error for lead ${leadId}:`, error);
       return { success: false, message: `Failed to save message to database: ${error.message}` };
   }
 
@@ -82,19 +82,21 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
   // 2. If sender is 'user', send the message via WhatsApp
   if (sender === 'user') {
       if (!phone || phone.trim() === '') {
-          console.log(`[CHAT_ACTION] Message for ${leadId} saved to history, but lead has no phone number.`);
+          console.log(`[SEND_CHAT_ACTION] Message for ${leadId} saved to history, but lead has no phone number. Not sending to WhatsApp.`);
           return { success: true, message: 'Message saved, but lead has no phone number to send to.', chatMessage: savedChatMessage };
       }
-
+      
+      console.log(`[SEND_CHAT_ACTION] Attempting to send WhatsApp message to ${phone}.`);
       const whatsappResult = await sendWhatsappMessage({
           to: phone,
           message: { text },
       });
 
       if (!whatsappResult.success) {
-          console.error(`[CHAT_ACTION] WhatsApp send failed for ${leadId}:`, whatsappResult.error);
+          console.error(`[SEND_CHAT_ACTION] WhatsApp send failed for ${leadId}:`, whatsappResult.error);
           return { success: false, message: `Failed to send WhatsApp message: ${whatsappResult.error}`, chatMessage: savedChatMessage };
       }
+      console.log(`[SEND_CHAT_ACTION] WhatsApp message sent successfully for lead ${leadId}.`);
   }
   
   return { success: true, message: 'Message sent and saved successfully.', chatMessage: savedChatMessage };
