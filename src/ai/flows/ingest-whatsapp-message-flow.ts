@@ -10,9 +10,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { Timestamp, collection, addDoc, getDocs, doc, query, where, writeBatch, arrayUnion } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { admin, adminDb } from '@/lib/firebase/admin';
 import type { LeadDocumentData, LeadWithId, ChatMessage } from '@/types/crm';
+import type { Timestamp } from 'firebase-admin/firestore';
 
 // We use z.any() because the webhook payload is complex and we only care about a few fields.
 const IngestWhatsappMessageInputSchema = z.any();
@@ -29,11 +29,11 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 
 async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
     const normalizedPhone = phoneNumber.replace(/\D/g, '');
-    const leadsRef = collection(db, "crm_leads");
-    const q = query(leadsRef, where("phone", "==", normalizedPhone));
+    const leadsRef = adminDb.collection("crm_leads");
+    const q = leadsRef.where("phone", "==", normalizedPhone);
     
     try {
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await q.get();
         if (!querySnapshot.empty) {
             const leadDoc = querySnapshot.docs[0];
             const leadData = leadDoc.data() as LeadDocumentData;
@@ -50,26 +50,25 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | 
         return null;
     } catch (error) {
         console.error(`[INGEST_FLOW] Erro ao buscar lead por telefone ${phoneNumber}:`, error);
-        // This is where the PERMISSION_DENIED error was happening.
-        // Running inside a Genkit flow should resolve this.
         return null; 
     }
 }
 
 async function saveLeadMessage(leadId: string, messageText: string, sender: 'lead' | 'user'): Promise<void> {
-    const batch = writeBatch(db);
-    const chatDocRef = doc(db, "crm_lead_chats", leadId);
-    const leadRef = doc(db, "crm_leads", leadId);
+    const batch = adminDb.batch();
+    const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
+    const leadRef = adminDb.collection("crm_leads").doc(leadId);
     
     const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         text: messageText,
         sender: sender,
-        timestamp: Timestamp.now(),
+        timestamp: admin.firestore.Timestamp.now(),
     };
     
-    batch.set(chatDocRef, { messages: arrayUnion(newMessage) }, { merge: true });
-    batch.update(leadRef, { lastContact: Timestamp.now() });
+    // Using FieldValue.arrayUnion to append to the messages array atomically.
+    batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
+    batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
 
     await batch.commit();
     console.log(`[INGEST_FLOW] Mensagem salva e lastContact atualizado para o lead ${leadId}.`);
@@ -89,7 +88,7 @@ async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: st
   console.log(`[INGEST_FLOW] Criando novo lead para ${phoneNumber}.`);
   const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
   const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
-  const now = Timestamp.now();
+  const now = admin.firestore.Timestamp.now();
 
   const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
     name: contactName || phoneNumber,
@@ -109,7 +108,7 @@ async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: st
   };
 
   try {
-    const docRef = await addDoc(collection(db, "crm_leads"), leadData);
+    const docRef = await adminDb.collection("crm_leads").add(leadData);
     console.log(`[INGEST_FLOW] Novo lead criado com ID: ${docRef.id}`);
 
     if (firstMessageText) {
