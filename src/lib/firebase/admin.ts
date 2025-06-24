@@ -4,16 +4,18 @@ import * as admin from 'firebase-admin';
 /**
  * Initializes the Firebase Admin SDK if not already initialized.
  * This is a singleton pattern to prevent re-initialization in serverless environments.
+ * It explicitly uses Application Default Credentials.
  */
 function ensureAdminInitialized() {
   if (!admin.apps.length) {
     try {
-      // When running on Google Cloud (like App Hosting), initializeApp() with no args
-      // will automatically use the service account credentials.
-      admin.initializeApp();
-      console.log("[ADMIN_SDK_LIB] Firebase Admin SDK initialized successfully via lib.");
+      // Explicitly use Application Default Credentials. This is the standard for GCP environments.
+      admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+      });
+      console.log("[ADMIN_SDK_LIB] Firebase Admin SDK initialized successfully.");
     } catch (e) {
-      console.error('[ADMIN_SDK_LIB] Firebase admin initialization error', e);
+      console.error('[ADMIN_SDK_LIB] Firebase admin initialization error. This can happen if the server is not running in a GCP environment with default credentials.', e);
     }
   }
 }

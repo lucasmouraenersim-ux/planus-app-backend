@@ -12,21 +12,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
+import { getFirebaseAdmin, getAdminFirestore } from '@/lib/firebase/admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
-
-// --- Admin SDK Initialization ---
-// Initialize the app only if it's not already initialized.
-// This is critical for serverless environments.
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp();
-    console.log("[ADMIN_SDK] Firebase Admin SDK initialized successfully in flow.");
-  } catch (e) {
-    console.error('[ADMIN_SDK] Firebase admin initialization error in flow', e);
-  }
-}
 
 // We use z.any() because the webhook payload is complex and we only care about a few fields.
 const IngestWhatsappMessageInputSchema = z.any();
@@ -71,7 +59,8 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
             
             console.log(`[INGEST_FLOW] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
             
-            const adminDb = admin.firestore();
+            const admin = getFirebaseAdmin();
+            const adminDb = getAdminFirestore();
             const normalizedPhone = from.replace(/\D/g, '');
             const leadsRef = adminDb.collection("crm_leads");
             
@@ -121,14 +110,19 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
                 const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
                 const leadRef = adminDb.collection("crm_leads").doc(leadId);
                 
-                const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
-                    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
                     text: messageText,
                     sender: 'lead',
                     timestamp: admin.firestore.Timestamp.now(),
                 };
                 
-                batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
+                // Add a random ID to the message object before saving
+                const finalMessage = {
+                    ...newMessage,
+                    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                };
+                
+                batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(finalMessage) }, { merge: true });
                 batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
 
                 await batch.commit();
