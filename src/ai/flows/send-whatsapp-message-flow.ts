@@ -35,6 +35,19 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     outputSchema: SendWhatsappMessageOutputSchema,
   },
   async (input) => {
+    let to = input.to.replace(/\D/g, ''); // Normalize phone number
+
+    // Automatically correct Brazilian numbers missing the 9th digit.
+    // Valid format is 55 (country) + XX (area) + 9 (digit) + XXXXXXXX (number) = 13 digits.
+    // Incorrect but common format is 55 + XX + XXXXXXXX = 12 digits.
+    if (to.startsWith('55') && to.length === 12) {
+      const areaCode = to.substring(2, 4);
+      const numberPart = to.substring(4);
+      const correctedTo = `55${areaCode}9${numberPart}`;
+      console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${to} to ${correctedTo}`);
+      to = correctedTo;
+    }
+
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
     const accessToken = process.env.META_PERMANENT_TOKEN;
     const apiVersion = 'v20.0'; 
@@ -50,10 +63,9 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // This structure, with the image parameter, is what the API expects for this specific template.
     const requestBody = {
       messaging_product: "whatsapp",
-      to: input.to,
+      to: to, // Use the potentially corrected phone number
       type: "template",
       template: {
         name: "novocontato",
@@ -65,7 +77,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
               {
                 "type": "image",
                 "image": {
-                  // Using the exact URL that worked in the successful cURL test.
                   "link": "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg"
                 }
               }
