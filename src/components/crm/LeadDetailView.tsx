@@ -111,7 +111,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
         setNewMessage(messageToSend); // Put message back in input on failure
       }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error processing message:", error);
         toast({
             title: "Erro Inesperado",
