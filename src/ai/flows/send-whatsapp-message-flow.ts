@@ -62,11 +62,16 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     }
 
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
-    const accessToken = process.env.META_ACCESS_TOKEN || "EAA4IDY7gn5sBO8PMEkX5DSkb6jIctMZCFPykFxfhZAMZBULqMBdFZAiN5frhRRzVLVHgwzcE10QAmY1xuXZBZAERXskOqIGZB1k5VdAbKaE2GrLZA6RaBRs8CIqnDVW3p5ZAYY2vFTDPbq2B3IHsc2ZAVYE4Fq8c19iHxTJMotJypv63UOwLrtFaCFs5SF5JUUJYFfNJmmHbj5bYMn3bcbI0XwcC1THR4J1erLcoQHbi0sog0L";
+    const accessToken = process.env.META_ACCESS_TOKEN;
     const apiVersion = 'v20.0'; 
 
-    if (!phoneNumberId || !accessToken) {
-      const errorMessage = "WhatsApp API não configurada. Verifique a variável META_PHONE_NUMBER_ID ou o token de acesso.";
+    if (!phoneNumberId) {
+      const errorMessage = "WhatsApp API não configurada: A variável de ambiente META_PHONE_NUMBER_ID não foi encontrada. Adicione-a como um segredo no painel do App Hosting.";
+      console.error(`[WHATSAPP_API] Error: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
+    if (!accessToken) {
+      const errorMessage = "WhatsApp API não configurada: A variável de ambiente META_ACCESS_TOKEN não foi encontrada. Adicione-a como um segredo no painel do App Hosting.";
       console.error(`[WHATSAPP_API] Error: ${errorMessage}`);
       return { success: false, error: errorMessage };
     }
