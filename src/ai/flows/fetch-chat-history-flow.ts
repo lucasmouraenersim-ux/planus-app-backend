@@ -9,7 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { adminDb } from '@/lib/firebase/admin';
+import { getAdminFirestore } from '@/lib/firebase/admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
 
@@ -41,6 +41,8 @@ const fetchChatHistoryFlow = ai.defineFlow(
       console.log("[FETCH_CHAT_FLOW] No leadId provided.");
       return [];
     }
+
+    const adminDb = getAdminFirestore();
 
     try {
       const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);

@@ -4,7 +4,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { admin, adminDb } from '@/lib/firebase/admin';
+import { getFirebaseAdmin, getAdminFirestore } from '@/lib/firebase/admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 import type { ChatMessage } from '@/types/crm';
@@ -42,6 +42,9 @@ const sendChatMessageFlow = ai.defineFlow(
     outputSchema: SendChatMessageOutputSchema,
   },
   async ({ leadId, phone, text, sender }) => {
+    const admin = getFirebaseAdmin();
+    const adminDb = getAdminFirestore();
+
     // 1. Save the message to Firestore using Admin SDK
     const batch = adminDb.batch();
     const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);

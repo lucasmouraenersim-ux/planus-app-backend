@@ -10,7 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { admin, adminDb } from '@/lib/firebase/admin';
+import { getFirebaseAdmin, getAdminFirestore } from '@/lib/firebase/admin';
 import type { LeadDocumentData, LeadWithId, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
 
@@ -28,6 +28,7 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 // --- Internal Helper Functions ---
 
 async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | null> {
+    const adminDb = getAdminFirestore();
     const normalizedPhone = phoneNumber.replace(/\D/g, '');
     const leadsRef = adminDb.collection("crm_leads");
     const q = leadsRef.where("phone", "==", normalizedPhone);
@@ -55,6 +56,8 @@ async function findLeadByPhoneNumber(phoneNumber: string): Promise<LeadWithId | 
 }
 
 async function saveLeadMessage(leadId: string, messageText: string, sender: 'lead' | 'user'): Promise<void> {
+    const admin = getFirebaseAdmin();
+    const adminDb = getAdminFirestore();
     const batch = adminDb.batch();
     const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
     const leadRef = adminDb.collection("crm_leads").doc(leadId);
@@ -75,6 +78,8 @@ async function saveLeadMessage(leadId: string, messageText: string, sender: 'lea
 }
 
 async function findOrCreateLeadFromWhatsapp(contactName: string, phoneNumber: string, firstMessageText: string): Promise<string | null> {
+  const admin = getFirebaseAdmin();
+  const adminDb = getAdminFirestore();
   const existingLead = await findLeadByPhoneNumber(phoneNumber);
   
   if (existingLead) {

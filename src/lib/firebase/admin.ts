@@ -1,13 +1,35 @@
 import * as admin from 'firebase-admin';
 
-// Garante que o app do Firebase Admin seja inicializado apenas uma vez.
-// Isso evita erros de "app já existe" em ambientes de desenvolvimento com hot-reloading.
-if (!admin.apps.length) {
-  admin.initializeApp();
+/**
+ * Initializes the Firebase Admin SDK if not already initialized.
+ * This is a singleton pattern to prevent re-initialization in serverless environments.
+ */
+function ensureAdminInitialized() {
+  if (!admin.apps.length) {
+    try {
+      admin.initializeApp();
+    } catch (e) {
+      console.error('Firebase admin initialization error', e);
+    }
+  }
 }
 
-// Exporta a instância do Firestore do Admin SDK para ser usada em funções de backend/servidor.
-export const adminDb = admin.firestore();
+/**
+ * Gets the initialized Firebase Admin namespace.
+ * Call this to access admin features like admin.firestore.FieldValue.
+ * @returns The Firebase Admin namespace.
+ */
+export function getFirebaseAdmin() {
+  ensureAdminInitialized();
+  return admin;
+}
 
-// Exporta o namespace 'admin' para acesso a outras funcionalidades, como o FieldValue.
-export { admin };
+/**
+ * Gets the initialized Firestore instance from the Admin SDK.
+ * Call this to perform database operations.
+ * @returns The Firestore instance.
+ */
+export function getAdminFirestore() {
+  ensureAdminInitialized();
+  return admin.firestore();
+}
