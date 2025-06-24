@@ -3,45 +3,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check user role
-    function isUserRole(role) {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role;
-    }
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Users can read their own profile. Admins can do anything.
-    // Users can update their own profile.
+    function isUserRole(role) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User profile rules
     match /users/{userId} {
       allow get: if isSignedIn();
       allow list, create, delete: if isUserRole('admin');
-      allow update: if isUserRole('admin') || (isSignedIn() && request.auth.uid == userId);
+      allow update: if isUserRole('admin') || isOwner(userId);
     }
 
-    // Leads can be read by their assigned seller or any admin.
-    // Creation is restricted to authenticated users.
-    // Unauthenticated access (like WhatsApp webhooks) MUST be handled by the Admin SDK in backend flows.
+    // CRM Leads: Admins and Sellers can manage all leads.
     match /crm_leads/{leadId} {
-      allow get: if isUserRole('admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow list: if isUserRole('admin') || isUserRole('vendedor');
-      allow create: if isUserRole('admin') || (isUserRole('vendedor') && request.resource.data.userId == request.auth.uid);
-      allow update: if isUserRole('admin') || (isUserRole('vendedor') && resource.data.userId == request.auth.uid);
+      allow read, list, create, update: if isUserRole('admin') || isUserRole('vendedor');
       allow delete: if isUserRole('admin');
     }
 
-    // Chat history can only be accessed along with the corresponding lead.
-    // Unauthenticated access (like WhatsApp webhooks) MUST be handled by the Admin SDK.
+    // CRM Lead Chats: Admins and Sellers can read/write to any chat.
     match /crm_lead_chats/{leadId} {
-      allow read, write: if isUserRole('admin') || (
-        isSignedIn() &&
-        exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-        get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid
-      );
+      allow read, write: if isUserRole('admin') || isUserRole('vendedor');
     }
 
-    // Withdrawal requests can be created by the user for themselves.
-    // Only admins can view the list or update/delete requests.
+    // Withdrawal requests
     match /withdrawal_requests/{requestId} {
       allow get: if isUserRole('admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow list, update, delete: if isUserRole('admin');
