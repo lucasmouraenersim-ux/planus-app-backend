@@ -10,26 +10,24 @@
  * - IngestWhatsappMessageOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { firebaseAi as ai } from '@/ai/firebase-genkit'; // Use the clean Firebase-only instance
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
 
 
-// Direct initialization of Firebase Admin SDK
-if (!admin.apps.length) {
-  try {
-    console.log('[INGEST_FLOW] Initializing Firebase Admin SDK...');
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-    console.log('[INGEST_FLOW] Firebase Admin SDK initialized successfully.');
-  } catch (e: any) {
+// Use a robust, idempotent initialization for serverless environments
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+    console.log('[INGEST_FLOW] Firebase Admin SDK initialized.');
+  }
+} catch (e: any) {
+  if (e.code !== 'app/duplicate-app') {
     console.error('[INGEST_FLOW] CRITICAL: Firebase admin initialization error.', e);
   }
 }
-
 const adminDb = admin.firestore();
 
 
@@ -57,7 +55,6 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
   },
   async (payload) => {
     try {
-        console.log(`[INGEST_FLOW] Admin SDK Initialized: ${admin.apps.length > 0}`);
         const entry = payload.entry?.[0];
         const change = entry?.changes?.[0];
         const value = change?.value;
@@ -83,7 +80,7 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
             let leadDoc;
             
             // 1. Find existing lead using Admin SDK
-            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone} using Admin SDK.`);
+            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
             
             try {
               const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
@@ -92,7 +89,7 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
               if (!querySnapshot.empty) {
                   leadDoc = querySnapshot.docs[0];
                   leadId = leadDoc.id;
-                  console.log(`[INGEST_FLOW] SUCCESS: Found existing lead for ${from}: ID ${leadId}`);
+                  console.log(`[INGEST_FLOW] Found existing lead for ${from}: ID ${leadId}`);
               } else {
                   console.log(`[INGEST_FLOW] No lead found for phone ${normalizedPhone}. Will create a new one.`);
               }

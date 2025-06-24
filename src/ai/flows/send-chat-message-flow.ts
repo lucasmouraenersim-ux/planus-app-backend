@@ -4,25 +4,22 @@
  * @fileOverview A flow to save a chat message and send it via WhatsApp using the Admin SDK.
  * This ensures the operation has sufficient permissions regardless of Firestore rules.
  */
-import { ai } from '@/ai/genkit';
+import { firebaseAi as ai } from '@/ai/firebase-genkit'; // Use the clean Firebase-only instance
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 import type { ChatMessage } from '@/types/crm';
 
-// Direct initialization of Firebase Admin SDK
-if (!admin.apps.length) {
-  try {
-    console.log('[SEND_CHAT_FLOW] Initializing Firebase Admin SDK...');
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-    console.log('[SEND_CHAT_FLOW] Firebase Admin SDK initialized successfully.');
-  } catch (e: any) {
-    if (e.code !== 'app/duplicate-app') {
-       console.error('[SEND_CHAT_FLOW] CRITICAL: Firebase admin initialization error.', e);
-    }
+// Use a robust, idempotent initialization for serverless environments
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+    console.log('[SEND_CHAT_FLOW] Firebase Admin SDK initialized.');
+  }
+} catch (e: any) {
+  if (e.code !== 'app/duplicate-app') {
+    console.error('[SEND_CHAT_FLOW] CRITICAL: Firebase admin initialization error.', e);
   }
 }
 const adminDb = admin.firestore();
