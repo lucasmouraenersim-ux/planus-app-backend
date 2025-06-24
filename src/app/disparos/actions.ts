@@ -58,10 +58,22 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
               return;
             }
 
-            const normalizedPhone = validation.data.numero.replace(/\D/g, '');
+            let phone = validation.data.numero.replace(/\D/g, '');
+
+            // Adiciona 55 se for um número brasileiro sem o código
+            if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
+                phone = '55' + phone;
+            }
+            
+            // Adiciona o 9º dígito se for um celular brasileiro e estiver faltando
+            if (phone.startsWith('55') && phone.length === 12) {
+                const areaCode = phone.substring(2, 4);
+                const numberPart = phone.substring(4);
+                phone = `55${areaCode}9${numberPart}`;
+            }
 
             // Basic phone number validation for Brazil (10-13 digits)
-            if (normalizedPhone.length < 10 || normalizedPhone.length > 13) {
+            if (phone.length < 10 || phone.length > 13) {
                 errorDetails.push({ row: rowNum, reason: `Número '${validation.data.numero}' inválido.` });
                 return;
             }
@@ -69,7 +81,7 @@ export async function uploadLeadsFromCSV(formData: FormData): Promise<ActionResu
             validLeads.push({
               id: `csv-${Date.now()}-${index}`,
               name: validation.data.nome.trim(),
-              phone: normalizedPhone,
+              phone: phone, // Usa o número normalizado
               consumption: 0,
               company: undefined,
             });

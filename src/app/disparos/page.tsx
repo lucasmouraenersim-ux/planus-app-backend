@@ -48,13 +48,29 @@ export default function DisparosPage() {
       const allLeads = await fetchAllCrmLeadsGlobally();
       const validLeads = allLeads
         .filter(lead => lead.phone && lead.phone.trim() !== '')
-        .map((lead): OutboundLead => ({
-          id: lead.id,
-          name: lead.name,
-          phone: lead.phone || 'N/A',
-          consumption: lead.kwh,
-          company: lead.company,
-        }));
+        .map((lead): OutboundLead => {
+          let phone = lead.phone?.replace(/\D/g, '') || '';
+          
+          // Adiciona 55 se for um número brasileiro sem o código
+          if ((phone.length === 10 || phone.length === 11) && !phone.startsWith('55')) {
+              phone = '55' + phone;
+          }
+          
+          // Adiciona o 9º dígito se for um celular brasileiro e estiver faltando
+          if (phone.startsWith('55') && phone.length === 12) {
+              const areaCode = phone.substring(2, 4);
+              const numberPart = phone.substring(4);
+              phone = `55${areaCode}9${numberPart}`;
+          }
+
+          return {
+            id: lead.id,
+            name: lead.name,
+            phone: phone, // Usa o número normalizado
+            consumption: lead.kwh,
+            company: lead.company,
+          };
+        });
       setLeads(validLeads);
       setSelectedLeads(new Set());
       setLastDataSource('crm');
