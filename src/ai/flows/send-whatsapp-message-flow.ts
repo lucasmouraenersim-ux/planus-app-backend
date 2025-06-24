@@ -49,11 +49,12 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     }
 
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
-    const accessToken = process.env.META_PERMANENT_TOKEN;
+    // !! DEBUGGING STEP: Token hardcoded to bypass environment variable caching issue on Firebase.
+    const accessToken = "EAA4IDY7gn5sBO8PMEkX5DSkb6jIctMZCFPykFxfhZAMZBULqMBdFZAiN5frhRRzVLVHgwzcE10QAmY1xuXZBZAERXskOqIGZB1k5VdAbKaE2GrLZA6RaBRs8CIqnDVW3p5ZAYY2vFTDPbq2B3IHsc2ZAVYE4Fq8c19iHxTJMotJypv63UOwLrtFaCFs5SF5JUUJYFfNJmmHbj5bYMn3bcbI0XwcC1THR4J1erLcoQHbi0sog0L";
     const apiVersion = 'v20.0'; 
 
     if (!phoneNumberId || !accessToken) {
-      const errorMessage = "WhatsApp API não configurada no servidor. Verifique as variáveis META_PHONE_NUMBER_ID e META_PERMANENT_TOKEN no arquivo apphosting.yaml.";
+      const errorMessage = "WhatsApp API não configurada. Verifique a variável META_PHONE_NUMBER_ID ou o token hardcoded.";
       console.error(`[WHATSAPP_API] Error: ${errorMessage}`);
       return {
         success: false,
