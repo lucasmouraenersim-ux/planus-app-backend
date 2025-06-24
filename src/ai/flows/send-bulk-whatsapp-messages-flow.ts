@@ -32,7 +32,7 @@ export type SendingConfiguration = z.infer<typeof SendingConfigurationSchema>;
 
 const SendBulkWhatsappMessagesInputSchema = z.object({
   leads: z.array(OutboundLeadSchema),
-  templateName: z.string().describe("The name of the pre-approved WhatsApp message template. NOTE: The underlying flow currently uses the hardcoded 'novocontato' template."),
+  templateName: z.string().describe("The name of the pre-approved WhatsApp message template."),
   configuration: SendingConfigurationSchema,
 });
 export type SendBulkWhatsappMessagesInput = z.infer<typeof SendBulkWhatsappMessagesInputSchema>;
@@ -69,9 +69,16 @@ const sendBulkWhatsappMessagesFlow = ai.defineFlow(
         
         console.log(`[WHATSAPP_BULK_SEND] Processing lead ${i + 1}/${totalLeads}: ${lead.name} (${lead.phone})`);
 
-        // Refactored to call the single-send flow for reliability.
-        // The 'body' is ignored by the flow since the 'novocontato' template is static.
-        const result = await sendWhatsappMessage({ to: lead.phone, body: `Bulk message to ${lead.name}` });
+        // Call the single-send flow with a template message payload
+        const result = await sendWhatsappMessage({ 
+            to: lead.phone,
+            message: {
+                template: {
+                    name: templateName,
+                    bodyParams: [lead.name] // Pass the lead's name as the first parameter {{1}}
+                }
+            }
+        });
 
         if (result.success) {
             sentCount++;

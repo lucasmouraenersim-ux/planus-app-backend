@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview A flow to send a single WhatsApp message via the Meta Graph API.
+ * @fileOverview A flow to send a single WhatsApp message (template or text) via the Meta Graph API.
  *
  * - sendWhatsappMessage - Sends a message to a phone number.
  * - SendWhatsappMessageInput - The input type for the function.
@@ -12,7 +12,15 @@ import { z } from 'zod';
 
 const SendWhatsappMessageInputSchema = z.object({
   to: z.string().describe("The recipient's phone number, including country code but no '+', e.g., '5511999998888'."),
-  body: z.string().describe("The text content of the message. Note: This is saved to history. The 'novocontato' template is assumed to be static."),
+  message: z.object({
+    text: z.string().optional().describe("The text content for a plain text message."),
+    template: z.object({
+      name: z.string().describe("The name of the pre-approved WhatsApp message template."),
+      bodyParams: z.array(z.string()).optional().describe("An array of strings to replace the variables {{1}}, {{2}}, etc., in the template's body."),
+    }).optional().describe("The template to use for the message."),
+  }).refine(m => m.text || m.template, {
+    message: "Either a 'text' or a 'template' object must be provided in the message.",
+  })
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
 
@@ -36,9 +44,6 @@ const sendWhatsappMessageFlow = ai.defineFlow(
   async (input) => {
     let to = input.to.replace(/\D/g, ''); // Normalize phone number
 
-    // Automatically correct Brazilian numbers missing the 9th digit.
-    // Valid format is 55 (country) + XX (area) + 9 (digit) + XXXXXXXX (number) = 13 digits.
-    // Incorrect but common format is 55 + XX + XXXXXXXX = 12 digits.
     if (to.startsWith('55') && to.length === 12) {
       const areaCode = to.substring(2, 4);
       const numberPart = to.substring(4);
@@ -48,53 +53,54 @@ const sendWhatsappMessageFlow = ai.defineFlow(
     }
 
     const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
-    // !! DEBUGGING STEP: Token hardcoded to bypass environment variable caching issue on Firebase.
-    const accessToken = "EAA4IDY7gn5sBO8PMEkX5DSkb6jIctMZCFPykFxfhZAMZBULqMBdFZAiN5frhRRzVLVHgwzcE10QAmY1xuXZBZAERXskOqIGZB1k5VdAbKaE2GrLZA6RaBRs8CIqnDVW3p5ZAYY2vFTDPbq2B3IHsc2ZAVYE4Fq8c19iHxTJMotJypv63UOwLrtFaCFs5SF5JUUJYFfNJmmHbj5bYMn3bcbI0XwcC1THR4J1erLcoQHbi0sog0L";
+    const accessToken = process.env.META_ACCESS_TOKEN || "EAA4IDY7gn5sBO8PMEkX5DSkb6jIctMZCFPykFxfhZAMZBULqMBdFZAiN5frhRRzVLVHgwzcE10QAmY1xuXZBZAERXskOqIGZB1k5VdAbKaE2GrLZA6RaBRs8CIqnDVW3p5ZAYY2vFTDPbq2B3IHsc2ZAVYE4Fq8c19iHxTJMotJypv63UOwLrtFaCFs5SF5JUUJYFfNJmmHbj5bYMn3bcbI0XwcC1THR4J1erLcoQHbi0sog0L";
     const apiVersion = 'v20.0'; 
 
     if (!phoneNumberId || !accessToken) {
-      const errorMessage = "WhatsApp API não configurada. Verifique a variável META_PHONE_NUMBER_ID ou o token hardcoded.";
+      const errorMessage = "WhatsApp API não configurada. Verifique a variável META_PHONE_NUMBER_ID ou o token de acesso.";
       console.error(`[WHATSAPP_API] Error: ${errorMessage}`);
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      return { success: false, error: errorMessage };
     }
     
-    // Log a masked version of the token to confirm which one is being used
-    console.log(`[WHATSAPP_API] Using token starting with: ${accessToken.substring(0, 4)}... and ending with: ...${accessToken.substring(accessToken.length - 4)}`);
-    console.log('[WHATSAPP_API] Forcing rebuild and re-read of environment variables.');
-
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // Using the fully encoded URL from the working CURL command to prevent re-encoding issues.
-    const imageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
+    let requestBody: any;
 
-    const requestBody = {
-      messaging_product: "whatsapp",
-      to: to, // Use the potentially corrected phone number
-      type: "template",
-      template: {
-        name: "novocontato",
-        language: { "code": "pt_BR" },
-        components: [
-          {
-            "type": "header",
-            "parameters": [
-              {
-                "type": "image",
-                "image": {
-                  "link": imageUrl
-                }
-              }
-            ]
-          }
-        ]
+    if (input.message.template) {
+      // Build a template message
+      requestBody = {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "template",
+        template: {
+          name: input.message.template.name,
+          language: { "code": "pt_BR" },
+          components: [],
+        }
+      };
+      if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
+        requestBody.template.components.push({
+          type: 'body',
+          parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
+        });
       }
-    };
+    } else if (input.message.text) {
+      // Build a text message
+      requestBody = {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "text",
+        text: {
+          body: input.message.text
+        }
+      };
+    } else {
+        return { success: false, error: "Invalid message payload. Must be text or template." };
+    }
+
 
     try {
-      console.log(`[WHATSAPP_API] Preparing to send template message to URL: ${apiUrl}`);
+      console.log(`[WHATSAPP_API] Preparing to send message to URL: ${apiUrl}`);
       console.log(`[WHATSAPP_API] Request Body: ${JSON.stringify(requestBody)}`);
       
       const response = await fetch(apiUrl, {

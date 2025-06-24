@@ -92,18 +92,18 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
       
       const result = await sendWhatsappMessage({
           to: lead.phone,
-          body: messageToSend,
+          message: { text: messageToSend },
       });
 
       if (result.success) {
         toast({
-            title: "Simulação de Envio OK",
-            description: `A mensagem para ${lead.name} foi enviada para a fila de simulação.`,
+            title: "Mensagem Enviada",
+            description: `A mensagem para ${lead.name} foi enviada para a fila.`,
         });
       } else {
          toast({
-            title: "Falha na Simulação de Envio",
-            description: result.error || "Não foi possível simular o envio da mensagem via WhatsApp.",
+            title: "Falha no Envio",
+            description: result.error || "Não foi possível enviar a mensagem via WhatsApp.",
             variant: "destructive",
         });
         // Restore message on failure so user can retry
