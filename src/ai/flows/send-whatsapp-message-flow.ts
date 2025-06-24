@@ -68,8 +68,8 @@ const sendWhatsappMessageFlow = ai.defineFlow(
 
     const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
     
-    // The decoded URL that works in CURL. The fetch API will handle encoding it correctly.
-    const imageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem do WhatsApp de 2025-06-17 à(s) 10.04.50_a5712825.jpg";
+    // Using the fully encoded URL from the working CURL command to prevent re-encoding issues.
+    const imageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
 
     const requestBody = {
       messaging_product: "whatsapp",
