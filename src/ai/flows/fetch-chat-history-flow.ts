@@ -37,6 +37,7 @@ export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<F
   } catch (e: any) {
     if (e.code !== 'app/duplicate-app') {
       console.error('[FETCH_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
+      return []; // Stop execution if init fails
     }
   }
   const adminDb = admin.firestore();

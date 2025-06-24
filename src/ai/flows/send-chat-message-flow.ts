@@ -42,6 +42,7 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
   } catch (e: any) {
     if (e.code !== 'app/duplicate-app') {
       console.error('[SEND_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
+      return { success: false, message: 'Server configuration error.' };
     }
   }
   const adminDb = admin.firestore();
