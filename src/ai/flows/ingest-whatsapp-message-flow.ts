@@ -2,6 +2,8 @@
 'use server';
 /**
  * @fileOverview A flow to ingest and process incoming WhatsApp messages from the Meta webhook.
+ * This flow now uses the Firebase Admin SDK to bypass Firestore security rules,
+ * which is necessary as it's triggered by an unauthenticated webhook.
  *
  * - ingestWhatsappMessage - Processes a webhook payload to find or create a lead and save the message.
  * - IngestWhatsappMessageInput - The input type for the function.
@@ -10,9 +12,21 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getFirebaseAdmin, getAdminFirestore } from '@/lib/firebase/admin';
-import type { LeadDocumentData, LeadWithId, ChatMessage } from '@/types/crm';
+import * as admin from 'firebase-admin';
+import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
+
+// --- Admin SDK Initialization ---
+// Initialize the app only if it's not already initialized.
+// This is critical for serverless environments.
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp();
+    console.log("[ADMIN_SDK] Firebase Admin SDK initialized successfully in flow.");
+  } catch (e) {
+    console.error('[ADMIN_SDK] Firebase admin initialization error in flow', e);
+  }
+}
 
 // We use z.any() because the webhook payload is complex and we only care about a few fields.
 const IngestWhatsappMessageInputSchema = z.any();
@@ -24,29 +38,6 @@ const IngestWhatsappMessageOutputSchema = z.object({
   leadId: z.string().optional(),
 });
 export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOutputSchema>;
-
-// This helper function can remain separate as it's a self-contained batch operation.
-async function saveLeadMessage(leadId: string, messageText: string, sender: 'lead' | 'user'): Promise<void> {
-    const admin = getFirebaseAdmin();
-    const adminDb = getAdminFirestore();
-    const batch = adminDb.batch();
-    const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
-    const leadRef = adminDb.collection("crm_leads").doc(leadId);
-    
-    const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        text: messageText,
-        sender: sender,
-        timestamp: admin.firestore.Timestamp.now(),
-    };
-    
-    batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
-    batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
-
-    await batch.commit();
-    console.log(`[INGEST_FLOW] Message saved and lastContact updated for lead ${leadId}.`);
-}
-
 
 // --- Main Flow ---
 
@@ -80,25 +71,24 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
             
             console.log(`[INGEST_FLOW] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
             
-            const adminDb = getAdminFirestore();
+            const adminDb = admin.firestore();
             const normalizedPhone = from.replace(/\D/g, '');
             const leadsRef = adminDb.collection("crm_leads");
             
-            // 1. Find existing lead
-            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
-            const q = leadsRef.where("phone", "==", normalizedPhone);
-            const querySnapshot = await q.get();
             let leadId: string | null = null;
+            
+            // 1. Find existing lead using Admin SDK (bypasses security rules)
+            console.log(`[INGEST_FLOW] Searching for lead with phone: ${normalizedPhone}`);
+            const q = leadsRef.where("phone", "==", normalizedPhone).limit(1);
+            const querySnapshot = await q.get();
             
             if (!querySnapshot.empty) {
                 const leadDoc = querySnapshot.docs[0];
                 leadId = leadDoc.id;
                 console.log(`[INGEST_FLOW] Found existing lead for ${from}: ID ${leadId}`);
-                await saveLeadMessage(leadId, messageText, 'lead');
             } else {
-                // 2. Create new lead if not found
+                // 2. Create new lead if not found using Admin SDK
                 console.log(`[INGEST_FLOW] No lead found. Creating new lead for ${from}.`);
-                const admin = getFirebaseAdmin();
                 const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
                 const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
                 const now = admin.firestore.Timestamp.now();
@@ -123,14 +113,29 @@ const ingestWhatsappMessageFlow = ai.defineFlow(
                 const docRef = await adminDb.collection("crm_leads").add(leadData);
                 leadId = docRef.id;
                 console.log(`[INGEST_FLOW] New lead created with ID: ${leadId}`);
-                await saveLeadMessage(leadId, messageText, 'lead');
             }
-            
+
+            // 3. Save message to the lead's chat document using a batch write
             if (leadId) {
+                const batch = adminDb.batch();
+                const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
+                const leadRef = adminDb.collection("crm_leads").doc(leadId);
+                
+                const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
+                    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    text: messageText,
+                    sender: 'lead',
+                    timestamp: admin.firestore.Timestamp.now(),
+                };
+                
+                batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
+                batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
+
+                await batch.commit();
+                console.log(`[INGEST_FLOW] Message saved and lastContact updated for lead ${leadId}.`);
                 return { success: true, message: "Message processed and saved.", leadId: leadId };
             } else {
-                // This case should theoretically not be reached with the logic above
-                return { success: false, message: `CRITICAL FAILURE: Could not create or find lead for ${from}.` };
+                throw new Error(`CRITICAL FAILURE: Could not create or find lead for ${from}.`);
             }
 
         // Handle message status updates
