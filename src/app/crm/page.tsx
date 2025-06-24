@@ -211,6 +211,12 @@ function CrmPageContent() {
 
       <Dialog open={!!selectedLead} onOpenChange={(open) => !open && handleCloseLeadDetails()}>
           <DialogContent className="max-w-3xl w-[90vw] h-[90vh] p-0 bg-transparent border-none shadow-none text-foreground">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Detalhes do Lead</DialogTitle>
+              <DialogDescription>
+                Exibe os detalhes completos e o histórico de um lead específico.
+              </DialogDescription>
+            </DialogHeader>
             {selectedLead && (
               <LeadDetailView 
                 lead={selectedLead} 
