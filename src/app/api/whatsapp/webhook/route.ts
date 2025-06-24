@@ -1,3 +1,4 @@
+
 // src/app/api/whatsapp/webhook/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createLeadFromWhatsapp } from '@/lib/firebase/firestore';
@@ -34,15 +35,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('[WHATSAPP_WEBHOOK] Payload completo recebido:', JSON.stringify(body, null, 2));
 
-    // Validação mais detalhada para garantir que temos uma mensagem
-    const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    
-    if (message) {
-        console.log('[WHATSAPP_WEBHOOK] Objeto de mensagem encontrado.');
-        
+    const change = body?.entry?.[0]?.changes?.[0];
+
+    if (change?.field === 'messages') {
+      const value = change.value;
+      
+      // Handle incoming user messages
+      const message = value?.messages?.[0];
+      if (message) {
+        console.log('[WHATSAPP_WEBHOOK] Objeto de mensagem de usuário encontrado.');
         if (message.type === 'text') {
-            const messageData = body.entry[0].changes[0].value;
-            const from = message.from; // Número de telefone do remetente
+            const messageData = value; // value is the correct scope here
+            const from = message.from;
             const text = message.text.body;
             const profileName = messageData.contacts?.[0]?.profile?.name || 'Lead do WhatsApp';
 
@@ -59,8 +63,33 @@ export async function POST(request: NextRequest) {
         } else {
             console.log(`[WHATSAPP_WEBHOOK] Mensagem de tipo '${message.type}' recebida e ignorada.`);
         }
+      }
+
+      // Handle message status updates (sent, delivered, failed, etc.)
+      const status = value?.statuses?.[0];
+      if (status) {
+          console.log(`[WHATSAPP_WEBHOOK_STATUS] Status de mensagem recebido:`);
+          console.log(`[WHATSAPP_WEBHOOK_STATUS] Message ID: ${status.id}`);
+          console.log(`[WHATSAPP_WEBHOOK_STATUS] Recipient: ${status.recipient_id}`);
+          console.log(`[WHATSAPP_WEBHOOK_STATUS] Status: ${status.status}`);
+          
+          if (status.status === 'failed' && status.errors) {
+              console.error(`[WHATSAPP_WEBHOOK_STATUS] ERRO: A mensagem falhou ao ser entregue.`);
+              status.errors.forEach((error: any) => {
+                  console.error(`[WHATSAPP_WEBHOOK_STATUS] Código de Erro: ${error.code}`);
+                  console.error(`[WHATSAPP_WEBHOOK_STATUS] Título do Erro: ${error.title}`);
+                  if (error.error_data?.details) {
+                    console.error(`[WHATSAPP_WEBHOOK_STATUS] Detalhes: ${error.error_data.details}`);
+                  }
+              });
+          }
+      }
+
+      if (!message && !status) {
+        console.log('[WHATSAPP_WEBHOOK] Notificação recebida não é uma mensagem de usuário nem um status. Ignorando.');
+      }
     } else {
-        console.log('[WHATSAPP_WEBHOOK] Payload não contém uma mensagem de usuário padrão. Ignorando. (Isso pode ser uma notificação de status de entrega, etc.)');
+        console.log('[WHATSAPP_WEBHOOK] Payload não é uma notificação de mensagem. Ignorando.');
     }
     
     console.log('[WHATSAPP_WEBHOOK] Respondendo 200 OK para a API da Meta.');
