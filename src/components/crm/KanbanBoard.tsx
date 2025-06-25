@@ -23,7 +23,7 @@ export function KanbanBoard({ leads, onViewLeadDetails }: KanbanBoardProps) {
             <div className="bg-card/50 backdrop-blur-sm border border-t-0 rounded-b-lg p-2 h-[calc(100vh-220px)] overflow-y-auto">
               {leads
                 .filter(lead => lead.stageId === stage.id)
-                .sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime()) // Sort by lastContact descending
+                // Sorting is now handled by the parent query
                 .map(lead => (
                   <LeadCard key={lead.id} lead={lead} onViewDetails={onViewLeadDetails} />
                 ))}

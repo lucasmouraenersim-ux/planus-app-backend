@@ -31,7 +31,7 @@ function CrmPageContent() {
   useEffect(() => {
     if (!appUser) return;
 
-    const q = query(collection(db, "crm_leads"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const fetchedLeads: LeadWithId[] = [];

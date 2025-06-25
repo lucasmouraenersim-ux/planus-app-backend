@@ -1,6 +1,9 @@
+
 'use server';
 /**
  * @fileOverview A server action to fetch the chat history for a specific lead.
+ * DEPRECATED: This server action is no longer in use as chat history is now fetched on the client-side.
+ * The file is kept for archival purposes but can be safely removed in the future.
  */
 
 import { z } from 'zod';

@@ -11,6 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState, useEffect, useRef } from 'react';
+import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
     CheckCircle, XCircle, AlertTriangle, X, Loader2 
@@ -18,13 +20,34 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
-import { fetchChatHistory } from '@/actions/chat/fetchChatHistory';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// Client-side function to fetch chat history
+async function fetchChatHistoryClient(leadId: string): Promise<ChatMessageType[]> {
+    if (!leadId) return [];
+    
+    const chatDocRef = doc(db, "crm_lead_chats", leadId);
+    const chatDocSnap = await getDoc(chatDocRef);
+
+    if (!chatDocSnap.exists()) {
+        return [];
+    }
+    
+    const messagesData = chatDocSnap.data()?.messages || [];
+    
+    const formattedMessages: ChatMessageType[] = messagesData.map((msg: any) => ({
+      ...msg,
+      timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),
+    })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    return formattedMessages;
+}
+
 
 interface LeadDetailViewProps {
   lead: LeadWithId;
@@ -55,11 +78,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
 
     let isMounted = true;
     const loadChat = async () => {
-      if (isLoadingChat) {
-        setChatError(null);
-      }
+      if (isMounted) setIsLoadingChat(true);
       try {
-        const history = await fetchChatHistory(lead.id);
+        const history = await fetchChatHistoryClient(lead.id);
         if (isMounted) {
           setChatMessages(history);
         }
@@ -69,20 +90,20 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
           setChatError("Não foi possível carregar o histórico de mensagens.");
         }
       } finally {
-        if (isMounted && isLoadingChat) {
+        if (isMounted) {
           setIsLoadingChat(false);
         }
       }
     };
     
-    loadChat();
-    const intervalId = setInterval(loadChat, 5000);
+    loadChat(); // Initial load
+    const intervalId = setInterval(loadChat, 5000); // Poll every 5 seconds for updates
 
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [lead.id, isLoadingChat]);
+  }, [lead.id]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -104,7 +125,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
       });
 
       if (result.success && result.chatMessage) {
+        // Optimistic update
         setChatMessages(prev => [...prev, result.chatMessage!]);
+        
         if (result.message && result.message.includes('no phone number')) {
              toast({
                 title: "Aviso: Apenas salvo no histórico",
@@ -118,14 +141,14 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
           description: result.message || "Não foi possível enviar a mensagem.",
           variant: "destructive",
         });
-        setNewMessage(messageToSend);
+        setNewMessage(messageToSend); // Restore message on failure
       }
 
     } catch (error: any) {
         console.error("Error processing message:", error);
         toast({
             title: "Erro Inesperado",
-            description: "Ocorreu um erro ao processar a mensagem. Verifique o console.",
+            description: "Ocorreu um erro ao processar a mensagem.",
             variant: "destructive",
         });
         setNewMessage(messageToSend); 
