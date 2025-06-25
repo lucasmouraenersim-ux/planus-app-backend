@@ -32,7 +32,7 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
-  const adminDb = initializeAdmin();
+  const adminDb = await initializeAdmin();
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
   
   const batch = adminDb.batch();

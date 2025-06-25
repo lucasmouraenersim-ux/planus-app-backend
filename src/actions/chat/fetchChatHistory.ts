@@ -22,7 +22,7 @@ const FetchChatHistoryOutputSchema = z.array(ChatMessageSchema);
 export type FetchChatHistoryOutput = z.infer<typeof FetchChatHistoryOutputSchema>;
 
 export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<FetchChatHistoryOutput> {
-  const adminDb = initializeAdmin();
+  const adminDb = await initializeAdmin();
   console.log(`[FETCH_CHAT_ACTION] Initiated with leadId: '${leadId}'`);
 
   if (!leadId) {

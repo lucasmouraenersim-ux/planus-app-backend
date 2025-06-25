@@ -2,7 +2,7 @@
 import admin from 'firebase-admin';
 
 // This function ensures Firebase Admin is initialized only once.
-export const initializeAdmin = () => {
+export async function initializeAdmin() {
   if (!admin.apps.length) {
     try {
       admin.initializeApp({
@@ -21,4 +21,4 @@ export const initializeAdmin = () => {
   }
   // Return the firestore instance
   return admin.firestore();
-};
+}
