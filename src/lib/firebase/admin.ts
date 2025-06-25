@@ -5,12 +5,10 @@ import admin from 'firebase-admin';
 export async function initializeAdmin() {
   if (!admin.apps.length) {
     try {
-      admin.initializeApp({
-        // In a Google Cloud environment (like App Hosting), the SDK
-        // can auto-discover credentials. Explicitly setting projectId can help.
-        projectId: 'energisa-invoice-editor',
-      });
-      console.log('[Firebase Admin] SDK initialized successfully.');
+      // In a Google Cloud environment (like App Hosting), the SDK
+      // can auto-discover credentials by calling initializeApp with no arguments.
+      admin.initializeApp();
+      console.log('[Firebase Admin] SDK initialized successfully using environment credentials.');
     } catch (error: any) {
       // This can happen in serverless environments with multiple concurrent executions.
       // If it's a duplicate app error, we can safely ignore it and use the existing app.
