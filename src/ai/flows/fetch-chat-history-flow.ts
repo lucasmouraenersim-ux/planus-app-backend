@@ -3,8 +3,8 @@
  * @fileOverview A server action to fetch the chat history for a specific lead.
  */
 
+import admin from 'firebase-admin';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
 

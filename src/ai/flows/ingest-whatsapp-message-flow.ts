@@ -7,8 +7,8 @@
  * - IngestWhatsappMessageOutput - The return type for the function.
  */
 
+import admin from 'firebase-admin';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
 

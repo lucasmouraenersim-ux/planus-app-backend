@@ -2,8 +2,8 @@
 /**
  * @fileOverview A server action to save a chat message and send it via WhatsApp.
  */
+import admin from 'firebase-admin';
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
 import type { ChatMessage } from '@/types/crm';
