@@ -68,9 +68,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           
           if (!leadId) {
-              console.log(`[INGEST_ACTION] Creating new lead for ${from}.`);
-              const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
-              const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
+              console.log(`[INGEST_ACTION] Creating new unassigned lead for ${from}.`);
               const now = admin.firestore.Timestamp.now();
 
               const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
@@ -78,21 +76,21 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                   phone: normalizedPhone,
                   email: '',
                   company: '',
-                  stageId: 'contato',
-                  sellerName: DEFAULT_ADMIN_EMAIL,
-                  userId: DEFAULT_ADMIN_UID,
+                  stageId: 'para-atribuir', // New leads go to the unassigned stage
+                  sellerName: 'Sistema', // Placeholder for unassigned
+                  userId: 'unassigned', // Placeholder for unassigned
                   leadSource: 'WhatsApp',
                   value: 0,
                   kwh: 0,
                   createdAt: now,
                   lastContact: now,
-                  needsAdminApproval: true,
+                  needsAdminApproval: false, // Unassigned leads don't need approval yet
                   correctionReason: ''
               };
               
               const docRef = await adminDb.collection("crm_leads").add(leadData);
               leadId = docRef.id;
-              console.log(`[INGEST_ACTION] New lead created with ID: ${leadId}`);
+              console.log(`[INGEST_ACTION] New unassigned lead created with ID: ${leadId}`);
           }
 
           if (leadId) {

@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead } from '@/lib/firebase/firestore';
+import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
 
 
@@ -31,58 +31,67 @@ function CrmPageContent() {
   useEffect(() => {
     if (!appUser) return;
 
-    let q;
+    let unsubscribe1: () => void;
+    let unsubscribe2: () => void;
+    
+    const leadsMap = new Map<string, LeadWithId>();
+
+    const processSnapshot = (snapshot: any, isInitialLoadForSpinner = false) => {
+        snapshot.docChanges().forEach((change: any) => {
+            if (change.type === "removed") {
+                leadsMap.delete(change.doc.id);
+            } else {
+                const data = change.doc.data();
+                const lead: LeadWithId = {
+                    id: change.doc.id,
+                    ...data,
+                    createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                    lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                    signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                } as LeadWithId;
+
+                // Toast notification for new leads
+                if (change.type === 'added' && !knownLeadIds.current.has(lead.id)) {
+                    if (userAppRole === 'admin') {
+                         toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
+                    } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
+                        toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
+                    }
+                    knownLeadIds.current.add(lead.id);
+                }
+
+                leadsMap.set(change.doc.id, lead);
+            }
+        });
+
+        const sortedLeads = Array.from(leadsMap.values()).sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+        setLeads(sortedLeads);
+
+        if (isInitialLoadForSpinner) {
+            setIsLoading(false);
+        }
+    };
+    
     if (userAppRole === 'admin') {
-      // Admins see all leads
-      q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+      const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+      unsubscribe1 = onSnapshot(q, (snapshot) => processSnapshot(snapshot, true));
+    } else if (userAppRole === 'vendedor') {
+      // Query for user's own leads
+      const q1 = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid));
+      unsubscribe1 = onSnapshot(q1, (snapshot) => processSnapshot(snapshot, true));
+
+      // Query for unassigned leads
+      const q2 = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
+      unsubscribe2 = onSnapshot(q2, (snapshot) => processSnapshot(snapshot, false));
     } else {
-      // Sellers see only their own leads
-      q = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid), orderBy("lastContact", "desc"));
+        setIsLoading(false);
+        setLeads([]);
     }
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const fetchedLeads: LeadWithId[] = [];
-        const currentLeadIds = new Set<string>();
-
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const lead: LeadWithId = {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-            } as LeadWithId;
-            fetchedLeads.push(lead);
-            currentLeadIds.add(lead.id);
-        });
-
-        // Check for new leads only after the initial load
-        if (knownLeadIds.current.size > 0 && userAppRole === 'admin') {
-            fetchedLeads.forEach(lead => {
-                if (!knownLeadIds.current.has(lead.id)) {
-                    toast({
-                        title: "✨ Novo Lead Recebido!",
-                        description: `Lead "${lead.name}" foi adicionado ao CRM.`,
-                    });
-                }
-            });
-        }
-        
-        setLeads(fetchedLeads);
-        knownLeadIds.current = currentLeadIds;
-        setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching real-time leads: ", error);
-        toast({
-            title: "Erro ao Carregar Leads",
-            description: "Não foi possível buscar os leads em tempo real.",
-            variant: "destructive",
-        });
-        setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe1) unsubscribe1();
+      if (unsubscribe2) unsubscribe2();
+    };
   }, [appUser, toast, userAppRole]);
 
 
@@ -180,6 +189,26 @@ function CrmPageContent() {
       toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o lead.", variant: "destructive" });
     }
   };
+  
+  const handleAssignLead = async (leadId: string) => {
+    if (!appUser) {
+      toast({ title: "Erro de Autenticação", description: "Você precisa estar logado para atribuir um lead.", variant: "destructive" });
+      return;
+    }
+    try {
+      await assignLeadToSeller(leadId, {
+        uid: appUser.uid,
+        name: appUser.displayName || appUser.email!,
+      });
+      toast({
+        title: "Lead Atribuído!",
+        description: "O lead agora é seu e foi movido para 'Contato Inicial'.",
+      });
+    } catch (error) {
+      console.error("Error assigning lead:", error);
+      toast({ title: "Erro ao Atribuir", description: "Não foi possível atribuir o lead. Pode já ter sido pego por outro vendedor.", variant: "destructive" });
+    }
+  };
 
 
   if (isLoading) {
@@ -221,6 +250,7 @@ function CrmPageContent() {
           onMoveLead={handleMoveLead}
           onDeleteLead={handleDeleteLead}
           onEditLead={handleOpenForm}
+          onAssignLead={handleAssignLead}
         />
       </div>
 

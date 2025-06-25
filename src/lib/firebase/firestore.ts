@@ -111,7 +111,23 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
   console.log(`Successfully deleted lead ${leadId} and its chat history.`);
 }
 
-// --- Lead Approval Flow ---
+// --- Lead Assignment & Approval Flow ---
+
+export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
+  const leadRef = doc(db, "crm_leads", leadId);
+  // Optional: Check if the lead is still unassigned before updating to prevent race conditions
+  const leadSnap = await getDoc(leadRef);
+  if (leadSnap.exists() && leadSnap.data().stageId === 'para-atribuir') {
+    await updateDoc(leadRef, {
+      userId: seller.uid,
+      sellerName: seller.name,
+      stageId: 'contato',
+      lastContact: Timestamp.now(),
+    });
+  } else {
+    throw new Error("Lead não está mais disponível para atribuição.");
+  }
+}
 
 export async function approveCrmLead(leadId: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);

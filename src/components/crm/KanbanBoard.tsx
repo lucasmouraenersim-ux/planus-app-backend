@@ -14,9 +14,10 @@ interface KanbanBoardProps {
   onMoveLead: (leadId: string, newStageId: StageId) => void;
   onDeleteLead: (leadId: string) => void;
   onEditLead: (lead: LeadWithId) => void;
+  onAssignLead: (leadId: string) => void;
 }
 
-export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead }: KanbanBoardProps) {
+export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead }: KanbanBoardProps) {
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-md ">
       <div className="flex w-max space-x-4 p-4">
@@ -38,6 +39,7 @@ export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead,
                     onMoveLead={onMoveLead}
                     onDeleteLead={onDeleteLead}
                     onEditLead={onEditLead}
+                    onAssignLead={onAssignLead}
                   />
                 ))}
               {leads.filter(lead => lead.stageId === stage.id).length === 0 && (
