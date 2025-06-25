@@ -1,8 +1,6 @@
 'use server';
 /**
  * @fileOverview A server action to ingest and process incoming WhatsApp messages.
- * This now uses the Firebase Admin SDK directly as a standard server function
- * to avoid Genkit auth conflicts.
  *
  * - ingestWhatsappMessage - Processes a webhook payload to find or create a lead and save the message.
  * - IngestWhatsappMessageInput - The input type for the function.
@@ -10,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
@@ -28,19 +27,6 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 // --- Main Server Action ---
 
 export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
-  // Use a robust, idempotent initialization for serverless environments
-  try {
-    if (!admin.apps.length) {
-      admin.initializeApp();
-      console.log('[INGEST_ACTION] Firebase Admin SDK initialized.');
-    }
-  } catch (e: any) {
-    if (e.code !== 'app/duplicate-app') {
-      console.error('[INGEST_ACTION] CRITICAL: Firebase admin initialization error.', e);
-    }
-  }
-  const adminDb = admin.firestore();
-
   try {
       const entry = payload.entry?.[0];
       const change = entry?.changes?.[0];

@@ -1,8 +1,6 @@
 'use server';
 /**
  * @fileOverview A server action to fetch the chat history for a specific lead.
- * This function now uses the Firebase Admin SDK directly without being a Genkit flow
- * to avoid authentication conflicts.
  *
  * - fetchChatHistory - Fetches the chat messages for a given lead ID.
  * - FetchChatHistoryInput - The input type for the function.
@@ -10,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
+import { adminDb } from '@/lib/firebase/admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
 
@@ -28,20 +26,6 @@ const FetchChatHistoryOutputSchema = z.array(ChatMessageSchema);
 export type FetchChatHistoryOutput = z.infer<typeof FetchChatHistoryOutputSchema>;
 
 export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<FetchChatHistoryOutput> {
-  // Use a robust, idempotent initialization for serverless environments
-  try {
-    if (!admin.apps.length) {
-      admin.initializeApp();
-      console.log('[FETCH_CHAT_ACTION] Firebase Admin SDK initialized.');
-    }
-  } catch (e: any) {
-    if (e.code !== 'app/duplicate-app') {
-      console.error('[FETCH_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
-      return []; // Stop execution if init fails
-    }
-  }
-  const adminDb = admin.firestore();
-  
   console.log(`[FETCH_CHAT_ACTION] Initiated with leadId: '${leadId}'`);
 
   if (!leadId) {

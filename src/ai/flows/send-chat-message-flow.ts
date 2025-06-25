@@ -1,10 +1,9 @@
 'use server';
 /**
  * @fileOverview A server action to save a chat message and send it via WhatsApp.
- * This now uses the Firebase Admin SDK directly as a standard server function
- * to avoid Genkit auth conflicts.
  */
 import { z } from 'zod';
+import { adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
@@ -33,20 +32,6 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
-  // Use a robust, idempotent initialization for serverless environments
-  try {
-    if (!admin.apps.length) {
-      admin.initializeApp();
-      console.log('[SEND_CHAT_ACTION] Firebase Admin SDK initialized.');
-    }
-  } catch (e: any) {
-    if (e.code !== 'app/duplicate-app') {
-      console.error('[SEND_CHAT_ACTION] CRITICAL: Firebase admin initialization error.', e);
-      return { success: false, message: 'Server configuration error.' };
-    }
-  }
-  const adminDb = admin.firestore();
-
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
   
   // 1. Save the message to Firestore using Admin SDK
