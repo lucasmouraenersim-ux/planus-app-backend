@@ -1,24 +1,57 @@
 
 "use client";
 
-import type { LeadWithId } from '@/types/crm';
+import { useState } from 'react';
+import type { LeadWithId, StageId } from '@/types/crm';
+import type { UserType } from '@/types/user';
+import { STAGES_CONFIG } from '@/config/crm-stages';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, Zap, User, CalendarDays, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuPortal,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
 
 interface LeadCardProps {
   lead: LeadWithId;
   onViewDetails: (lead: LeadWithId) => void;
+  userAppRole: UserType | null;
+  onMoveLead: (leadId: string, newStageId: StageId) => void;
+  onDeleteLead: (leadId: string) => void;
+  onEditLead: (lead: LeadWithId) => void;
 }
 
 const formatCurrency = (value: number) => {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-export function LeadCard({ lead, onViewDetails }: LeadCardProps) {
+export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead }: LeadCardProps) {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="pb-3">
@@ -26,7 +59,6 @@ export function LeadCard({ lead, onViewDetails }: LeadCardProps) {
           <CardTitle className="text-lg font-semibold text-primary truncate" title={lead.name}>
             {lead.name}
           </CardTitle>
-          {/* Placeholder for a stage badge or similar */}
         </div>
         {lead.company && <CardDescription className="text-xs text-muted-foreground truncate">{lead.company}</CardDescription>}
       </CardHeader>
@@ -53,11 +85,74 @@ export function LeadCard({ lead, onViewDetails }: LeadCardProps) {
           </div>
         )}
       </CardContent>
-      <CardFooter>
-        <Button variant="outline" size="sm" className="w-full" onClick={() => onViewDetails(lead)}>
+      <CardFooter className="flex items-center justify-between">
+        <Button variant="outline" size="sm" className="flex-1" onClick={() => onViewDetails(lead)}>
           <ExternalLink className="w-3 h-3 mr-2" />
           Ver Detalhes
         </Button>
+        {userAppRole === 'admin' && (
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="ml-2">
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Move className="w-4 h-4 mr-2" />
+                    Mover para
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      {STAGES_CONFIG.map((stage) => (
+                        <DropdownMenuItem
+                          key={stage.id}
+                          disabled={lead.stageId === stage.id}
+                          onSelect={() => onMoveLead(lead.id, stage.id)}
+                        >
+                          {stage.title}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+                <DropdownMenuItem onSelect={() => onEditLead(lead)}>
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem className="text-destructive focus:bg-destructive focus:text-destructive-foreground">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. Isso excluirá permanentemente o lead <strong className="text-foreground">{lead.name}</strong> e todo o seu histórico de chat.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive hover:bg-destructive/90"
+                  onClick={() => onDeleteLead(lead.id)}
+                >
+                  Sim, excluir lead
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </CardFooter>
     </Card>
   );

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, Suspense, useRef } from 'react';
-import type { LeadWithId } from '@/types/crm';
+import type { LeadWithId, StageId } from '@/types/crm';
 import { KanbanBoard } from '@/components/crm/KanbanBoard';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
@@ -11,9 +11,9 @@ import { PlusCircle, Users, Filter, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection } from '@/lib/firebase/firestore';
+import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
 
 
@@ -31,7 +31,14 @@ function CrmPageContent() {
   useEffect(() => {
     if (!appUser) return;
 
-    const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+    let q;
+    if (userAppRole === 'admin') {
+      // Admins see all leads
+      q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+    } else {
+      // Sellers see only their own leads
+      q = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid), orderBy("lastContact", "desc"));
+    }
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const fetchedLeads: LeadWithId[] = [];
@@ -51,12 +58,12 @@ function CrmPageContent() {
         });
 
         // Check for new leads only after the initial load
-        if (knownLeadIds.current.size > 0) {
+        if (knownLeadIds.current.size > 0 && userAppRole === 'admin') {
             fetchedLeads.forEach(lead => {
                 if (!knownLeadIds.current.has(lead.id)) {
                     toast({
                         title: "✨ Novo Lead Recebido!",
-                        description: `Lead "${lead.name}" foi adicionado ao seu CRM.`,
+                        description: `Lead "${lead.name}" foi adicionado ao CRM.`,
                     });
                 }
             });
@@ -76,7 +83,7 @@ function CrmPageContent() {
     });
 
     return () => unsubscribe();
-  }, [appUser, toast]);
+  }, [appUser, toast, userAppRole]);
 
 
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
@@ -145,6 +152,34 @@ function CrmPageContent() {
       toast({ title: "Erro na Solicitação", description: "Não foi possível solicitar a correção.", variant: "destructive" });
     }
   };
+  
+  const handleMoveLead = async (leadId: string, newStageId: StageId) => {
+    try {
+      await updateCrmLeadStage(leadId, newStageId);
+      toast({
+        title: "Lead Movido",
+        description: `O lead foi movido para o estágio "${newStageId}".`,
+      });
+      // The real-time listener will update the UI automatically.
+    } catch (error) {
+      console.error("Error moving lead:", error);
+      toast({ title: "Erro ao Mover", description: "Não foi possível mover o lead.", variant: "destructive" });
+    }
+  };
+  
+  const handleDeleteLead = async (leadId: string) => {
+    try {
+      await deleteCrmLead(leadId);
+      toast({
+        title: "Lead Excluído",
+        description: "O lead foi excluído com sucesso.",
+      });
+      // The real-time listener will update the UI automatically.
+    } catch (error) {
+      console.error("Error deleting lead:", error);
+      toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o lead.", variant: "destructive" });
+    }
+  };
 
 
   if (isLoading) {
@@ -179,7 +214,14 @@ function CrmPageContent() {
       </header>
       
       <div className="flex-1 min-w-0 overflow-hidden"> {/* Wrapper for KanbanBoard */}
-        <KanbanBoard leads={leads} onViewLeadDetails={handleViewLeadDetails} />
+        <KanbanBoard 
+          leads={leads} 
+          onViewLeadDetails={handleViewLeadDetails}
+          userAppRole={userAppRole}
+          onMoveLead={handleMoveLead}
+          onDeleteLead={handleDeleteLead}
+          onEditLead={handleOpenForm}
+        />
       </div>
 
       {/* Floating Action Button */}

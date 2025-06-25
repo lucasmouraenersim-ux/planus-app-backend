@@ -67,18 +67,11 @@ export async function fetchCrmLeads(
   return MOCK_SELLER_LEADS_FIRESTORE;
 }
 
-export async function updateCrmLeadStage(
-  leadId: string, 
-  newStageId: StageId, 
-  newLastContactIso: string, 
-  updates?: Partial<LeadDocumentData>
-): Promise<void> {
-  console.log("Placeholder: updateCrmLeadStage called for lead:", leadId, "to stage:", newStageId, "with updates:", updates);
+export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
     stageId: newStageId,
-    lastContact: Timestamp.fromDate(new Date(newLastContactIso)),
-    ...updates
+    lastContact: Timestamp.now(),
   });
 }
 
@@ -101,10 +94,21 @@ export async function updateCrmLeadDetails(
 
 
 export async function deleteCrmLead(leadId: string): Promise<void> {
-  console.log("Placeholder: deleteCrmLead called for lead:", leadId);
+  console.log(`Attempting to delete lead ${leadId} and associated data.`);
   const leadRef = doc(db, "crm_leads", leadId);
-  // Optionally delete associated files from Storage and chat document
-  await deleteDoc(leadRef);
+  const chatDocRef = doc(db, "crm_lead_chats", leadId);
+  
+  const batch = writeBatch(db);
+
+  batch.delete(leadRef);
+  batch.delete(chatDocRef);
+  
+  // Note: This does not delete associated files from Storage, which would require
+  // listing files under the lead's folder and deleting them one by one.
+  // This can be added later if necessary.
+  
+  await batch.commit();
+  console.log(`Successfully deleted lead ${leadId} and its chat history.`);
 }
 
 // --- Lead Approval Flow ---

@@ -1,17 +1,22 @@
 
 "use client";
 
-import type { LeadWithId, Stage } from '@/types/crm';
+import type { LeadWithId, Stage, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { LeadCard } from './LeadCard';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import type { UserType } from '@/types/user';
 
 interface KanbanBoardProps {
   leads: LeadWithId[];
   onViewLeadDetails: (lead: LeadWithId) => void;
+  userAppRole: UserType | null;
+  onMoveLead: (leadId: string, newStageId: StageId) => void;
+  onDeleteLead: (leadId: string) => void;
+  onEditLead: (lead: LeadWithId) => void;
 }
 
-export function KanbanBoard({ leads, onViewLeadDetails }: KanbanBoardProps) {
+export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead }: KanbanBoardProps) {
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-md ">
       <div className="flex w-max space-x-4 p-4">
@@ -25,7 +30,15 @@ export function KanbanBoard({ leads, onViewLeadDetails }: KanbanBoardProps) {
                 .filter(lead => lead.stageId === stage.id)
                 // Sorting is now handled by the parent query
                 .map(lead => (
-                  <LeadCard key={lead.id} lead={lead} onViewDetails={onViewLeadDetails} />
+                  <LeadCard 
+                    key={lead.id} 
+                    lead={lead} 
+                    onViewDetails={onViewLeadDetails}
+                    userAppRole={userAppRole}
+                    onMoveLead={onMoveLead}
+                    onDeleteLead={onDeleteLead}
+                    onEditLead={onEditLead}
+                  />
                 ))}
               {leads.filter(lead => lead.stageId === stage.id).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">Nenhum lead neste estágio.</p>
