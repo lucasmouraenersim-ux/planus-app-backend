@@ -1,16 +1,13 @@
 'use server';
 /**
  * @fileOverview A server action to ingest and process incoming WhatsApp messages.
- *
- * - ingestWhatsappMessage - Processes a webhook payload to find or create a lead and save the message.
- * - IngestWhatsappMessageInput - The input type for the function.
- * - IngestWhatsappMessageOutput - The return type for the function.
  */
 
-import admin from 'firebase-admin';
 import { z } from 'zod';
+import admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
+import { initializeAdmin } from '@/lib/firebase/admin';
 
 
 const IngestWhatsappMessageInputSchema = z.any();
@@ -26,10 +23,7 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 // --- Main Server Action ---
 
 export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
-  if (!admin.apps.length) {
-    admin.initializeApp();
-  }
-  const adminDb = admin.firestore();
+  const adminDb = initializeAdmin();
 
   try {
       const entry = payload.entry?.[0];

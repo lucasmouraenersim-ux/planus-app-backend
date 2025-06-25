@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A server action for bulk WhatsApp message sending using the Meta API.
@@ -9,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { sendWhatsappMessage } from './send-whatsapp-message-flow';
+import { sendWhatsappMessage } from './sendWhatsappMessage';
 
 const OutboundLeadSchema = z.object({
   id: z.string(),

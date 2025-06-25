@@ -5,8 +5,9 @@
 import admin from 'firebase-admin';
 import { z } from 'zod';
 import type { Timestamp } from 'firebase-admin/firestore';
-import { sendWhatsappMessage } from './send-whatsapp-message-flow';
+import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage';
 import type { ChatMessage } from '@/types/crm';
+import { initializeAdmin } from '@/lib/firebase/admin';
 
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
@@ -31,11 +32,7 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
-  if (!admin.apps.length) {
-    admin.initializeApp();
-  }
-  const adminDb = admin.firestore();
-
+  const adminDb = initializeAdmin();
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
   
   const batch = adminDb.batch();

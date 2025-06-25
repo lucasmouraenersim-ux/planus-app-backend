@@ -1,6 +1,5 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { ingestWhatsappMessage } from '@/ai/flows/ingest-whatsapp-message-flow'; // Import the new flow
+import { ingestWhatsappMessage } from '@/actions/chat/ingestWhatsappMessage'; // Import the new flow
 
 const VERIFY_TOKEN = "testeapi";
 
@@ -27,12 +26,12 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         console.log('[WHATSAPP_WEBHOOK] Payload completo recebido:', JSON.stringify(body, null, 2));
 
-        // Asynchronously call the Genkit flow to handle the logic.
+        // Asynchronously call the server action to handle the logic.
         // We do NOT await the result here because the webhook needs to return 200 OK immediately.
-        // The flow will run in the background with server permissions.
+        // The action will run in the background with server permissions.
         ingestWhatsappMessage(body).catch(error => {
-            // Log any critical errors from the flow invocation itself
-            console.error('[WHATSAPP_WEBHOOK] Erro CRÍTICO ao invocar o flow ingestWhatsappMessage:', error);
+            // Log any critical errors from the action invocation itself
+            console.error('[WHATSAPP_WEBHOOK] Erro CRÍTICO ao invocar a action ingestWhatsappMessage:', error);
         });
 
         // Immediately acknowledge receipt to Meta API.

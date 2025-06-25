@@ -3,10 +3,10 @@
  * @fileOverview A server action to fetch the chat history for a specific lead.
  */
 
-import admin from 'firebase-admin';
 import { z } from 'zod';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
+import { initializeAdmin } from '@/lib/firebase/admin';
 
 const ChatMessageSchema = z.object({
   id: z.string(),
@@ -22,11 +22,7 @@ const FetchChatHistoryOutputSchema = z.array(ChatMessageSchema);
 export type FetchChatHistoryOutput = z.infer<typeof FetchChatHistoryOutputSchema>;
 
 export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<FetchChatHistoryOutput> {
-  if (!admin.apps.length) {
-    admin.initializeApp();
-  }
-  const adminDb = admin.firestore();
-
+  const adminDb = initializeAdmin();
   console.log(`[FETCH_CHAT_ACTION] Initiated with leadId: '${leadId}'`);
 
   if (!leadId) {

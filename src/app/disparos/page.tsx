@@ -1,9 +1,8 @@
-
 "use client";
 
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { sendBulkWhatsappMessages, type SendBulkWhatsappMessagesOutput, type SendingConfiguration, type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
+import { sendBulkWhatsappMessages, type SendBulkWhatsappMessagesOutput, type SendingConfiguration, type OutboundLead } from '@/actions/whatsapp/sendBulkWhatsappMessages';
 import { uploadLeadsFromCSV } from './actions';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';

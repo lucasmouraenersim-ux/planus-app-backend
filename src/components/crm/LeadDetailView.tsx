@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -18,8 +17,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
-import { sendChatMessage } from '@/ai/flows/send-chat-message-flow';
-import { fetchChatHistory } from '@/ai/flows/fetch-chat-history-flow';
+import { sendChatMessage } from '@/actions/chat/sendChatMessage';
+import { fetchChatHistory } from '@/actions/chat/fetchChatHistory';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
