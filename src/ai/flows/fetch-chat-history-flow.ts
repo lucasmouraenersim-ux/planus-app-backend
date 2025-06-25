@@ -1,14 +1,10 @@
 'use server';
 /**
  * @fileOverview A server action to fetch the chat history for a specific lead.
- *
- * - fetchChatHistory - Fetches the chat messages for a given lead ID.
- * - FetchChatHistoryInput - The input type for the function.
- * - FetchChatHistoryOutput - The return type for the function.
  */
 
 import { z } from 'zod';
-import { adminDb } from '@/lib/firebase/admin';
+import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import type { ChatMessage } from '@/types/crm';
 
@@ -26,6 +22,11 @@ const FetchChatHistoryOutputSchema = z.array(ChatMessageSchema);
 export type FetchChatHistoryOutput = z.infer<typeof FetchChatHistoryOutputSchema>;
 
 export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<FetchChatHistoryOutput> {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+  const adminDb = admin.firestore();
+
   console.log(`[FETCH_CHAT_ACTION] Initiated with leadId: '${leadId}'`);
 
   if (!leadId) {
@@ -54,7 +55,6 @@ export async function fetchChatHistory(leadId: FetchChatHistoryInput): Promise<F
         return [];
     }
 
-    // Ensure all timestamps are converted correctly before sorting
     const formattedMessages = messagesData.map((msg: any) => ({
       ...msg,
       timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),

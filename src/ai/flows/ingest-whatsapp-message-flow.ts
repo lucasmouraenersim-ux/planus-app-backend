@@ -8,7 +8,6 @@
  */
 
 import { z } from 'zod';
-import { adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
@@ -27,12 +26,16 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 // --- Main Server Action ---
 
 export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+  const adminDb = admin.firestore();
+
   try {
       const entry = payload.entry?.[0];
       const change = entry?.changes?.[0];
       const value = change?.value;
       
-      // Handle user text messages
       if (value?.messages?.[0]) {
           const message = value.messages[0];
           const from = message.from;
@@ -52,7 +55,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           let leadId: string | null = null;
           let leadDoc;
           
-          // 1. Find existing lead using Admin SDK
           console.log(`[INGEST_ACTION] Searching for lead with phone: ${normalizedPhone}`);
           
           try {
@@ -72,7 +74,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           
           if (!leadId) {
-              // 2. Create new lead if not found using Admin SDK
               console.log(`[INGEST_ACTION] Creating new lead for ${from}.`);
               const DEFAULT_ADMIN_UID = "QV5ozufTPmOpWHFD2DYE6YRfuE43"; 
               const DEFAULT_ADMIN_EMAIL = "lucasmoura@sentenergia.com";
@@ -100,7 +101,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               console.log(`[INGEST_ACTION] New lead created with ID: ${leadId}`);
           }
 
-          // 3. Save message to the lead's chat document using a batch write
           if (leadId) {
               const batch = adminDb.batch();
               const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
@@ -127,7 +127,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               throw new Error(`CRITICAL FAILURE: Could not create or find lead for ${from}.`);
           }
 
-      // Handle message status updates
       } else if (value?.statuses?.[0]) {
           const statusInfo = value.statuses[0];
           if (statusInfo.status === 'failed') {
@@ -137,7 +136,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           return { success: true, message: "Status processed." };
       
-      // Handle irrelevant payloads
       } else {
           console.log('[INGEST_ACTION] Payload did not contain a valid user message or status. Ignoring.');
           return { success: true, message: "Irrelevant payload ignored." };

@@ -3,7 +3,6 @@
  * @fileOverview A server action to save a chat message and send it via WhatsApp.
  */
 import { z } from 'zod';
-import { adminDb } from '@/lib/firebase/admin';
 import * as admin from 'firebase-admin';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from './send-whatsapp-message-flow';
@@ -32,9 +31,13 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+  const adminDb = admin.firestore();
+
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
   
-  // 1. Save the message to Firestore using Admin SDK
   const batch = adminDb.batch();
   const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
   const leadRef = adminDb.collection("crm_leads").doc(leadId);
@@ -46,7 +49,6 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       timestamp: admin.firestore.Timestamp.now(),
   };
   
-  // Add message to the chat subcollection and update the lastContact on the lead
   batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
   batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
 
@@ -58,13 +60,11 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       return { success: false, message: `Failed to save message to database: ${error.message}` };
   }
 
-  // Prepare the message object to be returned to the client
   const savedChatMessage: ChatMessage = {
       ...newMessage,
       timestamp: newMessage.timestamp.toDate().toISOString(),
   };
 
-  // 2. If sender is 'user', send the message via WhatsApp
   if (sender === 'user') {
       if (!phone || phone.trim() === '') {
           console.log(`[SEND_CHAT_ACTION] Message for ${leadId} saved to history, but lead has no phone number. Not sending to WhatsApp.`);
