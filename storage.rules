@@ -1,66 +1,41 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Regras para fotos de perfil dos usuários
-    // O {userId} aqui deve corresponder ao UID do Firebase Authentication do usuário.
-    match /profile_photos/{userId}/{allPaths=**} {
-      // Qualquer usuário autenticado pode ler fotos de perfil (para avatares, etc.)
-      allow read: if request.auth != null;
+    // ========= Funções Reutilizáveis =========
+    
+    // Verifica se o usuário autenticado é um administrador
+    function isUserAdmin(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.type == 'admin';
+    }
 
-      // Apenas o proprietário da foto (usuário autenticado cujo UID corresponde ao userId no caminho)
-      // pode fazer upload, atualizar ou deletar sua própria foto.
+    // Verifica se o usuário autenticado é o proprietário do lead
+    function isLeadOwner(userId, leadId) {
+      return exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
+             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == userId;
+    }
+
+
+    // ========= Regras por Pasta =========
+
+    // Regras para fotos de perfil dos usuários
+    match /profile_photos/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Regras para documentos relacionados aos leads do CRM
-    // O {leadId} aqui deve corresponder ao ID do documento do lead na coleção 'crm_leads' do Firestore.
     match /crm_lead_documents/{leadId}/{allPaths=**} {
-      // Permite leitura se:
-      // 1. O usuário é um administrador.
-      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
-      //    corresponde ao UID do vendedor autenticado.
-      allow read: if request.auth != null &&
-                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
-                      get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
-                    );
-
-      // Permite escrita (upload/update) se:
-      // 1. O usuário é um administrador.
-      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
-      //    corresponde ao UID do vendedor autenticado.
-      allow write: if request.auth != null &&
-                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
-                       get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
-                     );
-
-      // Permite exclusão se:
-      // 1. O usuário é um administrador.
-      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
-      //    corresponde ao UID do vendedor autenticado.
-      // Geralmente, a exclusão de arquivos pode ser mais restrita ou gerenciada por Cloud Functions
-      // para garantir a integridade dos dados, mas esta regra permite a exclusão pelo proprietário/admin.
-      allow delete: if request.auth != null &&
-                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
-                        get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
-                      );
+      allow read, write, delete: if request.auth != null &&
+                                  (isUserAdmin(request.auth.uid) || isLeadOwner(request.auth.uid, leadId));
     }
 
-    // NOVA REGRA: Mídias de chat (imagens, áudio)
-    // O {leadId} corresponde ao ID do documento do lead associado ao chat.
+    // Regras para mídias de chat (áudio, imagem)
     match /chat_media/{leadId}/{allPaths=**} {
-      // Permite leitura e escrita para admins ou o vendedor atribuído ao lead.
-      // Isso garante que apenas pessoas autorizadas possam ver/enviar mídias para um chat específico.
-      allow read, write: if request.auth != null &&
-                           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-                            (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
-                             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
-                           );
+      allow read, write, delete: if request.auth != null &&
+                                  (isUserAdmin(request.auth.uid) || isLeadOwner(request.auth.uid, leadId));
     }
   }
 }
