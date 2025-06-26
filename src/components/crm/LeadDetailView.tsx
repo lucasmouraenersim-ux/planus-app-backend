@@ -15,7 +15,7 @@ import { doc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2 
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import Link from 'next/link';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -293,6 +294,12 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
         </CardContent>
         <CardFooter className="border-t pt-4 flex justify-end space-x-2">
             <Button variant="outline" onClick={() => onEdit(lead)}><Edit className="w-4 h-4 mr-2"/>Editar Lead</Button>
+            <Link href={`/chat?leadId=${lead.id}`} passHref>
+                <Button variant="outline">
+                    <MessagesSquare className="w-4 h-4 mr-2" />
+                    Abrir Chat em Modo Janela
+                </Button>
+            </Link>
             <Button onClick={onClose}>Fechar</Button>
         </CardFooter>
       </Card>
