@@ -1,3 +1,4 @@
+
 'use server';
 import admin from 'firebase-admin';
 
@@ -17,6 +18,8 @@ export async function initializeAdmin() {
       // If it's a duplicate app error, we can safely ignore it and use the existing app.
       if (error.code !== 'app/duplicate-app') {
         console.error('CRITICAL: Firebase admin initialization error:', error);
+        // Re-throw the error to ensure it's caught by the calling function.
+        throw error;
       }
     }
   }
