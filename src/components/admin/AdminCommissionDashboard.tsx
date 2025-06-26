@@ -162,12 +162,22 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }
   };
 
-  const handleViewLastAccess = (user: FirestoreUser) => {
+  const handleViewUserDetails = (user: FirestoreUser) => {
+    const creationDate = user.createdAt 
+        ? `Criado em: ${format(parseISO(user.createdAt as string), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
+        : "Data de criação não disponível.";
+    const lastAccessDate = user.lastSignInTime
+        ? `Último acesso: ${format(parseISO(user.lastSignInTime as string), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
+        : "Nenhum acesso registrado.";
+    
     toast({
-      title: `Data de Criação de ${user.displayName}`,
-      description: user.createdAt 
-        ? `O usuário foi criado em: ${format(parseISO(user.createdAt as string), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
-        : "Data de criação não disponível.",
+      title: `Detalhes de ${user.displayName}`,
+      description: (
+        <div>
+          <p>{creationDate}</p>
+          <p>{lastAccessDate}</p>
+        </div>
+      ),
     });
   };
 
@@ -314,7 +324,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           </div>
           {isLoadingUsersProp ? (<div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : filteredUsers.length === 0 ? (<p className="text-center text-muted-foreground py-4">Nenhum usuário encontrado com os filtros atuais.</p>) : (
             <Table>
-              <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>CPF</TableHead><TableHead>Tipo</TableHead><TableHead>Criado em</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>CPF</TableHead><TableHead>Tipo</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
               <TableBody>
                 {filteredUsers.map(user => (
                   <TableRow key={user.uid}>
@@ -322,7 +332,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.cpf ? `${user.cpf.slice(0,3)}.${user.cpf.slice(3,6)}.${user.cpf.slice(6,9)}-${user.cpf.slice(9,11)}` : 'N/A'}</TableCell>
                     <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
-                    <TableCell>{user.createdAt ? format(parseISO(user.createdAt as string), "dd/MM/yyyy", { locale: ptBR }) : 'N/A'}</TableCell>
+                    <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm", { locale: ptBR }) : 'Nunca'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
@@ -332,7 +342,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                             <DropdownMenuSubTrigger>Alterar Tipo</DropdownMenuSubTrigger>
                             <DropdownMenuPortal><DropdownMenuSubContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<DropdownMenuItem key={opt.value} disabled={user.type === opt.value} onSelect={() => handleOpenChangeTypeModal(user, opt.value as UserType)}>{opt.label}</DropdownMenuItem>))}</DropdownMenuSubContent></DropdownMenuPortal>
                           </DropdownMenuSub>
-                          <DropdownMenuItem onSelect={() => handleViewLastAccess(user)}>Ver Data de Criação</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => handleViewUserDetails(user)}>Ver Detalhes</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>Redefinir Senha</DropdownMenuItem>
                         </DropdownMenuContent>

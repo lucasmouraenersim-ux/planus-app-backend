@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const createdAtTimestamp = firestoreUserData.createdAt as Timestamp;
+        const lastSignInTimestamp = firestoreUserData.lastSignInTime as Timestamp;
         return {
           uid: user.uid,
           email: user.email,
@@ -53,6 +54,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           personalBalance: firestoreUserData.personalBalance || 0,
           mlmBalance: firestoreUserData.mlmBalance || 0,
           createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
+          lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : (user.metadata.lastSignInTime || undefined),
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
@@ -146,12 +148,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const usersCollectionRef = collection(db, "users");
         const usersSnapshot = await getDocs(usersCollectionRef);
         const usersList = usersSnapshot.docs.map(docSnap => {
-            const data = docSnap.data() as Omit<FirestoreUser, 'uid' | 'createdAt'>;
-            const createdAtTimestamp = docSnap.data().createdAt as Timestamp;
+            const data = docSnap.data() as Omit<FirestoreUser, 'uid'>;
+            const createdAtTimestamp = data.createdAt as Timestamp;
+            const lastSignInTimestamp = data.lastSignInTime as Timestamp;
             return {
                 ...data,
                 uid: docSnap.id,
                 createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
+                lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : undefined,
             } as FirestoreUser;
         });
         setAllFirestoreUsers(usersList);
@@ -191,6 +195,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setFirebaseUser(user);
 
       if (user) {
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists() && user.metadata.lastSignInTime) {
+            await updateDoc(userDocRef, {
+              lastSignInTime: Timestamp.fromDate(new Date(user.metadata.lastSignInTime))
+            });
+          }
+        } catch (error) {
+          console.error("Failed to update last sign-in time for user:", user.uid, error);
+        }
+        
         const fetchedAppUser = await fetchFirestoreUser(user);
         setAppUser(fetchedAppUser);
         setUserAppRole(fetchedAppUser?.type || 'pending_setup');

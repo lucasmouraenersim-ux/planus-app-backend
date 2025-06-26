@@ -12,6 +12,7 @@ export type FirestoreUser = {
   cpf?: string;
   type: UserType;
   createdAt: Timestamp | string; // Timestamp in Firestore, string on client
+  lastSignInTime?: Timestamp | string; // Timestamp in Firestore, string on client
   photoURL?: string | null;
   personalBalance?: number; 
   mlmBalance?: number; 
@@ -31,4 +32,5 @@ export type AppUser = {
   personalBalance: number; // Should have a default in context if possibly undefined
   mlmBalance: number;    // Should have a default in context if possibly undefined
   createdAt?: Timestamp | string; // Make createdAt optional or ensure it's always string from context
+  lastSignInTime?: string;
 };
