@@ -44,8 +44,8 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       return { success: false, message: `Lead not found with ID: ${leadId}` };
     }
   } catch (error: any) {
-     console.error(`[SEND_CHAT_ACTION] Error checking for lead existence for lead ${leadId}:`, error);
-     return { success: false, message: `Error accessing database: ${error.message}` };
+     console.error(`[SEND_CHAT_ACTION] CRITICAL ERROR checking for lead existence for lead ${leadId}:`, error);
+     return { success: false, message: `A server error occurred while trying to access the database. Please ensure the server has the correct permissions and project configuration. Details: ${error.message}` };
   }
   
   const batch = adminDb.batch();
