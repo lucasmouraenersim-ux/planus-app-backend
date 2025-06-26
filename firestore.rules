@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -9,6 +10,14 @@ service cloud.firestore {
     }
 
     function isUserRole(role) {
+      // An admin is someone whose firestore doc says so, OR has a specific email address.
+      // This allows initial admins to function before their Firestore document is created.
+      if (role == 'admin') {
+        let isSuperAdminByEmail = isSignedIn() && (request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com');
+        let isAdminByFirestoreDoc = isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
+        return isSuperAdminByEmail || isAdminByFirestoreDoc;
+      }
+      // For other roles, just check the firestore doc.
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role;
     }
     
@@ -19,25 +28,36 @@ service cloud.firestore {
     // User profile rules
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list, create, delete: if isUserRole('admin');
+      // Allow create/delete only for admins
+      allow create, delete: if isUserRole('admin');
+      // Allow update for admins or the user themselves
       allow update: if isUserRole('admin') || isOwner(userId);
+      // Deny list operation unless it's an admin
+      allow list: if isUserRole('admin');
     }
 
-    // CRM Leads: Admins and Sellers can manage all leads.
+    // CRM Leads rules
     match /crm_leads/{leadId} {
-      allow read, list, create, update: if isUserRole('admin') || isUserRole('vendedor');
+      // Admins or sellers can read, list, create, and update leads.
+      allow read, create, update: if isUserRole('admin') || isUserRole('vendedor');
+      allow list: if isUserRole('admin') || isUserRole('vendedor');
+      // Only admins can delete leads.
       allow delete: if isUserRole('admin');
     }
 
-    // CRM Lead Chats: Admins and Sellers can read/write to any chat.
+    // CRM Lead Chats rules
     match /crm_lead_chats/{leadId} {
+      // Admins or sellers can read and write to chats.
       allow read, write: if isUserRole('admin') || isUserRole('vendedor');
     }
 
-    // Withdrawal requests
+    // Withdrawal requests rules
     match /withdrawal_requests/{requestId} {
+      // Admins can get any request. Users can only get their own.
       allow get: if isUserRole('admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // Only admins can list, update, or delete requests.
       allow list, update, delete: if isUserRole('admin');
+      // Any signed-in user can create a withdrawal request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
   }
