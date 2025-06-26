@@ -1,8 +1,7 @@
-
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
-import type { FirestoreUser } from '@/types/user';
+import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import { Timestamp, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, arrayUnion, getDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { uploadFile } from './storage';
@@ -155,6 +154,15 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
   await updateDoc(leadRef, {
     signedAt: Timestamp.fromDate(new Date(newSignedAtIso)),
     lastContact: Timestamp.now(),
+  });
+}
+
+// --- User Management ---
+export async function updateUserType(userId: string, newType: UserType): Promise<void> {
+  if (!userId) throw new Error("User ID is required.");
+  const userRef = doc(db, "users", userId);
+  await updateDoc(userRef, {
+    type: newType
   });
 }
 
