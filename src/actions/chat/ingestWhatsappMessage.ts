@@ -60,7 +60,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                 leadId = leadDoc.id;
                 console.log(`[INGEST_ACTION] Found existing lead for ${from}: ID ${leadId}`);
             } else {
-                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will create a new one.`);
+                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will check for trigger phrase.`);
             }
           } catch (error: any) {
             console.error(`[INGEST_ACTION] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
@@ -68,7 +68,15 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           
           if (!leadId) {
-              console.log(`[INGEST_ACTION] Creating new unassigned lead for ${from}.`);
+              const normalizedMessage = messageText.trim().toLowerCase().replace(/[.,!?;]/g, '');
+              const triggerPhrase = "quero economizar";
+
+              if (normalizedMessage !== triggerPhrase) {
+                console.log(`[INGEST_ACTION] Ignoring message from new number as it's not the trigger phrase. Message: "${messageText}"`);
+                return { success: true, message: "Message from new number ignored." };
+              }
+              
+              console.log(`[INGEST_ACTION] Trigger phrase received. Creating new unassigned lead for ${from}.`);
               const now = admin.firestore.Timestamp.now();
 
               const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
@@ -116,6 +124,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               console.log(`[INGEST_ACTION] Message saved and lastContact updated for lead ${leadId}.`);
               return { success: true, message: "Message processed and saved.", leadId: leadId };
           } else {
+              // This part should not be reached due to the logic above, but it's here for safety.
               throw new Error(`CRITICAL FAILURE: Could not create or find lead for ${from}.`);
           }
 
