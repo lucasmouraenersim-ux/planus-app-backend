@@ -207,20 +207,31 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       }
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const firebaseUserAuth = userCredential.user;
-      const newUserForFirestore: Omit<FirestoreUser, 'createdAt'> & { createdAt: Timestamp } = {
-        uid: firebaseUserAuth.uid, email: data.email, displayName: data.displayName || data.email.split('@')[0],
+
+      const newUserForFirestore: Partial<FirestoreUser> & { uid: string; email: string; type: UserType; createdAt: Timestamp } = {
+        uid: firebaseUserAuth.uid,
+        email: data.email,
+        displayName: data.displayName || data.email.split('@')[0],
         cpf: data.cpf.replace(/\D/g, ''),
-        phone: data.phone?.replace(/\D/g, ''),
-        type: data.type as UserType, createdAt: Timestamp.now(),
+        type: data.type,
+        createdAt: Timestamp.now(),
         photoURL: `https://placehold.co/40x40.png?text=${(data.displayName || data.email).charAt(0).toUpperCase()}`,
-        personalBalance: 0, mlmBalance: 0,
+        personalBalance: 0,
+        mlmBalance: 0,
       };
+
+      if (data.phone) {
+        newUserForFirestore.phone = data.phone.replace(/\D/g, '');
+      }
+      
       await setDoc(doc(db, "users", firebaseUserAuth.uid), newUserForFirestore);
+      
       await refreshUsers();
       toast({ title: "Usuário Criado", description: `${data.email} registrado com sucesso.` });
       setIsAddUserModalOpen(false);
       addUserForm.reset({ type: 'vendedor', cpf: '', displayName: '', email: '', password: '', phone: '' });
     } catch (error: any) {
+      console.error("CRITICAL ERROR adding user:", error);
       let errorMessage = "Falha ao criar usuário. Tente novamente.";
       if (error.code === 'auth/email-already-in-use') errorMessage = "Este email já está em uso no Firebase Auth.";
       if (error.code === 'auth/weak-password') errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
