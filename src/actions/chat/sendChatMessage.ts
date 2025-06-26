@@ -93,8 +93,6 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
       if (type === 'image' && mediaUrl) {
           messagePayload = { image: { link: mediaUrl, caption: text } };
       } else if (type === 'audio' && mediaUrl) {
-          // Audio messages on WhatsApp don't support captions in the same API call.
-          // The audio is sent, and the text is saved for history context.
           messagePayload = { audio: { link: mediaUrl } };
       } else {
           messagePayload = { text };

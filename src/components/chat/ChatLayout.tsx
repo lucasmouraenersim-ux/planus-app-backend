@@ -13,33 +13,13 @@ import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Squar
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import Image from 'next/image';
-import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from "@/hooks/use-toast";
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-async function fetchChatHistoryClient(leadId: string): Promise<ChatMessage[]> {
-    if (!leadId) return [];
-    
-    const chatDocRef = doc(db, "crm_lead_chats", leadId);
-    const chatDocSnap = await getDoc(chatDocRef);
-
-    if (!chatDocSnap.exists()) {
-        return [];
-    }
-    
-    const messagesData = chatDocSnap.data()?.messages || [];
-    
-    const formattedMessages: ChatMessage[] = messagesData.map((msg: any) => ({
-      ...msg,
-      timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),
-    })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    
-    return formattedMessages;
-}
 
 export function ChatLayout() {
   const { appUser, fetchAllCrmLeadsGlobally } = useAuth();
@@ -92,28 +72,32 @@ export function ChatLayout() {
         return;
     };
 
-    let isMounted = true;
-    const loadChat = async () => {
-        if (isMounted) setIsLoadingChat(true);
-        try {
-            const history = await fetchChatHistoryClient(selectedLead.id);
-            if (isMounted) {
-                setChatMessages(history);
-            }
-        } catch (error) {
-            console.error("Error fetching chat history:", error);
-        } finally {
-            if (isMounted) setIsLoadingChat(false);
-        }
-    };
+    setIsLoadingChat(true);
+    const chatDocRef = doc(db, "crm_lead_chats", selectedLead.id);
     
-    loadChat();
+    const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const messagesData = docSnap.data()?.messages || [];
+            const formattedMessages: ChatMessage[] = messagesData.map((msg: any) => ({
+                ...msg,
+                timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),
+            })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            setChatMessages(formattedMessages);
+        } else {
+            setChatMessages([]);
+        }
+        setIsLoadingChat(false);
+    }, (error) => {
+        console.error("Error listening to chat history:", error);
+        setIsLoadingChat(false);
+        toast({ title: "Erro de Chat", description: "Não foi possível carregar as mensagens.", variant: "destructive" });
+    });
 
-    return () => { isMounted = false; };
-  }, [selectedLead]);
+    return () => unsubscribe();
+  }, [selectedLead, toast]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [chatMessages]);
 
   const sendMessageInternal = async (text: string, type: 'text' | 'image' | 'audio', mediaUrl?: string) => {
@@ -131,7 +115,7 @@ export function ChatLayout() {
         });
 
         if (result.success && result.chatMessage) {
-            setChatMessages(prev => [...prev, result.chatMessage!]);
+            // No optimistic update needed, listener will handle it
         } else {
             toast({ title: "Erro", description: result.message || "Falha ao enviar mensagem.", variant: "destructive" });
         }
@@ -179,7 +163,7 @@ export function ChatLayout() {
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream);
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
             audioChunksRef.current = [];
             
             mediaRecorderRef.current.ondataavailable = (event) => {
@@ -196,8 +180,7 @@ export function ChatLayout() {
                 try {
                     const filePath = `chat_media/${selectedLead.id}/${Date.now()}-audio.webm`;
                     const downloadURL = await uploadFile(audioBlob, filePath);
-                    await sendMessageInternal(newMessage || 'Mensagem de voz', 'audio', downloadURL);
-                    setNewMessage('');
+                    await sendMessageInternal('Mensagem de voz', 'audio', downloadURL);
                 } catch(error) {
                     toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
                     setIsUploadingMedia(false);
