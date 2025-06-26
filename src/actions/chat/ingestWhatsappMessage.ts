@@ -34,14 +34,22 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           const message = value.messages[0];
           const from = message.from;
           const contactName = value.contacts?.[0]?.profile?.name || from;
-          const messageText = message.text?.body;
+          
+          let messageText: string | undefined;
+
+          // Handle both text and interactive button reply messages
+          if (message.type === 'text') {
+              messageText = message.text?.body;
+          } else if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
+              messageText = message.interactive.button_reply?.title;
+          }
 
           if (!messageText) {
-              console.log("[INGEST_ACTION] Ignoring notification without text (e.g., status, media).");
-              return { success: true, message: "Notification without text ignored." };
+              console.log("[INGEST_ACTION] Ignoring notification without text or unsupported interactive type.");
+              return { success: true, message: "Notification without text or unsupported type ignored." };
           }
           
-          console.log(`[INGEST_ACTION] TEXT MESSAGE: From '${contactName}' (${from}). Content: "${messageText}"`);
+          console.log(`[INGEST_ACTION] MESSAGE RECEIVED: From '${contactName}' (${from}). Type: '${message.type}'. Content: "${messageText}"`);
           
           const normalizedPhone = from.replace(/\D/g, '');
           const leadsRef = adminDb.collection("crm_leads");
@@ -68,7 +76,6 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           
           if (!leadId) {
-              // CORRECTED LOGIC: Any message from a new number now creates a lead in 'para-validacao'.
               const stageIdForNewLead: StageId = 'para-validacao';
               
               console.log(`[INGEST_ACTION] Message from new number received. Creating new lead for validation for ${from}.`);
