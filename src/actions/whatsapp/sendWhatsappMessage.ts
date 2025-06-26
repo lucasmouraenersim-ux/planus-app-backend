@@ -1,6 +1,7 @@
+
 'use server';
 /**
- * @fileOverview A server action to send a single WhatsApp message (template or text) via the Meta Graph API.
+ * @fileOverview A server action to send a single WhatsApp message (template, text, image, or audio) via the Meta Graph API.
  *
  * - sendWhatsappMessage - Sends a message to a phone number.
  * - SendWhatsappMessageInput - The input type for the function.
@@ -18,8 +19,15 @@ const SendWhatsappMessageInputSchema = z.object({
       bodyParams: z.array(z.string()).optional().describe("An array of strings to replace the variables {{1}}, {{2}}, etc., in the template's body."),
       headerImageUrl: z.string().url().optional().describe("A URL for an image to be used in the template's header."),
     }).optional().describe("The template to use for the message."),
-  }).refine(m => m.text || m.template, {
-    message: "Either a 'text' or a 'template' object must be provided in the message.",
+    image: z.object({
+      link: z.string().url(),
+      caption: z.string().optional(),
+    }).optional(),
+    audio: z.object({
+      link: z.string().url(),
+    }).optional(),
+  }).refine(m => m.text || m.template || m.image || m.audio, {
+    message: "Either a 'text', 'template', 'image' or 'audio' object must be provided in the message.",
   })
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
@@ -69,33 +77,39 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
         language: { "code": "pt_BR" },
       }
     };
-
     const components = [];
-
-    // Add header component if an image URL is provided
     if (input.message.template.headerImageUrl) {
       components.push({
         type: 'header',
-        parameters: [{
-          type: 'image',
-          image: { link: input.message.template.headerImageUrl }
-        }]
+        parameters: [{ type: 'image', image: { link: input.message.template.headerImageUrl } }]
       });
     }
-
-    // Add body component if body parameters are provided
     if (input.message.template.bodyParams && input.message.template.bodyParams.length > 0) {
       components.push({
         type: 'body',
         parameters: input.message.template.bodyParams.map(param => ({ type: 'text', text: param })),
       });
     }
-    
-    // Attach components array to the request body if it's not empty
     if (components.length > 0) {
       requestBody.template.components = components;
     }
-
+  } else if (input.message.image) {
+    requestBody = {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "image",
+      image: { 
+        link: input.message.image.link,
+        ...(input.message.image.caption && { caption: input.message.image.caption })
+      }
+    };
+  } else if (input.message.audio) {
+    requestBody = {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "audio",
+      audio: { link: input.message.audio.link }
+    };
   } else if (input.message.text) {
     requestBody = {
       messaging_product: "whatsapp",
@@ -107,7 +121,7 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
       }
     };
   } else {
-      return { success: false, error: "Invalid message payload. Must be text or template." };
+      return { success: false, error: "Invalid message payload. Must be text, template, image, or audio." };
   }
 
   try {

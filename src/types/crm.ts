@@ -84,10 +84,11 @@ export interface OutboundLead {
 
 export interface ChatMessage {
   id: string; // ID único para a mensagem
-  text: string; // Conteúdo da mensagem
+  text: string; // Conteúdo da mensagem ou legenda da mídia
   sender: 'user' | 'lead'; // 'user' (vendedor/sistema), 'lead' (cliente)
   timestamp: Timestamp | string; // Timestamp na criação, string no cliente
-  type?: 'text' | 'button' | 'interactive'; // Tipo da mensagem para renderização futura
+  type?: 'text' | 'button' | 'interactive' | 'image' | 'audio'; // Tipo da mensagem
+  mediaUrl?: string; // URL para imagem ou áudio
 }
 
 export interface Stage {

@@ -9,11 +9,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft } from 'lucide-react';
+import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import Image from 'next/image';
 import { doc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from '@/lib/firebase';
+import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from "@/hooks/use-toast";
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
 import { format, parseISO } from 'date-fns';
@@ -53,6 +55,13 @@ export function ChatLayout() {
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -107,34 +116,104 @@ export function ChatLayout() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const handleSendMessage = async () => {
-    if (!selectedLead || newMessage.trim() === '' || isSending) return;
-    
+  const sendMessageInternal = async (text: string, type: 'text' | 'image' | 'audio', mediaUrl?: string) => {
+    if (!selectedLead) return;
     setIsSending(true);
-    const messageText = newMessage;
-    setNewMessage('');
     
     try {
         const result = await sendChatMessage({
             leadId: selectedLead.id,
             phone: selectedLead.phone,
-            text: messageText,
+            text,
             sender: 'user',
+            type,
+            mediaUrl
         });
 
         if (result.success && result.chatMessage) {
             setChatMessages(prev => [...prev, result.chatMessage!]);
         } else {
             toast({ title: "Erro", description: result.message || "Falha ao enviar mensagem.", variant: "destructive" });
-            setNewMessage(messageText); // Restore on failure
         }
     } catch (error) {
         toast({ title: "Erro", description: "Ocorreu um erro inesperado.", variant: "destructive" });
-        setNewMessage(messageText);
     } finally {
         setIsSending(false);
+        setIsUploadingMedia(false);
     }
   };
+
+  const handleSendText = () => {
+    if (newMessage.trim() === '') return;
+    sendMessageInternal(newMessage, 'text');
+    setNewMessage('');
+  };
+  
+  const handlePaperclipClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0 || !selectedLead) return;
+    const file = event.target.files[0];
+    event.target.value = ''; // Reset input
+    
+    setIsUploadingMedia(true);
+    toast({ title: "Enviando imagem...", description: "Aguarde enquanto o anexo é carregado." });
+    
+    try {
+        const filePath = `chat_media/${selectedLead.id}/${Date.now()}-${file.name}`;
+        const downloadURL = await uploadFile(file, filePath);
+        await sendMessageInternal(newMessage || file.name, 'image', downloadURL);
+        setNewMessage('');
+    } catch (error) {
+        toast({ title: "Erro no Upload", description: "Não foi possível enviar a imagem.", variant: "destructive" });
+        setIsUploadingMedia(false);
+    }
+  };
+
+  const handleRecordClick = async () => {
+    if (isRecording) {
+        mediaRecorderRef.current?.stop();
+        setIsRecording(false);
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorderRef.current = new MediaRecorder(stream);
+            audioChunksRef.current = [];
+            
+            mediaRecorderRef.current.ondataavailable = (event) => {
+                audioChunksRef.current.push(event.data);
+            };
+            
+            mediaRecorderRef.current.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                if (!selectedLead) return;
+
+                setIsUploadingMedia(true);
+                toast({ title: "Enviando áudio...", description: "Aguarde enquanto o áudio é carregado." });
+
+                try {
+                    const filePath = `chat_media/${selectedLead.id}/${Date.now()}-audio.webm`;
+                    const downloadURL = await uploadFile(audioBlob, filePath);
+                    await sendMessageInternal(newMessage || 'Mensagem de voz', 'audio', downloadURL);
+                    setNewMessage('');
+                } catch(error) {
+                    toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
+                    setIsUploadingMedia(false);
+                }
+                
+                stream.getTracks().forEach(track => track.stop()); // Stop microphone
+            };
+            
+            mediaRecorderRef.current.start();
+            setIsRecording(true);
+        } catch (error) {
+            toast({ title: "Erro de Microfone", description: "Não foi possível acessar o microfone. Verifique as permissões.", variant: "destructive" });
+        }
+    }
+  };
+
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -213,7 +292,15 @@ export function ChatLayout() {
                     chatMessages.map(msg => (
                       <div key={msg.id} className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`p-3 rounded-lg max-w-[80%] text-sm ${msg.sender === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                          {msg.type === 'image' && msg.mediaUrl && (
+                              <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="block mb-2">
+                                  <Image src={msg.mediaUrl} alt={msg.text || 'Imagem enviada'} width={250} height={250} className="rounded-lg object-cover" />
+                              </a>
+                          )}
+                          {msg.type === 'audio' && msg.mediaUrl && (
+                              <audio controls src={msg.mediaUrl} className="w-full max-w-xs my-2" />
+                          )}
+                          {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
                            <p className={`text-xs mt-1.5 text-right ${msg.sender === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
                             {format(parseISO(String(msg.timestamp)), "HH:mm", { locale: ptBR })}
                           </p>
@@ -227,17 +314,34 @@ export function ChatLayout() {
 
             <footer className="p-4 border-t bg-card/50 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" disabled><Paperclip /></Button>
                 <Input 
                   placeholder="Digite uma mensagem..." 
                   className="flex-1"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  disabled={isSending}
+                  onKeyPress={(e) => e.key === 'Enter' && newMessage.trim() !== '' && handleSendText()}
+                  disabled={isSending || isRecording || isUploadingMedia}
                 />
-                <Button onClick={handleSendMessage} disabled={isSending}>
-                    {isSending ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send />}
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleFileSelected}
+                />
+                <Button variant="ghost" size="icon" onClick={handlePaperclipClick} disabled={isSending || isRecording || isUploadingMedia}>
+                    <Paperclip className="h-5 w-5" />
+                </Button>
+                <Button 
+                    variant={isRecording ? "destructive" : "ghost"} 
+                    size="icon" 
+                    onClick={handleRecordClick} 
+                    disabled={isSending || isUploadingMedia}
+                >
+                    {isRecording ? <Square className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                </Button>
+                <Button onClick={handleSendText} disabled={isSending || isRecording || isUploadingMedia || newMessage.trim() === ''}>
+                    {isSending || isUploadingMedia ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4" />}
                 </Button>
               </div>
             </footer>

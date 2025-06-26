@@ -13,8 +13,10 @@ import { initializeAdmin } from '@/lib/firebase/admin';
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
   phone: z.string().optional(),
-  text: z.string(),
+  text: z.string(), // Caption for media, text for text messages
   sender: z.enum(['user', 'lead']),
+  type: z.enum(['text', 'image', 'audio']).default('text'),
+  mediaUrl: z.string().url().optional(),
 });
 export type SendChatMessageInput = z.infer<typeof SendChatMessageInputSchema>;
 
@@ -23,7 +25,8 @@ const ChatMessageSchema = z.object({
   text: z.string(),
   sender: z.enum(['user', 'lead']),
   timestamp: z.string(),
-  type: z.enum(['text', 'button', 'interactive']).optional(),
+  type: z.enum(['text', 'button', 'interactive', 'image', 'audio']).optional(),
+  mediaUrl: z.string().url().optional(),
 });
 const SendChatMessageOutputSchema = z.object({
     success: z.boolean(),
@@ -33,9 +36,9 @@ const SendChatMessageOutputSchema = z.object({
 export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
-export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
+export async function sendChatMessage({ leadId, phone, text, sender, type = 'text', mediaUrl }: SendChatMessageInput): Promise<SendChatMessageOutput> {
   const adminDb = await initializeAdmin();
-  console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
+  console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' of type '${type}' with text: "${text}"`);
 
   const leadRef = adminDb.collection("crm_leads").doc(leadId);
   
@@ -57,7 +60,8 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
       sender,
-      type: 'text', // Ensure all sent messages are of type 'text'
+      type: type,
+      ...(mediaUrl && { mediaUrl: mediaUrl }),
       timestamp: admin.firestore.Timestamp.now(),
   };
   
@@ -84,9 +88,21 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       }
       
       console.log(`[SEND_CHAT_ACTION] Attempting to send WhatsApp message to ${phone}.`);
+      
+      let messagePayload: any;
+      if (type === 'image' && mediaUrl) {
+          messagePayload = { image: { link: mediaUrl, caption: text } };
+      } else if (type === 'audio' && mediaUrl) {
+          // Audio messages on WhatsApp don't support captions in the same API call.
+          // The audio is sent, and the text is saved for history context.
+          messagePayload = { audio: { link: mediaUrl } };
+      } else {
+          messagePayload = { text };
+      }
+
       const whatsappResult = await sendWhatsappMessage({
           to: phone,
-          message: { text },
+          message: messagePayload,
       });
 
       if (!whatsappResult.success) {
