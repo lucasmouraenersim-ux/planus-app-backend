@@ -22,7 +22,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function ChatLayout() {
-  const { appUser, fetchAllCrmLeadsGlobally } = useAuth();
+  const { appUser, userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
@@ -47,16 +47,27 @@ export function ChatLayout() {
   useEffect(() => {
     const loadLeads = async () => {
       setIsLoadingLeads(true);
-      const allLeads = await fetchAllCrmLeadsGlobally(); 
-      setLeads(allLeads);
+      const allLeads = await fetchAllCrmLeadsGlobally();
+      
+      let leadsToDisplay: LeadWithId[] = [];
+
+      if (userAppRole === 'admin') {
+        leadsToDisplay = allLeads;
+      } else if (userAppRole === 'vendedor' && appUser) {
+        leadsToDisplay = allLeads.filter(lead => lead.userId === appUser.uid);
+      }
+
+      setLeads(leadsToDisplay);
       
       const leadIdFromUrl = searchParams.get('leadId');
       if (leadIdFromUrl) {
-        const leadToSelect = allLeads.find(l => l.id === leadIdFromUrl);
+        const leadToSelect = leadsToDisplay.find(l => l.id === leadIdFromUrl);
         setSelectedLead(leadToSelect || null);
-      } else if (allLeads.length > 0) {
-        const sortedLeads = [...allLeads].sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+      } else if (leadsToDisplay.length > 0) {
+        const sortedLeads = [...leadsToDisplay].sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
         setSelectedLead(sortedLeads[0]);
+      } else {
+        setSelectedLead(null); // Explicitly set to null if no leads
       }
       setIsLoadingLeads(false);
     };
@@ -64,7 +75,7 @@ export function ChatLayout() {
     if(appUser) {
         loadLeads();
     }
-  }, [appUser, searchParams, fetchAllCrmLeadsGlobally]);
+  }, [appUser, userAppRole, searchParams, fetchAllCrmLeadsGlobally]);
   
   useEffect(() => {
     if (!selectedLead) {
