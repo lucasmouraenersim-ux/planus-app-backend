@@ -34,10 +34,22 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 export async function sendChatMessage({ leadId, phone, text, sender }: SendChatMessageInput): Promise<SendChatMessageOutput> {
   const adminDb = await initializeAdmin();
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' with text: "${text}"`);
+
+  const leadRef = adminDb.collection("crm_leads").doc(leadId);
+  
+  try {
+    const leadDoc = await leadRef.get();
+    if (!leadDoc.exists) {
+      console.error(`[SEND_CHAT_ACTION] Lead with ID '${leadId}' not found.`);
+      return { success: false, message: `Lead not found with ID: ${leadId}` };
+    }
+  } catch (error: any) {
+     console.error(`[SEND_CHAT_ACTION] Error checking for lead existence for lead ${leadId}:`, error);
+     return { success: false, message: `Error accessing database: ${error.message}` };
+  }
   
   const batch = adminDb.batch();
   const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
-  const leadRef = adminDb.collection("crm_leads").doc(leadId);
 
   const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

@@ -8,7 +8,6 @@ export async function POST(request: NextRequest) {
 
     const { leadId, phone, text, sender } = body;
 
-    // Basic validation to ensure core fields are present
     if (!leadId || !text || !sender) {
       return NextResponse.json({ 
         success: false, 
@@ -16,7 +15,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Call the existing server action
     const result = await sendChatMessage({
       leadId,
       phone,
@@ -26,21 +24,26 @@ export async function POST(request: NextRequest) {
 
     console.log('[API /chat/send] Server action result:', result);
 
-    // Return the result from the action
     if (result.success) {
       return NextResponse.json(result, { status: 200 });
-    } else {
-      // If the action itself reports a failure, use a 500 status code
-      // to indicate a server-side issue.
-      return NextResponse.json({ 
-        success: false, 
-        message: result.message || 'An unknown error occurred in the server action.' 
-      }, { status: 500 });
     }
+    
+    // If the error message indicates "not found", return a 404 status.
+    if (result.message && result.message.toLowerCase().includes('not found')) {
+      return NextResponse.json({ 
+          success: false, 
+          message: result.message
+      }, { status: 404 });
+    }
+
+    // For all other failures, return a 500 status code.
+    return NextResponse.json({ 
+      success: false, 
+      message: result.message || 'An unknown error occurred in the server action.' 
+    }, { status: 500 });
 
   } catch (error: any) {
     console.error('[API /chat/send] CRITICAL ERROR processing request:', error);
-    // Catches issues like JSON parsing errors or other unexpected exceptions
     return NextResponse.json({ 
         success: false, 
         message: `Server error: ${error.message}` 
