@@ -3,23 +3,64 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Permite que qualquer pessoa leia as mídias, facilitando a exibição no chat.
-    // Apenas usuários autenticados podem escrever.
-    match /chat_media/{leadId}/{allPaths=**} {
-      allow read;
-      allow write: if request.auth != null;
-    }
 
-    // Mesma lógica para documentos do CRM
-    match /crm_lead_documents/{leadId}/{allPaths=**} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-
-    // Fotos de perfil podem ser lidas por todos, mas apenas o próprio usuário pode alterá-la.
+    // Regras para fotos de perfil dos usuários
+    // O {userId} aqui deve corresponder ao UID do Firebase Authentication do usuário.
     match /profile_photos/{userId}/{allPaths=**} {
-      allow read;
+      // Qualquer usuário autenticado pode ler fotos de perfil (para avatares, etc.)
+      allow read: if request.auth != null;
+
+      // Apenas o proprietário da foto (usuário autenticado cujo UID corresponde ao userId no caminho)
+      // pode fazer upload, atualizar ou deletar sua própria foto.
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Regras para documentos relacionados aos leads do CRM
+    // O {leadId} aqui deve corresponder ao ID do documento do lead na coleção 'crm_leads' do Firestore.
+    match /crm_lead_documents/{leadId}/{allPaths=**} {
+      // Permite leitura se:
+      // 1. O usuário é um administrador.
+      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
+      //    corresponde ao UID do vendedor autenticado.
+      allow read: if request.auth != null &&
+                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
+                      get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
+                    );
+
+      // Permite escrita (upload/update) se:
+      // 1. O usuário é um administrador.
+      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
+      //    corresponde ao UID do vendedor autenticado.
+      allow write: if request.auth != null &&
+                     (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
+                       get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
+                     );
+
+      // Permite exclusão se:
+      // 1. O usuário é um administrador.
+      // 2. O usuário é um vendedor E o campo 'userId' no documento do lead no Firestore
+      //    corresponde ao UID do vendedor autenticado.
+      // Geralmente, a exclusão de arquivos pode ser mais restrita ou gerenciada por Cloud Functions
+      // para garantir a integridade dos dados, mas esta regra permite a exclusão pelo proprietário/admin.
+      allow delete: if request.auth != null &&
+                      (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
+                        get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
+                      );
+    }
+
+    // NOVA REGRA: Mídias de chat (imagens, áudio)
+    // O {leadId} corresponde ao ID do documento do lead associado ao chat.
+    match /chat_media/{leadId}/{allPaths=**} {
+      // Permite leitura e escrita para admins ou o vendedor atribuído ao lead.
+      // Isso garante que apenas pessoas autorizadas possam ver/enviar mídias para um chat específico.
+      allow read, write: if request.auth != null &&
+                           (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+                            (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'vendedor' &&
+                             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid)
+                           );
     }
   }
 }

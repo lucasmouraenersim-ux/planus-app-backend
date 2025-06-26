@@ -46,7 +46,7 @@ export function BrazilMapGraphic({
       viewBox="0 0 450 460"
       enableBackground="new 0 0 450 460"
       xmlSpace="preserve"
-      className={cn("max-w-xl w-full h-auto", className)}
+      className={cn("max-w-xl w-full", className)}
       aria-label="Interactive map of Brazil"
     >
       <g>
