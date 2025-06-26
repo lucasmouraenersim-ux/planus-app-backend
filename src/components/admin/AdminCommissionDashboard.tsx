@@ -106,6 +106,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequestWithId | null>(null);
   const [targetType, setTargetType] = useState<UserType | null>(null);
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
