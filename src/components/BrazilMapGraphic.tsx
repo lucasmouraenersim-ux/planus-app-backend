@@ -43,7 +43,6 @@ export function BrazilMapGraphic({
       x="0px"
       y="0px"
       width="100%"
-      height="auto"
       viewBox="0 0 450 460"
       enableBackground="new 0 0 450 460"
       xmlSpace="preserve"
