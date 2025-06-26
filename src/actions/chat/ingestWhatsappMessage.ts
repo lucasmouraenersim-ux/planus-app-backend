@@ -37,7 +37,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           
           let messageText: string | undefined;
 
-          // Handle text, interactive button replies, and simple button clicks
+          // Handle text, interactive button replies, and simple button clicks from templates
           if (message.type === 'text') {
               messageText = message.text?.body;
           } else if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
