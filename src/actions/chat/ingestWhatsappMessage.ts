@@ -37,15 +37,17 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           
           let messageText: string | undefined;
 
-          // Handle both text and interactive button reply messages
+          // Handle text, interactive button replies, and simple button clicks
           if (message.type === 'text') {
               messageText = message.text?.body;
           } else if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
               messageText = message.interactive.button_reply?.title;
+          } else if (message.type === 'button' && message.button?.text) {
+              messageText = message.button.text;
           }
 
           if (!messageText) {
-              console.log("[INGEST_ACTION] Ignoring notification without text or unsupported interactive type.");
+              console.log("[INGEST_ACTION] Ignoring notification without text or unsupported message type.");
               return { success: true, message: "Notification without text or unsupported type ignored." };
           }
           
