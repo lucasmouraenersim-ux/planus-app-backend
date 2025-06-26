@@ -1,14 +1,16 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, collection, getDocs, query, where, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
 
@@ -16,7 +18,7 @@ import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import type { LeadWithId } from '@/types/crm';
 import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
-import { updateUserType } from '@/lib/firebase/firestore'; // Import the new function
+import { updateUserType } from '@/lib/firebase/firestore';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -54,7 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search
+    Loader2, Search, Download
 } from 'lucide-react';
 import { ChartContainer } from "@/components/ui/chart";
 
@@ -247,6 +249,46 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         setIsSubmittingAction(false);
     }, 1000);
   };
+
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) {
+      toast({
+        title: "Nenhum usuário para exportar",
+        description: "A seleção atual de filtros não retornou usuários.",
+      });
+      return;
+    }
+
+    const dataToExport = filteredUsers.map(user => ({
+      'UID': user.uid,
+      'Nome': user.displayName || 'N/A',
+      'Email': user.email || 'N/A',
+      'CPF': user.cpf || 'N/A',
+      'Tipo': user.type || 'N/A',
+      'Saldo Pessoal (R$)': (user.personalBalance || 0).toFixed(2).replace('.', ','),
+      'Saldo MLM (R$)': (user.mlmBalance || 0).toFixed(2).replace('.', ','),
+      'Data de Criação': user.createdAt ? format(parseISO(user.createdAt as string), "yyyy-MM-dd HH:mm:ss", { locale: ptBR }) : 'N/A',
+      'Último Acesso': user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "yyyy-MM-dd HH:mm:ss", { locale: ptBR }) : 'N/A',
+    }));
+
+    const csv = Papa.unparse(dataToExport);
+    
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    const formattedDate = format(new Date(), 'yyyy-MM-dd');
+    link.setAttribute("download", `usuarios_planus_${formattedDate}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+        title: "Exportação Iniciada",
+        description: `${filteredUsers.length} usuários estão sendo exportados para CSV.`,
+    });
+  };
   
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
@@ -315,7 +357,10 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários do sistema.</CardDescription></div>
-          <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleExportCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+            <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-4">
