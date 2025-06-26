@@ -3,6 +3,11 @@ import type { Stage, StageId } from '@/types/crm';
 
 export const STAGES_CONFIG: Stage[] = [
   {
+    id: 'para-validacao',
+    title: 'Para Validação',
+    colorClass: 'bg-gray-400',
+  },
+  {
     id: 'para-atribuir',
     title: 'Para Atribuir',
     colorClass: 'bg-slate-500',

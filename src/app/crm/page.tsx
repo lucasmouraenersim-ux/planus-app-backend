@@ -15,6 +15,7 @@ import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'fireba
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
+import { Badge } from '@/components/ui/badge';
 
 
 function CrmPageContent() {
@@ -228,6 +229,7 @@ function CrmPageContent() {
           <h1 className="text-2xl font-semibold text-foreground flex items-center">
             <Users className="w-7 h-7 mr-3 text-primary" />
             CRM - Gestão de Leads
+            <Badge variant="secondary" className="ml-4 text-base font-semibold">{leads.length}</Badge>
           </h1>
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm">

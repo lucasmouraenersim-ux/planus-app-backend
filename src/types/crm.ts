@@ -2,7 +2,8 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type StageId =
-  | 'para-atribuir'    // New unassigned leads
+  | 'para-validacao'   // New leads from non-trigger messages
+  | 'para-atribuir'    // New unassigned leads from trigger message
   | 'contato'          // Initial contact or lead generation
   | 'fatura'           // Bill collected, under analysis
   | 'proposta'         // Proposal sent to lead
@@ -13,6 +14,7 @@ export type StageId =
   | 'perdido';         // Deal lost to competitor or other reasons
 
 export const STAGE_IDS: StageId[] = [
+  'para-validacao',
   'para-atribuir',
   'contato',
   'fatura',

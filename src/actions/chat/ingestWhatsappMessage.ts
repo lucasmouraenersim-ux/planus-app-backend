@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import admin from 'firebase-admin';
-import type { LeadDocumentData, ChatMessage } from '@/types/crm';
+import type { LeadDocumentData, ChatMessage, StageId } from '@/types/crm';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { initializeAdmin } from '@/lib/firebase/admin';
 
@@ -60,7 +60,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                 leadId = leadDoc.id;
                 console.log(`[INGEST_ACTION] Found existing lead for ${from}: ID ${leadId}`);
             } else {
-                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will check for trigger phrase.`);
+                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will check message content to create new lead.`);
             }
           } catch (error: any) {
             console.error(`[INGEST_ACTION] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
@@ -70,13 +70,15 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           if (!leadId) {
               const normalizedMessage = messageText.trim().toLowerCase().replace(/[.,!?;]/g, '');
               const triggerPhrase = "quero economizar";
+              
+              const stageIdForNewLead: StageId = normalizedMessage === triggerPhrase ? 'para-atribuir' : 'para-validacao';
 
-              if (normalizedMessage !== triggerPhrase) {
-                console.log(`[INGEST_ACTION] Ignoring message from new number as it's not the trigger phrase. Message: "${messageText}"`);
-                return { success: true, message: "Message from new number ignored." };
+              if (stageIdForNewLead === 'para-atribuir') {
+                  console.log(`[INGEST_ACTION] Trigger phrase received. Creating new unassigned lead for ${from}.`);
+              } else {
+                  console.log(`[INGEST_ACTION] Message from new number received. Creating new lead for validation for ${from}.`);
               }
               
-              console.log(`[INGEST_ACTION] Trigger phrase received. Creating new unassigned lead for ${from}.`);
               const now = admin.firestore.Timestamp.now();
 
               const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
@@ -84,7 +86,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                   phone: normalizedPhone,
                   email: '',
                   company: '',
-                  stageId: 'para-atribuir', // New leads go to the unassigned stage
+                  stageId: stageIdForNewLead,
                   sellerName: 'Sistema', // Placeholder for unassigned
                   userId: 'unassigned', // Placeholder for unassigned
                   leadSource: 'WhatsApp',
@@ -92,13 +94,13 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                   kwh: 0,
                   createdAt: now,
                   lastContact: now,
-                  needsAdminApproval: false, // Unassigned leads don't need approval yet
+                  needsAdminApproval: false, 
                   correctionReason: ''
               };
               
               const docRef = await adminDb.collection("crm_leads").add(leadData);
               leadId = docRef.id;
-              console.log(`[INGEST_ACTION] New unassigned lead created with ID: ${leadId}`);
+              console.log(`[INGEST_ACTION] New lead created with ID: ${leadId} in stage '${stageIdForNewLead}'`);
           }
 
           if (leadId) {
