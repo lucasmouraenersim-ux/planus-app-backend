@@ -60,7 +60,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                 leadId = leadDoc.id;
                 console.log(`[INGEST_ACTION] Found existing lead for ${from}: ID ${leadId}`);
             } else {
-                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will check message content to create new lead.`);
+                console.log(`[INGEST_ACTION] No lead found for phone ${normalizedPhone}. Will attempt to create new lead.`);
             }
           } catch (error: any) {
             console.error(`[INGEST_ACTION] ADMIN SDK FAILED to query by phone ${normalizedPhone}:`, error);
@@ -68,16 +68,10 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           }
           
           if (!leadId) {
-              const normalizedMessage = messageText.trim().toLowerCase().replace(/[.,!?;]/g, '');
-              const triggerPhrase = "quero economizar";
+              // CORRECTED LOGIC: Any message from a new number now creates a lead in 'para-validacao'.
+              const stageIdForNewLead: StageId = 'para-validacao';
               
-              const stageIdForNewLead: StageId = normalizedMessage === triggerPhrase ? 'para-atribuir' : 'para-validacao';
-
-              if (stageIdForNewLead === 'para-atribuir') {
-                  console.log(`[INGEST_ACTION] Trigger phrase received. Creating new unassigned lead for ${from}.`);
-              } else {
-                  console.log(`[INGEST_ACTION] Message from new number received. Creating new lead for validation for ${from}.`);
-              }
+              console.log(`[INGEST_ACTION] Message from new number received. Creating new lead for validation for ${from}.`);
               
               const now = admin.firestore.Timestamp.now();
 
