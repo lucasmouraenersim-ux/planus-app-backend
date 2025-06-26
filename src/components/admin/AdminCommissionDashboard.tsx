@@ -10,7 +10,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, Timestamp, collection, getDocs, query, where, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import type { LeadWithId } from '@/types/crm';
 import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
-import { updateUserType } from '@/lib/firebase/firestore';
+import { updateUser } from '@/lib/firebase/firestore';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -44,11 +44,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -56,7 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download
+    Loader2, Search, Download, Edit2
 } from 'lucide-react';
 import { ChartContainer } from "@/components/ui/chart";
 
@@ -79,6 +75,13 @@ const addUserFormSchema = z.object({
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
 });
 type AddUserFormData = z.infer<typeof addUserFormSchema>;
+
+const editUserFormSchema = z.object({
+  displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
+  phone: z.string().optional(),
+  type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
+});
+type EditUserFormData = z.infer<typeof editUserFormSchema>;
 
 const updateWithdrawalFormSchema = z.object({
   status: z.enum(WITHDRAWAL_STATUSES_ADMIN as [WithdrawalStatus, ...WithdrawalStatus[]], { required_error: "Status é obrigatório." }),
@@ -105,12 +108,11 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isUpdateWithdrawalModalOpen, setIsUpdateWithdrawalModalOpen] = useState(false);
-  const [isChangeTypeModalOpen, setIsChangeTypeModalOpen] = useState(false);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequestWithId | null>(null);
-  const [targetType, setTargetType] = useState<UserType | null>(null);
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
@@ -119,29 +121,39 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     resolver: zodResolver(addUserFormSchema), 
     defaultValues: { type: 'vendedor', cpf: '', displayName: '', email: '', password: '', phone: '' } 
   });
+  const editUserForm = useForm<EditUserFormData>({ resolver: zodResolver(editUserFormSchema) });
   const updateWithdrawalForm = useForm<UpdateWithdrawalFormData>({ resolver: zodResolver(updateWithdrawalFormSchema) });
 
-  const handleOpenChangeTypeModal = (user: FirestoreUser, type: UserType) => {
-    if (user.type === type) return;
+  const authorizedEditors = useMemo(() => ['lucasmoura@sentenergia.com', 'eduardo.w@sentenergia.com'], []);
+  const canEdit = useMemo(() => authorizedEditors.includes(loggedInUser.email || ''), [loggedInUser.email, authorizedEditors]);
+
+  const handleOpenEditModal = (user: FirestoreUser) => {
     setSelectedUser(user);
-    setTargetType(type);
-    setIsChangeTypeModalOpen(true);
+    editUserForm.reset({
+      displayName: user.displayName || '',
+      phone: user.phone || '',
+      type: user.type,
+    });
+    setIsEditUserModalOpen(true);
   };
 
-  const handleConfirmChangeType = async () => {
-    if (!selectedUser || !targetType) return;
+  const handleUpdateUser = async (data: EditUserFormData) => {
+    if (!selectedUser) return;
     setIsSubmittingAction(true);
     try {
-      await updateUserType(selectedUser.uid, targetType);
+      await updateUser(selectedUser.uid, {
+        displayName: data.displayName,
+        phone: data.phone,
+        type: data.type,
+      });
       await refreshUsers();
-      toast({ title: "Sucesso", description: `O tipo de ${selectedUser.displayName} foi alterado para ${targetType}.` });
+      toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
+      setIsEditUserModalOpen(false);
     } catch (error) {
-      toast({ title: "Erro", description: "Não foi possível alterar o tipo do usuário.", variant: "destructive" });
+      console.error("Error updating user:", error);
+      toast({ title: "Erro", description: "Não foi possível atualizar o usuário.", variant: "destructive" });
     } finally {
       setIsSubmittingAction(false);
-      setIsChangeTypeModalOpen(false);
-      setSelectedUser(null);
-      setTargetType(null);
     }
   };
 
@@ -163,25 +175,6 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       setIsResetPasswordModalOpen(false);
       setSelectedUser(null);
     }
-  };
-
-  const handleViewUserDetails = (user: FirestoreUser) => {
-    const creationDate = user.createdAt 
-        ? `Criado em: ${format(parseISO(user.createdAt as string), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
-        : "Data de criação não disponível.";
-    const lastAccessDate = user.lastSignInTime
-        ? `Último acesso: ${format(parseISO(user.lastSignInTime as string), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
-        : "Nenhum acesso registrado.";
-    
-    toast({
-      title: `Detalhes de ${user.displayName}`,
-      description: (
-        <div>
-          <p>{creationDate}</p>
-          <p>{lastAccessDate}</p>
-        </div>
-      ),
-    });
   };
 
   const filteredUsers = useMemo(() => {
@@ -388,13 +381,15 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Alterar Tipo</DropdownMenuSubTrigger>
-                            <DropdownMenuPortal><DropdownMenuSubContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<DropdownMenuItem key={opt.value} disabled={user.type === opt.value} onSelect={() => handleOpenChangeTypeModal(user, opt.value as UserType)}>{opt.label}</DropdownMenuItem>))}</DropdownMenuSubContent></DropdownMenuPortal>
-                          </DropdownMenuSub>
-                          <DropdownMenuItem onSelect={() => handleViewUserDetails(user)}>Ver Detalhes</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Ver / Editar Detalhes
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>Redefinir Senha</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
+                            <ShieldAlert className="mr-2 h-4 w-4" />
+                            Redefinir Senha
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -429,10 +424,58 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
       {/* Modals */}
       <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      
+      {selectedUser && (
+        <Dialog open={isEditUserModalOpen} onOpenChange={setIsEditUserModalOpen}>
+          <DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground">
+            <DialogHeader>
+              <DialogTitle className="text-primary">Ver / Editar Usuário</DialogTitle>
+              <DialogDescription>
+                {canEdit ? 'Altere os dados do usuário abaixo. Email e CPF não podem ser alterados.' : 'Você está visualizando os detalhes do usuário. Apenas administradores autorizados podem editar.'}
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...editUserForm}>
+              <form onSubmit={editUserForm.handleSubmit(handleUpdateUser)} className="space-y-4 py-3">
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <Input value={selectedUser.email || 'N/A'} readOnly disabled className="cursor-not-allowed" />
+                </div>
+                <div className="space-y-1">
+                  <Label>CPF</Label>
+                  <Input value={selectedUser.cpf ? `${selectedUser.cpf.slice(0,3)}.${selectedUser.cpf.slice(3,6)}.${selectedUser.cpf.slice(6,9)}-${selectedUser.cpf.slice(9,11)}` : 'N/A'} readOnly disabled className="cursor-not-allowed" />
+                </div>
+                <FormField control={editUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={editUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={editUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground pt-4 border-t">
+                    <div>
+                        <p className="font-semibold text-foreground">Criado em:</p>
+                        <p>{selectedUser.createdAt ? format(parseISO(selectedUser.createdAt as string), "dd/MM/yy HH:mm") : 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-foreground">Último Acesso:</p>
+                        <p>{selectedUser.lastSignInTime ? format(parseISO(selectedUser.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</p>
+                    </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isSubmittingAction}>
+                    {canEdit ? 'Cancelar' : 'Fechar'}
+                  </Button>
+                  {canEdit && (
+                    <Button type="submit" disabled={isSubmittingAction}>
+                      {isSubmittingAction && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
+                      Salvar Alterações
+                    </Button>
+                  )}
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm", { locale: ptBR }) : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></DialogFooter></form></Form></DialogContent></Dialog>)}
       
-      {/* Action Confirmation Modals */}
-      <AlertDialog open={isChangeTypeModalOpen} onOpenChange={setIsChangeTypeModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Alteração de Tipo</AlertDialogTitle><AlertDialogDescription>Você tem certeza que deseja alterar o tipo do usuário <strong>{selectedUser?.displayName}</strong> para <strong>{USER_TYPE_ADD_OPTIONS.find(o => o.value === targetType)?.label}</strong>? Esta ação pode alterar as permissões do usuário no sistema.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmChangeType} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <AlertDialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Redefinição de Senha</AlertDialogTitle><AlertDialogDescription>Um email será enviado para <strong>{selectedUser?.email}</strong> com instruções para criar uma nova senha. O usuário será desconectado de todas as sessões ativas. Deseja continuar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmResetPassword} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar Email</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

@@ -1,3 +1,4 @@
+
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -158,12 +159,29 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
 }
 
 // --- User Management ---
-export async function updateUserType(userId: string, newType: UserType): Promise<void> {
+export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type'>>): Promise<void> {
   if (!userId) throw new Error("User ID is required.");
   const userRef = doc(db, "users", userId);
-  await updateDoc(userRef, {
-    type: newType
-  });
+  
+  const finalUpdates: { [key: string]: any } = {};
+
+  if (updates.displayName !== undefined) {
+    finalUpdates.displayName = updates.displayName;
+  }
+  if (updates.phone !== undefined) {
+    finalUpdates.phone = String(updates.phone).replace(/\D/g, '');
+  }
+  if (updates.type !== undefined) {
+    finalUpdates.type = updates.type;
+  }
+
+  if (Object.keys(finalUpdates).length > 0) {
+    await updateDoc(userRef, finalUpdates);
+  }
+  
+  // Note: Updating displayName in Firebase Auth for another user
+  // requires the Admin SDK and should be done in a secure backend environment.
+  // This update only affects the Firestore DB.
 }
 
 
