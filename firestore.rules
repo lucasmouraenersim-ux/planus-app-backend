@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -10,15 +9,19 @@ service cloud.firestore {
     }
 
     function isUserRole(role) {
-      // An admin is someone whose firestore doc says so, OR has a specific email address.
+      // An admin has a specific email OR a firestore doc with type 'admin'.
       // This allows initial admins to function before their Firestore document is created.
-      if (role == 'admin') {
-        let isSuperAdminByEmail = isSignedIn() && (request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com');
-        let isAdminByFirestoreDoc = isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
-        return isSuperAdminByEmail || isAdminByFirestoreDoc;
-      }
-      // For other roles, just check the firestore doc.
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role;
+      // Other roles are checked directly from the Firestore doc.
+      return isSignedIn() && (
+        (role == 'admin' && (
+            (request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com') ||
+            (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin')
+          )
+        ) ||
+        (role != 'admin' &&
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role)
+        )
+      );
     }
     
     function isOwner(userId) {
@@ -28,36 +31,29 @@ service cloud.firestore {
     // User profile rules
     match /users/{userId} {
       allow get: if isSignedIn();
-      // Allow create/delete only for admins
-      allow create, delete: if isUserRole('admin');
-      // Allow update for admins or the user themselves
+      // Only admins can create, list, or delete users.
+      // This uses the special logic in isUserRole to allow initial admins to create users.
+      allow list, create, delete: if isUserRole('admin');
+      // An admin or the user themselves can update their own profile.
       allow update: if isUserRole('admin') || isOwner(userId);
-      // Deny list operation unless it's an admin
-      allow list: if isUserRole('admin');
     }
 
-    // CRM Leads rules
+    // CRM Leads: Admins and Vendedores can manage leads.
     match /crm_leads/{leadId} {
-      // Admins or sellers can read, list, create, and update leads.
-      allow read, create, update: if isUserRole('admin') || isUserRole('vendedor');
-      allow list: if isUserRole('admin') || isUserRole('vendedor');
-      // Only admins can delete leads.
+      allow read, list, create, update: if isUserRole('admin') || isUserRole('vendedor');
       allow delete: if isUserRole('admin');
     }
 
-    // CRM Lead Chats rules
+    // CRM Lead Chats: Admins and Vendedores can read/write to any chat.
     match /crm_lead_chats/{leadId} {
-      // Admins or sellers can read and write to chats.
       allow read, write: if isUserRole('admin') || isUserRole('vendedor');
     }
 
-    // Withdrawal requests rules
+    // Withdrawal requests
     match /withdrawal_requests/{requestId} {
-      // Admins can get any request. Users can only get their own.
       allow get: if isUserRole('admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
-      // Only admins can list, update, or delete requests.
       allow list, update, delete: if isUserRole('admin');
-      // Any signed-in user can create a withdrawal request for themselves.
+      // A user can only create a withdrawal request for themselves.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
   }
