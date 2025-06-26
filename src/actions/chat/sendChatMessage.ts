@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action to save a chat message and send it via WhatsApp.
@@ -22,6 +23,7 @@ const ChatMessageSchema = z.object({
   text: z.string(),
   sender: z.enum(['user', 'lead']),
   timestamp: z.string(),
+  type: z.enum(['text', 'button', 'interactive']).optional(),
 });
 const SendChatMessageOutputSchema = z.object({
     success: z.boolean(),
@@ -55,6 +57,7 @@ export async function sendChatMessage({ leadId, phone, text, sender }: SendChatM
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
       sender,
+      type: 'text', // Ensure all sent messages are of type 'text'
       timestamp: admin.firestore.Timestamp.now(),
   };
   

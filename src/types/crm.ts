@@ -87,6 +87,7 @@ export interface ChatMessage {
   text: string; // Conteúdo da mensagem
   sender: 'user' | 'lead'; // 'user' (vendedor/sistema), 'lead' (cliente)
   timestamp: Timestamp | string; // Timestamp na criação, string no cliente
+  type?: 'text' | 'button' | 'interactive'; // Tipo da mensagem para renderização futura
 }
 
 export interface Stage {

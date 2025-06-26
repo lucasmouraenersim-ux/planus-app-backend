@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action to ingest and process incoming WhatsApp messages.
@@ -114,6 +115,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
                   text: messageText,
                   sender: 'lead',
+                  type: 'text', // Force type to 'text' for frontend compatibility
                   timestamp: admin.firestore.Timestamp.now(),
               };
               
