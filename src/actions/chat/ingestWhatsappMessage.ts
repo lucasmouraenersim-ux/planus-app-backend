@@ -36,19 +36,11 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
           const from = message.from;
           const contactName = value.contacts?.[0]?.profile?.name || from;
           
-          let messageText: string | undefined;
-
-          // Handle text, interactive button replies, and simple button clicks from templates
-          if (message.type === 'text') {
-              messageText = message.text?.body;
-          } else if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
-              messageText = message.interactive.button_reply?.title;
-          } else if (message.type === 'button' && message.button?.text) {
-              messageText = message.button.text;
-          }
+          // More robust and direct message text extraction
+          const messageText = message.text?.body || message.button?.text || message.interactive?.button_reply?.title;
 
           if (!messageText) {
-              console.log("[INGEST_ACTION] Ignoring notification without text or unsupported message type.");
+              console.log("[INGEST_ACTION] Ignoring notification without text (e.g., status, media).");
               return { success: true, message: "Notification without text or unsupported type ignored." };
           }
           
@@ -112,10 +104,11 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
               const leadRefToUpdate = adminDb.collection("crm_leads").doc(leadId);
               
+              // Force type to 'text' for frontend compatibility, as per the suggestion
               const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
                   text: messageText,
                   sender: 'lead',
-                  type: 'text', // Force type to 'text' for frontend compatibility
+                  type: 'text', 
                   timestamp: admin.firestore.Timestamp.now(),
               };
               
