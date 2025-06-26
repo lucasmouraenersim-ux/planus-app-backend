@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Select,
   SelectContent,
@@ -14,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap } from 'lucide-react';
+import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X } from 'lucide-react';
 import type { AppUser } from '@/types/user';
 
 // Interface for Ranking Display
@@ -91,6 +92,7 @@ function RankingPageContent() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>(PERIOD_OPTIONS[0].value);
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
   const [isLoading, setIsLoading] = useState(true);
+  const [showNotification, setShowNotification] = useState(true);
   const loggedInUser = MOCK_LOGGED_IN_USER;
 
   useEffect(() => {
@@ -145,6 +147,33 @@ function RankingPageContent() {
 
   return (
     <div className="container mx-auto px-4 py-8 text-foreground">
+      {/* Notification banner */}
+      {showNotification && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 animate-in fade-in-50">
+          <Card className="relative max-w-2xl w-full bg-card/90 border-primary shadow-2xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 h-8 w-8 rounded-full z-50 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              onClick={() => setShowNotification(false)}
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Fechar</span>
+            </Button>
+            <CardContent className="p-0">
+              <Image
+                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/e2ace5e621fa15e3ebfb6cd3ed9fed3122e8928e/ChatGPT%20Image%2023%20de%20jun.%20de%202025%2C%2015_38_04.png"
+                alt="Notificação da Campanha de Ranking"
+                width={1024}
+                height={576}
+                className="rounded-lg object-contain"
+                data-ai-hint="trophy award announcement"
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <header className="text-center mb-12">
         <Award className="w-16 h-16 text-primary mx-auto mb-4" />
         <h1 className="text-4xl md:text-5xl font-headline font-bold text-primary tracking-tight">
