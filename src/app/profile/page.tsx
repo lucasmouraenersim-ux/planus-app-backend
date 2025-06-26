@@ -31,13 +31,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { UserCircle, Edit3, Save, X, Mail, Shield, Calendar, KeyRound, Camera, Loader2 } from 'lucide-react';
+import { UserCircle, Edit3, Save, X, Mail, Shield, Calendar, KeyRound, Camera, Loader2, Phone } from 'lucide-react';
 
 import type { AppUser } from '@/types/user'; 
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(2, "O nome deve ter pelo menos 2 caracteres.").max(50, "O nome não pode exceder 50 caracteres."),
+  phone: z.string().optional(),
 });
 
 const passwordFormSchema = z.object({
@@ -65,23 +66,27 @@ function ProfilePageContent() {
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   
+  const profileForm = useForm<ProfileFormData>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      displayName: "",
+      phone: "",
+    },
+  });
+
   useEffect(() => {
     if (!isLoadingAuthContext && !appUser) {
       router.replace('/login');
     } else if (appUser) {
       setPreviewImage(appUser.photoURL || null);
-      profileForm.reset({ displayName: appUser.displayName || "" });
+      profileForm.reset({ 
+        displayName: appUser.displayName || "",
+        phone: appUser.phone || "",
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoadingAuthContext, appUser, router]);
 
-
-  const profileForm = useForm<ProfileFormData>({
-    resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      displayName: appUser?.displayName || "",
-    },
-  });
 
   const passwordForm = useForm<PasswordFormData>({
     resolver: zodResolver(passwordFormSchema),
@@ -96,7 +101,11 @@ function ProfilePageContent() {
   const handleProfileSubmit = async (values: ProfileFormData) => {
     setIsSubmittingProfile(true);
     try {
-      await updateAppUserProfile({ displayName: values.displayName, photoFile: selectedPhotoFile || undefined });
+      await updateAppUserProfile({ 
+        displayName: values.displayName, 
+        photoFile: selectedPhotoFile || undefined,
+        phone: values.phone,
+      });
       toast({
         title: "Perfil Atualizado",
         description: "Suas informações foram salvas com sucesso.",
@@ -203,6 +212,12 @@ function ProfilePageContent() {
                          CPF: <span className="font-medium text-foreground ml-1">{appUser.cpf}</span>
                     </div>
                 )}
+                {appUser.phone && (
+                    <div className="flex items-center justify-center md:justify-start text-muted-foreground">
+                         <Phone size={16} className="mr-2 text-primary/80" />
+                         Telefone: <span className="font-medium text-foreground ml-1">{profileForm.watch("phone") || appUser.phone}</span>
+                    </div>
+                )}
                 {createdAtString && (
                     <div className="flex items-center justify-center md:justify-start text-muted-foreground">
                         <Calendar size={16} className="mr-2 text-primary/80" /> Membro desde: <span className="font-medium text-foreground ml-1">{format(parseISO(createdAtString), "dd/MM/yyyy", { locale: ptBR })}</span>
@@ -241,11 +256,24 @@ function ProfilePageContent() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={profileForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Telefone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="(XX) XXXXX-XXXX" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormDescription className="text-xs text-center">
                     Para alterar o email ou CPF, por favor, entre em contato com o suporte.
                 </FormDescription>
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="ghost" onClick={() => { setIsEditingProfile(false); setPreviewImage(appUser.photoURL || null); profileForm.reset({displayName: appUser.displayName || ""}); setSelectedPhotoFile(null); }} disabled={isSubmittingProfile}>
+                  <Button type="button" variant="ghost" onClick={() => { setIsEditingProfile(false); setPreviewImage(appUser.photoURL || null); profileForm.reset({displayName: appUser.displayName || "", phone: appUser.phone || ""}); setSelectedPhotoFile(null); }} disabled={isSubmittingProfile}>
                     <X className="mr-2 h-4 w-4" /> Cancelar
                   </Button>
                   <Button type="submit" disabled={isSubmittingProfile}>

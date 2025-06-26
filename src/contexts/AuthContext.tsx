@@ -19,7 +19,7 @@ interface AuthContextType {
   isLoadingAllUsers: boolean;
   fetchAllAppUsers: () => Promise<void>;
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
-  updateAppUserProfile: (data: { displayName?: string; photoFile?: File }) => Promise<void>;
+  updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
 }
 
@@ -51,6 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           photoURL: firestoreUserData.photoURL || user.photoURL,
           type: firestoreUserData.type,
           cpf: firestoreUserData.cpf,
+          phone: firestoreUserData.phone,
           personalBalance: firestoreUserData.personalBalance || 0,
           mlmBalance: firestoreUserData.mlmBalance || 0,
           createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
@@ -86,7 +87,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
   
-  const updateAppUserProfile = async (data: { displayName?: string; photoFile?: File }) => {
+  const updateAppUserProfile = async (data: { displayName?: string; photoFile?: File; phone?: string }) => {
     if (!firebaseUser) throw new Error("Usuário não autenticado.");
 
     let newPhotoURL: string | undefined = undefined;
@@ -108,6 +109,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (data.displayName && data.displayName !== appUser?.displayName) {
       updatesForFirebaseAuth.displayName = data.displayName;
       updatesForFirestore.displayName = data.displayName;
+    }
+
+    if (data.phone !== undefined && data.phone !== appUser?.phone) {
+      updatesForFirestore.phone = data.phone.replace(/\D/g, ''); // Normalize phone number
     }
 
     if (Object.keys(updatesForFirebaseAuth).length > 0) {

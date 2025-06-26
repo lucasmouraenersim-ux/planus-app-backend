@@ -10,6 +10,7 @@ export type FirestoreUser = {
   email: string | null;
   displayName: string | null;
   cpf?: string;
+  phone?: string;
   type: UserType;
   createdAt: Timestamp | string; // Timestamp in Firestore, string on client
   lastSignInTime?: Timestamp | string; // Timestamp in Firestore, string on client
@@ -27,6 +28,7 @@ export type AppUser = {
   email: string | null;
   displayName: string | null;
   cpf?: string; // Make CPF optional as it might not always be present
+  phone?: string;
   type: UserType;
   photoURL?: string | null;
   personalBalance: number; // Should have a default in context if possibly undefined
