@@ -93,6 +93,7 @@ function RankingPageContent() {
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
+  const [showSecondNotification, setShowSecondNotification] = useState(false);
   const loggedInUser = MOCK_LOGGED_IN_USER;
 
   useEffect(() => {
@@ -147,7 +148,7 @@ function RankingPageContent() {
 
   return (
     <div className="container mx-auto px-4 py-8 text-foreground">
-      {/* Notification banner */}
+      {/* Notification banner 1 */}
       {showNotification && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 animate-in fade-in-50">
           <Card className="relative max-w-2xl w-full bg-card/90 border-primary shadow-2xl">
@@ -155,7 +156,10 @@ function RankingPageContent() {
               variant="ghost"
               size="icon"
               className="absolute top-2 right-2 h-8 w-8 rounded-full z-50 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-              onClick={() => setShowNotification(false)}
+              onClick={() => {
+                setShowNotification(false);
+                setShowSecondNotification(true);
+              }}
             >
               <X className="h-5 w-5" />
               <span className="sr-only">Fechar</span>
@@ -168,6 +172,33 @@ function RankingPageContent() {
                 height={576}
                 className="rounded-lg object-contain"
                 data-ai-hint="trophy award announcement"
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Second notification banner */}
+      {showSecondNotification && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 animate-in fade-in-50">
+          <Card className="relative max-w-2xl w-full bg-card/90 border-primary shadow-2xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 h-8 w-8 rounded-full z-50 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+              onClick={() => setShowSecondNotification(false)}
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Fechar</span>
+            </Button>
+            <CardContent className="p-0">
+              <Image
+                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/dd366bf807b2e9135fe42625f3557bb90738f7e7/ChatGPT%20Image%2026%20de%20jun.%20de%202025%2C%2016_37_58.png"
+                alt="Notificação da Segunda Campanha de Ranking"
+                width={1024}
+                height={576}
+                className="rounded-lg object-contain"
+                data-ai-hint="business presentation graph"
               />
             </CardContent>
           </Card>
