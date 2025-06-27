@@ -9,6 +9,7 @@ import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage';
 import type { ChatMessage } from '@/types/crm';
 import { initializeAdmin } from '@/lib/firebase/admin';
+import { transcribeAudio } from '@/ai/flows/transcribe-audio-flow';
 
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
@@ -27,6 +28,7 @@ const ChatMessageSchema = z.object({
   timestamp: z.string(),
   type: z.enum(['text', 'button', 'interactive', 'image', 'audio']).optional(),
   mediaUrl: z.string().url().optional(),
+  transcription: z.string().optional(),
 });
 const SendChatMessageOutputSchema = z.object({
     success: z.boolean(),
@@ -56,12 +58,27 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
   const batch = adminDb.batch();
   const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
 
+  let transcription: string | undefined = undefined;
+  if (type === 'audio' && mediaUrl && sender === 'user') { // Only transcribe user-sent audio for now
+    try {
+      console.log(`[SEND_CHAT_ACTION] Transcribing audio from URL: ${mediaUrl}`);
+      const transcriptionResult = await transcribeAudio(mediaUrl);
+      transcription = transcriptionResult.transcription;
+      console.log(`[SEND_CHAT_ACTION] Transcription successful: "${transcription}"`);
+    } catch (error) {
+      console.error(`[SEND_CHAT_ACTION] Audio transcription failed for lead ${leadId}:`, error);
+      // Don't block message sending if transcription fails. Just log the error.
+      transcription = '[Transcrição falhou]';
+    }
+  }
+
   const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
       sender,
       type: type,
       ...(mediaUrl && { mediaUrl: mediaUrl }),
+      ...(transcription && { transcription: transcription }),
       timestamp: admin.firestore.Timestamp.now(),
   };
   

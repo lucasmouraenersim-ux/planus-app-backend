@@ -183,7 +183,7 @@ export function ChatLayout() {
             
             mediaRecorderRef.current.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const audioFile = new File([audioBlob], "audio.webm", { type: "audio/webm" });
+                const audioFile = new File([audioBlob], `${Date.now()}-audio.webm`, { type: "audio/webm" });
 
                 if (!selectedLead) return;
 
@@ -191,7 +191,7 @@ export function ChatLayout() {
                 toast({ title: "Enviando áudio...", description: "Aguarde enquanto o áudio é carregado." });
 
                 try {
-                    const filePath = `chat_media/${selectedLead.id}/${Date.now()}-audio.webm`;
+                    const filePath = `chat_media/${selectedLead.id}/${audioFile.name}`;
                     const downloadURL = await uploadFile(audioFile, filePath);
                     await sendMessageInternal('Mensagem de voz', 'audio', downloadURL);
                 } catch(error) {
@@ -298,6 +298,11 @@ export function ChatLayout() {
                               <audio controls src={msg.mediaUrl} className="w-full max-w-xs my-2" />
                           )}
                           {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                          {msg.transcription && (
+                            <div className="mt-2 pt-2 border-t border-white/20">
+                              <p className="text-xs italic opacity-80">{msg.transcription}</p>
+                            </div>
+                          )}
                            <p className={`text-xs mt-1.5 text-right ${msg.sender === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground/70'}`}>
                             {format(parseISO(String(msg.timestamp)), "HH:mm", { locale: ptBR })}
                           </p>

@@ -89,6 +89,7 @@ export interface ChatMessage {
   timestamp: Timestamp | string; // Timestamp na criação, string no cliente
   type?: 'text' | 'button' | 'interactive' | 'image' | 'audio'; // Tipo da mensagem
   mediaUrl?: string; // URL para imagem ou áudio
+  transcription?: string; // Transcrição do áudio
 }
 
 export interface Stage {
