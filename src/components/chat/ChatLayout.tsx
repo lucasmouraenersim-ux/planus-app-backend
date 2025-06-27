@@ -174,7 +174,16 @@ export function ChatLayout() {
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/mp4' }); // Use MP4 format
+            
+            // Request a format supported by WhatsApp (OGG with Opus codec)
+            const options = { mimeType: 'audio/ogg; codecs=opus' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                console.warn(`${options.mimeType} is not supported, falling back to default.`);
+                mediaRecorderRef.current = new MediaRecorder(stream);
+            } else {
+                mediaRecorderRef.current = new MediaRecorder(stream, options);
+            }
+            
             audioChunksRef.current = [];
             
             mediaRecorderRef.current.ondataavailable = (event) => {
@@ -182,8 +191,10 @@ export function ChatLayout() {
             };
             
             mediaRecorderRef.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' });
-                const audioFile = new File([audioBlob], `${Date.now()}-audio.mp4`, { type: "audio/mp4" });
+                // Use the recorder's mimeType to ensure we have the correct format
+                const mimeType = mediaRecorderRef.current?.mimeType || 'audio/ogg';
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                const audioFile = new File([audioBlob], `${Date.now()}-audio.ogg`, { type: mimeType });
 
                 if (!selectedLead) return;
 
@@ -358,5 +369,3 @@ export function ChatLayout() {
     </div>
   );
 }
-
-    
