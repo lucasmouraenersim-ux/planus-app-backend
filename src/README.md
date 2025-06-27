@@ -15,7 +15,7 @@ Para começar a desenvolver localmente:
     npm run dev
     ```
 
-Abra [http://localhost:9002](http://localhost:9002) no seu navegador para ver o resultado.
+Abra [http://localhost:9004](http://localhost:9004) no seu navegador para ver o resultado.
 
 ## Implantação (Deployment)
 
