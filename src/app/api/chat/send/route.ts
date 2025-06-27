@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as SendChatMessageInput;
     console.log('[API /chat/send] Received request with body:', JSON.stringify(body, null, 2));
 
-    const { leadId, phone, text, sender } = body;
+    // FIX: Destructure type and mediaUrl from the body
+    const { leadId, phone, text, sender, type, mediaUrl } = body;
 
     if (!leadId || !text || !sender) {
       return NextResponse.json({ 
@@ -15,11 +16,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // FIX: Pass the type and mediaUrl to the action
     const result = await sendChatMessage({
       leadId,
       phone,
       text,
       sender,
+      type,
+      mediaUrl,
     });
 
     console.log('[API /chat/send] Server action result:', result);
