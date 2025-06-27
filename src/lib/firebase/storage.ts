@@ -1,14 +1,19 @@
 
 // src/lib/firebase/storage.ts
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, type UploadMetadata } from "firebase/storage";
 import { storage } from '../firebase'; // Ensure storage is initialized and exported from firebase.ts
 
 export async function uploadFile(file: File, path: string): Promise<string> {
-  console.log("Uploading file to path:", path, "File name:", file.name);
+  console.log("Uploading file to path:", path, "File name:", file.name, "with type:", file.type);
   const fileRef = storageRef(storage, path);
-  await uploadBytes(fileRef, file);
+
+  const metadata: UploadMetadata = {
+    contentType: file.type,
+  };
+
+  await uploadBytes(fileRef, file, metadata);
   const downloadURL = await getDownloadURL(fileRef);
-  console.log("File uploaded successfully. Download URL:", downloadURL);
+  console.log("File uploaded successfully with metadata. Download URL:", downloadURL);
   return downloadURL;
 }
 
