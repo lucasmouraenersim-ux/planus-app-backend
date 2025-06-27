@@ -177,8 +177,8 @@ export function ChatLayout() {
 
             const mimeTypesToTry = [
                 'audio/ogg; codecs=opus',
-                'audio/ogg',
                 'audio/mp4',
+                'audio/ogg',
             ];
 
             const supportedMimeType = mimeTypesToTry.find(type => {
@@ -213,7 +213,7 @@ export function ChatLayout() {
             
             mediaRecorderRef.current.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType });
-                const audioFile = new File([audioBlob], `${Date.now()}-audio.${fileExtension}`, { type: supportedMimeType });
+                const audioFile = new File([audioBlob], `audio-${Date.now()}.${fileExtension}`, { type: supportedMimeType });
 
                 if (!selectedLead) return;
 
@@ -223,8 +223,7 @@ export function ChatLayout() {
                 try {
                     const filePath = `chat_media/${selectedLead.id}/${audioFile.name}`;
                     const downloadURL = await uploadFile(audioFile, filePath);
-                    // Send as a document
-                    await sendMessageInternal(audioFile.name, 'document', downloadURL);
+                    await sendMessageInternal("Mensagem de voz", 'audio', downloadURL);
                 } catch(error) {
                     console.error("Audio upload error:", error);
                     toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
@@ -325,9 +324,9 @@ export function ChatLayout() {
                                   <Image src={msg.mediaUrl} alt={msg.text || 'Imagem enviada'} width={250} height={250} className="rounded-lg object-cover" />
                               </a>
                           )}
-                          {(msg.type === 'audio' || msg.type === 'document') && msg.mediaUrl && (
-                              <audio controls src={msg.mediaUrl} className="w-full max-w-xs my-2" />
-                          )}
+                           {msg.type === 'audio' && msg.mediaUrl && (
+                                <audio controls src={msg.mediaUrl} className="w-full max-w-xs my-2" />
+                            )}
                           {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
                           {msg.transcription && (
                             <div className="mt-2 pt-2 border-t border-white/20">
