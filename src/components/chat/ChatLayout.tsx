@@ -174,7 +174,7 @@ export function ChatLayout() {
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/mp4' }); // Use MP4 format
             audioChunksRef.current = [];
             
             mediaRecorderRef.current.ondataavailable = (event) => {
@@ -182,8 +182,8 @@ export function ChatLayout() {
             };
             
             mediaRecorderRef.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                const audioFile = new File([audioBlob], `${Date.now()}-audio.webm`, { type: "audio/webm" });
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' });
+                const audioFile = new File([audioBlob], `${Date.now()}-audio.mp4`, { type: "audio/mp4" });
 
                 if (!selectedLead) return;
 
