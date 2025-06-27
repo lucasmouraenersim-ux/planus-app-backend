@@ -1,54 +1,38 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Helper function to check if a user is authenticated
-    function isSignedIn() {
-      return request.auth != null;
+
+    // Helper function to check if the requesting user is an admin.
+    // It reads the user's document from Firestore.
+    function isUserAdmin(userId) {
+      return exists(/databases/(default)/documents/users/$(userId)) &&
+             get(/databases/(default)/documents/users/$(userId)).data.type == 'admin';
     }
 
-    // Helper function to check if the user is an admin.
-    // This allows bootstrap admins by email OR users with the 'admin' type in their Firestore doc.
-    function isUserAdmin() {
-      let isBootstrapAdmin = isSignedIn() && (
-        request.auth.token.email == 'lucasmoura@sentenergia.com' ||
-        request.auth.token.email == 'eduardo.w@sentenergia.com'
-      );
-
-      let hasAdminRoleInFirestore = isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin';
-
-      return isBootstrapAdmin || hasAdminRoleInFirestore;
+    // Helper function to check if the requesting user is the assigned seller for a lead.
+    // It reads the lead's document from Firestore.
+    function isLeadOwner(leadId, userId) {
+      return exists(/databases/(default)/documents/crm_leads/$(leadId)) &&
+             get(/databases/(default)/documents/crm_leads/$(leadId)).data.userId == userId;
     }
 
-    // Helper function to check if user is the assigned owner of a lead
-    function isLeadOwner(leadId) {
-        return isSignedIn() &&
-            exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-            get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid;
-    }
-
-    // --- Profile Photos ---
-    // Users can only read/write their own profile photos.
+    // Allow users to read/write their own profile photos.
     match /profile_photos/{userId}/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if true; // Profile photos are often public.
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // --- CRM-related Files (Documents) ---
-    // Only the assigned seller or an admin can read/write files for a specific lead.
+    // Allow admins or the lead's assigned seller to access lead-specific documents.
     match /crm_lead_documents/{leadId}/{allPaths=**} {
-      allow read, write: if isUserAdmin() || isLeadOwner(leadId);
-    }
-    
-    // --- Chat Media ---
-    // Only the assigned seller or an admin can read/write files for a specific lead's chat.
-    match /chat_media/{leadId}/{allPaths=**} {
-      allow read, write: if isUserAdmin() || isLeadOwner(leadId);
+      allow read, write: if request.auth != null &&
+                            (isUserAdmin(request.auth.uid) || isLeadOwner(leadId, request.auth.uid));
     }
 
+    // Allow admins or the lead's assigned seller to access chat media.
+    match /chat_media/{leadId}/{allPaths=**} {
+      allow read, write: if request.auth != null &&
+                            (isUserAdmin(request.auth.uid) || isLeadOwner(leadId, request.auth.uid));
+    }
   }
 }
