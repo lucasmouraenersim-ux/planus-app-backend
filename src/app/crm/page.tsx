@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, useEffect, Suspense, useRef } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { KanbanBoard } from '@/components/crm/KanbanBoard';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Filter, Plus } from 'lucide-react';
+import { PlusCircle, Users, Filter, Plus, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
@@ -95,6 +95,18 @@ function CrmPageContent() {
     };
   }, [appUser, toast, userAppRole]);
 
+
+  const kwhTotalAssinado = useMemo(() => {
+    return leads
+      .filter(lead => lead.stageId === 'assinado')
+      .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [leads]);
+
+  const kwhTotalParaAtribuir = useMemo(() => {
+    return leads
+      .filter(lead => lead.stageId === 'para-atribuir')
+      .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [leads]);
 
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
     setEditingLead(leadToEdit || null);
@@ -225,12 +237,26 @@ function CrmPageContent() {
   return (
     <div className="relative flex flex-col h-[calc(100vh-56px)] overflow-hidden">
       <header className="p-4 border-b border-sidebar-border bg-card/70 backdrop-blur-lg">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold text-foreground flex items-center">
-            <Users className="w-7 h-7 mr-3 text-primary" />
-            CRM - Gestão de Leads
-            <Badge variant="secondary" className="ml-4 text-base font-semibold">{leads.length}</Badge>
-          </h1>
+        <div className="flex justify-between items-center flex-wrap gap-4">
+          <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
+            <h1 className="text-2xl font-semibold text-foreground flex items-center">
+              <Users className="w-7 h-7 mr-3 text-primary" />
+              CRM - Gestão de Leads
+              <Badge variant="secondary" className="ml-4 text-base font-semibold">{leads.length}</Badge>
+            </h1>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="border-green-500/50 text-green-500 bg-green-500/10 py-1.5">
+                <Zap className="w-4 h-4 mr-1.5" />
+                <span className="font-normal mr-1.5">Assinado:</span>
+                <span className="font-semibold">{kwhTotalAssinado.toLocaleString('pt-BR')} kWh</span>
+              </Badge>
+              <Badge variant="outline" className="border-slate-500/50 text-slate-500 bg-slate-500/10 py-1.5">
+                <Zap className="w-4 h-4 mr-1.5" />
+                <span className="font-normal mr-1.5">Para Atribuir:</span>
+                <span className="font-semibold">{kwhTotalParaAtribuir.toLocaleString('pt-BR')} kWh</span>
+              </Badge>
+            </div>
+          </div>
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm">
               <Filter className="w-4 h-4 mr-2" />
