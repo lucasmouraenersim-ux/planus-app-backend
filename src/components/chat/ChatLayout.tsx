@@ -174,21 +174,28 @@ export function ChatLayout() {
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Prioritize the format recommended by WhatsApp
-            const preferredMimeType = 'audio/ogg; codecs=opus';
-            
-            if (!MediaRecorder.isTypeSupported(preferredMimeType)) {
-                console.error(`${preferredMimeType} is not supported by this browser.`);
+
+            // List of compatible MIME types, from most to least preferred.
+            const mimeTypesToTry = [
+                'audio/ogg; codecs=opus',
+                'audio/ogg',
+                'audio/mp4',
+            ];
+
+            const supportedMimeType = mimeTypesToTry.find(type => MediaRecorder.isTypeSupported(type));
+
+            if (!supportedMimeType) {
                 toast({
-                    title: "Gravação de áudio não suportada",
-                    description: "Seu navegador não suporta o formato de áudio necessário (OGG/Opus). Tente usar um navegador diferente, como Chrome ou Firefox.",
+                    title: "Gravação não suportada",
+                    description: "Seu navegador não suporta um formato de áudio compatível com o WhatsApp (OGG ou MP4).",
                     variant: "destructive",
                 });
                 return;
             }
             
-            const options = { mimeType: preferredMimeType };
+            const fileExtension = supportedMimeType.includes('mp4') ? 'mp4' : 'ogg';
+
+            const options = { mimeType: supportedMimeType };
             mediaRecorderRef.current = new MediaRecorder(stream, options);
             
             audioChunksRef.current = [];
@@ -198,8 +205,8 @@ export function ChatLayout() {
             };
             
             mediaRecorderRef.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: preferredMimeType });
-                const audioFile = new File([audioBlob], `${Date.now()}-audio.ogg`, { type: preferredMimeType });
+                const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType });
+                const audioFile = new File([audioBlob], `${Date.now()}-audio.${fileExtension}`, { type: supportedMimeType });
 
                 if (!selectedLead) return;
 
@@ -216,7 +223,7 @@ export function ChatLayout() {
                     setIsUploadingMedia(false);
                 }
                 
-                stream.getTracks().forEach(track => track.stop()); // Stop microphone
+                stream.getTracks().forEach(track => track.stop());
             };
             
             mediaRecorderRef.current.start();
@@ -225,7 +232,7 @@ export function ChatLayout() {
             toast({ title: "Erro de Microfone", description: "Não foi possível acessar o microfone. Verifique as permissões do navegador.", variant: "destructive" });
         }
     }
-  };
+};
 
 
   const filteredLeads = useMemo(() => {
