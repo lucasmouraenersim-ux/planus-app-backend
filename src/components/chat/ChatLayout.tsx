@@ -175,23 +175,29 @@ export function ChatLayout() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // List of compatible MIME types, from most to least preferred.
             const mimeTypesToTry = [
                 'audio/ogg; codecs=opus',
-                'audio/ogg',
                 'audio/mp4',
             ];
 
-            const supportedMimeType = mimeTypesToTry.find(type => MediaRecorder.isTypeSupported(type));
+            const supportedMimeType = mimeTypesToTry.find(type => {
+              try {
+                return MediaRecorder.isTypeSupported(type);
+              } catch (e) {
+                return false;
+              }
+            });
 
             if (!supportedMimeType) {
                 toast({
                     title: "Gravação não suportada",
-                    description: "Seu navegador não suporta um formato de áudio compatível com o WhatsApp (OGG ou MP4).",
+                    description: "Seu navegador não suporta um formato de áudio compatível (OGG/Opus ou MP4).",
                     variant: "destructive",
                 });
                 return;
             }
+            
+            console.log(`Using supported MIME type for recording: ${supportedMimeType}`);
             
             const fileExtension = supportedMimeType.includes('mp4') ? 'mp4' : 'ogg';
 
@@ -220,7 +226,8 @@ export function ChatLayout() {
                 } catch(error) {
                     console.error("Audio upload error:", error);
                     toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
-                    setIsUploadingMedia(false);
+                } finally {
+                   setIsUploadingMedia(false);
                 }
                 
                 stream.getTracks().forEach(track => track.stop());
