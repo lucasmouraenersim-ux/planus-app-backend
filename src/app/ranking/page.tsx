@@ -33,6 +33,9 @@ interface RankingDisplayEntry {
   periodIdentifier: string; 
   criteriaIdentifier: string; 
   kwh: number;
+  totalKwhAllTime: number;
+  kwhThisSalesCycle: number;
+  hasEverHit30kInAMonth: boolean;
 }
 
 // Mock AppUser for demonstration
@@ -47,23 +50,27 @@ const MOCK_LOGGED_IN_USER: AppUser = {
 };
 
 const MOCK_RANKING_ENTRIES: RankingDisplayEntry[] = [
-  // Monthly Current - Total Sales Value
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 25.000,00', mainScoreValue: 25000, detailScore1Label: 'Nº Vendas', detailScore1Value: 5, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 12500 },
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 18.500,00', mainScoreValue: 18500, detailScore1Label: 'Nº Vendas', detailScore1Value: 3, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 9250 },
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 12.000,00', mainScoreValue: 12000, detailScore1Label: 'Nº Vendas', detailScore1Value: 4, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 6000 },
-  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', mainScoreDisplay: 'R$ 10.000,00', mainScoreValue: 10000, detailScore1Label: 'Nº Vendas', detailScore1Value: 2, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 5000 },
-  // Monthly Current - Number of Sales
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: '5 Vendas', mainScoreValue: 5, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 25.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 12500 },
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: '4 Vendas', mainScoreValue: 4, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 12.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 6000 },
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '3 Vendas', mainScoreValue: 3, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 18.500,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 9250 },
-  // All Time - Total Sales Value
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 150.000,00', mainScoreValue: 150000, detailScore1Label: 'Nº Vendas', detailScore1Value: 25, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 75000 },
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 120.000,00', mainScoreValue: 120000, detailScore1Label: 'Nº Vendas', detailScore1Value: 20, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 60000 },
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 90.000,00', mainScoreValue: 90000, detailScore1Label: 'Nº Vendas', detailScore1Value: 15, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 45000 },
-  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', userPhotoUrl: 'https://placehold.co/100x100.png?text=V4',mainScoreDisplay: 'R$ 75.000,00', mainScoreValue: 75000, detailScore1Label: 'Nº Vendas', detailScore1Value: 10, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 37500 },
-  // All Time - Number of Sales
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '25 Vendas', mainScoreValue: 25, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 150.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 75000 },
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2',mainScoreDisplay: '20 Vendas', mainScoreValue: 20, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 120.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 60000 },
+  // User Data (Consistent across all entries)
+  // User 1 (Vendedor Um): Gold
+  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 18.500,00', mainScoreValue: 18500, detailScore1Label: 'Nº Vendas', detailScore1Value: 3, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 9250, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
+  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '3 Vendas', mainScoreValue: 3, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 18.500,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 9250, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
+  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 150.000,00', mainScoreValue: 150000, detailScore1Label: 'Nº Vendas', detailScore1Value: 25, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 75000, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
+  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '25 Vendas', mainScoreValue: 25, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 150.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 75000, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
+  
+  // User 2 (Vendedor Dois): Silver
+  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 25.000,00', mainScoreValue: 25000, detailScore1Label: 'Nº Vendas', detailScore1Value: 5, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 12500, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: '5 Vendas', mainScoreValue: 5, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 25.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 12500, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 120.000,00', mainScoreValue: 120000, detailScore1Label: 'Nº Vendas', detailScore1Value: 20, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 60000, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2',mainScoreDisplay: '20 Vendas', mainScoreValue: 20, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 120.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 60000, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
+  
+  // User 3 (Vendedor Três): Bronze (high total, low current month)
+  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 12.000,00', mainScoreValue: 12000, detailScore1Label: 'Nº Vendas', detailScore1Value: 4, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 6000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: '4 Vendas', mainScoreValue: 4, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 12.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 6000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 90.000,00', mainScoreValue: 90000, detailScore1Label: 'Nº Vendas', detailScore1Value: 15, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 45000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
+
+  // User 4 (Vendedor Quatro): Bronze (low total)
+  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', mainScoreDisplay: 'R$ 10.000,00', mainScoreValue: 10000, detailScore1Label: 'Nº Vendas', detailScore1Value: 2, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 5000, totalKwhAllTime: 15000, kwhThisSalesCycle: 10000, hasEverHit30kInAMonth: false },
+  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', userPhotoUrl: 'https://placehold.co/100x100.png?text=V4',mainScoreDisplay: 'R$ 75.000,00', mainScoreValue: 75000, detailScore1Label: 'Nº Vendas', detailScore1Value: 10, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 37500, totalKwhAllTime: 75000, kwhThisSalesCycle: 10000, hasEverHit30kInAMonth: false },
 ];
 
 const PERIOD_OPTIONS = [
@@ -86,6 +93,17 @@ const formatDisplayValue = (value: string | number | undefined, criteria: string
   }
   return String(value);
 };
+
+const getMedalForSeller = (entry: RankingDisplayEntry): string => {
+  if (entry.hasEverHit30kInAMonth) {
+    return '🥇'; // Gold
+  }
+  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) {
+    return '🥈'; // Silver
+  }
+  return '🥉'; // Bronze
+};
+
 
 function RankingPageContent() {
   const [rankingData, setRankingData] = useState<RankingDisplayEntry[]>([]);
@@ -280,11 +298,16 @@ function RankingPageContent() {
                     <div className={`text-5xl font-black mb-3 ${getPodiumTextColor(index)}`}>
                       {entry.rankPosition}º
                     </div>
-                    <Avatar className="w-24 h-24 mb-4 border-4 border-primary/50">
-                      <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
-                      <AvatarFallback className="text-2xl">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <h3 className="text-xl font-semibold text-primary mb-1 truncate max-w-full">{entry.userName}</h3>
+                    <div className="relative">
+                      <Avatar className="w-24 h-24 mb-4 border-4 border-primary/50">
+                        <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
+                        <AvatarFallback className="text-2xl">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-2 -right-1 text-4xl bg-card p-1 rounded-full shadow-lg">
+                        {getMedalForSeller(entry)}
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-semibold text-primary mb-1 truncate max-w-full mt-2">{entry.userName}</h3>
                     <p className="text-2xl font-bold text-foreground">{entry.mainScoreDisplay}</p>
                     <p className="text-xs text-muted-foreground">{criteriaLabel}</p>
                   </Card>
@@ -349,10 +372,15 @@ function RankingPageContent() {
                       <TableCell className="font-bold text-lg text-center">{entry.rankPosition}</TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
-                            <AvatarFallback>{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                          </Avatar>
+                          <div className="relative inline-block">
+                             <Avatar className="h-9 w-9">
+                              <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
+                              <AvatarFallback>{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="absolute -bottom-1.5 -right-1.5 text-lg bg-card p-0.5 rounded-full shadow">
+                              {getMedalForSeller(entry)}
+                            </div>
+                          </div>
                           <span className="font-medium">{entry.userName}</span>
                         </div>
                       </TableCell>
