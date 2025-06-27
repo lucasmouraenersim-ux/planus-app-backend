@@ -277,7 +277,6 @@ export function ChatLayout() {
               </Avatar>
               <div>
                 <h3 className="font-semibold text-foreground">{selectedLead.name}</h3>
-                <p className="text-xs text-muted-foreground">{selectedLead.phone || 'Sem telefone'}</p>
               </div>
             </header>
             
@@ -359,3 +358,5 @@ export function ChatLayout() {
     </div>
   );
 }
+
+    
