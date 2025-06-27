@@ -171,74 +171,74 @@ export function ChatLayout() {
     if (isRecording) {
         mediaRecorderRef.current?.stop();
         setIsRecording(false);
-    } else {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        return; // The rest of the logic is handled in onstop
+    }
 
-            const mimeTypesToTry = [
-                'audio/ogg; codecs=opus',
-                'audio/mp4',
-                'audio/ogg',
-            ];
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // List of candidates compliant with WhatsApp API, in order of preference.
+        const supportedCandidates = [
+            { mimeType: 'audio/ogg; codecs=opus', extension: 'ogg' },
+            { mimeType: 'audio/aac', extension: 'aac' },
+            { mimeType: 'audio/mp4', extension: 'mp4' },
+        ];
 
-            const supportedMimeType = mimeTypesToTry.find(type => {
-              try {
-                return MediaRecorder.isTypeSupported(type);
-              } catch (e) {
-                return false;
-              }
+        const supportedProfile = supportedCandidates.find(
+            (candidate) => MediaRecorder.isTypeSupported(candidate.mimeType)
+        );
+
+        if (!supportedProfile) {
+            toast({
+                title: "Gravação não suportada",
+                description: "Seu navegador não suporta um formato de áudio compatível (OGG Opus, AAC, ou MP4).",
+                variant: "destructive",
             });
+            console.error("No supported audio format found for MediaRecorder.");
+            return;
+        }
 
-            if (!supportedMimeType) {
-                toast({
-                    title: "Gravação não suportada",
-                    description: "Seu navegador não suporta um formato de áudio compatível para gravação.",
-                    variant: "destructive",
-                });
-                return;
+        console.log(`Using supported profile for recording: { mimeType: '${supportedProfile.mimeType}', extension: '${supportedProfile.extension}' }`);
+        
+        const options = { mimeType: supportedProfile.mimeType };
+        mediaRecorderRef.current = new MediaRecorder(stream, options);
+        
+        audioChunksRef.current = [];
+        
+        mediaRecorderRef.current.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunksRef.current.push(event.data);
+            }
+        };
+        
+        mediaRecorderRef.current.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: supportedProfile.mimeType });
+            const audioFile = new File([audioBlob], `audio-${Date.now()}.${supportedProfile.extension}`, { type: supportedProfile.mimeType });
+
+            if (!selectedLead) return;
+
+            setIsUploadingMedia(true);
+            toast({ title: "Enviando áudio...", description: "Aguarde enquanto o áudio é carregado." });
+
+            try {
+                const filePath = `chat_media/${selectedLead.id}/${audioFile.name}`;
+                const downloadURL = await uploadFile(audioFile, filePath);
+                await sendMessageInternal("Mensagem de voz", 'audio', downloadURL);
+            } catch(error) {
+                console.error("Audio upload error:", error);
+                toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
+            } finally {
+               setIsUploadingMedia(false);
             }
             
-            console.log(`Using supported MIME type for recording: ${supportedMimeType}`);
-            
-            const fileExtension = supportedMimeType.includes('mp4') ? 'mp4' : 'ogg';
-
-            const options = { mimeType: supportedMimeType };
-            mediaRecorderRef.current = new MediaRecorder(stream, options);
-            
-            audioChunksRef.current = [];
-            
-            mediaRecorderRef.current.ondataavailable = (event) => {
-                audioChunksRef.current.push(event.data);
-            };
-            
-            mediaRecorderRef.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: supportedMimeType });
-                const audioFile = new File([audioBlob], `audio-${Date.now()}.${fileExtension}`, { type: supportedMimeType });
-
-                if (!selectedLead) return;
-
-                setIsUploadingMedia(true);
-                toast({ title: "Enviando áudio...", description: "Aguarde enquanto o áudio é carregado." });
-
-                try {
-                    const filePath = `chat_media/${selectedLead.id}/${audioFile.name}`;
-                    const downloadURL = await uploadFile(audioFile, filePath);
-                    await sendMessageInternal("Mensagem de voz", 'audio', downloadURL);
-                } catch(error) {
-                    console.error("Audio upload error:", error);
-                    toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
-                } finally {
-                   setIsUploadingMedia(false);
-                }
-                
-                stream.getTracks().forEach(track => track.stop());
-            };
-            
-            mediaRecorderRef.current.start();
-            setIsRecording(true);
-        } catch (error) {
-            toast({ title: "Erro de Microfone", description: "Não foi possível acessar o microfone. Verifique as permissões do navegador.", variant: "destructive" });
-        }
+            stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+    } catch (error) {
+        console.error("Error accessing media devices.", error);
+        toast({ title: "Erro de Microfone", description: "Não foi possível acessar o microfone. Verifique as permissões do navegador.", variant: "destructive" });
     }
 };
 
