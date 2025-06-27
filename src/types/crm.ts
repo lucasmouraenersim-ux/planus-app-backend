@@ -87,7 +87,7 @@ export interface ChatMessage {
   text: string; // Conteúdo da mensagem ou legenda da mídia
   sender: 'user' | 'lead'; // 'user' (vendedor/sistema), 'lead' (cliente)
   timestamp: Timestamp | string; // Timestamp na criação, string no cliente
-  type?: 'text' | 'button' | 'interactive' | 'image' | 'audio'; // Tipo da mensagem
+  type?: 'text' | 'button' | 'interactive' | 'image' | 'audio' | 'document'; // Tipo da mensagem
   mediaUrl?: string; // URL para imagem ou áudio
   transcription?: string; // Transcrição do áudio
 }

@@ -111,7 +111,7 @@ export function ChatLayout() {
     setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [chatMessages]);
 
-  const sendMessageInternal = async (text: string, type: 'text' | 'image' | 'audio', mediaUrl?: string) => {
+  const sendMessageInternal = async (text: string, type: 'text' | 'image' | 'audio' | 'document', mediaUrl?: string) => {
     if (!selectedLead) return;
     setIsSending(true);
     
@@ -177,6 +177,7 @@ export function ChatLayout() {
 
             const mimeTypesToTry = [
                 'audio/ogg; codecs=opus',
+                'audio/ogg',
                 'audio/mp4',
             ];
 
@@ -191,7 +192,7 @@ export function ChatLayout() {
             if (!supportedMimeType) {
                 toast({
                     title: "Gravação não suportada",
-                    description: "Seu navegador não suporta um formato de áudio compatível (OGG/Opus ou MP4).",
+                    description: "Seu navegador não suporta um formato de áudio compatível para gravação.",
                     variant: "destructive",
                 });
                 return;
@@ -222,7 +223,8 @@ export function ChatLayout() {
                 try {
                     const filePath = `chat_media/${selectedLead.id}/${audioFile.name}`;
                     const downloadURL = await uploadFile(audioFile, filePath);
-                    await sendMessageInternal('Mensagem de voz', 'audio', downloadURL);
+                    // Send as a document
+                    await sendMessageInternal(audioFile.name, 'document', downloadURL);
                 } catch(error) {
                     console.error("Audio upload error:", error);
                     toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
@@ -305,7 +307,7 @@ export function ChatLayout() {
                 <AvatarImage src={undefined} alt={selectedLead.name} />
                 <AvatarFallback className="bg-primary/20 text-primary">{selectedLead.name.charAt(0)}</AvatarFallback>
               </Avatar>
-              <div>
+              <div className="flex-1 truncate">
                 <h3 className="font-semibold text-foreground">{selectedLead.name}</h3>
               </div>
             </header>
@@ -323,7 +325,7 @@ export function ChatLayout() {
                                   <Image src={msg.mediaUrl} alt={msg.text || 'Imagem enviada'} width={250} height={250} className="rounded-lg object-cover" />
                               </a>
                           )}
-                          {msg.type === 'audio' && msg.mediaUrl && (
+                          {(msg.type === 'audio' || msg.type === 'document') && msg.mediaUrl && (
                               <audio controls src={msg.mediaUrl} className="w-full max-w-xs my-2" />
                           )}
                           {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}

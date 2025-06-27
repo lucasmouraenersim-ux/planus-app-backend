@@ -14,9 +14,9 @@ import { transcribeAudio } from '@/ai/flows/transcribe-audio-flow';
 const SendChatMessageInputSchema = z.object({
   leadId: z.string(),
   phone: z.string().optional(),
-  text: z.string(), // Caption for media, text for text messages
+  text: z.string(), // Caption for media, text for text messages, filename for documents
   sender: z.enum(['user', 'lead']),
-  type: z.enum(['text', 'image', 'audio']).default('text'),
+  type: z.enum(['text', 'image', 'audio', 'document']).default('text'),
   mediaUrl: z.string().url().optional(),
 });
 export type SendChatMessageInput = z.infer<typeof SendChatMessageInputSchema>;
@@ -26,7 +26,7 @@ const ChatMessageSchema = z.object({
   text: z.string(),
   sender: z.enum(['user', 'lead']),
   timestamp: z.string(),
-  type: z.enum(['text', 'button', 'interactive', 'image', 'audio']).optional(),
+  type: z.enum(['text', 'button', 'interactive', 'image', 'audio', 'document']).optional(),
   mediaUrl: z.string().url().optional(),
   transcription: z.string().optional(),
 });
@@ -111,6 +111,8 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
           messagePayload = { image: { link: mediaUrl, caption: text } };
       } else if (type === 'audio' && mediaUrl) {
           messagePayload = { audio: { link: mediaUrl } };
+      } else if (type === 'document' && mediaUrl) {
+          messagePayload = { document: { link: mediaUrl, filename: text } };
       } else {
           messagePayload = { text };
       }

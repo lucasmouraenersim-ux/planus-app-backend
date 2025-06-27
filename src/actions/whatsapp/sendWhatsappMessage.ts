@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A server action to send a single WhatsApp message (template, text, image, or audio) via the Meta Graph API.
+ * @fileOverview A server action to send a single WhatsApp message (template, text, image, audio, or document) via the Meta Graph API.
  *
  * - sendWhatsappMessage - Sends a message to a phone number.
  * - SendWhatsappMessageInput - The input type for the function.
@@ -26,8 +26,12 @@ const SendWhatsappMessageInputSchema = z.object({
     audio: z.object({
       link: z.string().url(),
     }).optional(),
-  }).refine(m => m.text || m.template || m.image || m.audio, {
-    message: "Either a 'text', 'template', 'image' or 'audio' object must be provided in the message.",
+    document: z.object({
+      link: z.string().url(),
+      filename: z.string().optional(),
+    }).optional(),
+  }).refine(m => m.text || m.template || m.image || m.audio || m.document, {
+    message: "Either a 'text', 'template', 'image', 'audio', or 'document' object must be provided in the message.",
   })
 });
 export type SendWhatsappMessageInput = z.infer<typeof SendWhatsappMessageInputSchema>;
@@ -110,6 +114,16 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
       type: "audio",
       audio: { link: input.message.audio.link }
     };
+  } else if (input.message.document) {
+    requestBody = {
+      messaging_product: "whatsapp",
+      to: to,
+      type: "document",
+      document: { 
+        link: input.message.document.link,
+        ...(input.message.document.filename && { filename: input.message.document.filename })
+      }
+    };
   } else if (input.message.text) {
     requestBody = {
       messaging_product: "whatsapp",
@@ -121,7 +135,7 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
       }
     };
   } else {
-      return { success: false, error: "Invalid message payload. Must be text, template, image, or audio." };
+      return { success: false, error: "Invalid message payload. Must be text, template, image, audio, or document." };
   }
 
   try {
