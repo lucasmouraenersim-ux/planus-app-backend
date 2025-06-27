@@ -47,13 +47,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2
+    Loader2, Search, Download, Edit2, Eye
 } from 'lucide-react';
 import { ChartContainer } from "@/components/ui/chart";
 
@@ -81,6 +82,7 @@ const editUserFormSchema = z.object({
   displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
   phone: z.string().optional(),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
+  canViewLeadPhoneNumber: z.boolean().default(false),
 });
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
 
@@ -134,6 +136,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       displayName: user.displayName || '',
       phone: user.phone || '',
       type: user.type,
+      canViewLeadPhoneNumber: user.canViewLeadPhoneNumber || false,
     });
     setIsEditUserModalOpen(true);
   };
@@ -146,6 +149,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         displayName: data.displayName,
         phone: data.phone,
         type: data.type,
+        canViewLeadPhoneNumber: data.canViewLeadPhoneNumber,
       });
       await refreshUsers();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
@@ -218,6 +222,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         photoURL: `https://placehold.co/40x40.png?text=${(data.displayName || data.email).charAt(0).toUpperCase()}`,
         personalBalance: 0,
         mlmBalance: 0,
+        canViewLeadPhoneNumber: false, // Default to false
       };
 
       if (data.phone) {
@@ -459,6 +464,27 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 <FormField control={editUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={editUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={editUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField
+                  control={editUserForm.control}
+                  name="canViewLeadPhoneNumber"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-background/50">
+                      <div className="space-y-0.5">
+                        <FormLabel className="flex items-center"><Eye className="mr-2 h-4 w-4" />Ver Telefone do Lead</FormLabel>
+                        <FormDescription className="text-xs">
+                          Permite que este usuário veja o número de telefone do lead no chat.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canEdit || isSubmittingAction}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground pt-4 border-t">
                     <div>
                         <p className="font-semibold text-foreground">Criado em:</p>

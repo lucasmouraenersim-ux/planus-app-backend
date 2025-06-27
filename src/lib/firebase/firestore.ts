@@ -159,7 +159,7 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
 }
 
 // --- User Management ---
-export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type'>>): Promise<void> {
+export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type' | 'canViewLeadPhoneNumber'>>): Promise<void> {
   if (!userId) throw new Error("User ID is required.");
   const userRef = doc(db, "users", userId);
   
@@ -173,6 +173,9 @@ export async function updateUser(userId: string, updates: Partial<Pick<Firestore
   }
   if (updates.type !== undefined) {
     finalUpdates.type = updates.type;
+  }
+  if (updates.canViewLeadPhoneNumber !== undefined) {
+    finalUpdates.canViewLeadPhoneNumber = updates.canViewLeadPhoneNumber;
   }
 
   if (Object.keys(finalUpdates).length > 0) {

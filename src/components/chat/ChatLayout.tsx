@@ -177,11 +177,10 @@ export function ChatLayout() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
-        // List of candidates compliant with WhatsApp API, in order of preference.
         const supportedCandidates = [
             { mimeType: 'audio/ogg; codecs=opus', extension: 'ogg' },
-            { mimeType: 'audio/aac', extension: 'aac' },
             { mimeType: 'audio/mp4', extension: 'mp4' },
+            { mimeType: 'audio/aac', extension: 'aac' },
         ];
 
         const supportedProfile = supportedCandidates.find(
@@ -197,8 +196,6 @@ export function ChatLayout() {
             console.error("No supported audio format found for MediaRecorder.");
             return;
         }
-
-        console.log(`Using supported profile for recording: { mimeType: '${supportedProfile.mimeType}', extension: '${supportedProfile.extension}' }`);
         
         const options = { mimeType: supportedProfile.mimeType };
         mediaRecorderRef.current = new MediaRecorder(stream, options);
@@ -308,6 +305,9 @@ export function ChatLayout() {
               </Avatar>
               <div className="flex-1 truncate">
                 <h3 className="font-semibold text-foreground">{selectedLead.name}</h3>
+                 {appUser?.canViewLeadPhoneNumber && (
+                  <p className="text-xs text-muted-foreground">{selectedLead.phone || 'Telefone não disponível'}</p>
+                )}
               </div>
             </header>
             

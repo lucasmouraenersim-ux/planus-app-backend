@@ -56,6 +56,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           mlmBalance: firestoreUserData.mlmBalance || 0,
           createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
           lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : (user.metadata.lastSignInTime || undefined),
+          canViewLeadPhoneNumber: firestoreUserData.canViewLeadPhoneNumber || false,
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
@@ -68,6 +69,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             personalBalance: 0,
             mlmBalance: 0,
             createdAt: new Date().toISOString(),
+            canViewLeadPhoneNumber: true,
           };
         }
         return { // Fallback for users without a Firestore doc (pending setup)
@@ -79,6 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             personalBalance: 0,
             mlmBalance: 0,
             createdAt: new Date().toISOString(),
+            canViewLeadPhoneNumber: false,
         };
       }
     } catch (error) {
