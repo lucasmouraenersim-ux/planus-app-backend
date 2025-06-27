@@ -1,6 +1,6 @@
 
 // src/lib/firebase/storage.ts
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, type UploadMetadata } from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, type UploadMetadata, updateMetadata } from "firebase/storage";
 import { storage } from '../firebase'; // Ensure storage is initialized and exported from firebase.ts
 
 export async function uploadFile(file: File, path: string): Promise<string> {
@@ -11,9 +11,22 @@ export async function uploadFile(file: File, path: string): Promise<string> {
     contentType: file.type,
   };
 
+  // 1. Upload with metadata
   await uploadBytes(fileRef, file, metadata);
+  
+  // 2. Force update metadata after upload as a safety measure.
+  // This can fix cases where the initial metadata is ignored by Firebase Storage.
+  try {
+    await updateMetadata(fileRef, { contentType: file.type });
+    console.log("Successfully verified/updated metadata contentType to:", file.type);
+  } catch (error) {
+    console.error("Could not update metadata after upload. This might cause issues with WhatsApp.", error);
+    // Depending on strictness, you might want to throw an error here.
+    // For now, we'll log a warning and continue.
+  }
+
   const downloadURL = await getDownloadURL(fileRef);
-  console.log("File uploaded successfully with metadata. Download URL:", downloadURL);
+  console.log("File uploaded successfully. Download URL:", downloadURL);
   return downloadURL;
 }
 
