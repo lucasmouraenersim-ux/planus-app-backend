@@ -107,6 +107,40 @@ function CrmPageContent() {
       .filter(lead => lead.stageId === 'para-atribuir')
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
+  
+  const kwhTotalAssinadoNoPeriodo = useMemo(() => {
+    const today = new Date();
+    const dayOfMonth = today.getDate();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    let startDate: Date;
+    let endDate: Date;
+
+    // The sales cycle is from the 21st of one month to the 20th of the next.
+    // So the end date should be the 21st at 00:00:00, making it exclusive.
+    if (dayOfMonth < 21) {
+      // Period from 21st of last month to 20th of this month.
+      startDate = new Date(currentYear, currentMonth - 1, 21);
+      endDate = new Date(currentYear, currentMonth, 21);
+    } else {
+      // Period from 21st of this month to 20th of next month.
+      startDate = new Date(currentYear, currentMonth, 21);
+      endDate = new Date(currentYear, currentMonth + 1, 21);
+    }
+
+    return leads
+      .filter(lead => {
+        if (lead.stageId !== 'assinado' || !lead.signedAt) {
+          return false;
+        }
+        const signedDate = new Date(lead.signedAt);
+        // Check if signedDate is on or after startDate and before endDate.
+        return signedDate >= startDate && signedDate < endDate;
+      })
+      .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [leads]);
+
 
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
     setEditingLead(leadToEdit || null);
@@ -249,6 +283,11 @@ function CrmPageContent() {
                 <Zap className="w-4 h-4 mr-1.5" />
                 <span className="font-normal mr-1.5">Assinado:</span>
                 <span className="font-semibold">{kwhTotalAssinado.toLocaleString('pt-BR')} kWh</span>
+              </Badge>
+              <Badge variant="outline" className="border-indigo-500/50 text-indigo-500 bg-indigo-500/10 py-1.5">
+                <Zap className="w-4 h-4 mr-1.5" />
+                <span className="font-normal mr-1.5">Assinado (Período):</span>
+                <span className="font-semibold">{kwhTotalAssinadoNoPeriodo.toLocaleString('pt-BR')} kWh</span>
               </Badge>
               <Badge variant="outline" className="border-slate-500/50 text-slate-500 bg-slate-500/10 py-1.5">
                 <Zap className="w-4 h-4 mr-1.5" />
