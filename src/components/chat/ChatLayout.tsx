@@ -183,6 +183,8 @@ export function ChatLayout() {
             
             mediaRecorderRef.current.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const audioFile = new File([audioBlob], "audio.webm", { type: "audio/webm" });
+
                 if (!selectedLead) return;
 
                 setIsUploadingMedia(true);
@@ -190,9 +192,10 @@ export function ChatLayout() {
 
                 try {
                     const filePath = `chat_media/${selectedLead.id}/${Date.now()}-audio.webm`;
-                    const downloadURL = await uploadFile(audioBlob, filePath);
+                    const downloadURL = await uploadFile(audioFile, filePath);
                     await sendMessageInternal('Mensagem de voz', 'audio', downloadURL);
                 } catch(error) {
+                    console.error("Audio upload error:", error);
                     toast({ title: "Erro no Upload", description: "Não foi possível enviar o áudio.", variant: "destructive" });
                     setIsUploadingMedia(false);
                 }
