@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -13,12 +14,12 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download } from 'lucide-react';
+import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download, ShieldAlert } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
 export default function DisparosPage() {
-  const { fetchAllCrmLeadsGlobally } = useAuth();
+  const { fetchAllCrmLeadsGlobally, userAppRole, isLoadingAuth } = useAuth();
   const { toast } = useToast();
 
   const [leads, setLeads] = useState<OutboundLead[]>([]);
@@ -188,6 +189,25 @@ export default function DisparosPage() {
       setStatusText("Disparo finalizado.");
     }
   };
+
+  if (isLoadingAuth) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[calc(100vh-56px)] bg-transparent text-primary">
+        <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
+        <p className="text-lg font-medium">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (userAppRole !== 'admin' && userAppRole !== 'superadmin') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-56px)] text-destructive p-4 text-center">
+        <ShieldAlert size={64} className="mb-4" />
+        <h1 className="text-2xl font-bold">Acesso Negado</h1>
+        <p>Você não tem permissão para acessar esta página.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-6 lg:p-8 space-y-6">

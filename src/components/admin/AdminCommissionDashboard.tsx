@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -54,7 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye
+    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon
 } from 'lucide-react';
 import { ChartContainer } from "@/components/ui/chart";
 
@@ -83,6 +82,8 @@ const editUserFormSchema = z.object({
   phone: z.string().optional(),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
   canViewLeadPhoneNumber: z.boolean().default(false),
+  canViewCrm: z.boolean().default(false),
+  canViewCareerPlan: z.boolean().default(false),
 });
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
 
@@ -127,7 +128,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const editUserForm = useForm<EditUserFormData>({ resolver: zodResolver(editUserFormSchema) });
   const updateWithdrawalForm = useForm<UpdateWithdrawalFormData>({ resolver: zodResolver(updateWithdrawalFormSchema) });
 
-  const authorizedEditors = useMemo(() => ['lucasmoura@sentenergia.com', 'eduardo.w@sentenergia.com'], []);
+  const authorizedEditors = useMemo(() => ['lucasmoura@sentenergia.com'], []);
   const canEdit = useMemo(() => authorizedEditors.includes(loggedInUser.email || ''), [loggedInUser.email, authorizedEditors]);
 
   const handleOpenEditModal = (user: FirestoreUser) => {
@@ -137,6 +138,8 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       phone: user.phone || '',
       type: user.type,
       canViewLeadPhoneNumber: user.canViewLeadPhoneNumber || false,
+      canViewCrm: user.canViewCrm || false,
+      canViewCareerPlan: user.canViewCareerPlan || false,
     });
     setIsEditUserModalOpen(true);
   };
@@ -150,6 +153,8 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         phone: data.phone,
         type: data.type,
         canViewLeadPhoneNumber: data.canViewLeadPhoneNumber,
+        canViewCrm: data.canViewCrm,
+        canViewCareerPlan: data.canViewCareerPlan,
       });
       await refreshUsers();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
@@ -222,7 +227,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         photoURL: `https://placehold.co/40x40.png?text=${(data.displayName || data.email).charAt(0).toUpperCase()}`,
         personalBalance: 0,
         mlmBalance: 0,
-        canViewLeadPhoneNumber: false, // Default to false
+        canViewLeadPhoneNumber: false,
+        canViewCrm: false,
+        canViewCareerPlan: false,
       };
 
       if (data.phone) {
@@ -324,11 +331,12 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const getUserTypeBadgeStyle = (type?: UserType) => {
     if (!type) return 'bg-gray-500/20 text-gray-400';
     switch (type) {
+      case 'superadmin': return 'bg-yellow-500/20 text-yellow-400';
       case 'admin': return 'bg-red-500/20 text-red-400';
       case 'vendedor': return 'bg-blue-500/20 text-blue-400';
       case 'prospector': return 'bg-purple-500/20 text-purple-400';
       case 'user': return 'bg-green-500/20 text-green-400';
-      case 'pending_setup': return 'bg-yellow-500/20 text-yellow-400';
+      case 'pending_setup': return 'bg-orange-500/20 text-orange-400';
       default: return 'bg-gray-500/20 text-gray-400';
     }
   };
@@ -373,7 +381,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários do sistema.</CardDescription></div>
           <div className="flex items-center gap-2">
             <Button onClick={handleExportCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
-            <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>
+            {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
           </div>
         </CardHeader>
         <CardContent>
@@ -402,11 +410,11 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                             <Edit2 className="h-4 w-4 mr-2" />
                             Ver / Editar Detalhes
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
+                          {canEdit && <DropdownMenuSeparator />}
+                          {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
                             <ShieldAlert className="mr-2 h-4 w-4" />
                             Redefinir Senha
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>)}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -448,7 +456,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <DialogHeader>
               <DialogTitle className="text-primary">Ver / Editar Usuário</DialogTitle>
               <DialogDescription>
-                {canEdit ? 'Altere os dados do usuário abaixo. Email e CPF não podem ser alterados.' : 'Você está visualizando os detalhes do usuário. Apenas administradores autorizados podem editar.'}
+                {canEdit ? 'Altere os dados e permissões do usuário abaixo.' : 'Você está visualizando os detalhes do usuário.'}
               </DialogDescription>
             </DialogHeader>
             <Form {...editUserForm}>
@@ -464,6 +472,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 <FormField control={editUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={editUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={editUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                
                 <FormField
                   control={editUserForm.control}
                   name="canViewLeadPhoneNumber"
@@ -471,20 +480,47 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-background/50">
                       <div className="space-y-0.5">
                         <FormLabel className="flex items-center"><Eye className="mr-2 h-4 w-4" />Ver Telefone do Lead</FormLabel>
-                        <FormDescription className="text-xs">
-                          Permite que este usuário veja o número de telefone do lead no chat.
-                        </FormDescription>
+                        <FormDescription className="text-xs">Permite ver o telefone do lead no chat.</FormDescription>
                       </div>
                       <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={!canEdit || isSubmittingAction}
-                        />
+                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} />
                       </FormControl>
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={editUserForm.control}
+                  name="canViewCrm"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-background/50">
+                      <div className="space-y-0.5">
+                        <FormLabel className="flex items-center"><CrmIcon className="mr-2 h-4 w-4" />Ativar CRM</FormLabel>
+                        <FormDescription className="text-xs">Permite que este usuário acesse o CRM.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editUserForm.control}
+                  name="canViewCareerPlan"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-background/50">
+                      <div className="space-y-0.5">
+                        <FormLabel className="flex items-center"><Rocket className="mr-2 h-4 w-4" />Ativar Plano de Carreira</FormLabel>
+                        <FormDescription className="text-xs">Permite que este usuário veja o Plano de Carreira.</FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground pt-4 border-t">
                     <div>
                         <p className="font-semibold text-foreground">Criado em:</p>

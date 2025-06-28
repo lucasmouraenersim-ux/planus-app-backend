@@ -53,7 +53,7 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
       if (!appUser && currentPathname !== '/login') {
         router.replace('/login');
       } else if (appUser && currentPathname === '/login') {
-        if (userAppRole === 'admin') {
+        if (userAppRole === 'admin' || userAppRole === 'superadmin') {
           router.replace('/admin/dashboard');
         } else if (userAppRole === 'vendedor') {
           router.replace('/dashboard/seller');
@@ -81,6 +81,7 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
     if (!role) return "Usuário";
     switch (role) {
       case "admin": return "Administrador";
+      case "superadmin": return "Super Admin";
       case "vendedor": return "Vendedor";
       case "prospector": return "Prospector";
       case "user": return "Cliente";
@@ -135,22 +136,26 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
                 </Link>
               </SidebarMenuItem>
             )}
-            <SidebarMenuItem>
-              <Link href="/crm">
-                <SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}>
-                  <UsersRound />
-                  CRM
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <Link href="/disparos">
-                <SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}>
-                  <Send />
-                  Disparos
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
+            {appUser?.canViewCrm && (
+              <SidebarMenuItem>
+                <Link href="/crm">
+                  <SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}>
+                    <UsersRound />
+                    CRM
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
+             {(userAppRole === 'admin' || userAppRole === 'superadmin') && (
+              <SidebarMenuItem>
+                <Link href="/disparos">
+                  <SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}>
+                    <Send />
+                    Disparos
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+             )}
             <SidebarMenuItem>
               <Link href="/carteira">
                 <SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}>
@@ -159,7 +164,7 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
-            {userAppRole === 'admin' && (
+            {(userAppRole === 'admin' || userAppRole === 'superadmin') && (
               <SidebarMenuItem>
                 <Link href="/admin/dashboard">
                   <SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin">
@@ -177,14 +182,16 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <Link href="/career-plan">
-                <SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}>
-                  <Rocket />
-                  Plano de Carreira
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
+            {appUser?.canViewCareerPlan && (
+              <SidebarMenuItem>
+                <Link href="/career-plan">
+                  <SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}>
+                    <Rocket />
+                    Plano de Carreira
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <Link href="/profile">
                 <SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}>

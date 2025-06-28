@@ -2,7 +2,7 @@
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
-import type { AppUser, FirestoreUser } from '@/types/user';
+import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import type { LeadWithId } from '@/types/crm';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
@@ -14,7 +14,7 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   appUser: AppUser | null;
   isLoadingAuth: boolean;
-  userAppRole: 'admin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup' | null;
+  userAppRole: UserType | null;
   allFirestoreUsers: FirestoreUser[];
   isLoadingAllUsers: boolean;
   fetchAllAppUsers: () => Promise<void>;
@@ -40,6 +40,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
+      if (user.email === 'lucasmoura@sentenergia.com') {
+        const firestoreData = userDocSnap.exists() ? userDocSnap.data() as FirestoreUser : {};
+        return {
+          uid: user.uid,
+          email: user.email,
+          displayName: firestoreData.displayName || user.displayName || "Super Admin",
+          photoURL: firestoreData.photoURL || user.photoURL,
+          type: 'superadmin',
+          cpf: firestoreData.cpf,
+          phone: firestoreData.phone,
+          personalBalance: firestoreData.personalBalance || 0,
+          mlmBalance: firestoreData.mlmBalance || 0,
+          createdAt: (firestoreData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+          lastSignInTime: (firestoreData.lastSignInTime as Timestamp)?.toDate().toISOString() || user.metadata.lastSignInTime,
+          canViewLeadPhoneNumber: true,
+          canViewCareerPlan: true,
+          canViewCrm: true,
+        };
+      }
+      
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const createdAtTimestamp = firestoreUserData.createdAt as Timestamp;
@@ -57,21 +77,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
           lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : (user.metadata.lastSignInTime || undefined),
           canViewLeadPhoneNumber: firestoreUserData.canViewLeadPhoneNumber || false,
+          canViewCareerPlan: firestoreUserData.canViewCareerPlan || false,
+          canViewCrm: firestoreUserData.canViewCrm || false,
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
-        if (user.email === 'lucasmoura@sentenergia.com') {
-          return {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "Admin Lucas",
-            type: 'admin',
-            personalBalance: 0,
-            mlmBalance: 0,
-            createdAt: new Date().toISOString(),
-            canViewLeadPhoneNumber: true,
-          };
-        }
         return { // Fallback for users without a Firestore doc (pending setup)
             uid: user.uid,
             email: user.email,
@@ -82,6 +92,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             mlmBalance: 0,
             createdAt: new Date().toISOString(),
             canViewLeadPhoneNumber: false,
+            canViewCrm: false,
+            canViewCareerPlan: false,
         };
       }
     } catch (error) {
@@ -230,9 +242,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   useEffect(() => {
-    if (userAppRole === 'admin' && !isLoadingAuth) {
+    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
         fetchAllAppUsers();
-    } else if (userAppRole !== 'admin') {
+    } else if (!isLoadingAuth) {
         setAllFirestoreUsers([]);
         setIsLoadingAllUsers(false);
     }

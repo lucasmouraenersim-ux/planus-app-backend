@@ -1,4 +1,3 @@
-
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -159,7 +158,7 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
 }
 
 // --- User Management ---
-export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type' | 'canViewLeadPhoneNumber'>>): Promise<void> {
+export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type' | 'canViewLeadPhoneNumber' | 'canViewCareerPlan' | 'canViewCrm'>>): Promise<void> {
   if (!userId) throw new Error("User ID is required.");
   const userRef = doc(db, "users", userId);
   
@@ -176,6 +175,12 @@ export async function updateUser(userId: string, updates: Partial<Pick<Firestore
   }
   if (updates.canViewLeadPhoneNumber !== undefined) {
     finalUpdates.canViewLeadPhoneNumber = updates.canViewLeadPhoneNumber;
+  }
+  if (updates.canViewCareerPlan !== undefined) {
+    finalUpdates.canViewCareerPlan = updates.canViewCareerPlan;
+  }
+  if (updates.canViewCrm !== undefined) {
+    finalUpdates.canViewCrm = updates.canViewCrm;
   }
 
   if (Object.keys(finalUpdates).length > 0) {

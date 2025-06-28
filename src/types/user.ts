@@ -1,7 +1,7 @@
 // src/types/user.ts
 import type { Timestamp } from 'firebase/firestore';
 
-export type UserType = 'admin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup';
+export type UserType = 'admin' | 'superadmin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup';
 
 // Represents the data structure for a user in Firestore
 export type FirestoreUser = {
@@ -19,7 +19,9 @@ export type FirestoreUser = {
   uplineUid?: string; 
   downlineUids?: string[]; 
   mlmLevel?: number;
-  canViewLeadPhoneNumber?: boolean; // New field
+  canViewLeadPhoneNumber?: boolean;
+  canViewCareerPlan?: boolean; // New field
+  canViewCrm?: boolean; // New field
 };
 
 // User object available in the auth context or passed as props
@@ -35,5 +37,7 @@ export type AppUser = {
   mlmBalance: number;    // Should have a default in context if possibly undefined
   createdAt?: Timestamp | string; // Make createdAt optional or ensure it's always string from context
   lastSignInTime?: string;
-  canViewLeadPhoneNumber?: boolean; // New field
+  canViewLeadPhoneNumber?: boolean;
+  canViewCareerPlan?: boolean; // New field
+  canViewCrm?: boolean; // New field
 };
