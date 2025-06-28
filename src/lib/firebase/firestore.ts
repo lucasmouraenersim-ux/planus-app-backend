@@ -12,13 +12,15 @@ import { uploadFile } from './storage';
 export async function createCrmLead(
   leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt'>,
   photoDocumentFile?: File, 
-  billDocumentFile?: File
+  billDocumentFile?: File,
+  legalRepresentativeDocumentFile?: File,
+  otherDocumentsFile?: File
 ): Promise<LeadWithId> {
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error("Usuário não autenticado para criar o lead.");
 
   // Prepare data, excluding file URLs which are added later
-  const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl'> = {
+  const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl' | 'legalRepresentativeDocumentUrl' | 'otherDocumentsUrl'> = {
     ...leadData,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
@@ -39,6 +41,14 @@ export async function createCrmLead(
   if (billDocumentFile) {
     const billPath = `crm_lead_documents/${docRef.id}/bill_${billDocumentFile.name}`;
     updates.billDocumentUrl = await uploadFile(billDocumentFile, billPath);
+  }
+  if (legalRepresentativeDocumentFile) {
+    const legalRepDocPath = `crm_lead_documents/${docRef.id}/legal_rep_doc_${legalRepresentativeDocumentFile.name}`;
+    updates.legalRepresentativeDocumentUrl = await uploadFile(legalRepresentativeDocumentFile, legalRepDocPath);
+  }
+  if (otherDocumentsFile) {
+    const otherDocsPath = `crm_lead_documents/${docRef.id}/other_docs_${otherDocumentsFile.name}`;
+    updates.otherDocumentsUrl = await uploadFile(otherDocumentsFile, otherDocsPath);
   }
 
   // Update the document with file URLs if any were uploaded
@@ -81,7 +91,9 @@ export async function updateCrmLeadDetails(
   leadId: string,
   updates: Partial<Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>>,
   photoFile?: File,
-  billFile?: File
+  billFile?: File,
+  legalRepresentativeDocumentFile?: File,
+  otherDocumentsFile?: File
 ): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
@@ -98,6 +110,15 @@ export async function updateCrmLeadDetails(
   if (billFile) {
     const billPath = `crm_lead_documents/${leadId}/bill_${billFile.name}`;
     finalUpdates.billDocumentUrl = await uploadFile(billFile, billPath);
+  }
+
+  if (legalRepresentativeDocumentFile) {
+    const legalRepDocPath = `crm_lead_documents/${leadId}/legal_rep_doc_${legalRepresentativeDocumentFile.name}`;
+    finalUpdates.legalRepresentativeDocumentUrl = await uploadFile(legalRepresentativeDocumentFile, legalRepDocPath);
+  }
+  if (otherDocumentsFile) {
+    const otherDocsPath = `crm_lead_documents/${leadId}/other_docs_${otherDocumentsFile.name}`;
+    finalUpdates.otherDocumentsUrl = await uploadFile(otherDocumentsFile, otherDocsPath);
   }
 
   // Always update lastContact timestamp on any edit

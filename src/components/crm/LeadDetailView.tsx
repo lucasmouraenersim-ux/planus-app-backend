@@ -15,7 +15,7 @@ import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
@@ -215,15 +215,26 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   <p><strong>Email:</strong> {lead.email || 'N/A'}</p>
                   <p><strong>Telefone:</strong> {lead.phone || 'N/A'}</p>
-                  <p><strong>Naturalidade:</strong> {lead.naturality || 'N/A'}</p>
-                  <p><strong>Estado Civil:</strong> {lead.maritalStatus || 'N/A'}</p>
-                  <p><strong>Profissão:</strong> {lead.profession || 'N/A'}</p>
                   <p><strong>Fonte do Lead:</strong> {lead.leadSource || 'N/A'}</p>
+                  {lead.customerType === 'pf' && (
+                    <>
+                      <p><strong>CPF:</strong> {lead.cpf || 'N/A'}</p>
+                      <p><strong>Naturalidade:</strong> {lead.naturality || 'N/A'}</p>
+                      <p><strong>Estado Civil:</strong> {lead.maritalStatus || 'N/A'}</p>
+                      <p><strong>Profissão:</strong> {lead.profession || 'N/A'}</p>
+                    </>
+                  )}
+                  {lead.customerType === 'pj' && (
+                    <>
+                      <p><strong>CNPJ:</strong> {lead.cnpj || 'N/A'}</p>
+                      <p><strong>Inscrição Estadual:</strong> {lead.stateRegistration || 'N/A'}</p>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 pt-2">
                   {lead.photoDocumentUrl && (
                     <a href={lead.photoDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
-                      <Button variant="outline" size="sm"><FileText className="w-3.5 h-3.5 mr-2"/>Ver Documento</Button>
+                      <Button variant="outline" size="sm"><FileText className="w-3.5 h-3.5 mr-2"/>Ver Doc. Cliente</Button>
                     </a>
                   )}
                   {lead.billDocumentUrl && (
@@ -233,6 +244,40 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                   )}
                 </div>
                 {lead.correctionReason && <p className="pt-2 text-amber-600"><strong>Motivo Correção:</strong> {lead.correctionReason}</p>}
+              </CardContent>
+            </Card>
+          )}
+
+          {isAdmin && lead.customerType === 'pj' && (
+            <Card className="mb-4 bg-background/50 border-border">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base text-foreground">Dados do Representante Legal</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-2 px-4 pb-3">
+                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    <p><strong>Nome:</strong> {lead.legalRepresentativeName || 'N/A'}</p>
+                    <p><strong>CPF:</strong> {lead.legalRepresentativeCpf || 'N/A'}</p>
+                    <p><strong>RG:</strong> {lead.legalRepresentativeRg || 'N/A'}</p>
+                    <p><strong>Endereço:</strong> {lead.legalRepresentativeAddress || 'N/A'}</p>
+                    <p><strong>Email:</strong> {lead.legalRepresentativeEmail || 'N/A'}</p>
+                    <p><strong>Telefone:</strong> {lead.legalRepresentativePhone || 'N/A'}</p>
+                    <p><strong>Estado Civil:</strong> {lead.legalRepresentativeMaritalStatus || 'N/A'}</p>
+                    <p><strong>Data de Nascimento:</strong> {lead.legalRepresentativeBirthDate || 'N/A'}</p>
+                    <p><strong>Profissão:</strong> {lead.legalRepresentativeProfession || 'N/A'}</p>
+                    <p><strong>Nacionalidade:</strong> {lead.legalRepresentativeNationality || 'N/A'}</p>
+                 </div>
+                 <div className="flex items-center gap-4 pt-2">
+                    {lead.legalRepresentativeDocumentUrl && (
+                        <a href={lead.legalRepresentativeDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                            <Button variant="outline" size="sm"><UserSquare className="w-3.5 h-3.5 mr-2"/>Ver Doc. Representante</Button>
+                        </a>
+                    )}
+                    {lead.otherDocumentsUrl && (
+                        <a href={lead.otherDocumentsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                            <Button variant="outline" size="sm"><Landmark className="w-3.5 h-3.5 mr-2"/>Ver Demais Docs.</Button>
+                        </a>
+                    )}
+                  </div>
               </CardContent>
             </Card>
           )}

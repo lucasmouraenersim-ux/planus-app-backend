@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 
 const leadFormSchema = z.object({
@@ -59,8 +60,24 @@ const leadFormSchema = z.object({
   profession: z.string().optional(),
   
   correctionReason: z.string().optional(),
+  
+  // PJ Legal Rep fields
+  legalRepresentativeName: z.string().optional(),
+  legalRepresentativeCpf: z.string().optional(),
+  legalRepresentativeRg: z.string().optional(),
+  legalRepresentativeAddress: z.string().optional(),
+  legalRepresentativeEmail: z.string().email("Email do representante é inválido.").optional().or(z.literal('')),
+  legalRepresentativePhone: z.string().optional(),
+  legalRepresentativeMaritalStatus: z.string().optional(),
+  legalRepresentativeBirthDate: z.string().optional(),
+  legalRepresentativeProfession: z.string().optional(),
+  legalRepresentativeNationality: z.string().optional(),
+
+  // File fields
   photoDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
   billDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
+  legalRepresentativeDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
+  otherDocumentsFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
 }).refine(data => {
     if (data.customerType === 'pf') return !!data.cpf && data.cpf.replace(/\D/g, '').length === 11;
     return true;
@@ -79,7 +96,7 @@ const leadFormSchema = z.object({
 type LeadFormData = z.infer<typeof leadFormSchema>;
 
 interface LeadFormProps {
-  onSubmit: (data: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile'>, photoFile?: File, billFile?: File) => Promise<void>;
+  onSubmit: (data: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile'>, photoFile?: File, billFile?: File, legalRepFile?: File, otherDocsFile?: File) => Promise<void>;
   onCancel: () => void;
   initialData?: Partial<LeadDocumentData & { id?: string }>; // For editing
   isSubmitting?: boolean;
@@ -107,20 +124,38 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
       naturality: initialData?.naturality || "",
       maritalStatus: initialData?.maritalStatus || "",
       profession: initialData?.profession || "",
+      legalRepresentativeName: initialData?.legalRepresentativeName || "",
+      legalRepresentativeCpf: initialData?.legalRepresentativeCpf || "",
+      legalRepresentativeRg: initialData?.legalRepresentativeRg || "",
+      legalRepresentativeAddress: initialData?.legalRepresentativeAddress || "",
+      legalRepresentativeEmail: initialData?.legalRepresentativeEmail || "",
+      legalRepresentativePhone: initialData?.legalRepresentativePhone || "",
+      legalRepresentativeMaritalStatus: initialData?.legalRepresentativeMaritalStatus || "",
+      legalRepresentativeBirthDate: initialData?.legalRepresentativeBirthDate || "",
+      legalRepresentativeProfession: initialData?.legalRepresentativeProfession || "",
+      legalRepresentativeNationality: initialData?.legalRepresentativeNationality || "",
     },
   });
 
   const photoFileRef = form.register("photoDocumentFile");
   const billFileRef = form.register("billDocumentFile");
+  const legalRepFileRef = form.register("legalRepresentativeDocumentFile");
+  const otherDocsFileRef = form.register("otherDocumentsFile");
 
 
   const handleSubmit = async (values: LeadFormData) => {
     const photoFile = values.photoDocumentFile?.[0];
     const billFile = values.billDocumentFile?.[0];
-    const dataToSubmit: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile'> = { ...values };
+    const legalRepFile = values.legalRepresentativeDocumentFile?.[0];
+    const otherDocsFile = values.otherDocumentsFile?.[0];
+
+    const dataToSubmit: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile'> = { ...values };
     delete (dataToSubmit as any).photoDocumentFile;
     delete (dataToSubmit as any).billDocumentFile;
-    await onSubmit(dataToSubmit, photoFile, billFile);
+    delete (dataToSubmit as any).legalRepresentativeDocumentFile;
+    delete (dataToSubmit as any).otherDocumentsFile;
+    
+    await onSubmit(dataToSubmit, photoFile, billFile, legalRepFile, otherDocsFile);
   };
   
   const customerType = form.watch('customerType');
@@ -390,11 +425,11 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                   name="photoDocumentFile"
                   render={() => (
                     <FormItem>
-                        <FormLabel>{customerType === 'pj' ? 'Contrato Social ou Doc do Sócio' : 'Documento de Identidade (Foto/PDF)'}</FormLabel>
+                        <FormLabel>{customerType === 'pj' ? 'Contrato Social da Empresa' : 'Documento de Identidade (Foto/PDF)'}</FormLabel>
                         <FormControl><Input type="file" {...photoFileRef} /></FormControl>
                         <FormDescription>
                           {customerType === 'pj' 
-                            ? "Anexe o contrato social da empresa ou o documento de um dos sócios."
+                            ? "Anexe o contrato social da empresa ou documento equivalente."
                             : "Anexe uma foto ou PDF do documento do cliente (RG ou CNH)."
                           }
                         </FormDescription>
@@ -402,6 +437,35 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     </FormItem>
                   )}
                 />
+                
+                {customerType === 'pj' && (
+                  <Card className="p-4 bg-background/50">
+                    <CardHeader className="p-0 mb-4">
+                      <CardTitle className="text-lg text-primary">Dados do Representante Legal</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0 space-y-4">
+                      <FormField control={form.control} name="legalRepresentativeName" render={({ field }) => (<FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Nome completo do representante" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="legalRepresentativeCpf" render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input placeholder="CPF do representante" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="legalRepresentativeRg" render={({ field }) => (<FormItem><FormLabel>RG e Órgão Emissor</FormLabel><FormControl><Input placeholder="Ex: 1234567 SSP/MT" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      </div>
+                      <FormField control={form.control} name="legalRepresentativeAddress" render={({ field }) => (<FormItem><FormLabel>Endereço</FormLabel><FormControl><Input placeholder="Endereço do representante" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="legalRepresentativeEmail" render={({ field }) => (<FormItem><FormLabel>E-mail</FormLabel><FormControl><Input type="email" placeholder="email@representante.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="legalRepresentativePhone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField control={form.control} name="legalRepresentativeMaritalStatus" render={({ field }) => ( <FormItem><FormLabel>Estado Civil</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl><SelectContent><SelectItem value="solteiro">Solteiro(a)</SelectItem><SelectItem value="casado">Casado(a)</SelectItem><SelectItem value="divorciado">Divorciado(a)</SelectItem><SelectItem value="viuvo">Viúvo(a)</SelectItem><SelectItem value="uniao_estavel">União Estável</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+                         <FormField control={form.control} name="legalRepresentativeBirthDate" render={({ field }) => (<FormItem><FormLabel>Data de Nascimento</FormLabel><FormControl><Input placeholder="DD/MM/AAAA" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="legalRepresentativeProfession" render={({ field }) => (<FormItem><FormLabel>Profissão</FormLabel><FormControl><Input placeholder="Profissão do representante" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="legalRepresentativeNationality" render={({ field }) => (<FormItem><FormLabel>Nacionalidade</FormLabel><FormControl><Input placeholder="Ex: Brasileiro(a)" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      </div>
+                      <FormField control={form.control} name="legalRepresentativeDocumentFile" render={() => (<FormItem><FormLabel>Documento(s) do Representante</FormLabel><FormControl><Input type="file" {...legalRepFileRef} /></FormControl><FormDescription>Anexe o documento de identidade (RG/CNH) do representante.</FormDescription><FormMessage /></FormItem>)} />
+                    </CardContent>
+                  </Card>
+                )}
 
                 <FormField
                   control={form.control}
@@ -415,6 +479,10 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     </FormItem>
                   )}
                 />
+                
+                {customerType === 'pj' && (
+                   <FormField control={form.control} name="otherDocumentsFile" render={() => (<FormItem><FormLabel>Demais Documentos (Opcional)</FormLabel><FormControl><Input type="file" {...otherDocsFileRef} /></FormControl><FormDescription>Anexe outros documentos relevantes para o cliente PJ.</FormDescription><FormMessage /></FormItem>)} />
+                )}
 
                 {initialData?.id && ( // Only show for existing leads being edited
                     <FormField

@@ -58,9 +58,9 @@ export interface LeadDocumentData {
   needsAdminApproval?: boolean; // Default: false. true se o lead está em um estágio que requer aprovação
   photoDocumentUrl?: string; // URL do Firebase Storage para o documento de foto/identidade
   billDocumentUrl?: string; // URL do Firebase Storage para a fatura de energia
-  naturality?: string; // Naturalidade do cliente
-  maritalStatus?: string; // Estado civil
-  profession?: string; // Profissão
+  naturality?: string; // Naturalidade do cliente PF
+  maritalStatus?: string; // Estado civil do cliente PF
+  profession?: string; // Profissão do cliente PF
   createdAt: Timestamp | string; // Obrigatório - Timestamp for Firestore, string for client
   lastContact: Timestamp | string; // Obrigatório - Timestamp for Firestore, string for client
   userId: string; // UID do Firebase Auth do vendedor/usuário que criou o lead - Obrigatório
@@ -69,6 +69,20 @@ export interface LeadDocumentData {
   cpf?: string; // New: CPF para Pessoa Física
   cnpj?: string; // New: CNPJ para Pessoa Jurídica
   stateRegistration?: string; // New: Inscrição Estadual para PJ
+
+  // Legal Representative Fields (for PJ)
+  legalRepresentativeName?: string;
+  legalRepresentativeCpf?: string;
+  legalRepresentativeRg?: string;
+  legalRepresentativeAddress?: string;
+  legalRepresentativeEmail?: string;
+  legalRepresentativePhone?: string;
+  legalRepresentativeMaritalStatus?: string;
+  legalRepresentativeBirthDate?: string;
+  legalRepresentativeProfession?: string;
+  legalRepresentativeNationality?: string;
+  legalRepresentativeDocumentUrl?: string; // For the "Documento(s)" file
+  otherDocumentsUrl?: string; // For "Demais documentos"
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt'> {
