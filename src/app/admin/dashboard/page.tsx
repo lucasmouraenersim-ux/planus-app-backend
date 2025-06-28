@@ -12,12 +12,12 @@ export default function AdminDashboardPage() {
 
   // Effect to fetch users if admin is already logged in but allFirestoreUsers might not be populated initially
   useEffect(() => {
-    if (userAppRole === 'admin' && !isLoadingAllUsers && allFirestoreUsers.length === 0) {
+    if ((userAppRole === 'admin' || userAppRole === 'superadmin') && !isLoadingAllUsers && allFirestoreUsers.length === 0) {
       fetchAllAppUsers();
     }
   }, [userAppRole, isLoadingAllUsers, allFirestoreUsers.length, fetchAllAppUsers]);
 
-  if (isLoadingAuth || (userAppRole === 'admin' && isLoadingAllUsers)) {
+  if (isLoadingAuth || ((userAppRole === 'admin' || userAppRole === 'superadmin') && isLoadingAllUsers)) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
         <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
@@ -26,7 +26,7 @@ export default function AdminDashboardPage() {
     );
   }
 
-  if (userAppRole !== 'admin' || !appUser) {
+  if ((userAppRole !== 'admin' && userAppRole !== 'superadmin') || !appUser) {
     return (
       <div className="flex flex-col items-center justify-center h-screen text-destructive">
         <ShieldCheck size={64} className="mb-4" />
