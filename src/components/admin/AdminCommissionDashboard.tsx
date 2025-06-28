@@ -8,9 +8,8 @@ import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, setDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -18,6 +17,7 @@ import type { LeadWithId } from '@/types/crm';
 import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
+import { createUser } from '@/actions/admin/createUser';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -72,7 +72,7 @@ const addUserFormSchema = z.object({
   email: z.string().email("Email inválido."),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
   phone: z.string().optional(),
-  cpf: z.string().min(11, "CPF deve ter 11 dígitos.").max(14, "CPF inválido.").regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$|^\d{11}$/, "Formato de CPF inválido."),
+  cpf: z.string().min(11, "CPF deve ter 11 dígitos.").max(14, "Formato de CPF inválido.").regex(/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$|^\d{11}$/, "Formato de CPF inválido."),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
 });
 type AddUserFormData = z.infer<typeof addUserFormSchema>;
@@ -193,7 +193,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       const matchesSearch = 
         (user.displayName?.toLowerCase().includes(searchTermLower)) ||
         (user.email?.toLowerCase().includes(searchTermLower)) ||
-        (user.cpf?.replace(/\D/g, '').includes(searchTermLower.replace(/\D/g, '')));
+        (user.cpf?.replace(/\D/g, '').includes(searchTermLower.replace(/\D/g, ')));
       const matchesType = userTypeFilter === 'all' || user.type === userTypeFilter;
       return matchesSearch && matchesType;
     });
@@ -202,52 +202,27 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const handleAddUser = async (data: AddUserFormData) => {
     setIsSubmittingUser(true);
     try {
-      const emailExists = initialUsers.some(user => user.email === data.email);
-      const cpfExists = initialUsers.some(user => user.cpf === data.cpf.replace(/\D/g, ''));
-      if (emailExists) {
-        toast({ title: "Erro ao Criar Usuário", description: "Este email já está cadastrado.", variant: "destructive" });
-        setIsSubmittingUser(false);
-        return;
-      }
-      if (cpfExists) {
-        toast({ title: "Erro ao Criar Usuário", description: "Este CPF já está cadastrado.", variant: "destructive" });
-        setIsSubmittingUser(false);
-        return;
-      }
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const firebaseUserAuth = userCredential.user;
+      const result = await createUser(data);
 
-      const newUserForFirestore: Partial<FirestoreUser> & { uid: string; email: string; type: UserType; createdAt: Timestamp } = {
-        uid: firebaseUserAuth.uid,
-        email: data.email,
-        displayName: data.displayName || data.email.split('@')[0],
-        cpf: data.cpf.replace(/\D/g, ''),
-        type: data.type,
-        createdAt: Timestamp.now(),
-        photoURL: `https://placehold.co/40x40.png?text=${(data.displayName || data.email).charAt(0).toUpperCase()}`,
-        personalBalance: 0,
-        mlmBalance: 0,
-        canViewLeadPhoneNumber: false,
-        canViewCrm: false,
-        canViewCareerPlan: false,
-      };
-
-      if (data.phone) {
-        newUserForFirestore.phone = data.phone.replace(/\D/g, '');
+      if (result.success) {
+        await refreshUsers();
+        toast({ title: "Usuário Criado", description: result.message });
+        setIsAddUserModalOpen(false);
+        addUserForm.reset({ type: 'vendedor', cpf: '', displayName: '', email: '', password: '', phone: '' });
+      } else {
+        toast({
+          title: "Erro ao Criar Usuário",
+          description: result.message,
+          variant: "destructive",
+        });
       }
-      
-      await setDoc(doc(db, "users", firebaseUserAuth.uid), newUserForFirestore);
-      
-      await refreshUsers();
-      toast({ title: "Usuário Criado", description: `${data.email} registrado com sucesso.` });
-      setIsAddUserModalOpen(false);
-      addUserForm.reset({ type: 'vendedor', cpf: '', displayName: '', email: '', password: '', phone: '' });
-    } catch (error: any) {
+    } catch (error) {
       console.error("CRITICAL ERROR adding user:", error);
-      let errorMessage = "Falha ao criar usuário. Tente novamente.";
-      if (error.code === 'auth/email-already-in-use') errorMessage = "Este email já está em uso no Firebase Auth.";
-      if (error.code === 'auth/weak-password') errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
-      toast({ title: "Erro ao Criar Usuário", description: errorMessage, variant: "destructive" });
+      toast({
+        title: "Erro de Rede",
+        description: "Não foi possível conectar ao servidor para criar o usuário.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmittingUser(false);
     }
