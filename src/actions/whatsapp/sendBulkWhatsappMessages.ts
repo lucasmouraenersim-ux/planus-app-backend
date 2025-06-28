@@ -71,13 +71,17 @@ export async function sendBulkWhatsappMessages(input: SendBulkWhatsappMessagesIn
       const chunk = leads.slice(i, i + numberOfSimultaneousWhatsapps);
       console.log(`[WHATSAPP_BULK_SEND] Processing chunk starting at index ${i}. Chunk size: ${chunk.length}`);
 
-      const sendPromises = chunk.map(lead => 
-        sendWhatsappMessage({ 
+      const sendPromises = chunk.map(lead => {
+        // Conditionally add body parameters based on the template name.
+        const bodyParams = templateName === 'leadsquentes' ? [lead.name] : undefined;
+        
+        return sendWhatsappMessage({ 
             to: lead.phone,
             message: {
                 template: {
                     name: templateName,
                     headerImageUrl: headerImageUrl,
+                    bodyParams: bodyParams
                 }
             }
         }).then(result => {
@@ -90,7 +94,7 @@ export async function sendBulkWhatsappMessages(input: SendBulkWhatsappMessagesIn
         }).catch(e => {
           console.error(`[WHATSAPP_BULK_SEND] Critical error sending to ${lead.phone}. Reason:`, e);
         })
-      );
+      });
 
       await Promise.all(sendPromises);
 

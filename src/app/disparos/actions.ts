@@ -1,9 +1,8 @@
-
 'use server';
 
 import { z } from 'zod';
 import Papa from 'papaparse';
-import { type OutboundLead } from '@/ai/flows/send-bulk-whatsapp-messages-flow';
+import { type OutboundLead } from '@/actions/whatsapp/sendBulkWhatsappMessages';
 
 const CsvRowSchema = z.object({
   nome: z.string().optional(),
