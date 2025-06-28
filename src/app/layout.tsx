@@ -136,7 +136,7 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
                 </Link>
               </SidebarMenuItem>
             )}
-            {appUser?.canViewCrm && (
+            {(userAppRole === 'admin' || userAppRole === 'superadmin' || appUser?.canViewCrm) && (
               <SidebarMenuItem>
                 <Link href="/crm">
                   <SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}>
