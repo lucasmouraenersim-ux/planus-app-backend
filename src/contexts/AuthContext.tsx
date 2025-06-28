@@ -167,10 +167,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!firebaseUser) throw new Error("User not authenticated.");
     const userDocRef = doc(db, "users", firebaseUser.uid);
     try {
-      await updateDoc(userDocRef, {
+      // Use setDoc with merge: true to create the document if it doesn't exist,
+      // or update it if it does. This is safer than updateDoc.
+      await setDoc(userDocRef, {
         termsAcceptedAt: Timestamp.now()
+      }, { merge: true });
+      
+      setAppUser(prev => {
+        if (!prev) return null;
+        return { ...prev, termsAcceptedAt: new Date().toISOString() };
       });
-      setAppUser(prev => prev ? { ...prev, termsAcceptedAt: new Date().toISOString() } : null);
     } catch (error) {
       console.error("Error accepting terms:", error);
       throw new Error("Failed to accept terms.");
