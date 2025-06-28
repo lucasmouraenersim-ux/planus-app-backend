@@ -44,21 +44,36 @@ const SendWhatsappMessageOutputSchema = z.object({
 export type SendWhatsappMessageOutput = z.infer<typeof SendWhatsappMessageOutputSchema>;
 
 export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Promise<SendWhatsappMessageOutput> {
-  // Robust phone number normalization
-  let to = input.to.replace(/\D/g, ''); // 1. Remove non-digits
-  
-  // 2. Add country code if missing
-  if (to.length === 10 || to.length === 11) {
-      to = '55' + to;
-  }
+  // 1. Normalize phone number
+  let to = input.to.replace(/\D/g, ''); // Remove all non-digits
 
-  // 3. Add the 9th digit for mobile numbers if missing
-  if (to.startsWith('55') && to.length === 12) {
-    const areaCode = to.substring(2, 4);
-    const numberPart = to.substring(4);
-    const correctedTo = `55${areaCode}9${numberPart}`;
-    console.log(`[WHATSAPP_API_FIX] Corrected phone number from ${input.to} to ${correctedTo}`);
-    to = correctedTo;
+  // 2. Handle numbers with country code already
+  if (to.startsWith('55')) {
+    if (to.length === 12) { // 55 + DD + 8 digits (Possible mobile needing '9')
+      const ddd = to.substring(2, 4);
+      const numberPart = to.substring(4);
+      // Only add the 9th digit if the number is mobile (starts with 6, 7, 8, or 9)
+      if (/^[6-9]/.test(numberPart)) {
+        to = `55${ddd}9${numberPart}`;
+        console.log(`[WHATSAPP_API_FIX] Corrected 12-digit mobile from ${input.to} to ${to}`);
+      }
+    }
+    // if length is 13 (55 + DD + 9 digits), it's already correct.
+    // if length is 12 and not mobile, it's a landline and correct.
+  } 
+  // 3. Handle numbers without country code
+  else if (to.length === 11) { // DD + 9 digits
+    to = `55${to}`;
+  } 
+  else if (to.length === 10) { // DD + 8 digits
+    const ddd = to.substring(0, 2);
+    const numberPart = to.substring(2);
+    if (/^[6-9]/.test(numberPart)) { // It's a mobile number
+      to = `55${ddd}9${numberPart}`;
+       console.log(`[WHATSAPP_API_FIX] Corrected 10-digit mobile from ${input.to} to ${to}`);
+    } else { // It's a landline
+      to = `55${to}`;
+    }
   }
 
   // Using hardcoded values as a temporary measure to unblock the user.
