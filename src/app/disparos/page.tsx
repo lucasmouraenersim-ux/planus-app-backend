@@ -1,6 +1,8 @@
+
 "use client";
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendBulkWhatsappMessages, type SendBulkWhatsappMessagesOutput, type SendingConfiguration, type OutboundLead } from '@/actions/whatsapp/sendBulkWhatsappMessages';
 import { uploadLeadsFromCSV } from './actions';
@@ -13,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download, ShieldAlert } from 'lucide-react';
+import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download, ShieldAlert, Eye } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +24,11 @@ const TEMPLATE_OPTIONS = [
   { value: 'novocontato', label: 'Novo Contato (Reduza até 25%)' },
   { value: 'leadsquentes', label: 'Leads Quentes (Reduza sua conta)' },
 ];
+
+const TEMPLATE_PREVIEWS: { [key: string]: string } = {
+  novocontato: 'https://raw.githubusercontent.com/LucasMouraChaser/apisent/f1998e7c61dee0c48333cf1353725d8fa880ad42/Captura%20de%20tela%202025-06-28%20133600.png',
+  leadsquentes: 'https://raw.githubusercontent.com/LucasMouraChaser/apisent/f1998e7c61dee0c48333cf1353725d8fa880ad42/Captura%20de%20tela%202025-06-28%20133756.png',
+};
 
 export default function DisparosPage() {
   const { fetchAllCrmLeadsGlobally, userAppRole, isLoadingAuth } = useAuth();
@@ -258,7 +265,8 @@ export default function DisparosPage() {
             <CardHeader>
               <CardTitle>2. Template da Mensagem</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-4">
+              <div>
                 <Label htmlFor="templateName">Selecione o Template</Label>
                 <Select
                   value={templateName}
@@ -275,6 +283,26 @@ export default function DisparosPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {templateName && (
+                <div className="pt-4 border-t">
+                  <Label className="flex items-center mb-2 text-muted-foreground">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Pré-visualização do Template
+                  </Label>
+                  <div className="p-2 border rounded-md bg-muted/30">
+                    <Image
+                      src={TEMPLATE_PREVIEWS[templateName]}
+                      alt={`Preview do template ${templateName}`}
+                      width={350}
+                      height={200}
+                      className="rounded-md object-contain mx-auto"
+                      data-ai-hint="whatsapp message preview"
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
           
