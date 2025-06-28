@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -98,7 +97,7 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
               <ExternalLink className="w-3 h-3 mr-2" />
               Ver Detalhes
             </Button>
-            {userAppRole === 'admin' && (
+            {(userAppRole === 'admin' || userAppRole === 'superadmin') && (
               <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
