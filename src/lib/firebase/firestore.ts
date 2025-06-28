@@ -1,3 +1,4 @@
+
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -16,41 +17,43 @@ export async function createCrmLead(
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error("Usuário não autenticado para criar o lead.");
 
-  const fullLeadData: Omit<LeadDocumentData, 'photoDocumentUrl' | 'billDocumentUrl' | 'signedAt'> = {
+  // Prepare data, excluding file URLs which are added later
+  const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl'> = {
     ...leadData,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
     createdAt: Timestamp.now(),
     lastContact: Timestamp.now(),
-    needsAdminApproval: leadData.needsAdminApproval ?? true, // Require approval for manual creation too
+    needsAdminApproval: leadData.needsAdminApproval ?? true, // Require approval for manual creation
   };
 
-  const docRef = await addDoc(collection(db, "crm_leads"), fullLeadData);
+  // Create document in Firestore to get an ID
+  const docRef = await addDoc(collection(db, "crm_leads"), baseLeadData);
   
-  let photoUrl, billUrl;
+  // Handle file uploads
   const updates: Partial<LeadDocumentData> = {};
-
   if (photoDocumentFile) {
-    photoUrl = await uploadFile(photoDocumentFile, `crm_lead_documents/${docRef.id}/photo_document/${photoDocumentFile.name}`);
-    updates.photoDocumentUrl = photoUrl;
+    const photoPath = `crm_lead_documents/${docRef.id}/photo_${photoDocumentFile.name}`;
+    updates.photoDocumentUrl = await uploadFile(photoDocumentFile, photoPath);
   }
   if (billDocumentFile) {
-    billUrl = await uploadFile(billDocumentFile, `crm_lead_documents/${docRef.id}/bill_document/${billDocumentFile.name}`);
-    updates.billDocumentUrl = billUrl;
+    const billPath = `crm_lead_documents/${docRef.id}/bill_${billDocumentFile.name}`;
+    updates.billDocumentUrl = await uploadFile(billDocumentFile, billPath);
   }
 
-  if (photoUrl || billUrl) {
+  // Update the document with file URLs if any were uploaded
+  if (Object.keys(updates).length > 0) {
     await updateDoc(docRef, updates);
   }
 
-  // Ensure createdAt and lastContact are strings for the return type
-  const createdAtStr = (fullLeadData.createdAt as Timestamp).toDate().toISOString();
-  const lastContactStr = (fullLeadData.lastContact as Timestamp).toDate().toISOString();
+  // Ensure returned object matches client-side type (string dates)
+  const createdAtStr = (baseLeadData.createdAt as Timestamp).toDate().toISOString();
+  const lastContactStr = (baseLeadData.lastContact as Timestamp).toDate().toISOString();
 
   return { 
-    ...(fullLeadData as LeadDocumentData), // Cast to include potential urls in type
+    id: docRef.id,
+    ...(baseLeadData as Omit<LeadDocumentData, 'id' | 'signedAt' | 'createdAt' | 'lastContact'>),
     ...updates,
-    id: docRef.id, 
     createdAt: createdAtStr,
     lastContact: lastContactStr,
   };
@@ -76,19 +79,31 @@ export async function updateCrmLeadStage(leadId: string, newStageId: StageId): P
 
 export async function updateCrmLeadDetails(
   leadId: string,
-  updates: Partial<Omit<LeadDocumentData, 'createdAt' | 'userId'>> & { lastContactIso: string }
+  updates: Partial<Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>>,
+  photoFile?: File,
+  billFile?: File
 ): Promise<void> {
-  console.log("Placeholder: updateCrmLeadDetails called for lead:", leadId, "with updates:", updates);
-  const { lastContactIso, ...otherUpdates } = updates;
-  // Normalize phone number if it's being updated
-  if (otherUpdates.phone) {
-    otherUpdates.phone = otherUpdates.phone.replace(/\D/g, '');
-  }
   const leadRef = doc(db, "crm_leads", leadId);
-  await updateDoc(leadRef, {
-    ...otherUpdates,
-    lastContact: Timestamp.fromDate(new Date(lastContactIso)),
-  });
+  const finalUpdates: { [key: string]: any } = { ...updates };
+
+  if (updates.phone) {
+    finalUpdates.phone = updates.phone.replace(/\D/g, '');
+  }
+  
+  if (photoFile) {
+    const photoPath = `crm_lead_documents/${leadId}/photo_${photoFile.name}`;
+    finalUpdates.photoDocumentUrl = await uploadFile(photoFile, photoPath);
+  }
+
+  if (billFile) {
+    const billPath = `crm_lead_documents/${leadId}/bill_${billFile.name}`;
+    finalUpdates.billDocumentUrl = await uploadFile(billFile, billPath);
+  }
+
+  // Always update lastContact timestamp on any edit
+  finalUpdates.lastContact = Timestamp.now();
+  
+  await updateDoc(leadRef, finalUpdates);
 }
 
 

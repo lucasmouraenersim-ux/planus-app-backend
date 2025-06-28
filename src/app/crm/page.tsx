@@ -156,10 +156,7 @@ function CrmPageContent() {
     setIsSubmitting(true);
     try {
       if (editingLead) {
-        await updateCrmLeadDetails(editingLead.id, {
-          ...formData,
-          lastContactIso: new Date().toISOString(),
-        });
+        await updateCrmLeadDetails(editingLead.id, formData, photoFile, billFile);
         toast({ title: "Lead Atualizado", description: `Os dados de "${formData.name}" foram salvos.` });
       } else {
         if (!appUser) throw new Error("Usuário não autenticado.");

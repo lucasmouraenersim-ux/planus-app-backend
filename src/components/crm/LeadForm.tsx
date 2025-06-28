@@ -52,8 +52,8 @@ const leadFormSchema = z.object({
   naturality: z.string().optional(),
   maritalStatus: z.string().optional(),
   profession: z.string().optional(),
-  // photoDocumentFile: typeof window === 'undefined' ? z.any().optional() : z.instanceof(FileList).optional(),
-  // billDocumentFile: typeof window === 'undefined' ? z.any().optional() : z.instanceof(FileList).optional(),
+  photoDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
+  billDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
 });
 
 type LeadFormData = z.infer<typeof leadFormSchema>;
@@ -91,10 +91,9 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
 
 
   const handleSubmit = async (values: LeadFormData) => {
-    // const photoFile = values.photoDocumentFile?.[0];
-    // const billFile = values.billDocumentFile?.[0];
-    // await onSubmit(values, photoFile, billFile);
-    await onSubmit(values); // Simplified for now
+    const photoFile = values.photoDocumentFile?.[0];
+    const billFile = values.billDocumentFile?.[0];
+    await onSubmit(values, photoFile, billFile);
   };
 
   return (
@@ -274,19 +273,31 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                 />
             </div>
 
-            <FormItem>
-                <FormLabel>Documento de Identidade (Foto/PDF)</FormLabel>
-                <FormControl><Input type="file" {...photoFileRef} /></FormControl>
-                <FormDescription>Anexe uma foto ou PDF do documento do cliente.</FormDescription>
-                <FormMessage />
-            </FormItem>
+            <FormField
+              control={form.control}
+              name="photoDocumentFile"
+              render={() => (
+                <FormItem>
+                    <FormLabel>Documento de Identidade (Foto/PDF)</FormLabel>
+                    <FormControl><Input type="file" {...photoFileRef} /></FormControl>
+                    <FormDescription>Anexe uma foto ou PDF do documento do cliente.</FormDescription>
+                    <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <FormItem>
-                <FormLabel>Fatura de Energia (PDF/Imagem)</FormLabel>
-                <FormControl><Input type="file" {...billFileRef} /></FormControl>
-                <FormDescription>Anexe a última fatura de energia do cliente.</FormDescription>
-                <FormMessage />
-            </FormItem>
+            <FormField
+              control={form.control}
+              name="billDocumentFile"
+              render={() => (
+                <FormItem>
+                    <FormLabel>Fatura de Energia (PDF/Imagem)</FormLabel>
+                    <FormControl><Input type="file" {...billFileRef} /></FormControl>
+                    <FormDescription>Anexe a última fatura de energia do cliente.</FormDescription>
+                    <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {initialData?.id && ( // Only show for existing leads being edited
                 <FormField

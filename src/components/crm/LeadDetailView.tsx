@@ -15,7 +15,7 @@ import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
@@ -205,6 +205,37 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <div className="flex items-center"><User className="w-4 h-4 mr-2 text-green-400" /><strong>Vendedor:</strong><span className="ml-2 text-foreground">{lead.sellerName}</span></div>
             <div className="flex items-center"><CalendarDays className="w-4 h-4 mr-2 text-purple-400" /><strong>Criado em:</strong><span className="ml-2 text-foreground">{format(parseISO(lead.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span></div>
           </div>
+
+          {isAdmin && (
+            <Card className="mb-4 bg-background/50 border-border">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base text-foreground">Detalhes Completos (Admin)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-2 px-4 pb-3">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <p><strong>Email:</strong> {lead.email || 'N/A'}</p>
+                  <p><strong>Telefone:</strong> {lead.phone || 'N/A'}</p>
+                  <p><strong>Naturalidade:</strong> {lead.naturality || 'N/A'}</p>
+                  <p><strong>Estado Civil:</strong> {lead.maritalStatus || 'N/A'}</p>
+                  <p><strong>Profissão:</strong> {lead.profession || 'N/A'}</p>
+                  <p><strong>Fonte do Lead:</strong> {lead.leadSource || 'N/A'}</p>
+                </div>
+                <div className="flex items-center gap-4 pt-2">
+                  {lead.photoDocumentUrl && (
+                    <a href={lead.photoDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><FileText className="w-3.5 h-3.5 mr-2"/>Ver Documento</Button>
+                    </a>
+                  )}
+                  {lead.billDocumentUrl && (
+                    <a href={lead.billDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                       <Button variant="outline" size="sm"><Banknote className="w-3.5 h-3.5 mr-2"/>Ver Fatura</Button>
+                    </a>
+                  )}
+                </div>
+                {lead.correctionReason && <p className="pt-2 text-amber-600"><strong>Motivo Correção:</strong> {lead.correctionReason}</p>}
+              </CardContent>
+            </Card>
+          )}
 
           {isAdmin && lead.needsAdminApproval && (
             <Card className="mb-4 border-amber-500 bg-amber-500/10">
