@@ -65,6 +65,10 @@ export interface LeadDocumentData {
   lastContact: Timestamp | string; // Obrigatório - Timestamp for Firestore, string for client
   userId: string; // UID do Firebase Auth do vendedor/usuário que criou o lead - Obrigatório
   signedAt?: Timestamp | string; // Data de assinatura do contrato
+  customerType?: 'pf' | 'pj'; // New: Pessoa Física ou Jurídica
+  cpf?: string; // New: CPF para Pessoa Física
+  cnpj?: string; // New: CNPJ para Pessoa Jurídica
+  stateRegistration?: string; // New: Inscrição Estadual para PJ
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt'> {
