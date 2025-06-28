@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState, useEffect, useRef } from 'react';
-import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
@@ -27,27 +27,6 @@ import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-// Client-side function to fetch chat history
-async function fetchChatHistoryClient(leadId: string): Promise<ChatMessageType[]> {
-    if (!leadId) return [];
-    
-    const chatDocRef = doc(db, "crm_lead_chats", leadId);
-    const chatDocSnap = await getDoc(chatDocRef);
-
-    if (!chatDocSnap.exists()) {
-        return [];
-    }
-    
-    const messagesData = chatDocSnap.data()?.messages || [];
-    
-    const formattedMessages: ChatMessageType[] = messagesData.map((msg: any) => ({
-      ...msg,
-      timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),
-    })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    
-    return formattedMessages;
-}
 
 
 interface LeadDetailViewProps {
@@ -76,35 +55,31 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
 
   useEffect(() => {
     if (!lead.id) return;
-
-    let isMounted = true;
-    const loadChat = async () => {
-      if (isMounted) setIsLoadingChat(true);
-      try {
-        const history = await fetchChatHistoryClient(lead.id);
-        if (isMounted) {
-          setChatMessages(history);
-        }
-      } catch (error) {
-        console.error("Error fetching chat history:", error);
-        if (isMounted) {
-          setChatError("Não foi possível carregar o histórico de mensagens.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingChat(false);
-        }
-      }
-    };
     
-    loadChat(); // Initial load
-    const intervalId = setInterval(loadChat, 5000); // Poll every 5 seconds for updates
+    setIsLoadingChat(true);
+    const chatDocRef = doc(db, "crm_lead_chats", lead.id);
 
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
-  }, [lead.id]);
+    const unsubscribe = onSnapshot(chatDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const messagesData = docSnap.data()?.messages || [];
+            const formattedMessages: ChatMessageType[] = messagesData.map((msg: any) => ({
+                ...msg,
+                timestamp: (msg.timestamp as Timestamp).toDate().toISOString(),
+            })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            setChatMessages(formattedMessages);
+        } else {
+            setChatMessages([]);
+        }
+        setIsLoadingChat(false);
+    }, (error) => {
+        console.error("Error fetching chat history:", error);
+        setChatError("Não foi possível carregar o histórico de mensagens.");
+        setIsLoadingChat(false);
+    });
+
+    return () => unsubscribe();
+}, [lead.id]);
+
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,12 +98,11 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
         phone: lead.phone,
         text: messageToSend,
         sender: 'user',
+        type: 'text',
       });
 
       if (result.success && result.chatMessage) {
-        // Optimistic update
-        setChatMessages(prev => [...prev, result.chatMessage!]);
-        
+        // Optimistic update handled by listener
         if (result.message && result.message.includes('no phone number')) {
              toast({
                 title: "Aviso: Apenas salvo no histórico",

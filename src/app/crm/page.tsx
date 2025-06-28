@@ -53,7 +53,7 @@ function CrmPageContent() {
 
                 // Toast notification for new leads
                 if (change.type === 'added' && !knownLeadIds.current.has(lead.id)) {
-                    if (userAppRole === 'admin') {
+                    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
                          toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
                     } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
                         toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
@@ -73,7 +73,7 @@ function CrmPageContent() {
         }
     };
     
-    if (userAppRole === 'admin') {
+    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
       const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
       unsubscribe1 = onSnapshot(q, (snapshot) => processSnapshot(snapshot, true));
     } else if (userAppRole === 'vendedor') {
@@ -364,7 +364,7 @@ function CrmPageContent() {
                     handleCloseLeadDetails(); // Close detail view first
                     handleOpenForm(selectedLead); // Then open edit form
                 }}
-                isAdmin={userAppRole === 'admin'}
+                isAdmin={userAppRole === 'admin' || userAppRole === 'superadmin'}
                 onApprove={handleApproveLead}
                 onRequestCorrection={handleRequestCorrectionLead}
               />
