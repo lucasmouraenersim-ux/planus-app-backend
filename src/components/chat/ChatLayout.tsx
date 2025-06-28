@@ -51,7 +51,7 @@ export function ChatLayout() {
       
       let leadsToDisplay: LeadWithId[] = [];
 
-      if (userAppRole === 'admin') {
+      if (userAppRole === 'admin' || userAppRole === 'superadmin') {
         leadsToDisplay = allLeads;
       } else if (userAppRole === 'vendedor' && appUser) {
         leadsToDisplay = allLeads.filter(lead => lead.userId === appUser.uid);
