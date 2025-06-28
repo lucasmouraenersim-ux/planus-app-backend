@@ -20,8 +20,9 @@ export type FirestoreUser = {
   downlineUids?: string[]; 
   mlmLevel?: number;
   canViewLeadPhoneNumber?: boolean;
-  canViewCareerPlan?: boolean; // New field
-  canViewCrm?: boolean; // New field
+  canViewCareerPlan?: boolean;
+  canViewCrm?: boolean;
+  termsAcceptedAt?: Timestamp | string; // New field
 };
 
 // User object available in the auth context or passed as props
@@ -38,6 +39,7 @@ export type AppUser = {
   createdAt?: Timestamp | string; // Make createdAt optional or ensure it's always string from context
   lastSignInTime?: string;
   canViewLeadPhoneNumber?: boolean;
-  canViewCareerPlan?: boolean; // New field
-  canViewCrm?: boolean; // New field
+  canViewCareerPlan?: boolean;
+  canViewCrm?: boolean;
+  termsAcceptedAt?: string; // New field
 };

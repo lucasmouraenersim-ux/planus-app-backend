@@ -4,6 +4,7 @@
 // import type { Metadata } from 'next'; // Metadata can be an issue with "use client" at root
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
+import { TermsDialog } from '@/components/auth/TermsDialog';
 import {
   SidebarProvider,
   Sidebar,
@@ -20,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info } from 'lucide-react';
@@ -28,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import type { UserType } from '@/types/user';
+import { useToast } from '@/hooks/use-toast';
 
 interface AppContentProps {
   children: ReactNode;
@@ -37,7 +39,8 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
   const { toggleSidebar, state: sidebarState, isMobile, openMobile, setOpenMobile } = useSidebar();
   const currentPathname = usePathname();
   const router = useRouter();
-  const { appUser, userAppRole, isLoadingAuth } = useAuth();
+  const { toast } = useToast();
+  const { appUser, userAppRole, isLoadingAuth, acceptUserTerms } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -63,6 +66,25 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
       }
     }
   }, [isLoadingAuth, appUser, userAppRole, currentPathname, router]);
+  
+  const handleAcceptTerms = async () => {
+    try {
+      await acceptUserTerms();
+      toast({
+        title: "Termos Aceitos",
+        description: "Obrigado! Você pode continuar a usar o aplicativo.",
+      });
+    } catch (error) {
+      console.error("Error accepting terms:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar sua aceitação. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const showTermsDialog = !isLoadingAuth && appUser && !appUser.termsAcceptedAt;
 
   if (isLoadingAuth && currentPathname !== '/login') { 
     return (
@@ -94,6 +116,7 @@ const AppContent: React.FC<AppContentProps> = ({ children }) => {
 
   return (
     <>
+      <TermsDialog isOpen={showTermsDialog} onAccept={handleAcceptTerms} />
       <Sidebar collapsible={isMobile ? "offcanvas" : "icon"}>
          {(!isMobile || openMobile) && (
           <div className={cn(

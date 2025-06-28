@@ -21,6 +21,7 @@ interface AuthContextType {
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
   updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
+  acceptUserTerms: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,7 +41,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      if (user.email === 'lucasmoura@sentenergia.com') {
+      const isSuperAdmin = user.email === 'lucasmoura@sentenergia.com';
+
+      if (isSuperAdmin) {
         const firestoreData = userDocSnap.exists() ? userDocSnap.data() as FirestoreUser : {};
         return {
           uid: user.uid,
@@ -54,6 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           mlmBalance: firestoreData.mlmBalance || 0,
           createdAt: (firestoreData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
           lastSignInTime: (firestoreData.lastSignInTime as Timestamp)?.toDate().toISOString() || user.metadata.lastSignInTime,
+          termsAcceptedAt: (firestoreData.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
           canViewLeadPhoneNumber: true,
           canViewCareerPlan: true,
           canViewCrm: true,
@@ -62,8 +66,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
-        const createdAtTimestamp = firestoreUserData.createdAt as Timestamp;
-        const lastSignInTimestamp = firestoreUserData.lastSignInTime as Timestamp;
         return {
           uid: user.uid,
           email: user.email,
@@ -74,8 +76,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           phone: firestoreUserData.phone,
           personalBalance: firestoreUserData.personalBalance || 0,
           mlmBalance: firestoreUserData.mlmBalance || 0,
-          createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
-          lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : (user.metadata.lastSignInTime || undefined),
+          createdAt: (firestoreUserData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+          lastSignInTime: (firestoreUserData.lastSignInTime as Timestamp)?.toDate().toISOString() || (user.metadata.lastSignInTime || undefined),
+          termsAcceptedAt: (firestoreUserData.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
           canViewLeadPhoneNumber: firestoreUserData.canViewLeadPhoneNumber || false,
           canViewCareerPlan: firestoreUserData.canViewCareerPlan || false,
           canViewCrm: firestoreUserData.canViewCrm || false,
@@ -139,7 +142,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await updateDoc(userDocRef, updatesForFirestore);
     }
     
-    // Refetch or update appUser state
     const updatedAppUser = await fetchFirestoreUser(firebaseUser);
     if (updatedAppUser) {
         setAppUser(updatedAppUser);
@@ -157,10 +159,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await updateFirebasePassword(firebaseUser, newPasswordProvided);
     } catch (error) {
         console.error("Erro ao alterar senha:", error);
-        throw error; // Re-throw para ser tratado na UI
+        throw error;
     }
   };
 
+  const acceptUserTerms = async () => {
+    if (!firebaseUser) throw new Error("User not authenticated.");
+    const userDocRef = doc(db, "users", firebaseUser.uid);
+    try {
+      await updateDoc(userDocRef, {
+        termsAcceptedAt: Timestamp.now()
+      });
+      setAppUser(prev => prev ? { ...prev, termsAcceptedAt: new Date().toISOString() } : null);
+    } catch (error) {
+      console.error("Error accepting terms:", error);
+      throw new Error("Failed to accept terms.");
+    }
+  };
 
   const fetchAllAppUsers = useCallback(async () => {
     setIsLoadingAllUsers(true);
@@ -169,13 +184,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const usersSnapshot = await getDocs(usersCollectionRef);
         const usersList = usersSnapshot.docs.map(docSnap => {
             const data = docSnap.data() as Omit<FirestoreUser, 'uid'>;
-            const createdAtTimestamp = data.createdAt as Timestamp;
-            const lastSignInTimestamp = data.lastSignInTime as Timestamp;
             return {
                 ...data,
                 uid: docSnap.id,
-                createdAt: createdAtTimestamp ? createdAtTimestamp.toDate().toISOString() : new Date().toISOString(),
-                lastSignInTime: lastSignInTimestamp ? lastSignInTimestamp.toDate().toISOString() : undefined,
+                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                lastSignInTime: (data.lastSignInTime as Timestamp)?.toDate().toISOString() || undefined,
+                termsAcceptedAt: (data.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
             } as FirestoreUser;
         });
         setAllFirestoreUsers(usersList);
@@ -207,7 +221,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return [];
     }
   }, []);
-
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -252,7 +265,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllAppUsers, fetchAllCrmLeadsGlobally, updateAppUserProfile, changeUserPassword }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllAppUsers, fetchAllCrmLeadsGlobally, updateAppUserProfile, changeUserPassword, acceptUserTerms }}>
       {children}
     </AuthContext.Provider>
   );
