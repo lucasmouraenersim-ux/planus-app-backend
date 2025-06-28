@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { LeadDocumentData, StageId, LeadSource } from '@/types/crm';
 import { STAGE_IDS, LEAD_SOURCES } from '@/types/crm'; // Import defined arrays
+import type { FirestoreUser } from '@/types/user';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -62,9 +63,10 @@ interface LeadFormProps {
   onCancel: () => void;
   initialData?: Partial<LeadDocumentData & { id?: string }>; // For editing
   isSubmitting?: boolean;
+  allUsers: FirestoreUser[];
 }
 
-export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting }: LeadFormProps) {
+export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUsers }: LeadFormProps) {
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: {
@@ -73,7 +75,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting }: Lead
       value: initialData?.value || 0,
       kwh: initialData?.kwh || 0,
       stageId: initialData?.stageId || 'contato',
-      sellerName: initialData?.sellerName || "Vendedor Atual", // Placeholder
+      sellerName: initialData?.sellerName || "Sistema",
       leadSource: initialData?.leadSource || undefined,
       phone: initialData?.phone || "",
       email: initialData?.email || "",
@@ -168,7 +170,21 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting }: Lead
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vendedor Responsável *</FormLabel>
-                  <FormControl><Input placeholder="Email ou nome do vendedor" {...field} /></FormControl>
+                   <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um vendedor" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Sistema">Sistema</SelectItem>
+                      {allUsers.filter(u => u.type === 'vendedor' || u.type === 'admin' || u.type === 'superadmin').map(user => (
+                        <SelectItem key={user.uid} value={user.displayName || user.email!}>
+                          {user.displayName || user.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

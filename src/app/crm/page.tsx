@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 
 
 function CrmPageContent() {
-  const { appUser, userAppRole } = useAuth();
+  const { appUser, userAppRole, allFirestoreUsers } = useAuth();
   const { toast } = useToast();
   const [leads, setLeads] = useState<LeadWithId[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -344,6 +344,7 @@ function CrmPageContent() {
             onCancel={handleCloseForm}
             initialData={editingLead || undefined}
             isSubmitting={isSubmitting}
+            allUsers={allFirestoreUsers}
           />
         </DialogContent>
       </Dialog>
