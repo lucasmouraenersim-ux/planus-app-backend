@@ -48,8 +48,21 @@ export async function sendBulkWhatsappMessages(input: SendBulkWhatsappMessagesIn
     const { leads, templateName, configuration } = input;
     const { sendInterval, numberOfSimultaneousWhatsapps } = configuration;
 
-    // This hardcoded URL matches the one from the working production logs for the 'novocontato' template.
-    const headerImageUrl = "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg";
+    // Mapping template names to their respective header image URLs
+    const TEMPLATE_IMAGE_URLS: { [key: string]: string } = {
+      novocontato: "https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/fc30ce6fef5a3ebac0439eeab4a5704c64f8ee7c/Imagem%20do%20WhatsApp%20de%202025-06-17%20%C3%A0(s)%2010.04.50_a5712825.jpg",
+      leadsquentes: "https://raw.githubusercontent.com/LucasMouraChaser/apisent/406ebbca68d4f86df445d7712fcd5f7131f251/fundoleadsquentes.png"
+    };
+
+    const headerImageUrl = TEMPLATE_IMAGE_URLS[templateName];
+
+    if (!headerImageUrl) {
+        return {
+          success: false,
+          message: `Ocorreu um erro: Template de mensagem '${templateName}' não tem uma imagem de cabeçalho configurada.`,
+          sentCount: 0,
+        };
+    }
 
     let sentCount = 0;
     const totalLeads = leads.length;
@@ -64,8 +77,6 @@ export async function sendBulkWhatsappMessages(input: SendBulkWhatsappMessagesIn
             message: {
                 template: {
                     name: templateName,
-                    // The production logs for 'novocontato' template show it expects a header image, not body parameters.
-                    // Sending bodyParams would cause an error.
                     headerImageUrl: headerImageUrl,
                 }
             }
