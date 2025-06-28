@@ -193,7 +193,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       const matchesSearch = 
         (user.displayName?.toLowerCase().includes(searchTermLower)) ||
         (user.email?.toLowerCase().includes(searchTermLower)) ||
-        (user.cpf?.replace(/\D/g, '').includes(searchTermLower.replace(/\D/g, ')));
+        ((user.cpf?.replace(/\D/g, '') ?? '').includes(searchTermLower.replace(/\D/g, '')));
       const matchesType = userTypeFilter === 'all' || user.type === userTypeFilter;
       return matchesSearch && matchesType;
     });
