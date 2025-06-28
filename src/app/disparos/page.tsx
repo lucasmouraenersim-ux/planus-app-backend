@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -17,6 +16,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlayCircle, CheckCircle, AlertCircle, Upload, Database, Download, ShieldAlert } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const TEMPLATE_OPTIONS = [
+  { value: 'novocontato', label: 'Novo Contato (Reduza até 25%)' },
+  { value: 'leadsquentes', label: 'Leads Quentes (Reduza sua conta)' },
+];
 
 export default function DisparosPage() {
   const { fetchAllCrmLeadsGlobally, userAppRole, isLoadingAuth } = useAuth();
@@ -144,7 +149,7 @@ export default function DisparosPage() {
     if (selectedLeads.size === 0 || !templateName) {
       toast({
         title: "Dados Incompletos",
-        description: "Selecione ao menos um lead e informe o nome do template.",
+        description: "Selecione ao menos um lead e um template de mensagem.",
         variant: "destructive",
       });
       return;
@@ -254,13 +259,22 @@ export default function DisparosPage() {
               <CardTitle>2. Template da Mensagem</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-                <Label htmlFor="templateName">Nome do Template Aprovado</Label>
-                <Input
-                    id="templateName"
-                    placeholder="Ex: novocontato"
-                    value={templateName}
-                    onChange={e => setTemplateName(e.target.value)}
-                />
+                <Label htmlFor="templateName">Selecione o Template</Label>
+                <Select
+                  value={templateName}
+                  onValueChange={(value) => setTemplateName(value)}
+                >
+                  <SelectTrigger id="templateName">
+                    <SelectValue placeholder="Selecione um template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
             </CardContent>
           </Card>
           
