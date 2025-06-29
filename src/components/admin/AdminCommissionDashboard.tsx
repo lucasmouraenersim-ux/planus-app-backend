@@ -18,6 +18,7 @@ import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
 import { createUser } from '@/actions/admin/createUser';
+import { syncLegacySellers } from '@/actions/admin/syncLegacySellers';
 import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
 
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network
+    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle
 } from 'lucide-react';
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -123,6 +124,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const addUserForm = useForm<AddUserFormData>({ 
     resolver: zodResolver(addUserFormSchema), 
@@ -283,6 +285,21 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     toast({ title: "Exportação Iniciada", description: `${filteredUsers.length} usuários exportados.` });
   };
+  
+  const handleSyncSellers = async () => {
+      setIsSyncing(true);
+      const result = await syncLegacySellers();
+      toast({
+          title: result.success ? "Sincronização Concluída" : "Erro na Sincronização",
+          description: result.message,
+          variant: result.success ? "default" : "destructive",
+          duration: 9000,
+      });
+      if (result.success) {
+          await refreshUsers();
+      }
+      setIsSyncing(false);
+  };
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
@@ -352,8 +369,12 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários e suas comissões.</CardDescription></div>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar Usuários</Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={handleSyncSellers} size="sm" variant="outline" disabled={isSyncing}>
+              {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shuffle className="mr-2 h-4 w-4" />}
+                Sincronizar Vendedores
+            </Button>
+            <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
             {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
           </div>
         </CardHeader>
