@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -152,9 +151,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!firebaseUser) throw new Error("User not authenticated.");
     const userDocRef = doc(db, "users", firebaseUser.uid);
     try {
-      await setDoc(userDocRef, {
-        termsAcceptedAt: Timestamp.now()
-      }, { merge: true });
+      const userDocSnap = await getDoc(userDocRef);
+      if (!userDocSnap.exists()) {
+        await setDoc(userDocRef, { termsAcceptedAt: Timestamp.now() }, { merge: true });
+      } else {
+        await updateDoc(userDocRef, { termsAcceptedAt: Timestamp.now() });
+      }
       
       setAppUser(prev => {
         if (!prev) return null;
@@ -202,6 +204,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
           lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
           signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+          completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
         } as LeadWithId;
       });
       return leadsList;
