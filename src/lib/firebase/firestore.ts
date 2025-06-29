@@ -81,10 +81,16 @@ export async function fetchCrmLeads(
 
 export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
-  await updateDoc(leadRef, {
+  const updates: { [key: string]: any } = {
     stageId: newStageId,
     lastContact: Timestamp.now(),
-  });
+  };
+
+  if (newStageId === 'finalizado') {
+    updates.completedAt = Timestamp.now();
+  }
+  
+  await updateDoc(leadRef, updates);
 }
 
 export async function updateCrmLeadDetails(

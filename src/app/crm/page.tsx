@@ -56,6 +56,7 @@ function CrmPageContent() {
                     createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
                     lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
                     signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                    completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
                 } as LeadWithId;
 
                 // Toast notification for new leads
@@ -103,9 +104,9 @@ function CrmPageContent() {
   }, [appUser, toast, userAppRole]);
 
 
-  const kwhTotalAssinado = useMemo(() => {
+  const kwhTotalFinalizado = useMemo(() => {
     return leads
-      .filter(lead => lead.stageId === 'assinado')
+      .filter(lead => lead.stageId === 'finalizado')
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
 
@@ -115,7 +116,7 @@ function CrmPageContent() {
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const kwhTotalAssinadoNoPeriodo = useMemo(() => {
+  const kwhTotalFinalizadoNoPeriodo = useMemo(() => {
     const today = new Date();
     const dayOfMonth = today.getDate();
     const currentMonth = today.getMonth();
@@ -138,12 +139,12 @@ function CrmPageContent() {
 
     return leads
       .filter(lead => {
-        if (lead.stageId !== 'assinado' || !lead.signedAt) {
+        if (lead.stageId !== 'finalizado' || !lead.completedAt) {
           return false;
         }
-        const signedDate = new Date(lead.signedAt);
-        // Check if signedDate is on or after startDate and before endDate.
-        return signedDate >= startDate && signedDate < endDate;
+        const completedDate = new Date(lead.completedAt);
+        // Check if completedDate is on or after startDate and before endDate.
+        return completedDate >= startDate && completedDate < endDate;
       })
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
@@ -348,15 +349,15 @@ function CrmPageContent() {
               <Badge variant="secondary" className="ml-4 text-base font-semibold">{leads.length}</Badge>
             </h1>
             <div className="flex items-center gap-3">
-              <Badge variant="outline" className="border-green-500/50 text-green-500 bg-green-500/10 py-1.5">
+              <Badge variant="outline" className="border-emerald-600/50 text-emerald-500 bg-emerald-600/10 py-1.5">
                 <Zap className="w-4 h-4 mr-1.5" />
-                <span className="font-normal mr-1.5">Assinado:</span>
-                <span className="font-semibold">{kwhTotalAssinado.toLocaleString('pt-BR')} kWh</span>
+                <span className="font-normal mr-1.5">Finalizado:</span>
+                <span className="font-semibold">{kwhTotalFinalizado.toLocaleString('pt-BR')} kWh</span>
               </Badge>
               <Badge variant="outline" className="border-indigo-500/50 text-indigo-500 bg-indigo-500/10 py-1.5">
                 <Zap className="w-4 h-4 mr-1.5" />
-                <span className="font-normal mr-1.5">Assinado (Período):</span>
-                <span className="font-semibold">{kwhTotalAssinadoNoPeriodo.toLocaleString('pt-BR')} kWh</span>
+                <span className="font-normal mr-1.5">Finalizado (Período):</span>
+                <span className="font-semibold">{kwhTotalFinalizadoNoPeriodo.toLocaleString('pt-BR')} kWh</span>
               </Badge>
               <Badge variant="outline" className="border-slate-500/50 text-slate-500 bg-slate-500/10 py-1.5">
                 <Zap className="w-4 h-4 mr-1.5" />
