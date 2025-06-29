@@ -80,7 +80,7 @@ const editUserFormSchema = z.object({
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
   mlmLevel: z.preprocess((val) => Number(val), z.number().int().min(1).max(4).optional()),
-  recurrenceRate: z.preprocess((val) => Number(val), z.number().optional()),
+  recurrenceRate: z.preprocess((val) => (val === "" || val === null ? undefined : Number(val)), z.number().optional()),
   canViewLeadPhoneNumber: z.boolean().default(false),
   canViewCrm: z.boolean().default(false),
   canViewCareerPlan: z.boolean().default(false),
@@ -297,7 +297,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const aggregatedMetrics = useMemo(() => {
     const paidCommissions = withdrawalRequests.filter(w => w.status === 'concluido').reduce((sum, w) => sum + w.amount, 0);
     const pendingCommissions = withdrawalRequests.filter(w => w.status === 'pendente').reduce((sum, w) => sum + w.amount, 0);
-    const finalizedLeadsValue = filteredLeads.filter(l => l.stageId === 'finalizado').reduce((sum, l) => sum + l.value, 0);
+    const finalizedLeadsValue = filteredLeads.filter(l => l.stageId === 'finalizado').reduce((sum, l) => sum + (l.value || 0), 0);
     return { paidCommissions, pendingCommissions, finalizedLeadsValue };
   }, [withdrawalRequests, filteredLeads]);
 
@@ -453,7 +453,26 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 {/* Commissions */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Configurações de Comissão</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
                     <FormField control={editUserForm.control} name="commissionRate" render={({ field }) => (<FormItem><FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Padrão (40%/50%)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="40">40%</SelectItem><SelectItem value="50">50%</SelectItem><SelectItem value="60">60%</SelectItem></SelectContent></Select></FormItem>)} />
-                    <FormField control={editUserForm.control} name="recurrenceRate" render={({ field }) => (<FormItem><FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl><SelectContent><SelectItem value="0.5">0.5%</SelectItem><SelectItem value="1">1%</SelectItem></SelectContent></Select></FormItem>)} />
+                    <FormField control={editUserForm.control} name="recurrenceRate" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
+                            <Select 
+                                onValueChange={field.onChange} 
+                                defaultValue={String(field.value ?? '')}
+                                disabled={userAppRole !== 'superadmin' || isSubmittingAction}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Sem Recorrência" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    <SelectItem value="">Sem Recorrência</SelectItem>
+                                    <SelectItem value="0.5">0.5%</SelectItem>
+                                    <SelectItem value="1">1%</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </FormItem>
+                    )} />
                     <FormField control={editUserForm.control} name="mlmEnabled" render={({ field }) => (<FormItem className="flex items-center justify-between"><FormLabel className="flex items-center"><Network className="mr-2 h-4 w-4"/>Ativar Multinível</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl></FormItem>)} />
                     {editUserForm.watch("mlmEnabled") && (<>
                         <FormField control={editUserForm.control} name="uplineUid" render={({ field }) => (<FormItem><FormLabel>Upline (Líder Direto)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o upline" /></SelectTrigger></FormControl><SelectContent>{initialUsers.filter(u => u.uid !== selectedUser.uid).map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}</SelectContent></Select></FormItem>)} />
