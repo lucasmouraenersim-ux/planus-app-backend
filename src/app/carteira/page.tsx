@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -29,7 +29,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -54,10 +53,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
-import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2 } from 'lucide-react';
+import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed } from 'lucide-react';
 import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
+import type { LeadWithId } from '@/types/crm';
+import type { FirestoreUser } from '@/types/user';
 import { PIX_KEY_TYPES, WITHDRAWAL_TYPES } from '@/types/wallet';
-import { requestWithdrawal, fetchWithdrawalHistory } from '@/lib/firebase/firestore'; 
+import { requestWithdrawal, fetchWithdrawalHistory, updateLeadCommissionStatus } from '@/lib/firebase/firestore'; 
 import { useAuth } from '@/contexts/AuthContext';
 
 
@@ -77,12 +78,24 @@ const withdrawalFormSchema = z.object({
 
 type WithdrawalFormData = z.infer<typeof withdrawalFormSchema>;
 
+interface ContractToReceive {
+    leadId: string;
+    clientName: string;
+    kwh: number;
+    valueAfterDiscount: number;
+    commission: number;
+    recurrence?: number;
+    isPaid: boolean;
+}
+
 function WalletPageContent() {
   const { toast } = useToast();
-  const { appUser, isLoadingAuth } = useAuth();
+  const { appUser, userAppRole, isLoadingAuth, fetchAllCrmLeadsGlobally, allFirestoreUsers } = useAuth();
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequestWithId[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
 
   const form = useForm<WithdrawalFormData>({
     resolver: zodResolver(withdrawalFormSchema),
@@ -96,21 +109,83 @@ function WalletPageContent() {
 
   useEffect(() => {
     if (!appUser) return;
+    
+    setIsLoadingHistory(true);
+    fetchWithdrawalHistory(appUser.uid)
+      .then(setWithdrawalHistory)
+      .catch(error => {
+          console.error("Error fetching withdrawal history:", error);
+          toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive"});
+      })
+      .finally(() => setIsLoadingHistory(false));
 
-    const loadHistory = async () => {
-      setIsLoadingHistory(true);
-      try {
-        const history = await fetchWithdrawalHistory(appUser.uid);
-        setWithdrawalHistory(history);
-      } catch (error) {
-        console.error("Error fetching withdrawal history:", error);
-        toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive"});
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-    loadHistory();
-  }, [appUser, toast]);
+    setIsLoadingLeads(true);
+    fetchAllCrmLeadsGlobally()
+      .then(setAllLeads)
+      .catch(error => {
+          console.error("Error fetching leads:", error);
+          toast({ title: "Erro", description: "Não foi possível carregar os contratos.", variant: "destructive"});
+      })
+      .finally(() => setIsLoadingLeads(false));
+
+  }, [appUser, toast, fetchAllCrmLeadsGlobally]);
+
+  const contractsToReceive = useMemo((): ContractToReceive[] => {
+    if (!appUser || !allLeads.length || !allFirestoreUsers.length) return [];
+    
+    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+    
+    let userVisibleLeads = finalizedLeads;
+    if (userAppRole !== 'superadmin') {
+      userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
+    }
+
+    return userVisibleLeads.map(lead => {
+        const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
+        let commissionRate = 40; // Default Bronze
+        if (seller) {
+            // Priority: Explicitly set rate > Level-based rate
+            if(seller.commissionRate) {
+                commissionRate = seller.commissionRate;
+            } else {
+                // Determine level based logic if needed, for now using simple default
+                // This part can be expanded with Bronze/Prata/Ouro logic
+            }
+        }
+        
+        const commission = (lead.valueAfterDiscount || 0) * (commissionRate / 100);
+        const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
+        
+        return {
+            leadId: lead.id,
+            clientName: lead.name,
+            kwh: lead.kwh,
+            valueAfterDiscount: lead.valueAfterDiscount || 0,
+            commission,
+            recurrence,
+            isPaid: lead.commissionPaid || false,
+        };
+    });
+
+  }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
+
+  const handleToggleCommissionPaid = async (leadId: string, currentStatus: boolean) => {
+    try {
+        await updateLeadCommissionStatus(leadId, !currentStatus);
+        setAllLeads(prevLeads => prevLeads.map(l => l.id === leadId ? {...l, commissionPaid: !currentStatus} : l));
+        toast({
+            title: "Status de Pagamento Atualizado",
+            description: `A comissão do contrato foi marcada como ${!currentStatus ? 'paga' : 'não paga'}.`,
+        });
+    } catch (error) {
+        toast({
+            title: "Erro ao Atualizar",
+            description: "Não foi possível alterar o status de pagamento.",
+            variant: "destructive"
+        });
+    }
+  };
+
 
   const onSubmitWithdrawal = async (data: WithdrawalFormData) => {
     if (!appUser) {
@@ -146,7 +221,6 @@ function WalletPageContent() {
         setIsWithdrawalDialogOpen(false);
         form.reset();
         
-        // Optimistic update
         const newEntry: WithdrawalRequestWithId = {
             id: requestId,
             userId: appUser.uid,
@@ -246,93 +320,80 @@ function WalletPageContent() {
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmitWithdrawal)} className="space-y-4 py-4">
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Valor do Saque (R$)</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="Ex: 100,50" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="withdrawalType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Origem do Saldo</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione a origem do saldo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="personal" disabled={appUser.personalBalance <= 0}>
-                              Pessoal (Disponível: {formatCurrency(appUser.personalBalance)})
-                            </SelectItem>
-                            <SelectItem value="mlm" disabled={appUser.mlmBalance <= 0}>
-                              Rede MLM (Disponível: {formatCurrency(appUser.mlmBalance)})
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="pixKeyType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo de Chave PIX</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o tipo da chave" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PIX_KEY_TYPES.map(type => (
-                              <SelectItem key={type} value={type}>{type}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="pixKey"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Chave PIX</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Digite sua chave PIX" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={form.control} name="amount" render={({ field }) => ( <FormItem> <FormLabel>Valor do Saque (R$)</FormLabel> <FormControl> <Input type="number" placeholder="Ex: 100,50" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /> </FormControl> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="withdrawalType" render={({ field }) => ( <FormItem> <FormLabel>Origem do Saldo</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Selecione a origem do saldo" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="personal" disabled={appUser.personalBalance <= 0}> Pessoal (Disponível: {formatCurrency(appUser.personalBalance)}) </SelectItem> <SelectItem value="mlm" disabled={appUser.mlmBalance <= 0}> Rede MLM (Disponível: {formatCurrency(appUser.mlmBalance)}) </SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="pixKeyType" render={({ field }) => ( <FormItem> <FormLabel>Tipo de Chave PIX</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Selecione o tipo da chave" /> </SelectTrigger> </FormControl> <SelectContent> {PIX_KEY_TYPES.map(type => ( <SelectItem key={type} value={type}>{type}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="pixKey" render={({ field }) => ( <FormItem> <FormLabel>Chave PIX</FormLabel> <FormControl> <Input placeholder="Digite sua chave PIX" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
                   <DialogFooter className="pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsWithdrawalDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={form.formState.isSubmitting}>
-                      {form.formState.isSubmitting ? "Enviando..." : "Confirmar Solicitação"}
-                       <Send className="w-4 h-4 ml-2" />
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsWithdrawalDialogOpen(false)}> Cancelar </Button>
+                    <Button type="submit" disabled={form.formState.isSubmitting}> {form.formState.isSubmitting ? "Enviando..." : "Confirmar Solicitação"} <Send className="w-4 h-4 ml-2" /> </Button>
                   </DialogFooter>
                 </form>
               </Form>
             </DialogContent>
           </Dialog>
         </CardFooter>
+      </Card>
+
+       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-xl text-primary flex items-center">
+            <FileSignature className="w-6 h-6 mr-2" />
+            Contratos e Valor a Receber
+          </CardTitle>
+          <CardDescription>Comissões geradas por contratos finalizados.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingLeads ? (
+            <div className="flex justify-center items-center h-32">
+              <Loader2 className="animate-spin rounded-full h-8 w-8 text-primary" />
+              <p className="ml-3 text-muted-foreground">Carregando contratos...</p>
+            </div>
+          ) : contractsToReceive.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+                <Info size={48} className="mx-auto mb-4 opacity-50" />
+                <p>Nenhum contrato finalizado encontrado.</p>
+                <p className="text-sm">Quando você finalizar um contrato, a comissão aparecerá aqui.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableCaption>Suas comissões de contratos finalizados.</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Consumo (KWh)</TableHead>
+                  <TableHead>Valor c/ Desconto</TableHead>
+                  <TableHead>Sua Comissão</TableHead>
+                  {userAppRole === 'superadmin' && <TableHead>Recorrência</TableHead>}
+                  <TableHead className="text-center">Status Pagto.</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contractsToReceive.map((contract) => (
+                  <TableRow key={contract.leadId}>
+                    <TableCell className="font-medium">{contract.clientName}</TableCell>
+                    <TableCell>{contract.kwh.toLocaleString('pt-BR')} kWh</TableCell>
+                    <TableCell>{formatCurrency(contract.valueAfterDiscount)}</TableCell>
+                    <TableCell className="font-semibold text-green-500">{formatCurrency(contract.commission)}</TableCell>
+                    {userAppRole === 'superadmin' && <TableCell>{formatCurrency(contract.recurrence)}</TableCell>}
+                    <TableCell className="text-center">
+                      <Button 
+                        size="sm" 
+                        variant={contract.isPaid ? 'default' : 'outline'}
+                        onClick={() => userAppRole === 'superadmin' && handleToggleCommissionPaid(contract.leadId, contract.isPaid)}
+                        disabled={userAppRole !== 'superadmin'}
+                        className={cn("h-7 px-2", userAppRole === 'superadmin' ? 'cursor-pointer' : 'cursor-not-allowed')}
+                      >
+                         {contract.isPaid ? <Check className="w-4 h-4 mr-1.5"/> : <CircleDotDashed className="w-4 h-4 mr-1.5"/>}
+                         {contract.isPaid ? 'Pago' : 'Pendente'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
       </Card>
 
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">

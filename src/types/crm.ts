@@ -92,6 +92,11 @@ export interface LeadDocumentData {
   legalRepresentativeNationality?: string;
   legalRepresentativeDocumentUrl?: string; // For the "Documento(s)" file
   otherDocumentsUrl?: string; // For "Demais documentos"
+
+  // New Commission Fields
+  discountPercentage?: number; // Percentual de desconto negociado
+  valueAfterDiscount?: number; // Valor da conta após o desconto
+  commissionPaid?: boolean; // Se a comissão deste contrato já foi paga
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'> {

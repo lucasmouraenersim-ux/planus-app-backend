@@ -1,4 +1,3 @@
-
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -8,6 +7,8 @@ import { db, auth } from '../firebase';
 import { uploadFile } from './storage';
 
 // --- Leads ---
+
+const KWH_TO_REAIS_FACTOR = 1.093113;
 
 export async function createCrmLead(
   leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt'>,
@@ -19,14 +20,19 @@ export async function createCrmLead(
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error("Usuário não autenticado para criar o lead.");
 
+  // Calculate valueAfterDiscount
+  const valueAfterDiscount = (leadData.kwh * KWH_TO_REAIS_FACTOR) * (1 - ((leadData.discountPercentage || 0) / 100));
+
   // Prepare data, excluding file URLs which are added later
   const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl' | 'legalRepresentativeDocumentUrl' | 'otherDocumentsUrl'> = {
     ...leadData,
+    valueAfterDiscount,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
     createdAt: Timestamp.now(),
     lastContact: Timestamp.now(),
     needsAdminApproval: leadData.needsAdminApproval ?? true, // Require approval for manual creation
+    commissionPaid: false, // Default to not paid
   };
 
   // Create document in Firestore to get an ID
@@ -40,7 +46,7 @@ export async function createCrmLead(
   }
   if (billDocumentFile) {
     const billPath = `crm_lead_documents/${docRef.id}/bill_${billDocumentFile.name}`;
-    updates.billDocumentUrl = await uploadFile(billDocumentFile, billPath);
+    updates.billDocumentUrl = await uploadFile(billFile, billPath);
   }
   if (legalRepresentativeDocumentFile) {
     const legalRepDocPath = `crm_lead_documents/${docRef.id}/legal_rep_doc_${legalRepresentativeDocumentFile.name}`;
@@ -95,6 +101,15 @@ export async function updateCrmLeadDetails(
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
 
+  // Recalculate valueAfterDiscount if kwh or discountPercentage changes
+  if (updates.kwh !== undefined || updates.discountPercentage !== undefined) {
+    const leadDoc = await getDoc(leadRef);
+    const existingData = leadDoc.data() as LeadDocumentData;
+    const kwh = updates.kwh ?? existingData.kwh;
+    const discount = updates.discountPercentage ?? existingData.discountPercentage;
+    finalUpdates.valueAfterDiscount = (kwh * KWH_TO_REAIS_FACTOR) * (1 - ((discount || 0) / 100));
+  }
+
   if (updates.phone) {
     finalUpdates.phone = updates.phone.replace(/\D/g, '');
   }
@@ -103,12 +118,10 @@ export async function updateCrmLeadDetails(
     const photoPath = `crm_lead_documents/${leadId}/photo_${photoFile.name}`;
     finalUpdates.photoDocumentUrl = await uploadFile(photoFile, photoPath);
   }
-
   if (billFile) {
     const billPath = `crm_lead_documents/${leadId}/bill_${billFile.name}`;
     finalUpdates.billDocumentUrl = await uploadFile(billFile, billPath);
   }
-
   if (legalRepresentativeDocumentFile) {
     const legalRepDocPath = `crm_lead_documents/${leadId}/legal_rep_doc_${legalRepresentativeDocumentFile.name}`;
     finalUpdates.legalRepresentativeDocumentUrl = await uploadFile(legalRepresentativeDocumentFile, legalRepDocPath);
@@ -118,10 +131,8 @@ export async function updateCrmLeadDetails(
     finalUpdates.otherDocumentsUrl = await uploadFile(otherDocumentsFile, otherDocsPath);
   }
 
-  // Always update lastContact timestamp on any edit
   finalUpdates.lastContact = Timestamp.now();
   
-  // FIX: Remove properties with undefined values before sending to Firestore
   const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
     if (value !== undefined) {
       (acc as any)[key] = value;
@@ -143,39 +154,17 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
   batch.delete(leadRef);
   batch.delete(chatDocRef);
   
-  // Note: This does not delete associated files from Storage, which would require
-  // listing files under the lead's folder and deleting them one by one.
-  // This can be added later if necessary.
-  
   await batch.commit();
   console.log(`Successfully deleted lead ${leadId} and its chat history.`);
-}
-
-// --- Lead Assignment & Approval Flow ---
-
-export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
-  const leadRef = doc(db, "crm_leads", leadId);
-  // Optional: Check if the lead is still unassigned before updating to prevent race conditions
-  const leadSnap = await getDoc(leadRef);
-  if (leadSnap.exists() && leadSnap.data().stageId === 'para-atribuir') {
-    await updateDoc(leadRef, {
-      userId: seller.uid,
-      sellerName: seller.name,
-      stageId: 'contato',
-      lastContact: Timestamp.now(),
-    });
-  } else {
-    throw new Error("Lead não está mais disponível para atribuição.");
-  }
 }
 
 export async function approveCrmLead(leadId: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
-    stageId: 'assinado', // Move to 'signed' stage
+    stageId: 'assinado', 
     needsAdminApproval: false,
-    correctionReason: '', // Clear correction reason
-    signedAt: Timestamp.now(), // Set the signature date to now
+    correctionReason: '',
+    signedAt: Timestamp.now(), 
     lastContact: Timestamp.now(),
   });
 }
@@ -183,7 +172,7 @@ export async function approveCrmLead(leadId: string): Promise<void> {
 export async function requestCrmLeadCorrection(leadId: string, reason: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
-    stageId: 'contato', // Revert to a previous stage to be handled by seller
+    stageId: 'contato',
     correctionReason: reason,
     needsAdminApproval: false, 
     lastContact: Timestamp.now(),
@@ -198,40 +187,45 @@ export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: stri
   });
 }
 
+export async function updateLeadCommissionStatus(leadId: string, isPaid: boolean): Promise<void> {
+    const leadRef = doc(db, "crm_leads", leadId);
+    await updateDoc(leadRef, {
+        commissionPaid: isPaid,
+        lastContact: Timestamp.now()
+    });
+}
+
 // --- User Management ---
-export async function updateUser(userId: string, updates: Partial<Pick<FirestoreUser, 'displayName' | 'phone' | 'type' | 'canViewLeadPhoneNumber' | 'canViewCareerPlan' | 'canViewCrm'>>): Promise<void> {
+export async function updateUser(userId: string, updates: Partial<FirestoreUser>): Promise<void> {
   if (!userId) throw new Error("User ID is required.");
   const userRef = doc(db, "users", userId);
   
-  const finalUpdates: { [key: string]: any } = {};
+  const finalUpdates: { [key: string]: any } = { ...updates };
 
-  if (updates.displayName !== undefined) {
-    finalUpdates.displayName = updates.displayName;
-  }
   if (updates.phone !== undefined) {
     finalUpdates.phone = String(updates.phone).replace(/\D/g, '');
   }
-  if (updates.type !== undefined) {
-    finalUpdates.type = updates.type;
-  }
-  if (updates.canViewLeadPhoneNumber !== undefined) {
-    finalUpdates.canViewLeadPhoneNumber = updates.canViewLeadPhoneNumber;
-  }
-  if (updates.canViewCareerPlan !== undefined) {
-    finalUpdates.canViewCareerPlan = updates.canViewCareerPlan;
-  }
-  if (updates.canViewCrm !== undefined) {
-    finalUpdates.canViewCrm = updates.canViewCrm;
+
+  // Remove UID from the update object if it exists to avoid errors
+  if ('uid' in finalUpdates) {
+    delete finalUpdates.uid;
   }
 
-  if (Object.keys(finalUpdates).length > 0) {
-    await updateDoc(userRef, finalUpdates);
+  // Ensure only valid, non-undefined fields are sent
+  const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      (acc as any)[key] = value;
+    }
+    return acc;
+  }, {});
+  
+  if (Object.keys(cleanUpdates).length > 0) {
+    await updateDoc(userRef, cleanUpdates);
   }
 }
 
 
 // --- Wallet / Commission Functions ---
-
 export async function requestWithdrawal(userId: string, userEmail: string, userName: string, amount: number, pixKeyType: PixKeyType, pixKey: string, withdrawalType: WithdrawalType): Promise<string | null> {
   const newRequest: WithdrawalRequestData = { userId, userEmail, userName, amount, pixKeyType, pixKey, withdrawalType, status: 'pendente', requestedAt: Timestamp.now() };
   const docRef = await addDoc(collection(db, "withdrawal_requests"), newRequest);

@@ -43,35 +43,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const isSuperAdmin = user.email === 'lucasmoura@sentenergia.com';
 
-      if (isSuperAdmin) {
-        const firestoreData = userDocSnap.exists() ? userDocSnap.data() as FirestoreUser : {};
-        return {
-          uid: user.uid,
-          email: user.email,
-          displayName: firestoreData.displayName || user.displayName || "Super Admin",
-          photoURL: firestoreData.photoURL || user.photoURL,
-          type: 'superadmin',
-          cpf: firestoreData.cpf,
-          phone: firestoreData.phone,
-          personalBalance: firestoreData.personalBalance || 0,
-          mlmBalance: firestoreData.mlmBalance || 0,
-          createdAt: (firestoreData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-          lastSignInTime: (firestoreData.lastSignInTime as Timestamp)?.toDate().toISOString() || user.metadata.lastSignInTime,
-          termsAcceptedAt: (firestoreData.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
-          canViewLeadPhoneNumber: true,
-          canViewCareerPlan: true,
-          canViewCrm: true,
-        };
-      }
-      
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
+        const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
         return {
           uid: user.uid,
           email: user.email,
           displayName: firestoreUserData.displayName || user.displayName,
           photoURL: firestoreUserData.photoURL || user.photoURL,
-          type: firestoreUserData.type,
+          type: finalType,
           cpf: firestoreUserData.cpf,
           phone: firestoreUserData.phone,
           personalBalance: firestoreUserData.personalBalance || 0,
@@ -79,13 +59,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdAt: (firestoreUserData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
           lastSignInTime: (firestoreUserData.lastSignInTime as Timestamp)?.toDate().toISOString() || (user.metadata.lastSignInTime || undefined),
           termsAcceptedAt: (firestoreUserData.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
-          canViewLeadPhoneNumber: firestoreUserData.canViewLeadPhoneNumber || false,
-          canViewCareerPlan: firestoreUserData.canViewCareerPlan || false,
-          canViewCrm: firestoreUserData.canViewCrm || false,
+          commissionRate: firestoreUserData.commissionRate,
+          mlmEnabled: firestoreUserData.mlmEnabled,
+          uplineUid: firestoreUserData.uplineUid,
+          mlmLevel: firestoreUserData.mlmLevel,
+          recurrenceRate: firestoreUserData.recurrenceRate,
+          canViewLeadPhoneNumber: isSuperAdmin || firestoreUserData.canViewLeadPhoneNumber || false,
+          canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,
+          canViewCrm: isSuperAdmin || firestoreUserData.canViewCrm || false,
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
-        return { // Fallback for users without a Firestore doc (pending setup)
+        return { 
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
@@ -167,8 +152,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!firebaseUser) throw new Error("User not authenticated.");
     const userDocRef = doc(db, "users", firebaseUser.uid);
     try {
-      // Use setDoc with merge: true to create the document if it doesn't exist,
-      // or update it if it does. This is safer than updateDoc.
       await setDoc(userDocRef, {
         termsAcceptedAt: Timestamp.now()
       }, { merge: true });

@@ -16,13 +16,19 @@ export type FirestoreUser = {
   photoURL?: string | null;
   personalBalance?: number; 
   mlmBalance?: number; 
-  uplineUid?: string; 
-  downlineUids?: string[]; 
-  mlmLevel?: number;
+  termsAcceptedAt?: Timestamp | string; // New field
+  
+  // New Commission Fields
+  commissionRate?: 40 | 50 | 60; // Direct commission percentage
+  mlmEnabled?: boolean; // Is this user eligible for MLM overrides?
+  uplineUid?: string; // UID of the user this person reports to for MLM
+  mlmLevel?: 1 | 2 | 3 | 4; // What override level this person generates for their upline
+  recurrenceRate?: 0.5 | 1; // Recurrence percentage
+
+  // Permissions
   canViewLeadPhoneNumber?: boolean;
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
-  termsAcceptedAt?: Timestamp | string; // New field
 };
 
 // User object available in the auth context or passed as props
@@ -30,16 +36,25 @@ export type AppUser = {
   uid: string;
   email: string | null;
   displayName: string | null;
-  cpf?: string; // Make CPF optional as it might not always be present
+  cpf?: string; 
   phone?: string;
   type: UserType;
   photoURL?: string | null;
-  personalBalance: number; // Should have a default in context if possibly undefined
-  mlmBalance: number;    // Should have a default in context if possibly undefined
-  createdAt?: Timestamp | string; // Make createdAt optional or ensure it's always string from context
+  personalBalance: number; 
+  mlmBalance: number;    
+  createdAt?: Timestamp | string; 
   lastSignInTime?: string;
+  termsAcceptedAt?: string; 
+
+  // New Commission Fields
+  commissionRate?: 40 | 50 | 60;
+  mlmEnabled?: boolean;
+  uplineUid?: string;
+  mlmLevel?: 1 | 2 | 3 | 4;
+  recurrenceRate?: 0.5 | 1;
+  
+  // Permissions
   canViewLeadPhoneNumber?: boolean;
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
-  termsAcceptedAt?: string; // New field
 };
