@@ -51,7 +51,7 @@ const CRITERIA_OPTIONS = [
 
 const formatDisplayValue = (value: string | number | undefined, criteria: string): string => {
   if (value === undefined) return 'N/A';
-  if (criteria === 'totalSalesValue' || (typeof value === 'string' && value.startsWith('R$'))) {
+  if (criteria === 'totalSalesValue') {
     const num = Number(String(value).replace(/[^0-9,.-]+/g,"").replace('.', '').replace(',', '.'));
     return isNaN(num) ? String(value) : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
@@ -136,12 +136,13 @@ function RankingPageContent() {
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
 
     finalizedLeads.forEach(lead => {
+        if (!lead.userId || !lead.completedAt) return;
         if (!userAllTimeMetrics[lead.userId]) {
             userAllTimeMetrics[lead.userId] = { totalKwh: 0, monthlySales: {} };
         }
         userAllTimeMetrics[lead.userId].totalKwh += lead.kwh || 0;
         
-        const monthKey = format(parseISO(lead.completedAt!), 'yyyy-MM');
+        const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
         if (!userAllTimeMetrics[lead.userId].monthlySales[monthKey]) {
             userAllTimeMetrics[lead.userId].monthlySales[monthKey] = 0;
         }
@@ -178,6 +179,7 @@ function RankingPageContent() {
     
     const userSalesCycleKwh: Record<string, number> = {};
     salesCycleLeads.forEach(lead => {
+        if (!lead.userId) return;
         if (!userSalesCycleKwh[lead.userId]) userSalesCycleKwh[lead.userId] = 0;
         userSalesCycleKwh[lead.userId] += lead.kwh || 0;
     });
@@ -191,6 +193,7 @@ function RankingPageContent() {
     }>();
 
     periodLeads.forEach(lead => {
+      if (!lead.userId) return;
       if (!userMetrics.has(lead.userId)) {
         userMetrics.set(lead.userId, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, kwh: 0 });
       }
@@ -217,7 +220,7 @@ function RankingPageContent() {
           mainScoreValue = metrics.totalSalesValue;
           mainScoreDisplay = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
           detailScore1Label = "Nº Vendas";
-          detailScore1Value = metrics.numberOfSales;
+          detailScore1Value = metrics.numberOfSales.toLocaleString('pt-BR');
           detailScore2Label = "Total KWh";
           detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
         } else if (selectedCriteria === 'numberOfSales') {
@@ -233,7 +236,7 @@ function RankingPageContent() {
           detailScore1Label = "Volume (R$)";
           detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
           detailScore2Label = "Nº Vendas";
-          detailScore2Value = metrics.numberOfSales;
+          detailScore2Value = metrics.numberOfSales.toLocaleString('pt-BR');
         }
         
         return {
@@ -257,7 +260,7 @@ function RankingPageContent() {
 
     setRankingData(calculatedRanking);
 
-  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers, periodLeads, isLoading]);
+  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers, isLoading]);
 
   const criteriaLabel = CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance";
   const loggedInUserRank = useMemo(() => rankingData.find(entry => entry.userId === appUser?.uid), [rankingData, appUser]);
@@ -452,13 +455,13 @@ function RankingPageContent() {
                 </div>
                 {loggedInUserRank.detailScore1Label && (
                    <div className="text-center hidden sm:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'totalKwh')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{loggedInUserRank.detailScore1Value}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore1Label}</p>
                   </div>
                 )}
                  {loggedInUserRank.detailScore2Label && (
                    <div className="text-center hidden md:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore2Value, 'currency')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{loggedInUserRank.detailScore2Value}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore2Label}</p>
                   </div>
                 )}
@@ -501,8 +504,8 @@ function RankingPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatDisplayValue(entry.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'totalKwh')}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatDisplayValue(entry.detailScore2Value, selectedCriteria === 'totalKwh' ? 'numberOfSales' : 'totalSalesValue')}</TableCell>}
+                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{entry.detailScore1Value}</TableCell>}
+                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{entry.detailScore2Value}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -538,4 +541,3 @@ export default function RankingPage() {
     </Suspense>
   );
 }
-
