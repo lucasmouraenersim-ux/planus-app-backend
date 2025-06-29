@@ -54,20 +54,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
-import { Wallet, Landmark, Send, History, DollarSign, Users, Info } from 'lucide-react';
-
-import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType } from '@/types/wallet';
+import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2 } from 'lucide-react';
+import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
 import { PIX_KEY_TYPES, WITHDRAWAL_TYPES } from '@/types/wallet';
-import { requestWithdrawal, fetchWithdrawalHistory } from '@/lib/firebase/firestore'; // Placeholder functions
+import { requestWithdrawal, fetchWithdrawalHistory } from '@/lib/firebase/firestore'; 
+import { useAuth } from '@/contexts/AuthContext';
 
-// Mock user balances (replace with actual data from auth context or user document)
-const MOCK_USER_BALANCES = {
-  personalBalance: 1250.75,
-  mlmBalance: 875.20,
-  userName: "Usuário Exemplo", // For the form
-  userEmail: "usuario@exemplo.com", // For the form
-  userId: "mockUserId123" // For the form
-};
 
 const withdrawalFormSchema = z.object({
   amount: z.preprocess(
@@ -87,8 +79,8 @@ type WithdrawalFormData = z.infer<typeof withdrawalFormSchema>;
 
 function WalletPageContent() {
   const { toast } = useToast();
+  const { appUser, isLoadingAuth } = useAuth();
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
-  const [userBalances, setUserBalances] = useState(MOCK_USER_BALANCES); // Simulate fetching balances
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequestWithId[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
@@ -103,19 +95,30 @@ function WalletPageContent() {
   });
 
   useEffect(() => {
-    // Simulate fetching withdrawal history
+    if (!appUser) return;
+
     const loadHistory = async () => {
       setIsLoadingHistory(true);
-      // In a real app, get userId from auth context
-      const history = await fetchWithdrawalHistory(userBalances.userId);
-      setWithdrawalHistory(history);
-      setIsLoadingHistory(false);
+      try {
+        const history = await fetchWithdrawalHistory(appUser.uid);
+        setWithdrawalHistory(history);
+      } catch (error) {
+        console.error("Error fetching withdrawal history:", error);
+        toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive"});
+      } finally {
+        setIsLoadingHistory(false);
+      }
     };
     loadHistory();
-  }, [userBalances.userId]);
+  }, [appUser, toast]);
 
   const onSubmitWithdrawal = async (data: WithdrawalFormData) => {
-    const selectedBalance = data.withdrawalType === 'personal' ? userBalances.personalBalance : userBalances.mlmBalance;
+    if (!appUser) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
+
+    const selectedBalance = data.withdrawalType === 'personal' ? appUser.personalBalance : appUser.mlmBalance;
     if (data.amount > selectedBalance) {
       form.setError("amount", {
         type: "manual",
@@ -125,11 +128,10 @@ function WalletPageContent() {
     }
 
     try {
-      // In a real app, get userId, userName, userEmail from auth context
       const requestId = await requestWithdrawal(
-        userBalances.userId,
-        userBalances.userEmail,
-        userBalances.userName,
+        appUser.uid,
+        appUser.email || 'Não informado',
+        appUser.displayName || 'Não informado',
         data.amount,
         data.pixKeyType,
         data.pixKey,
@@ -143,21 +145,18 @@ function WalletPageContent() {
         });
         setIsWithdrawalDialogOpen(false);
         form.reset();
-        // Simulate updating history (in real app, history would refetch or update via listener)
+        
+        // Optimistic update
         const newEntry: WithdrawalRequestWithId = {
             id: requestId,
-            userId: userBalances.userId,
-            userEmail: userBalances.userEmail,
-            userName: userBalances.userName,
+            userId: appUser.uid,
+            userEmail: appUser.email || 'Não informado',
+            userName: appUser.displayName || 'Não informado',
             ...data,
             status: 'pendente',
             requestedAt: new Date().toISOString(),
         };
         setWithdrawalHistory(prev => [newEntry, ...prev]);
-
-        // Note: Do NOT deduct balance from local state here.
-        // The actual balance deduction should happen on the backend when the admin marks it 'concluido'.
-        // The UI should reflect the "real" balance from Firestore. For this mock, balances remain unchanged.
 
       } else {
         toast({
@@ -183,13 +182,22 @@ function WalletPageContent() {
 
   const getStatusBadgeVariant = (status: WithdrawalStatus): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
-      case 'concluido': return 'default'; // Green (primary theme)
-      case 'processando': return 'secondary'; // Yellowish/Grayish
-      case 'pendente': return 'outline'; // Blueish/Grayish
-      case 'falhou': return 'destructive'; // Red
+      case 'concluido': return 'default';
+      case 'processando': return 'secondary';
+      case 'pendente': return 'outline';
+      case 'falhou': return 'destructive';
       default: return 'secondary';
     }
   };
+  
+  if (isLoadingAuth || !appUser) {
+      return (
+        <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
+            <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
+            <p className="text-lg font-medium">Carregando dados da carteira...</p>
+        </div>
+      );
+  }
 
   return (
     <div className="relative flex flex-col h-[calc(100vh-56px)] overflow-y-auto p-4 md:p-6 space-y-6">
@@ -200,7 +208,6 @@ function WalletPageContent() {
         </h1>
       </header>
 
-      {/* Saldo Disponível Card */}
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
         <CardHeader>
           <CardTitle className="text-xl text-primary flex items-center">
@@ -211,15 +218,15 @@ function WalletPageContent() {
         <CardContent className="space-y-3 text-lg">
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
             <span className="text-muted-foreground">Saldo Pessoal:</span>
-            <span className="font-semibold text-foreground">{formatCurrency(userBalances.personalBalance)}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(appUser.personalBalance)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
             <span className="text-muted-foreground">Saldo de Rede (MLM):</span>
-            <span className="font-semibold text-foreground">{formatCurrency(userBalances.mlmBalance)}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(appUser.mlmBalance)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-primary/10 rounded-md mt-2">
             <span className="font-bold text-primary">SALDO TOTAL:</span>
-            <span className="font-bold text-primary text-xl">{formatCurrency(userBalances.personalBalance + userBalances.mlmBalance)}</span>
+            <span className="font-bold text-primary text-xl">{formatCurrency(appUser.personalBalance + appUser.mlmBalance)}</span>
           </div>
         </CardContent>
         <CardFooter>
@@ -265,11 +272,11 @@ function WalletPageContent() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="personal" disabled={userBalances.personalBalance <= 0}>
-                              Pessoal (Disponível: {formatCurrency(userBalances.personalBalance)})
+                            <SelectItem value="personal" disabled={appUser.personalBalance <= 0}>
+                              Pessoal (Disponível: {formatCurrency(appUser.personalBalance)})
                             </SelectItem>
-                            <SelectItem value="mlm" disabled={userBalances.mlmBalance <= 0}>
-                              Rede MLM (Disponível: {formatCurrency(userBalances.mlmBalance)})
+                            <SelectItem value="mlm" disabled={appUser.mlmBalance <= 0}>
+                              Rede MLM (Disponível: {formatCurrency(appUser.mlmBalance)})
                             </SelectItem>
                           </SelectContent>
                         </Select>
@@ -328,7 +335,6 @@ function WalletPageContent() {
         </CardFooter>
       </Card>
 
-      {/* Histórico de Saques Card */}
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
         <CardHeader>
           <CardTitle className="text-xl text-primary flex items-center">
@@ -340,7 +346,7 @@ function WalletPageContent() {
         <CardContent>
           {isLoadingHistory ? (
             <div className="flex justify-center items-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Loader2 className="animate-spin rounded-full h-8 w-8 text-primary" />
               <p className="ml-3 text-muted-foreground">Carregando histórico...</p>
             </div>
           ) : withdrawalHistory.length === 0 ? (

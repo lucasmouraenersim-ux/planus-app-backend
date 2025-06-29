@@ -70,15 +70,6 @@ export async function createCrmLead(
 }
 
 
-export async function fetchCrmLeads(
-  // currentUser: AppUser
-): Promise<LeadWithId[]> {
-  // This is a placeholder as the component using it is mocked.
-  // In a real scenario, you'd implement logic based on the currentUser role.
-  console.log("Placeholder: fetchCrmLeads called");
-  return MOCK_SELLER_LEADS_FIRESTORE;
-}
-
 export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   const updates: { [key: string]: any } = {
@@ -236,16 +227,12 @@ export async function updateUser(userId: string, updates: Partial<Pick<Firestore
   if (Object.keys(finalUpdates).length > 0) {
     await updateDoc(userRef, finalUpdates);
   }
-  
-  // Note: Updating displayName in Firebase Auth for another user
-  // requires the Admin SDK and should be done in a secure backend environment.
-  // This update only affects the Firestore DB.
 }
 
 
-// --- Wallet / Commission Functions (Placeholders) ---
+// --- Wallet / Commission Functions ---
 
-export async function requestWithdrawal(userId: string, userEmail: string, userName: string | undefined, amount: number, pixKeyType: PixKeyType, pixKey: string, withdrawalType: WithdrawalType): Promise<string | null> {
+export async function requestWithdrawal(userId: string, userEmail: string, userName: string, amount: number, pixKeyType: PixKeyType, pixKey: string, withdrawalType: WithdrawalType): Promise<string | null> {
   const newRequest: WithdrawalRequestData = { userId, userEmail, userName, amount, pixKeyType, pixKey, withdrawalType, status: 'pendente', requestedAt: Timestamp.now() };
   const docRef = await addDoc(collection(db, "withdrawal_requests"), newRequest);
   return docRef.id;
@@ -254,20 +241,13 @@ export async function requestWithdrawal(userId: string, userEmail: string, userN
 export async function fetchWithdrawalHistory(userId: string): Promise<WithdrawalRequestWithId[]> {
   const q = query(collection(db, "withdrawal_requests"), where("userId", "==", userId), orderBy("requestedAt", "desc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
-    const data = doc.data() as WithdrawalRequestData;
+  return querySnapshot.docs.map(docSnap => {
+    const data = docSnap.data() as WithdrawalRequestData;
     return {
-      id: doc.id,
+      id: docSnap.id,
       ...data,
       requestedAt: (data.requestedAt as Timestamp).toDate().toISOString(),
       processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
     };
   });
 }
-
-// --- Mock Data (for components not yet fully integrated) ---
-const MOCK_SELLER_LEADS_FIRESTORE: LeadWithId[] = [
-    { id: 'slead1', name: 'Loja de Roupas Elegance', company: 'Elegance Modas LTDA', value: 3500, kwh: 1200, stageId: 'proposta', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 2).toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Indicação" },
-    { id: 'slead2', name: 'Restaurante Sabor Caseiro', value: 8000, kwh: 3000, stageId: 'assinado', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 15).toISOString(), lastContact: new Date(Date.now() - 86400000 * 1).toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Tráfego Pago" },
-    { id: 'slead3', name: 'Oficina Mecânica Rápida', value: 1500, kwh: 600, stageId: 'fatura', sellerName: 'vendedor1@example.com', createdAt: new Date().toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Porta a Porta (PAP)" },
-];

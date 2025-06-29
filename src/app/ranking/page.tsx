@@ -4,6 +4,8 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '@/contexts/AuthContext';
+import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -11,14 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X } from 'lucide-react';
-import type { AppUser } from '@/types/user';
+import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2 } from 'lucide-react';
+import type { LeadWithId } from '@/types/crm';
+import type { FirestoreUser } from '@/types/user';
 
-// Interface for Ranking Display
 interface RankingDisplayEntry {
   rankPosition: number;
   userId: string;
@@ -30,59 +32,21 @@ interface RankingDisplayEntry {
   detailScore1Value?: string | number;
   detailScore2Label?: string;
   detailScore2Value?: string | number;
-  periodIdentifier: string; 
-  criteriaIdentifier: string; 
   kwh: number;
   totalKwhAllTime: number;
   kwhThisSalesCycle: number;
   hasEverHit30kInAMonth: boolean;
 }
 
-// Mock AppUser for demonstration
-const MOCK_LOGGED_IN_USER: AppUser = {
-  uid: 'user1',
-  email: 'vendedor1@example.com',
-  displayName: 'Vendedor Um',
-  type: 'vendedor',
-  personalBalance: 1250.75,
-  mlmBalance: 350.50,
-  photoURL: 'https://placehold.co/100x100.png?text=VU',
-};
-
-const MOCK_RANKING_ENTRIES: RankingDisplayEntry[] = [
-  // User Data (Consistent across all entries)
-  // User 1 (Vendedor Um): Gold
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 18.500,00', mainScoreValue: 18500, detailScore1Label: 'Nº Vendas', detailScore1Value: 3, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 9250, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '3 Vendas', mainScoreValue: 3, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 18.500,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 6.166,67', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 9250, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: 'R$ 150.000,00', mainScoreValue: 150000, detailScore1Label: 'Nº Vendas', detailScore1Value: 25, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 75000, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
-  { rankPosition: 0, userId: 'user1', userName: 'Vendedor Um', userPhotoUrl: MOCK_LOGGED_IN_USER.photoURL || undefined, mainScoreDisplay: '25 Vendas', mainScoreValue: 25, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 150.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 75000, totalKwhAllTime: 150000, kwhThisSalesCycle: 18500, hasEverHit30kInAMonth: true },
-  
-  // User 2 (Vendedor Dois): Silver
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 25.000,00', mainScoreValue: 25000, detailScore1Label: 'Nº Vendas', detailScore1Value: 5, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 12500, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: '5 Vendas', mainScoreValue: 5, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 25.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 12500, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2', mainScoreDisplay: 'R$ 120.000,00', mainScoreValue: 120000, detailScore1Label: 'Nº Vendas', detailScore1Value: 20, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 60000, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user2', userName: 'Vendedor Dois', userPhotoUrl: 'https://placehold.co/100x100.png?text=V2',mainScoreDisplay: '20 Vendas', mainScoreValue: 20, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 120.000,00', periodIdentifier: 'all_time', criteriaIdentifier: 'numberOfSales', kwh: 60000, totalKwhAllTime: 120000, kwhThisSalesCycle: 25000, hasEverHit30kInAMonth: false },
-  
-  // User 3 (Vendedor Três): Bronze (high total, low current month)
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 12.000,00', mainScoreValue: 12000, detailScore1Label: 'Nº Vendas', detailScore1Value: 4, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 6000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: '4 Vendas', mainScoreValue: 4, detailScore1Label: 'Volume (R$)', detailScore1Value: 'R$ 12.000,00', detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 3.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'numberOfSales', kwh: 6000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user3', userName: 'Vendedor Três', userPhotoUrl: 'https://placehold.co/100x100.png?text=V3', mainScoreDisplay: 'R$ 90.000,00', mainScoreValue: 90000, detailScore1Label: 'Nº Vendas', detailScore1Value: 15, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 45000, totalKwhAllTime: 90000, kwhThisSalesCycle: 12000, hasEverHit30kInAMonth: false },
-
-  // User 4 (Vendedor Quatro): Bronze (low total)
-  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', mainScoreDisplay: 'R$ 10.000,00', mainScoreValue: 10000, detailScore1Label: 'Nº Vendas', detailScore1Value: 2, detailScore2Label: 'Ticket Médio', detailScore2Value: 'R$ 5.000,00', periodIdentifier: 'monthly_current', criteriaIdentifier: 'totalSalesValue', kwh: 5000, totalKwhAllTime: 15000, kwhThisSalesCycle: 10000, hasEverHit30kInAMonth: false },
-  { rankPosition: 0, userId: 'user4', userName: 'Vendedor Quatro', userPhotoUrl: 'https://placehold.co/100x100.png?text=V4',mainScoreDisplay: 'R$ 75.000,00', mainScoreValue: 75000, detailScore1Label: 'Nº Vendas', detailScore1Value: 10, periodIdentifier: 'all_time', criteriaIdentifier: 'totalSalesValue', kwh: 37500, totalKwhAllTime: 75000, kwhThisSalesCycle: 10000, hasEverHit30kInAMonth: false },
-];
-
 const PERIOD_OPTIONS = [
-  { value: 'monthly_current', label: 'Mensal Atual' },
-  { value: 'monthly_previous', label: 'Mensal Anterior' },
-  { value: 'annual_current', label: 'Anual Atual' },
+  { value: 'monthly_current', label: 'Mensal (Ciclo de Vendas)' },
   { value: 'all_time', label: 'Todo o Período' },
 ];
 
 const CRITERIA_OPTIONS = [
   { value: 'totalSalesValue', label: 'Volume de Vendas (R$)' },
   { value: 'numberOfSales', label: 'Número de Vendas' },
+  { value: 'totalKwh', label: 'Total de KWh' },
 ];
 
 const formatDisplayValue = (value: string | number | undefined, criteria: string): string => {
@@ -91,62 +55,191 @@ const formatDisplayValue = (value: string | number | undefined, criteria: string
     const num = Number(String(value).replace(/[^0-9,.-]+/g,"").replace('.', '').replace(',', '.'));
     return isNaN(num) ? String(value) : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
+   if (criteria === 'totalKwh') {
+      return `${Number(value).toLocaleString('pt-BR')} kWh`;
+   }
   return String(value);
 };
 
 const getMedalForSeller = (entry: RankingDisplayEntry): string => {
-  if (entry.hasEverHit30kInAMonth) {
-    return '🥇'; // Gold
-  }
-  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) {
-    return '🥈'; // Silver
-  }
-  return '🥉'; // Bronze
+  if (entry.hasEverHit30kInAMonth) return '🥇'; 
+  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) return '🥈';
+  return '🥉';
 };
 
-
 function RankingPageContent() {
+  const { appUser, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
+  const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [rankingData, setRankingData] = useState<RankingDisplayEntry[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(PERIOD_OPTIONS[0].value);
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
   const [showSecondNotification, setShowSecondNotification] = useState(false);
-  const loggedInUser = MOCK_LOGGED_IN_USER;
 
   useEffect(() => {
-    setIsLoading(true);
-    // Simulate API call / data processing
-    const timer = setTimeout(() => {
-      const filtered = MOCK_RANKING_ENTRIES.filter(
-        entry => entry.periodIdentifier === selectedPeriod && entry.criteriaIdentifier === selectedCriteria
-      );
-      const sorted = [...filtered].sort((a, b) => b.mainScoreValue - a.mainScoreValue);
-      const ranked = sorted.map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
-      setRankingData(ranked);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const leads = await fetchAllCrmLeadsGlobally();
+        setAllLeads(leads);
+      } catch (error) {
+        console.error("Failed to load leads for ranking:", error);
+      }
+    };
+    loadData();
+  }, [fetchAllCrmLeadsGlobally]);
+
+  useEffect(() => {
+    if (!allLeads.length || !allFirestoreUsers.length) {
       setIsLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [selectedPeriod, selectedCriteria]);
+      return;
+    }
+
+    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+
+    const getPeriodBounds = (period: string) => {
+      const today = new Date();
+      if (period === 'monthly_current') {
+        const dayOfMonth = today.getDate();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        if (dayOfMonth < 21) {
+          return { start: new Date(currentYear, currentMonth - 1, 21), end: new Date(currentYear, currentMonth, 21) };
+        } else {
+          return { start: new Date(currentYear, currentMonth, 21), end: new Date(currentYear, currentMonth + 1, 21) };
+        }
+      }
+      return { start: null, end: null }; // all_time
+    };
+
+    const { start, end } = getPeriodBounds(selectedPeriod);
+    const periodLeads = start && end
+      ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
+      : finalizedLeads;
+    
+    // --- All-time metrics calculation ---
+    const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
+
+    finalizedLeads.forEach(lead => {
+        if (!userAllTimeMetrics[lead.userId]) {
+            userAllTimeMetrics[lead.userId] = { totalKwh: 0, monthlySales: {} };
+        }
+        userAllTimeMetrics[lead.userId].totalKwh += lead.kwh || 0;
+        
+        const monthKey = format(parseISO(lead.completedAt!), 'yyyy-MM');
+        if (!userAllTimeMetrics[lead.userId].monthlySales[monthKey]) {
+            userAllTimeMetrics[lead.userId].monthlySales[monthKey] = 0;
+        }
+        userAllTimeMetrics[lead.userId].monthlySales[monthKey] += lead.value || 0;
+    });
+
+    const usersWhoHit30k = new Set<string>();
+    Object.keys(userAllTimeMetrics).forEach(userId => {
+        const monthlySales = userAllTimeMetrics[userId].monthlySales;
+        for (const month in monthlySales) {
+            if (monthlySales[month] >= 30000) {
+                usersWhoHit30k.add(userId);
+                break;
+            }
+        }
+    });
+
+    const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
+    const salesCycleLeads = cycleStart && cycleEnd
+        ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd)
+        : [];
+    
+    const userSalesCycleKwh: Record<string, number> = {};
+    salesCycleLeads.forEach(lead => {
+        if (!userSalesCycleKwh[lead.userId]) userSalesCycleKwh[lead.userId] = 0;
+        userSalesCycleKwh[lead.userId] += lead.kwh || 0;
+    });
+
+    // --- Period-specific metrics ---
+    const userMetrics = new Map<string, {
+      totalSalesValue: number,
+      numberOfSales: number,
+      totalKwh: number,
+      kwh: number
+    }>();
+
+    periodLeads.forEach(lead => {
+      if (!userMetrics.has(lead.userId)) {
+        userMetrics.set(lead.userId, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, kwh: 0 });
+      }
+      const metrics = userMetrics.get(lead.userId)!;
+      metrics.totalSalesValue += lead.value || 0;
+      metrics.numberOfSales += 1;
+      metrics.totalKwh += lead.kwh || 0;
+      metrics.kwh += lead.kwh || 0;
+    });
+    
+    const calculatedRanking = allFirestoreUsers
+      .filter(user => user.type === 'vendedor' || user.type === 'admin' || user.type === 'superadmin')
+      .map(user => {
+        const metrics = userMetrics.get(user.uid) || { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, kwh: 0 };
+        
+        let mainScoreValue = 0;
+        let mainScoreDisplay = "";
+        let detailScore1Label = "";
+        let detailScore1Value: string | number | undefined = "";
+        let detailScore2Label = "";
+        let detailScore2Value: string | number | undefined = "";
+
+        if (selectedCriteria === 'totalSalesValue') {
+          mainScoreValue = metrics.totalSalesValue;
+          mainScoreDisplay = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          detailScore1Label = "Nº Vendas";
+          detailScore1Value = metrics.numberOfSales;
+          detailScore2Label = "Total KWh";
+          detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+        } else if (selectedCriteria === 'numberOfSales') {
+          mainScoreValue = metrics.numberOfSales;
+          mainScoreDisplay = `${metrics.numberOfSales} Vendas`;
+          detailScore1Label = "Volume (R$)";
+          detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          detailScore2Label = "Total KWh";
+          detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+        } else { // totalKwh
+          mainScoreValue = metrics.totalKwh;
+          mainScoreDisplay = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+          detailScore1Label = "Volume (R$)";
+          detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          detailScore2Label = "Nº Vendas";
+          detailScore2Value = metrics.numberOfSales;
+        }
+        
+        return {
+          userId: user.uid,
+          userName: user.displayName || user.email || 'N/A',
+          userPhotoUrl: user.photoURL || undefined,
+          mainScoreValue,
+          mainScoreDisplay,
+          detailScore1Label,
+          detailScore1Value,
+          detailScore2Label,
+          detailScore2Value,
+          kwh: metrics.kwh,
+          totalKwhAllTime: userAllTimeMetrics[user.uid]?.totalKwh || 0,
+          kwhThisSalesCycle: userSalesCycleKwh[user.uid] || 0,
+          hasEverHit30kInAMonth: usersWhoHit30k.has(user.uid),
+        } as Omit<RankingDisplayEntry, 'rankPosition'>;
+      })
+      .sort((a, b) => b.mainScoreValue - a.mainScoreValue)
+      .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
+
+    setRankingData(calculatedRanking);
+    setIsLoading(false);
+
+  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers]);
 
   const totalKwhSold = useMemo(() => {
-    const relevantEntries = MOCK_RANKING_ENTRIES.filter(
-      entry => entry.periodIdentifier === selectedPeriod
-    );
-    const uniqueUserKwh = new Map<string, number>();
-    relevantEntries.forEach(entry => {
-        uniqueUserKwh.set(entry.userId, entry.kwh);
-    });
-    return Array.from(uniqueUserKwh.values()).reduce((sum, kwh) => sum + kwh, 0);
-  }, [selectedPeriod]);
-
+    return rankingData.reduce((sum, entry) => sum + entry.kwh, 0);
+  }, [rankingData]);
 
   const criteriaLabel = CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance";
-
-  const loggedInUserRank = useMemo(() => {
-    return rankingData.find(entry => entry.userId === loggedInUser.uid);
-  }, [rankingData, loggedInUser.uid]);
-
+  const loggedInUserRank = useMemo(() => rankingData.find(entry => entry.userId === appUser?.uid), [rankingData, appUser]);
   const podiumData = useMemo(() => rankingData.slice(0, 3), [rankingData]);
 
   const getPodiumBorderColor = (index: number) => {
@@ -162,11 +255,17 @@ function RankingPageContent() {
     if (index === 2) return 'text-yellow-600';
     return 'text-foreground';
   };
-
+  
+  if (!appUser) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
+        <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 text-foreground">
-      {/* Notification banner 1 */}
       {showNotification && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 animate-in fade-in-50">
           <Card className="relative max-w-2xl w-full bg-card/90 border-primary shadow-2xl">
@@ -196,7 +295,6 @@ function RankingPageContent() {
         </div>
       )}
 
-      {/* Second notification banner */}
       {showSecondNotification && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 animate-in fade-in-50">
           <Card className="relative max-w-2xl w-full bg-card/90 border-primary shadow-2xl">
@@ -281,14 +379,13 @@ function RankingPageContent() {
       
       {isLoading && (
          <div className="flex flex-col justify-center items-center h-64 bg-transparent text-primary">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
             <p className="text-lg font-medium">Carregando ranking...</p>
         </div>
       )}
 
       {!isLoading && rankingData.length > 0 && (
         <>
-          {/* Podium Section */}
           {podiumData.length > 0 && (
             <section className="mb-12">
               <h2 className="text-3xl font-semibold text-center text-foreground mb-8">Pódio dos Campeões <Crown className="inline-block text-yellow-400 ml-2 h-7 w-7" /></h2>
@@ -316,7 +413,6 @@ function RankingPageContent() {
             </section>
           )}
 
-          {/* My Position Section */}
           {loggedInUserRank && (
             <Card className="my-8 bg-primary/10 border-primary/50 border-2 shadow-xl p-6">
               <CardHeader className="p-0 pb-3 text-center md:text-left">
@@ -335,7 +431,7 @@ function RankingPageContent() {
                 </div>
                 {loggedInUserRank.detailScore1Label && (
                    <div className="text-center hidden sm:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'numberOfSales')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'totalKwh')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore1Label}</p>
                   </div>
                 )}
@@ -349,7 +445,6 @@ function RankingPageContent() {
             </Card>
           )}
 
-          {/* Full Ranking Table */}
           <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
             <CardHeader>
               <CardTitle className="text-2xl text-primary">Classificação Completa</CardTitle>
@@ -368,7 +463,7 @@ function RankingPageContent() {
                 </TableHeader>
                 <TableBody>
                   {rankingData.map((entry) => (
-                    <TableRow key={entry.userId} className={entry.userId === loggedInUser.uid ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted/50'}>
+                    <TableRow key={entry.userId} className={entry.userId === appUser?.uid ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted/50'}>
                       <TableCell className="font-bold text-lg text-center">{entry.rankPosition}</TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-3">
@@ -385,16 +480,13 @@ function RankingPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatDisplayValue(entry.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'numberOfSales')}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatDisplayValue(entry.detailScore2Value, 'currency')}</TableCell>}
+                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatDisplayValue(entry.detailScore1Value, selectedCriteria === 'numberOfSales' ? 'totalSalesValue' : 'totalKwh')}</TableCell>}
+                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatDisplayValue(entry.detailScore2Value, selectedCriteria === 'totalKwh' ? 'numberOfSales' : 'totalSalesValue')}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </CardContent>
-            <CardFooter className="text-xs text-muted-foreground pt-4">
-              <p>* O ranking é atualizado periodicamente. Os valores são baseados em leads com status 'assinado'.</p>
-            </CardFooter>
           </Card>
         </>
       )}
@@ -404,7 +496,7 @@ function RankingPageContent() {
           <CardContent className="p-10 text-center">
             <ListOrdered className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-xl text-muted-foreground">Nenhum dado de ranking encontrado para os filtros selecionados.</p>
-            <p className="text-sm text-muted-foreground mt-2">Tente ajustar o período ou critério.</p>
+            <p className="text-sm text-muted-foreground mt-2">Tente ajustar o período ou critério, ou finalize mais leads!</p>
           </CardContent>
         </Card>
       )}
@@ -414,51 +506,10 @@ function RankingPageContent() {
 
 
 export default function RankingPage() {
-  // Simulate checking user role, in a real app this would come from auth context
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    // This logic now runs only on the client after hydration
-    const loggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
-    const role = loggedIn ? 'vendedor' : 'admin'; // Example: 'vendedor' if logged in, 'admin' if not
-    setUserRole(role);
-
-    if (role === 'vendedor' || role === 'admin') {
-      setIsAuthorized(true);
-    } else {
-      setIsAuthorized(false);
-      // Optionally redirect if not authorized, e.g., router.push('/login');
-      // For this example, we'll just show a message.
-    }
-  }, []);
-
-  if (isAuthorized === null) {
-     return (
-      <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-        <p className="text-lg font-medium">Verificando autorização...</p>
-      </div>
-    );
-  }
-
-  if (!isAuthorized) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen text-destructive">
-        <TrendingUp size={64} className="mb-4" />
-        <h1 className="text-2xl font-bold">Acesso Negado</h1>
-        <p>Você não tem permissão para acessar esta página.</p>
-        <Link href="/" passHref>
-          <Button variant="link" className="mt-4">Voltar para a Home</Button>
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <Suspense fallback={
       <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+        <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
         <p className="text-lg font-medium">Carregando Ranking...</p>
       </div>
     }>
