@@ -166,6 +166,23 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
   console.log(`Successfully deleted lead ${leadId} and its chat history.`);
 }
 
+export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
+  const leadRef = doc(db, "crm_leads", leadId);
+  const leadDoc = await getDoc(leadRef);
+
+  // Check if the lead is available to be assigned.
+  if (!leadDoc.exists() || (leadDoc.data().stageId !== 'para-atribuir')) {
+    throw new Error("Este lead não está mais disponível para atribuição.");
+  }
+  
+  await updateDoc(leadRef, {
+    userId: seller.uid,
+    sellerName: seller.name,
+    stageId: 'contato', // Move to 'contato' stage after assignment
+    lastContact: Timestamp.now(),
+  });
+}
+
 export async function approveCrmLead(leadId: string): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   await updateDoc(leadRef, {
