@@ -1,8 +1,9 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +19,8 @@ import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
 import { createUser } from '@/actions/admin/createUser';
+import { importLeadsFromCSV } from '@/actions/admin/leadManagement'; // New import
+import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -53,15 +56,10 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon
+    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Upload
 } from 'lucide-react';
 import { ChartContainer } from "@/components/ui/chart";
 
-
-const MOCK_LEADS: LeadWithId[] = [
-  { id: 'lead1', name: 'Empresa Grande', value: 10000, kwh: 5000, stageId: 'assinado', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 3).toISOString(), lastContact: new Date().toISOString(), leadSource: 'Tráfego Pago', userId: 'user1', needsAdminApproval: false },
-  { id: 'lead2', name: 'Mercado Local', value: 2000, kwh: 800, stageId: 'proposta', sellerName: 'vendedor2@example.com', createdAt: new Date(Date.now() - 86400000 * 7).toISOString(), lastContact: new Date(Date.now() - 86400000).toISOString(), leadSource: 'Indicação', userId: 'user2' },
-];
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
   { id: 'wd1', userId: 'user1', userEmail: 'vendedor1@example.com', userName: 'Vendedor Um', amount: 500, pixKeyType: 'CPF/CNPJ', pixKey: '111.111.111-11', status: 'pendente', requestedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'personal' },
   { id: 'wd2', userId: 'user2', userEmail: 'vendedor2@example.com', userName: 'Vendedor Dois', amount: 200, pixKeyType: 'Email', pixKey: 'vendedor2@example.com', status: 'concluido', requestedAt: new Date(Date.now() - 86400000 * 2).toISOString(), processedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'mlm', adminNotes: 'Pago.' },
@@ -102,9 +100,13 @@ interface AdminCommissionDashboardProps {
 
 export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, refreshUsers }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
+  const { userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
   
-  const [allLeads, setAllLeads] = useState<LeadWithId[]>(MOCK_LEADS);
+  const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
+  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
+  const [isUploadingLeads, setIsUploadingLeads] = useState(false);
+
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequestWithId[]>(MOCK_WITHDRAWALS);
 
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -130,6 +132,16 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
   const authorizedEditors = useMemo(() => ['lucasmoura@sentenergia.com'], []);
   const canEdit = useMemo(() => authorizedEditors.includes(loggedInUser.email || ''), [loggedInUser.email, authorizedEditors]);
+  
+  useEffect(() => {
+    async function loadLeads() {
+      setIsLoadingLeads(true);
+      const leads = await fetchAllCrmLeadsGlobally();
+      setAllLeads(leads);
+      setIsLoadingLeads(false);
+    }
+    loadLeads();
+  }, [fetchAllCrmLeadsGlobally]);
 
   const handleOpenEditModal = (user: FirestoreUser) => {
     setSelectedUser(user);
@@ -245,45 +257,85 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }, 1000);
   };
 
-  const handleExportCSV = () => {
+  const handleExportUsersCSV = () => {
     if (filteredUsers.length === 0) {
-      toast({
-        title: "Nenhum usuário para exportar",
-        description: "A seleção atual de filtros não retornou usuários.",
-      });
+      toast({ title: "Nenhum usuário para exportar", description: "A seleção atual de filtros não retornou usuários." });
       return;
     }
-
-    const dataToExport = filteredUsers.map(user => ({
-      'UID': user.uid,
-      'Nome': user.displayName || 'N/A',
-      'Email': user.email || 'N/A',
-      'CPF': user.cpf || 'N/A',
-      'Telefone': user.phone || 'N/A',
-      'Tipo': user.type || 'N/A',
-      'Saldo Pessoal (R$)': (user.personalBalance || 0).toFixed(2).replace('.', ','),
-      'Saldo MLM (R$)': (user.mlmBalance || 0).toFixed(2).replace('.', ','),
-      'Data de Criação': user.createdAt ? format(parseISO(user.createdAt as string), "yyyy-MM-dd HH:mm:ss", { locale: ptBR }) : 'N/A',
-      'Último Acesso': user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "yyyy-MM-dd HH:mm:ss", { locale: ptBR }) : 'N/A',
-    }));
-
+    const dataToExport = filteredUsers.map(user => ({ 'UID': user.uid, 'Nome': user.displayName || 'N/A', 'Email': user.email || 'N/A', 'CPF': user.cpf || 'N/A', 'Telefone': user.phone || 'N/A', 'Tipo': user.type || 'N/A', 'Saldo Pessoal (R$)': (user.personalBalance || 0).toFixed(2).replace('.', ','), 'Saldo MLM (R$)': (user.mlmBalance || 0).toFixed(2).replace('.', ','), 'Data de Criação': user.createdAt ? format(parseISO(user.createdAt as string), "yyyy-MM-dd HH:mm:ss") : 'N/A', 'Último Acesso': user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "yyyy-MM-dd HH:mm:ss") : 'N/A' }));
     const csv = Papa.unparse(dataToExport);
-    
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    const formattedDate = format(new Date(), 'yyyy-MM-dd');
-    link.setAttribute("download", `usuarios_planus_${formattedDate}.csv`);
-    link.style.visibility = 'hidden';
+    link.setAttribute("download", `usuarios_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    toast({ title: "Exportação Iniciada", description: `${filteredUsers.length} usuários exportados.` });
+  };
+  
+  const handleExportLeadsCSV = () => {
+    if (allLeads.length === 0) {
+      toast({ title: "Nenhum lead para exportar." });
+      return;
+    }
+    const dataToExport = allLeads.map(lead => ({
+      'Cliente': lead.name,
+      'Vendedor': lead.sellerName,
+      'Documento': lead.cpf || lead.cnpj || '',
+      'Instalação': lead.codigoClienteInstalacao || '',
+      'Concessionária': lead.concessionaria || '',
+      'Plano': lead.plano || '',
+      'Consumo (KWh)': lead.kwh,
+      'Valor (R$)': lead.value,
+      'Status': lead.stageId.toUpperCase(),
+      'Assinado em': lead.signedAt ? format(parseISO(lead.signedAt), 'dd/MM/yyyy HH:mm') : '',
+      'Finalizado em': lead.completedAt ? format(parseISO(lead.completedAt), 'dd/MM/yyyy HH:mm') : '',
+      'Data Referencia Venda': lead.saleReferenceDate || '',
+      'Criado em': format(parseISO(lead.createdAt), 'dd/MM/yyyy HH:mm'),
+      'Atualizado em': format(parseISO(lead.lastContact), 'dd/MM/yyyy HH:mm'),
+    }));
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `leads_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    toast({ title: "Exportação de Leads Iniciada", description: `${allLeads.length} leads exportados.` });
+  };
+
+  const handleImportLeadsCSV = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const fileInput = event.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
+
+    if (!fileInput?.files?.length) {
+      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo CSV.", variant: "destructive" });
+      return;
+    }
+    setIsUploadingLeads(true);
+    const result = await importLeadsFromCSV(formData);
+    toast({
+      title: result.success ? "Importação Concluída" : "Erro na Importação",
+      description: result.message,
+      variant: result.success ? "default" : "destructive"
+    });
+    if (result.success) {
+      // Manually trigger a refresh of leads data
+      const leads = await fetchAllCrmLeadsGlobally();
+      setAllLeads(leads);
+    }
+    setIsUploadingLeads(false);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = "Cliente,Vendedor,Documento,Instalação,Concessionária,Plano,Consumo (KWh),Valor (RS),Status,Assinado em,Finalizado em,Data Referencia Venda,Criado em,Atualizado em";
+    const csvContent = "data:text/csv;charset=utf-8," + encodeURI(headers);
+    const link = document.createElement("a");
+    link.setAttribute("href", csvContent);
+    link.setAttribute("download", "modelo_importacao_leads.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    toast({
-        title: "Exportação Iniciada",
-        description: `${filteredUsers.length} usuários estão sendo exportados para CSV.`,
-    });
   };
   
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
@@ -328,7 +380,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yy", { locale: ptBR })} - ${format(dateRange.to, "dd/MM/yy", { locale: ptBR })}` : format(dateRange.from, "dd/MM/yy", { locale: ptBR })) : (<span>Selecione o período</span>)}
+                {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yy")} - ${format(dateRange.to, "dd/MM/yy")}` : format(dateRange.from, "dd/MM/yy")) : (<span>Selecione o período</span>)}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end"><Calendar mode="range" selected={dateRange} onSelect={setDateRange} initialFocus locale={ptBR} /></PopoverContent>
@@ -351,11 +403,45 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Consumo (kWh) dos Leads</CardTitle><CardDescription>Distribuição de consumo dos leads assinados.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><Activity className="w-16 h-16 text-muted-foreground/50"/></CardContent></Card>
       </div>
       
+       {userAppRole === 'superadmin' && (
+        <Card className="bg-card/70 backdrop-blur-lg border">
+          <CardHeader>
+            <CardTitle className="text-primary flex items-center"><CrmIcon className="mr-2 h-5 w-5" />Gerenciamento de Leads (CSV)</CardTitle>
+            <CardDescription>Importe novos leads ou exporte a base atual em formato CSV.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 space-y-2">
+                <Label>Importar Leads</Label>
+                <form onSubmit={handleImportLeadsCSV} className="flex items-center gap-2">
+                  <Input id="csvFile" name="csvFile" type="file" accept=".csv" disabled={isUploadingLeads} className="flex-grow" />
+                  <Button type="submit" disabled={isUploadingLeads}>
+                    {isUploadingLeads ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    Importar
+                  </Button>
+                </form>
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Exportar / Modelo</Label>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleExportLeadsCSV} variant="outline" className="w-full">
+                    <Download className="mr-2 h-4 w-4" /> Exportar Leads
+                  </Button>
+                  <Button onClick={handleDownloadTemplate} variant="outline" className="w-full">
+                    <Download className="mr-2 h-4 w-4" /> Baixar Modelo
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+       )}
+
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários do sistema.</CardDescription></div>
           <div className="flex items-center gap-2">
-            <Button onClick={handleExportCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+            <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar Usuários</Button>
             {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
           </div>
         </CardHeader>
@@ -375,7 +461,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                     <TableCell>{user.cpf ? `${user.cpf.slice(0,3)}.${user.cpf.slice(3,6)}.${user.cpf.slice(6,9)}-${user.cpf.slice(9,11)}` : 'N/A'}</TableCell>
                     <TableCell>{user.phone || 'N/A'}</TableCell>
                     <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
-                    <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm", { locale: ptBR }) : 'Nunca'}</TableCell>
+                    <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
@@ -412,7 +498,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 <TableRow key={req.id}>
                   <TableCell>{req.userName || req.userEmail}</TableCell><TableCell>{formatCurrency(req.amount)}</TableCell>
                   <TableCell>{req.withdrawalType === 'personal' ? 'Pessoal' : 'Rede MLM'}</TableCell><TableCell title={req.pixKey} className="truncate max-w-[150px]">{req.pixKeyType}: {req.pixKey}</TableCell>
-                  <TableCell>{req.requestedAt ? format(parseISO(req.requestedAt as string), "dd/MM/yy HH:mm", { locale: ptBR }) : 'N/A'}</TableCell>
+                  <TableCell>{req.requestedAt ? format(parseISO(req.requestedAt as string), "dd/MM/yy HH:mm") : 'N/A'}</TableCell>
                   <TableCell><span className={`px-2 py-1 text-xs rounded-full ${req.status === 'concluido' ? 'bg-green-500/20 text-green-400' : req.status === 'pendente' ? 'bg-yellow-500/20 text-yellow-400' : req.status === 'falhou' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>{req.status}</span></TableCell>
                   <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => handleOpenUpdateWithdrawalModal(req)}><ExternalLink className="h-3 w-3 mr-1"/>Detalhes</Button></TableCell>
                 </TableRow>
@@ -523,7 +609,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </Dialog>
       )}
 
-      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm", { locale: ptBR }) : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></DialogFooter></form></Form></DialogContent></Dialog>)}
+      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></DialogFooter></form></Form></DialogContent></Dialog>)}
       
       <AlertDialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Redefinição de Senha</AlertDialogTitle><AlertDialogDescription>Um email será enviado para <strong>{selectedUser?.email}</strong> com instruções para criar uma nova senha. O usuário será desconectado de todas as sessões ativas. Deseja continuar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmResetPassword} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar Email</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>

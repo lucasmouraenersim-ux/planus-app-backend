@@ -70,6 +70,13 @@ export interface LeadDocumentData {
   cnpj?: string; // New: CNPJ para Pessoa Jurídica
   stateRegistration?: string; // New: Inscrição Estadual para PJ
 
+  // Fields for Import/Export
+  codigoClienteInstalacao?: string; // 'Instalação' from CSV
+  concessionaria?: string; // 'Concessionária' from CSV
+  plano?: string; // 'Plano' from CSV
+  completedAt?: Timestamp | string; // 'Finalizado em' from CSV
+  saleReferenceDate?: string; // 'Data Referencia Venda' from CSV
+
   // Legal Representative Fields (for PJ)
   legalRepresentativeName?: string;
   legalRepresentativeCpf?: string;
@@ -85,11 +92,12 @@ export interface LeadDocumentData {
   otherDocumentsUrl?: string; // For "Demais documentos"
 }
 
-export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt'> {
+export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'> {
   id: string;
   createdAt: string; // Always string on client
   lastContact: string; // Always string on client
   signedAt?: string; // Always string on client
+  completedAt?: string; // Always string on client
 }
 
 export interface OutboundLead {
