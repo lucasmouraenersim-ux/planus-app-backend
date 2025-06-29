@@ -29,9 +29,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake } from 'lucide-react';
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -79,6 +78,20 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
           <CalendarDays className="w-4 h-4 mr-2 text-purple-500" />
           <span>Último Contato: {format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", { locale: ptBR })}</span>
         </div>
+        
+        {lead.signedAt && (
+            <div className="flex items-center text-muted-foreground text-xs pt-1">
+                <CheckCircle className="w-3.5 h-3.5 mr-1.5 text-green-500" />
+                <span>Assinado: {format(parseISO(lead.signedAt), "dd/MM/yy")}</span>
+            </div>
+        )}
+        {lead.completedAt && (
+            <div className="flex items-center text-muted-foreground text-xs">
+                <Award className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                <span>Finalizado: {format(parseISO(lead.completedAt), "dd/MM/yy")}</span>
+            </div>
+        )}
+
         {lead.leadSource && (
           <div className="pt-1">
             <Badge variant="secondary" className="text-xs">{lead.leadSource}</Badge>

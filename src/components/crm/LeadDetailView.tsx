@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -18,7 +17,7 @@ import {
     CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { updateCrmLeadSignedAt } from '@/lib/firebase/firestore';
+import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -48,9 +47,14 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [correctionReason, setCorrectionReason] = useState('');
   const [showCorrectionInput, setShowCorrectionInput] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [isEditingDate, setIsEditingDate] = useState(false);
+
+  const [isEditingSignedDate, setIsEditingSignedDate] = useState(false);
   const [newSignedDate, setNewSignedDate] = useState<Date | undefined>(
     lead.signedAt ? parseISO(lead.signedAt) : undefined
+  );
+  const [isEditingCompletedDate, setIsEditingCompletedDate] = useState(false);
+  const [newCompletedDate, setNewCompletedDate] = useState<Date | undefined>(
+    lead.completedAt ? parseISO(lead.completedAt) : undefined
   );
 
   useEffect(() => {
@@ -139,17 +143,19 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     setShowCorrectionInput(false);
   };
   
-  const handleUpdateDate = async () => {
-    if (!newSignedDate || !lead.id) return;
+  const handleUpdateDate = async (field: 'signedAt' | 'completedAt', date: Date | undefined) => {
+    if (!date || !lead.id) return;
     try {
-        await updateCrmLeadSignedAt(lead.id, newSignedDate.toISOString());
+        const fieldName = field === 'signedAt' ? 'de Assinatura' : 'de Finalização';
+        await updateCrmLeadDetails(lead.id, { [field]: date.toISOString() });
         toast({
-            title: "Data de Assinatura Atualizada",
+            title: `Data ${fieldName} Atualizada`,
             description: "A data foi salva com sucesso.",
         });
-        setIsEditingDate(false);
+        if (field === 'signedAt') setIsEditingSignedDate(false);
+        if (field === 'completedAt') setIsEditingCompletedDate(false);
     } catch (error) {
-        console.error("Error updating signature date:", error);
+        console.error("Error updating date:", error);
         toast({
             title: "Erro ao Salvar",
             description: "Não foi possível salvar a nova data.",
@@ -171,27 +177,6 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
               {stageInfo && (
                 <Badge className={`text-xs ${stageInfo.colorClass} text-white`}>{stageInfo.title}</Badge>
               )}
-              {lead.stageId === 'assinado' && (
-                <div className="flex items-center text-sm text-muted-foreground bg-background px-2 py-1 rounded-md">
-                  <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" />
-                  <span className="font-medium">{lead.signedAt ? format(parseISO(lead.signedAt), "dd/MM/yyyy", { locale: ptBR }) : 'Assinado'}</span>
-                  {isAdmin && (
-                    <Popover open={isEditingDate} onOpenChange={setIsEditingDate}>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="ml-1 h-6 w-6">
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 bg-card border-border">
-                        <Calendar mode="single" selected={newSignedDate} onSelect={setNewSignedDate} initialFocus locale={ptBR} />
-                        <div className="p-2 border-t border-border flex justify-end">
-                          <Button size="sm" onClick={handleUpdateDate} disabled={!newSignedDate}>Salvar Data</Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-              )}
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -204,6 +189,39 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <div className="flex items-center"><Zap className="w-4 h-4 mr-2 text-sky-400" /><strong>Consumo:</strong><span className="ml-2 text-foreground">{lead.kwh} kWh</span></div>
             <div className="flex items-center"><User className="w-4 h-4 mr-2 text-green-400" /><strong>Vendedor:</strong><span className="ml-2 text-foreground">{lead.sellerName}</span></div>
             <div className="flex items-center"><CalendarDays className="w-4 h-4 mr-2 text-purple-400" /><strong>Criado em:</strong><span className="ml-2 text-foreground">{format(parseISO(lead.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span></div>
+
+            {/* Editable SignedAt */}
+            <div className="flex items-center">
+              <CalendarDays className="w-4 h-4 mr-2 text-green-500" />
+              <strong>Assinado em:</strong>
+              <span className="ml-2 text-foreground">{lead.signedAt ? format(parseISO(lead.signedAt), "dd/MM/yyyy") : 'N/A'}</span>
+              {isAdmin && (
+                <Popover open={isEditingSignedDate} onOpenChange={setIsEditingSignedDate}>
+                  <PopoverTrigger asChild><Button variant="ghost" size="icon" className="ml-1 h-6 w-6"><Edit className="h-3 w-3" /></Button></PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-card border-border">
+                    <Calendar mode="single" selected={newSignedDate} onSelect={setNewSignedDate} initialFocus locale={ptBR} />
+                    <div className="p-2 border-t border-border flex justify-end"><Button size="sm" onClick={() => handleUpdateDate('signedAt', newSignedDate)} disabled={!newSignedDate}>Salvar</Button></div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+            
+            {/* Editable CompletedAt */}
+            <div className="flex items-center">
+              <CalendarDays className="w-4 h-4 mr-2 text-emerald-600" />
+              <strong>Finalizado em:</strong>
+              <span className="ml-2 text-foreground">{lead.completedAt ? format(parseISO(lead.completedAt), "dd/MM/yyyy") : 'N/A'}</span>
+              {isAdmin && (
+                <Popover open={isEditingCompletedDate} onOpenChange={setIsEditingCompletedDate}>
+                  <PopoverTrigger asChild><Button variant="ghost" size="icon" className="ml-1 h-6 w-6"><Edit className="h-3 w-3" /></Button></PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-card border-border">
+                    <Calendar mode="single" selected={newCompletedDate} onSelect={setNewCompletedDate} initialFocus locale={ptBR} />
+                    <div className="p-2 border-t border-border flex justify-end"><Button size="sm" onClick={() => handleUpdateDate('completedAt', newCompletedDate)} disabled={!newCompletedDate}>Salvar</Button></div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+
           </div>
 
           {isAdmin && (

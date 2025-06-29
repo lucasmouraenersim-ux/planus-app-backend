@@ -114,6 +114,14 @@ export async function updateCrmLeadDetails(
     finalUpdates.phone = updates.phone.replace(/\D/g, '');
   }
   
+  // Handle date string to Timestamp conversion for specific fields
+  if (updates.signedAt && typeof updates.signedAt === 'string') {
+    finalUpdates.signedAt = Timestamp.fromDate(new Date(updates.signedAt));
+  }
+  if (updates.completedAt && typeof updates.completedAt === 'string') {
+    finalUpdates.completedAt = Timestamp.fromDate(new Date(updates.completedAt));
+  }
+  
   if (photoFile) {
     const photoPath = `crm_lead_documents/${leadId}/photo_${photoFile.name}`;
     finalUpdates.photoDocumentUrl = await uploadFile(photoFile, photoPath);
@@ -175,14 +183,6 @@ export async function requestCrmLeadCorrection(leadId: string, reason: string): 
     stageId: 'contato',
     correctionReason: reason,
     needsAdminApproval: false, 
-    lastContact: Timestamp.now(),
-  });
-}
-
-export async function updateCrmLeadSignedAt(leadId: string, newSignedAtIso: string): Promise<void> {
-  const leadRef = doc(db, "crm_leads", leadId);
-  await updateDoc(leadRef, {
-    signedAt: Timestamp.fromDate(new Date(newSignedAtIso)),
     lastContact: Timestamp.now(),
   });
 }
