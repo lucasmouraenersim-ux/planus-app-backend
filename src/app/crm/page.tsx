@@ -7,8 +7,20 @@ import { KanbanBoard } from '@/components/crm/KanbanBoard';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2 } from 'lucide-react';
+import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2, CopyCheck, Trash2, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'firebase/firestore';
@@ -19,8 +31,14 @@ import { Badge } from '@/components/ui/badge';
 import { importLeadsFromCSV } from '@/actions/admin/leadManagement';
 import Papa from 'papaparse';
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+interface DuplicateGroup {
+  key: string; // The CPF or CNPJ
+  leads: LeadWithId[];
+}
 
 function CrmPageContent() {
   const { appUser, userAppRole, allFirestoreUsers } = useAuth();
@@ -35,6 +53,12 @@ function CrmPageContent() {
   
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isUploadingLeads, setIsUploadingLeads] = useState(false);
+
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
+  const [leadToDelete, setLeadToDelete] = useState<LeadWithId | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
 
   useEffect(() => {
     if (!appUser) return;
@@ -326,6 +350,55 @@ function CrmPageContent() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     toast({ title: "Exportação de Leads Iniciada", description: `${leads.length} leads exportados.` });
   };
+  
+  const handleCheckDuplicates = () => {
+    const docMap = new Map<string, LeadWithId[]>();
+    
+    leads.forEach(lead => {
+      const doc = (lead.cpf || lead.cnpj || '').replace(/\D/g, '');
+      if (doc && doc.length >= 11) { // Only check for valid CPF/CNPJ lengths
+        if (!docMap.has(doc)) {
+          docMap.set(doc, []);
+        }
+        docMap.get(doc)!.push(lead);
+      }
+    });
+
+    const duplicates: DuplicateGroup[] = [];
+    docMap.forEach((leadGroup, key) => {
+      if (leadGroup.length > 1) {
+        duplicates.push({ key, leads: leadGroup.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) });
+      }
+    });
+    
+    if (duplicates.length === 0) {
+      toast({ title: "Nenhuma Duplicidade Encontrada", description: "Não foram encontrados leads com o mesmo CPF ou CNPJ." });
+      return;
+    }
+
+    setDuplicateGroups(duplicates);
+    setIsDuplicateModalOpen(true);
+  };
+  
+  const handleDeleteClick = (lead: LeadWithId) => {
+    setLeadToDelete(lead);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (leadToDelete) {
+      await handleDeleteLead(leadToDelete.id);
+      // UI will update via realtime listener, but we can also update the dialog state
+      setDuplicateGroups(prev =>
+        prev.map(group => ({
+          ...group,
+          leads: group.leads.filter(l => l.id !== leadToDelete!.id)
+        })).filter(group => group.leads.length > 1)
+      );
+    }
+    setLeadToDelete(null);
+    setIsDeleteDialogOpen(false);
+  };
 
 
   if (isLoading) {
@@ -373,6 +446,10 @@ function CrmPageContent() {
             </Button>
             {userAppRole === 'superadmin' && (
               <>
+                <Button onClick={handleCheckDuplicates} size="sm" variant="outline">
+                  <CopyCheck className="w-4 h-4 mr-2" />
+                  Verificar Duplicados
+                </Button>
                 <Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="outline">
                   <Upload className="w-4 h-4 mr-2" />
                   Importar
@@ -487,6 +564,82 @@ function CrmPageContent() {
           </form>
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={isDuplicateModalOpen} onOpenChange={setIsDuplicateModalOpen}>
+        <DialogContent className="max-w-4xl w-[90vw] h-[90vh] bg-card/70 backdrop-blur-lg border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Leads Duplicados Encontrados</DialogTitle>
+            <DialogDescription>
+              Foram encontrados {duplicateGroups.length} grupo(s) de leads com o mesmo CPF ou CNPJ.
+              Analise e gerencie os leads abaixo para manter a base de dados organizada.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-6 py-4">
+              {duplicateGroups.map((group) => (
+                <div key={group.key} className="p-4 rounded-lg border bg-background/50">
+                  <h3 className="font-semibold mb-2">
+                    Duplicidade para o Documento: <span className="text-primary font-mono">{group.key}</span>
+                  </h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Vendedor</TableHead>
+                        <TableHead>Estágio</TableHead>
+                        <TableHead>Criado em</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.leads.map((lead) => (
+                        <TableRow key={lead.id}>
+                          <TableCell className="font-medium">{lead.name}</TableCell>
+                          <TableCell>{lead.sellerName}</TableCell>
+                          <TableCell>
+                             <Badge variant="outline">{lead.stageId}</Badge>
+                          </TableCell>
+                          <TableCell>{format(parseISO(lead.createdAt), "dd/MM/yy HH:mm")}</TableCell>
+                          <TableCell className="text-right space-x-1">
+                            <Button variant="outline" size="sm" onClick={() => handleViewLeadDetails(lead)}>Ver Detalhes</Button>
+                            <Button variant="outline" size="sm" onClick={() => { setIsDuplicateModalOpen(false); handleOpenForm(lead); }}>
+                                <Edit className="w-3 h-3 mr-1"/>Editar
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(lead)}>
+                                <Trash2 className="w-3 h-3 mr-1"/>Remover
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button onClick={() => setIsDuplicateModalOpen(false)}>Concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação excluirá permanentemente o lead <strong className="text-foreground">{leadToDelete?.name}</strong>. Isso não pode ser desfeito.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setLeadToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleConfirmDelete}>
+              Sim, Excluir Lead
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
