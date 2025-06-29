@@ -21,8 +21,6 @@ import Papa from 'papaparse';
 import { format, parseISO } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FormDescription } from '@/components/ui/form';
-
 
 function CrmPageContent() {
   const { appUser, userAppRole, allFirestoreUsers } = useAuth();
@@ -468,9 +466,9 @@ function CrmPageContent() {
             <div className="space-y-2">
               <Label htmlFor="csvFile">Arquivo CSV</Label>
               <Input id="csvFile" name="csvFile" type="file" accept=".csv" disabled={isUploadingLeads} />
-              <FormDescription>
+              <p className="text-sm text-muted-foreground">
                 O arquivo deve seguir o modelo para evitar erros.
-              </FormDescription>
+              </p>
             </div>
             <DialogFooter className="flex-col sm:flex-row sm:justify-between sm:items-center pt-2">
                <Button type="button" variant="link" size="sm" onClick={handleDownloadTemplate} className="p-0 h-auto text-primary justify-start order-last sm:order-first mt-2 sm:mt-0">
