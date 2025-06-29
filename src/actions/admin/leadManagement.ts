@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -31,11 +30,28 @@ const CsvRowSchema = z.object({
   'atualizado em': z.string().optional(),
 });
 
-function mapStatusToStageId(status: string | undefined): StageId {
-  const s = status?.trim().toUpperCase();
-  if (s === 'CONTRATO_ASSINADO') return 'assinado';
-  if (s === 'CONTRATO_FINALIZADI') return 'perdido'; // ou 'cancelado'
-  return 'contato'; // Default stage
+/**
+ * Maps a status string from the CSV to a CRM StageId.
+ * Prioritizes direct stage names and common contract statuses.
+ * @param status The status string from the CSV.
+ * @returns A StageId or null if no mapping is found.
+ */
+function mapStatusToStageId(status: string | undefined): StageId | null {
+  const s = status?.trim().toUpperCase().replace(/_/g, ' '); // Normalize
+  if (!s) return null;
+
+  if (s.includes('FINALIZADO')) return 'finalizado';
+  if (s.includes('ASSINADO')) return 'assinado';
+  if (s.includes('CANCELADO')) return 'cancelado';
+  if (s.includes('PERDIDO')) return 'perdido';
+  if (s.includes('CONFORMIDADE')) return 'conformidade';
+  if (s.includes('CONTRATO')) return 'contrato';
+  if (s.includes('PROPOSTA')) return 'proposta';
+  if (s.includes('FATURA')) return 'fatura';
+  if (s.includes('CONTATO')) return 'contato';
+  if (s.includes('VALIDACAO')) return 'para-validacao';
+
+  return null;
 }
 
 function parseCsvNumber(value: string | undefined): number {
@@ -98,6 +114,21 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   const data = validation.data;
                   const docRef = adminDb.collection("crm_leads").doc();
                   
+                  // --- New Stage Logic ---
+                  const signedAtDate = parseCsvDate(data['assinado em'], 'dd/MM/yyyy HH:mm');
+                  const completedAtDate = parseCsvDate(data['finalizado em'], 'dd/MM/yyyy HH:mm');
+                  
+                  let stageId: StageId;
+
+                  if (completedAtDate) {
+                    stageId = 'finalizado';
+                  } else if (signedAtDate) {
+                    stageId = 'assinado';
+                  } else {
+                    stageId = mapStatusToStageId(data.status) || 'contato'; // Fallback to status, then to 'contato'
+                  }
+                  // --- End New Stage Logic ---
+
                   const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
                   
                   const leadDataObject: Partial<LeadDocumentData> = {
@@ -111,9 +142,9 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       plano: data.plano,
                       kwh: parseCsvNumber(data['consumo (kwh)']),
                       value: parseCsvNumber(data['valor (rs)']),
-                      stageId: mapStatusToStageId(data.status),
-                      signedAt: parseCsvDate(data['assinado em'], 'dd/MM/yyyy HH:mm'),
-                      completedAt: parseCsvDate(data['finalizado em'], 'dd/MM/yyyy HH:mm'),
+                      stageId: stageId, // Use the new logic
+                      signedAt: signedAtDate, // Pass the parsed date
+                      completedAt: completedAtDate, // Pass the parsed date
                       saleReferenceDate: data['data referencia venda'],
                       createdAt: parseCsvDate(data['criado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
                       lastContact: parseCsvDate(data['atualizado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
