@@ -100,7 +100,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   
                   const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
                   
-                  const leadData: Partial<LeadDocumentData> = {
+                  const leadDataObject: Partial<LeadDocumentData> = {
                       name: data.cliente,
                       sellerName: data.vendedor || "Sistema",
                       cpf: normalizedDocument.length === 11 ? normalizedDocument : undefined,
@@ -120,8 +120,16 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       needsAdminApproval: false, // Default for imported leads
                       userId: 'unassigned', // Default, should be updated manually if needed
                   };
+
+                  // Remove properties that are undefined, as Firestore doesn't allow them.
+                  const cleanLeadData = Object.entries(leadDataObject).reduce((acc, [key, value]) => {
+                    if (value !== undefined) {
+                      acc[key as keyof LeadDocumentData] = value;
+                    }
+                    return acc;
+                  }, {} as Partial<LeadDocumentData>);
                   
-                  batch.set(docRef, leadData);
+                  batch.set(docRef, cleanLeadData);
                   successfulImports++;
               }
               
