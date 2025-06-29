@@ -3,7 +3,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,7 +19,6 @@ import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
 import { createUser } from '@/actions/admin/createUser';
-import { importLeadsFromCSV } from '@/actions/admin/leadManagement'; // New import
 import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
 
 import { Button } from "@/components/ui/button";
@@ -56,9 +55,8 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Upload
+    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon
 } from 'lucide-react';
-import { ChartContainer } from "@/components/ui/chart";
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
   { id: 'wd1', userId: 'user1', userEmail: 'vendedor1@example.com', userName: 'Vendedor Um', amount: 500, pixKeyType: 'CPF/CNPJ', pixKey: '111.111.111-11', status: 'pendente', requestedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'personal' },
@@ -105,7 +103,6 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
-  const [isUploadingLeads, setIsUploadingLeads] = useState(false);
 
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequestWithId[]>(MOCK_WITHDRAWALS);
 
@@ -272,72 +269,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     toast({ title: "Exportação Iniciada", description: `${filteredUsers.length} usuários exportados.` });
   };
-  
-  const handleExportLeadsCSV = () => {
-    if (allLeads.length === 0) {
-      toast({ title: "Nenhum lead para exportar." });
-      return;
-    }
-    const dataToExport = allLeads.map(lead => ({
-      'Cliente': lead.name,
-      'Vendedor': lead.sellerName,
-      'Documento': lead.cpf || lead.cnpj || '',
-      'Instalação': lead.codigoClienteInstalacao || '',
-      'Concessionária': lead.concessionaria || '',
-      'Plano': lead.plano || '',
-      'Consumo (KWh)': lead.kwh,
-      'Valor (R$)': lead.value,
-      'Status': lead.stageId.toUpperCase(),
-      'Assinado em': lead.signedAt ? format(parseISO(lead.signedAt), 'dd/MM/yyyy HH:mm') : '',
-      'Finalizado em': lead.completedAt ? format(parseISO(lead.completedAt), 'dd/MM/yyyy HH:mm') : '',
-      'Data Referencia Venda': lead.saleReferenceDate || '',
-      'Criado em': format(parseISO(lead.createdAt), 'dd/MM/yyyy HH:mm'),
-      'Atualizado em': format(parseISO(lead.lastContact), 'dd/MM/yyyy HH:mm'),
-    }));
-    const csv = Papa.unparse(dataToExport);
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `leads_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    toast({ title: "Exportação de Leads Iniciada", description: `${allLeads.length} leads exportados.` });
-  };
 
-  const handleImportLeadsCSV = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const fileInput = event.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
-
-    if (!fileInput?.files?.length) {
-      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo CSV.", variant: "destructive" });
-      return;
-    }
-    setIsUploadingLeads(true);
-    const result = await importLeadsFromCSV(formData);
-    toast({
-      title: result.success ? "Importação Concluída" : "Erro na Importação",
-      description: result.message,
-      variant: result.success ? "default" : "destructive"
-    });
-    if (result.success) {
-      // Manually trigger a refresh of leads data
-      const leads = await fetchAllCrmLeadsGlobally();
-      setAllLeads(leads);
-    }
-    setIsUploadingLeads(false);
-  };
-
-  const handleDownloadTemplate = () => {
-    const headers = "Cliente,Vendedor,Documento,Instalação,Concessionária,Plano,Consumo (KWh),Valor (RS),Status,Assinado em,Finalizado em,Data Referencia Venda,Criado em,Atualizado em";
-    const csvContent = "data:text/csv;charset=utf-8," + encodeURI(headers);
-    const link = document.createElement("a");
-    link.setAttribute("href", csvContent);
-    link.setAttribute("download", "modelo_importacao_leads.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const filteredLeads = useMemo(() => {
@@ -402,40 +334,6 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Origem dos Leads Assinados</CardTitle><CardDescription>Fontes dos leads convertidos no período.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><BarChartHorizontalBig className="w-16 h-16 text-muted-foreground/50"/></CardContent></Card>
         <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Consumo (kWh) dos Leads</CardTitle><CardDescription>Distribuição de consumo dos leads assinados.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><Activity className="w-16 h-16 text-muted-foreground/50"/></CardContent></Card>
       </div>
-      
-       {userAppRole === 'superadmin' && (
-        <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader>
-            <CardTitle className="text-primary flex items-center"><CrmIcon className="mr-2 h-5 w-5" />Gerenciamento de Leads (CSV)</CardTitle>
-            <CardDescription>Importe novos leads ou exporte a base atual em formato CSV.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 space-y-2">
-                <Label>Importar Leads</Label>
-                <form onSubmit={handleImportLeadsCSV} className="flex items-center gap-2">
-                  <Input id="csvFile" name="csvFile" type="file" accept=".csv" disabled={isUploadingLeads} className="flex-grow" />
-                  <Button type="submit" disabled={isUploadingLeads}>
-                    {isUploadingLeads ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                    Importar
-                  </Button>
-                </form>
-              </div>
-              <div className="flex-1 space-y-2">
-                <Label>Exportar / Modelo</Label>
-                <div className="flex items-center gap-2">
-                  <Button onClick={handleExportLeadsCSV} variant="outline" className="w-full">
-                    <Download className="mr-2 h-4 w-4" /> Exportar Leads
-                  </Button>
-                  <Button onClick={handleDownloadTemplate} variant="outline" className="w-full">
-                    <Download className="mr-2 h-4 w-4" /> Baixar Modelo
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-       )}
 
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -467,6 +365,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
                             <Edit2 className="h-4 w-4 mr-2" />
                             Ver / Editar Detalhes

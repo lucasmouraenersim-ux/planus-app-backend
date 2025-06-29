@@ -7,8 +7,8 @@ import { KanbanBoard } from '@/components/crm/KanbanBoard';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Filter, Plus, Zap } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'firebase/firestore';
@@ -16,6 +16,12 @@ import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
 import { Badge } from '@/components/ui/badge';
+import { importLeadsFromCSV } from '@/actions/admin/leadManagement';
+import Papa from 'papaparse';
+import { format, parseISO } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { FormDescription } from '@/components/ui/form';
 
 
 function CrmPageContent() {
@@ -28,6 +34,9 @@ function CrmPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const knownLeadIds = useRef<Set<string>>(new Set());
+  
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isUploadingLeads, setIsUploadingLeads] = useState(false);
 
   useEffect(() => {
     if (!appUser) return;
@@ -254,6 +263,71 @@ function CrmPageContent() {
     }
   };
 
+  const handleImportLeads = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const fileInput = event.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
+
+    if (!fileInput?.files?.length) {
+      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo CSV.", variant: "destructive" });
+      return;
+    }
+    setIsUploadingLeads(true);
+    const result = await importLeadsFromCSV(formData);
+    toast({
+      title: result.success ? "Importação Concluída" : "Erro na Importação",
+      description: result.message,
+      variant: result.success ? "default" : "destructive"
+    });
+    if (result.success) {
+      // The realtime listener will pick up the new leads automatically.
+      setIsImportModalOpen(false);
+    }
+    setIsUploadingLeads(false);
+  };
+  
+  const handleDownloadTemplate = () => {
+    const headers = "Cliente,Vendedor,Documento,Instalação,Concessionária,Plano,Consumo (KWh),Valor (RS),Status,Assinado em,Finalizado em,Data Referencia Venda,Criado em,Atualizado em";
+    const csvContent = "data:text/csv;charset=utf-8," + encodeURI(headers);
+    const link = document.createElement("a");
+    link.setAttribute("href", csvContent);
+    link.setAttribute("download", "modelo_importacao_leads.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportLeadsCSV = () => {
+    if (leads.length === 0) {
+      toast({ title: "Nenhum lead para exportar." });
+      return;
+    }
+    const dataToExport = leads.map(lead => ({
+      'Cliente': lead.name,
+      'Vendedor': lead.sellerName,
+      'Documento': lead.cpf || lead.cnpj || '',
+      'Instalação': lead.codigoClienteInstalacao || '',
+      'Concessionária': lead.concessionaria || '',
+      'Plano': lead.plano || '',
+      'Consumo (KWh)': lead.kwh,
+      'Valor (R$)': lead.value,
+      'Status': lead.stageId.toUpperCase(),
+      'Assinado em': lead.signedAt ? format(parseISO(lead.signedAt), 'dd/MM/yyyy HH:mm') : '',
+      'Finalizado em': lead.completedAt ? format(parseISO(lead.completedAt as string), 'dd/MM/yyyy HH:mm') : '',
+      'Data Referencia Venda': lead.saleReferenceDate || '',
+      'Criado em': format(parseISO(lead.createdAt), 'dd/MM/yyyy HH:mm'),
+      'Atualizado em': format(parseISO(lead.lastContact), 'dd/MM/yyyy HH:mm'),
+    }));
+    const csv = Papa.unparse(dataToExport);
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `leads_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    toast({ title: "Exportação de Leads Iniciada", description: `${leads.length} leads exportados.` });
+  };
+
 
   if (isLoading) {
      return (
@@ -298,6 +372,18 @@ function CrmPageContent() {
               <Filter className="w-4 h-4 mr-2" />
               Filtros
             </Button>
+            {userAppRole === 'superadmin' && (
+              <>
+                <Button onClick={() => setIsImportModalOpen(true)} size="sm" variant="outline">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar
+                </Button>
+                <Button onClick={handleExportLeadsCSV} size="sm" variant="outline">
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
+              </>
+            )}
             <Button onClick={() => handleOpenForm()} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="w-4 h-4 mr-2" />
               Novo Lead
@@ -370,6 +456,38 @@ function CrmPageContent() {
           </DialogContent>
       </Dialog>
 
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="sm:max-w-md bg-card/70 backdrop-blur-lg border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Importar Leads por CSV</DialogTitle>
+            <DialogDescription>
+              Faça o upload de um arquivo CSV para adicionar novos leads em lote.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleImportLeads} className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label htmlFor="csvFile">Arquivo CSV</Label>
+              <Input id="csvFile" name="csvFile" type="file" accept=".csv" disabled={isUploadingLeads} />
+              <FormDescription>
+                O arquivo deve seguir o modelo para evitar erros.
+              </FormDescription>
+            </div>
+            <DialogFooter className="flex-col sm:flex-row sm:justify-between sm:items-center pt-2">
+               <Button type="button" variant="link" size="sm" onClick={handleDownloadTemplate} className="p-0 h-auto text-primary justify-start order-last sm:order-first mt-2 sm:mt-0">
+                  <Download className="mr-2 h-4 w-4" />
+                  Baixar Modelo
+               </Button>
+               <div className="flex gap-2 justify-end">
+                <Button type="button" variant="outline" onClick={() => setIsImportModalOpen(false)} disabled={isUploadingLeads}>Cancelar</Button>
+                <Button type="submit" disabled={isUploadingLeads}>
+                  {isUploadingLeads ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Importar Arquivo
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
