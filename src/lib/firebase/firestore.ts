@@ -124,7 +124,15 @@ export async function updateCrmLeadDetails(
   // Always update lastContact timestamp on any edit
   finalUpdates.lastContact = Timestamp.now();
   
-  await updateDoc(leadRef, finalUpdates);
+  // FIX: Remove properties with undefined values before sending to Firestore
+  const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      (acc as any)[key] = value;
+    }
+    return acc;
+  }, {});
+  
+  await updateDoc(leadRef, cleanUpdates);
 }
 
 
