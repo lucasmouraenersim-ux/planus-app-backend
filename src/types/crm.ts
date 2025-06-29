@@ -10,6 +10,7 @@ export type StageId =
   | 'contrato'         // Contract sent, awaiting signature
   | 'conformidade'     // Contract signed, under compliance review
   | 'assinado'         // Contract signed and approved (deal won)
+  | 'finalizado'       // Lead finalized, commissions are calculated from this stage
   | 'cancelado'        // Lead or client cancelled
   | 'perdido';         // Deal lost to competitor or other reasons
 
@@ -22,6 +23,7 @@ export const STAGE_IDS: StageId[] = [
   'contrato',
   'conformidade',
   'assinado',
+  'finalizado',
   'cancelado',
   'perdido',
 ];

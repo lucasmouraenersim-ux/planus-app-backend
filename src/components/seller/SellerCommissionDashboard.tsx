@@ -21,7 +21,7 @@ import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Badge } from 'lu
 
 const MOCK_SELLER_LEADS: LeadWithId[] = [
   { id: 'slead1', name: 'Loja de Roupas Elegance', company: 'Elegance Modas LTDA', value: 3500, kwh: 1200, stageId: 'proposta', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 2).toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Indicação" },
-  { id: 'slead2', name: 'Restaurante Sabor Caseiro', value: 8000, kwh: 3000, stageId: 'assinado', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 15).toISOString(), lastContact: new Date(Date.now() - 86400000 * 1).toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Tráfego Pago" },
+  { id: 'slead2', name: 'Restaurante Sabor Caseiro', value: 8000, kwh: 3000, stageId: 'finalizado', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 15).toISOString(), lastContact: new Date(Date.now() - 86400000 * 1).toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Tráfego Pago" },
   { id: 'slead3', name: 'Oficina Mecânica Rápida', value: 1500, kwh: 600, stageId: 'fatura', sellerName: 'vendedor1@example.com', createdAt: new Date().toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Porta a Porta (PAP)" },
 ];
 
@@ -44,10 +44,10 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const performanceMetrics = useMemo(() => {
-    const activeLeads = leads.filter(l => !['assinado', 'perdido', 'cancelado'].includes(l.stageId)).length;
-    const convertedThisMonth = leads.filter(l => l.stageId === 'assinado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).length;
-    const valueConvertedThisMonth = leads.filter(l => l.stageId === 'assinado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).reduce((sum, l) => sum + l.value, 0);
-    return { activeLeads, convertedThisMonth, valueConvertedThisMonth };
+    const activeLeads = leads.filter(l => !['assinado', 'finalizado', 'perdido', 'cancelado'].includes(l.stageId)).length;
+    const finalizedThisMonth = leads.filter(l => l.stageId === 'finalizado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).length;
+    const valueFinalizedThisMonth = leads.filter(l => l.stageId === 'finalizado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).reduce((sum, l) => sum + l.value, 0);
+    return { activeLeads, finalizedThisMonth, valueFinalizedThisMonth };
   }, [leads]);
   
   const getStageBadgeStyle = (stageId: StageId) => {
@@ -105,12 +105,12 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
           <CardContent><div className="text-2xl font-bold">{performanceMetrics.activeLeads}</div></CardContent>
         </Card>
         <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Convertidos (Mês)</CardTitle><Zap className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{performanceMetrics.convertedThisMonth}</div></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Finalizados (Mês)</CardTitle><Zap className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{performanceMetrics.finalizedThisMonth}</div></CardContent>
         </Card>
         <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Valor Convertido (Mês)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{formatCurrency(performanceMetrics.valueConvertedThisMonth)}</div></CardContent>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Valor Finalizado (Mês)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{formatCurrency(performanceMetrics.valueFinalizedThisMonth)}</div></CardContent>
         </Card>
       </div>
       

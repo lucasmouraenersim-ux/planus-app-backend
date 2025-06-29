@@ -43,6 +43,11 @@ export const STAGES_CONFIG: Stage[] = [
     colorClass: 'bg-green-500',
   },
   {
+    id: 'finalizado',
+    title: 'Finalizado 🏆',
+    colorClass: 'bg-emerald-600',
+  },
+  {
     id: 'cancelado',
     title: 'Cancelado ❌',
     colorClass: 'bg-rose-500',
