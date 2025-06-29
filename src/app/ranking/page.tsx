@@ -90,14 +90,9 @@ function RankingPageContent() {
     loadData();
   }, [fetchAllCrmLeadsGlobally]);
 
-  useEffect(() => {
-    if (!allLeads.length || !allFirestoreUsers.length) {
-      setIsLoading(false);
-      return;
-    }
-
+  const periodLeads = useMemo(() => {
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
-
+    
     const getPeriodBounds = (period: string) => {
       const today = new Date();
       if (period === 'monthly_current') {
@@ -114,11 +109,30 @@ function RankingPageContent() {
     };
 
     const { start, end } = getPeriodBounds(selectedPeriod);
-    const periodLeads = start && end
-      ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
-      : finalizedLeads;
+    
+    if (start && end) {
+      return finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end);
+    }
+    return finalizedLeads; // For 'all_time'
+  }, [allLeads, selectedPeriod]);
+
+  const totalKwhSold = useMemo(() => {
+    return periodLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [periodLeads]);
+
+
+  useEffect(() => {
+    if ((allLeads.length === 0 || allFirestoreUsers.length === 0) && isLoading) {
+        // Data not yet loaded, wait
+        if (allLeads.length > 0 || allFirestoreUsers.length > 0){
+             setIsLoading(false); // At least one dataset is loaded, can stop loading
+        }
+        return;
+    }
+    setIsLoading(false);
     
     // --- All-time metrics calculation ---
+    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
 
     finalizedLeads.forEach(lead => {
@@ -145,7 +159,19 @@ function RankingPageContent() {
         }
     });
 
-    const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
+    const getSalesCycleBounds = () => {
+      const today = new Date();
+      const dayOfMonth = today.getDate();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      if (dayOfMonth < 21) {
+          return { start: new Date(currentYear, currentMonth - 1, 21), end: new Date(currentYear, currentMonth, 21) };
+      } else {
+          return { start: new Date(currentYear, currentMonth, 21), end: new Date(currentYear, currentMonth + 1, 21) };
+      }
+    };
+
+    const { start: cycleStart, end: cycleEnd } = getSalesCycleBounds();
     const salesCycleLeads = cycleStart && cycleEnd
         ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd)
         : [];
@@ -230,13 +256,8 @@ function RankingPageContent() {
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
 
     setRankingData(calculatedRanking);
-    setIsLoading(false);
 
-  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers]);
-
-  const totalKwhSold = useMemo(() => {
-    return rankingData.reduce((sum, entry) => sum + entry.kwh, 0);
-  }, [rankingData]);
+  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers, periodLeads, isLoading]);
 
   const criteriaLabel = CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance";
   const loggedInUserRank = useMemo(() => rankingData.find(entry => entry.userId === appUser?.uid), [rankingData, appUser]);
@@ -517,3 +538,4 @@ export default function RankingPage() {
     </Suspense>
   );
 }
+
