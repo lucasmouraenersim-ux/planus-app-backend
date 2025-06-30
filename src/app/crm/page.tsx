@@ -23,7 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where, or } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
@@ -69,9 +69,8 @@ function CrmPageContent() {
   useEffect(() => {
     if (!appUser) return;
 
-    let unsubscribe1: () => void;
-    let unsubscribe2: () => void;
-    let unsubscribe3: () => void; // For sellerName query
+    let unsubscribe1: (() => void) | undefined;
+    let unsubscribe2: (() => void) | undefined;
     
     const leadsMap = new Map<string, LeadWithId>();
 
@@ -131,19 +130,18 @@ function CrmPageContent() {
       const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
       unsubscribe1 = onSnapshot(q, (snapshot) => processSnapshot(snapshot, true));
     } else if (userAppRole === 'vendedor') {
-      // Query for user's own leads by UID
-      const q1 = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid));
+      // Query for user's own leads (by UID or Name) and unassigned leads
+      const userLeadsQuery = or(
+          where("userId", "==", appUser.uid),
+          where("sellerName", "==", appUser.displayName || '')
+      );
+
+      const q1 = query(collection(db, "crm_leads"), userLeadsQuery);
       unsubscribe1 = onSnapshot(q1, (snapshot) => processSnapshot(snapshot, true));
 
-      // Query for unassigned leads
+      // Query for unassigned leads, handled by a separate listener
       const q2 = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
       unsubscribe2 = onSnapshot(q2, (snapshot) => processSnapshot(snapshot, false));
-
-      // Query for user's leads by name (fallback for legacy/imported leads)
-      if (appUser.displayName) {
-        const q3 = query(collection(db, "crm_leads"), where("sellerName", "==", appUser.displayName));
-        unsubscribe3 = onSnapshot(q3, (snapshot) => processSnapshot(snapshot, false));
-      }
 
     } else {
         setIsLoading(false);
@@ -153,7 +151,6 @@ function CrmPageContent() {
     return () => {
       if (unsubscribe1) unsubscribe1();
       if (unsubscribe2) unsubscribe2();
-      if (unsubscribe3) unsubscribe3(); // Cleanup the third listener
     };
   }, [appUser, toast, userAppRole]);
 
@@ -238,7 +235,7 @@ function CrmPageContent() {
   };
 
   const handleFormSubmit = async (
-    formData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>,
+    formData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'photoDocumentUrl' | 'billDocumentUrl' | 'legalRepresentativeDocumentUrl' | 'otherDocumentsUrl'>,
     photoFile?: File,
     billFile?: File,
     legalRepFile?: File,
