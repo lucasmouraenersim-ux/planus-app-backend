@@ -111,67 +111,42 @@ function RankingPageContent() {
   }, [fetchAllCrmLeadsGlobally]);
   
   const processedData = useMemo(() => {
-    if (isLoading || allFirestoreUsers.length === 0) {
+    if (isLoading) {
       return { ranking: [], totalKwhSoldInPeriod: 0, podium: [] };
     }
   
     const commissionRateOverrides: Record<string, number> = {
-      'karatty victoria': 60,
-      'diogo rodrigo bottona': 60,
-      'francisco gregorio da silva filho': 60,
-      'valeria da silva': 60,
-      'valeria da silva pereira': 60,
-      'daniel reveles costa': 60,
+      'karatty victoria': 60, 'diogo rodrigo bottona': 60, 'francisco gregorio da silva filho': 60,
+      'valeria da silva': 60, 'valeria da silva pereira': 60, 'daniel reveles costa': 60,
     };
     const ouroSellers = Object.keys(commissionRateOverrides);
     const sellersToExclude = ['lucas de moura', 'eduardo w', 'eduardo henrique wiegert'];
-  
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
-
-    // Step 1: Discover all sellers from users list and ALL finalized leads
+  
+    // 1. Discover all sellers from user list and ALL finalized leads
     const sellerMetrics = new Map<string, { 
-      totalSalesValue: number; 
-      numberOfSales: number; 
-      totalKwh: number; 
+      totalSalesValue: number; numberOfSales: number; totalKwh: number;
       user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType };
     }>();
     
-    // Add all registered users who are sellers
+    const userMapByName = new Map<string, FirestoreUser>();
     allFirestoreUsers.forEach(user => {
+      if (user.displayName) userMapByName.set(user.displayName.trim().toLowerCase(), user);
       if ((user.type === 'vendedor' || user.type === 'superadmin' || user.type === 'admin') && !sellersToExclude.includes((user.displayName || '').toLowerCase())) {
-        sellerMetrics.set(user.uid, {
-          totalSalesValue: 0,
-          numberOfSales: 0,
-          totalKwh: 0,
-          user,
-        });
+        sellerMetrics.set(user.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, user });
       }
     });
 
-    // Add sellers from leads who may not be registered users
     finalizedLeads.forEach(lead => {
       if (lead.sellerName && !sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) {
         const sellerNameLower = lead.sellerName.trim().toLowerCase();
-        let found = false;
-        for (const metrics of sellerMetrics.values()) {
-          if (metrics.user.displayName?.toLowerCase() === sellerNameLower) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-           sellerMetrics.set(sellerNameLower, {
-              totalSalesValue: 0,
-              numberOfSales: 0,
-              totalKwh: 0,
-              user: { uid: sellerNameLower, displayName: lead.sellerName.trim(), type: 'vendedor' }
-           });
+        if (!userMapByName.has(sellerNameLower) && !sellerMetrics.has(sellerNameLower)) {
+          sellerMetrics.set(sellerNameLower, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, user: { uid: sellerNameLower, displayName: lead.sellerName.trim(), type: 'vendedor' } });
         }
       }
     });
 
-
-    // Step 2: Get period boundaries
+    // 2. Filter leads based on the selected period
     const getPeriodBounds = (period: string, customRange?: DateRange) => {
       const today = new Date();
       if (period === 'custom' && customRange?.from) {
@@ -191,70 +166,50 @@ function RankingPageContent() {
       return { start: null, end: null };
     };
     const { start, end } = getPeriodBounds(selectedPeriod, date);
-
-    // Step 3: Filter leads for the period
+    
     const periodLeads = (start && end)
       ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
       : (selectedPeriod === 'all_time' ? finalizedLeads : finalizedLeads.filter(l => {
           const {start: cycleStart, end: cycleEnd} = getPeriodBounds('monthly_current');
           return l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd
       }));
+    
     const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
   
-    // Step 4: Calculate metrics for the period
-    const userMapByName = new Map<string, FirestoreUser>();
-    allFirestoreUsers.forEach(user => {
-      if (user.displayName) userMapByName.set(user.displayName.trim().toLowerCase(), user);
-    });
-
+    // 3. Calculate metrics for the period using filtered leads
     periodLeads.forEach(lead => {
       if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return;
-
       const sellerNameLower = lead.sellerName.trim().toLowerCase();
-      let metricKey: string | undefined;
+      const userByDisplayName = userMapByName.get(sellerNameLower);
+      const metricKey = userByDisplayName ? userByDisplayName.uid : sellerNameLower;
 
-      const userByName = userMapByName.get(sellerNameLower);
-      if (userByName) {
-        metricKey = userByName.uid;
-      } else if (lead.userId && lead.userId !== 'unassigned' && sellerMetrics.has(lead.userId)) {
-        metricKey = lead.userId;
-      } else if (sellerMetrics.has(sellerNameLower)) {
-        metricKey = sellerNameLower;
+      if (metricKey && sellerMetrics.has(metricKey)) {
+        const metrics = sellerMetrics.get(metricKey)!;
+        const commissionRate = commissionRateOverrides[sellerNameLower] || 40;
+        metrics.totalSalesValue += (Number(lead.valueAfterDiscount) || 0) * (commissionRate / 100);
+        metrics.numberOfSales += 1;
+        metrics.totalKwh += (Number(lead.kwh) || 0);
       }
-      
-      if (!metricKey || !sellerMetrics.has(metricKey)) return;
-
-      const metrics = sellerMetrics.get(metricKey)!;
-      const commissionRate = commissionRateOverrides[sellerNameLower] || 40;
-      const commissionValue = (Number(lead.valueAfterDiscount) || 0) * (commissionRate / 100);
-      const kwh = Number(lead.kwh) || 0;
-
-      metrics.totalSalesValue += commissionValue;
-      metrics.numberOfSales += 1;
-      metrics.totalKwh += kwh;
     });
 
-    // All-time and other metrics calculation remains the same
+    // 4. Calculate all-time metrics for medals using all finalized leads
     const allTimeKwhMetrics: Record<string, number> = {};
     const monthlySalesByUser: Record<string, Record<string, number>> = {};
+    
     finalizedLeads.forEach(lead => {
-        let sellerId;
-        const sellerNameLower = lead.sellerName?.trim().toLowerCase();
-        if (sellerNameLower) {
-            const user = userMapByName.get(sellerNameLower);
-            if (user) sellerId = user.uid;
+      if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return;
+      const sellerNameLower = lead.sellerName.trim().toLowerCase();
+      const userByDisplayName = userMapByName.get(sellerNameLower);
+      const metricKey = userByDisplayName ? userByDisplayName.uid : sellerNameLower;
+
+      if (metricKey) {
+        allTimeKwhMetrics[metricKey] = (allTimeKwhMetrics[metricKey] || 0) + (Number(lead.kwh) || 0);
+        if (lead.completedAt) {
+          const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
+          if (!monthlySalesByUser[metricKey]) monthlySalesByUser[metricKey] = {};
+          monthlySalesByUser[metricKey][monthKey] = (monthlySalesByUser[metricKey][monthKey] || 0) + (Number(lead.value) || 0);
         }
-        if (!sellerId && lead.userId && lead.userId !== 'unassigned') sellerId = lead.userId;
-        
-        const metricKey = sellerId || sellerNameLower;
-        if (metricKey) {
-            allTimeKwhMetrics[metricKey] = (allTimeKwhMetrics[metricKey] || 0) + (Number(lead.kwh) || 0);
-            if (lead.completedAt) {
-                 const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
-                 if (!monthlySalesByUser[metricKey]) monthlySalesByUser[metricKey] = {};
-                 monthlySalesByUser[metricKey][monthKey] = (monthlySalesByUser[metricKey][monthKey] || 0) + (Number(lead.value) || 0);
-            }
-        }
+      }
     });
 
     const hasEverHit30kMap: Record<string, boolean> = {};
@@ -267,56 +222,45 @@ function RankingPageContent() {
     const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
     const salesCycleLeads = finalizedLeads.filter(l => l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
     const userSalesCycleKwh = salesCycleLeads.reduce((acc, lead) => {
-        let sellerId;
-        const sellerNameLower = lead.sellerName?.trim().toLowerCase();
-        if (sellerNameLower) {
-            const user = userMapByName.get(sellerNameLower);
-            if (user) sellerId = user.uid;
-        }
-        if (!sellerId && lead.userId && lead.userId !== 'unassigned') sellerId = lead.userId;
-        const metricKey = sellerId || sellerNameLower;
-
-        if (metricKey) {
-            acc[metricKey] = (acc[metricKey] || 0) + (Number(lead.kwh) || 0);
-        }
+        if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return acc;
+        const sellerNameLower = lead.sellerName.trim().toLowerCase();
+        const userByDisplayName = userMapByName.get(sellerNameLower);
+        const metricKey = userByDisplayName ? userByDisplayName.uid : sellerNameLower;
+        if (metricKey) acc[metricKey] = (acc[metricKey] || 0) + (Number(lead.kwh) || 0);
         return acc;
     }, {} as Record<string, number>);
   
-    const unsortedRanking = Array.from(sellerMetrics.values())
-      .map(metrics => {
-        let mainScoreValue = 0;
-        if (selectedCriteria === 'totalSalesValue') mainScoreValue = metrics.totalSalesValue;
-        else if (selectedCriteria === 'numberOfSales') mainScoreValue = metrics.numberOfSales;
-        else mainScoreValue = metrics.totalKwh;
-        
-        const sellerNameLower = (metrics.user.displayName || '').toLowerCase();
-        const metricKey = metrics.user.uid;
+    // 5. Format for display
+    const unsortedRanking = Array.from(sellerMetrics.values()).map(metrics => {
+      let mainScoreValue = 0;
+      if (selectedCriteria === 'totalSalesValue') mainScoreValue = metrics.totalSalesValue;
+      else if (selectedCriteria === 'numberOfSales') mainScoreValue = metrics.numberOfSales;
+      else mainScoreValue = metrics.totalKwh;
+      
+      const sellerNameLower = (metrics.user.displayName || '').toLowerCase();
+      const metricKey = metrics.user.uid;
 
-        return {
-          userId: metricKey,
-          userName: metrics.user.displayName || 'N/A',
-          userPhotoUrl: metrics.user.photoURL || undefined,
-          mainScoreValue,
-          mainScoreDisplay: selectedCriteria === 'totalSalesValue' ? formatValueForDisplay(metrics.totalSalesValue, 'currency') : (selectedCriteria === 'numberOfSales' ? `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas` : formatValueForDisplay(metrics.totalKwh, 'kwh')),
-          detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Nº Vendas" : "Volume (R$)",
-          detailScore1Value: selectedCriteria === 'totalSalesValue' ? metrics.numberOfSales : metrics.totalSalesValue,
-          detailScore1Type: selectedCriteria === 'totalSalesValue' ? 'plain' : 'currency',
-          detailScore2Label: selectedCriteria === 'numberOfSales' ? "Total KWh" : (selectedCriteria === 'totalKwh' ? "Nº Vendas" : "Total KWh"),
-          detailScore2Value: selectedCriteria === 'numberOfSales' ? metrics.totalKwh : (selectedCriteria === 'totalKwh' ? metrics.numberOfSales : metrics.totalKwh),
-          detailScore2Type: selectedCriteria === 'numberOfSales' ? 'kwh' : (selectedCriteria === 'totalKwh' ? 'plain' : 'kwh'),
-          kwh: metrics.totalKwh,
-          totalKwhAllTime: allTimeKwhMetrics[metricKey] || 0,
-          kwhThisSalesCycle: userSalesCycleKwh[metricKey] || 0,
-          hasEverHit30kInAMonth: hasEverHit30kMap[metricKey] || false,
-          isOuro: ouroSellers.includes(sellerNameLower),
-        };
-      });
+      return {
+        userId: metricKey, userName: metrics.user.displayName || 'N/A', userPhotoUrl: metrics.user.photoURL || undefined,
+        mainScoreValue,
+        mainScoreDisplay: selectedCriteria === 'totalSalesValue' ? formatValueForDisplay(metrics.totalSalesValue, 'currency') : (selectedCriteria === 'numberOfSales' ? `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas` : formatValueForDisplay(metrics.totalKwh, 'kwh')),
+        detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Nº Vendas" : "Volume (R$)",
+        detailScore1Value: selectedCriteria === 'totalSalesValue' ? metrics.numberOfSales : metrics.totalSalesValue,
+        detailScore1Type: selectedCriteria === 'totalSalesValue' ? 'plain' : 'currency',
+        detailScore2Label: selectedCriteria === 'numberOfSales' ? "Total KWh" : (selectedCriteria === 'totalKwh' ? "Nº Vendas" : "Total KWh"),
+        detailScore2Value: selectedCriteria === 'numberOfSales' ? metrics.totalKwh : (selectedCriteria === 'totalKwh' ? metrics.numberOfSales : metrics.totalKwh),
+        detailScore2Type: selectedCriteria === 'numberOfSales' ? 'kwh' : (selectedCriteria === 'totalKwh' ? 'plain' : 'kwh'),
+        kwh: metrics.totalKwh,
+        totalKwhAllTime: allTimeKwhMetrics[metricKey] || 0,
+        kwhThisSalesCycle: userSalesCycleKwh[metricKey] || 0,
+        hasEverHit30kInAMonth: hasEverHit30kMap[metricKey] || false,
+        isOuro: ouroSellers.includes(sellerNameLower),
+      };
+    });
   
-    const finalRanking = unsortedRanking
-      .sort((a, b) => b.mainScoreValue - a.mainScoreValue)
-      .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
-  
+    const finalRanking = unsortedRanking.sort((a, b) => b.mainScoreValue - a.mainScoreValue).map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
     return { ranking: finalRanking, totalKwhSoldInPeriod, podium: finalRanking.slice(0, 3) };
+
   }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading, date]);
 
 
@@ -506,13 +450,13 @@ function RankingPageContent() {
             <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
             <p className="text-lg font-medium">Carregando ranking...</p>
         </div>
-      ) : ranking.length > 0 ? (
+      ) : ranking.filter(r => r.mainScoreValue > 0).length > 0 ? (
         <>
-          {podium.length > 0 && (
+          {podium.filter(p => p.mainScoreValue > 0).length > 0 && (
             <section className="mb-12">
               <h2 className="text-3xl font-semibold text-center text-foreground mb-8">Pódio dos Campeões <Crown className="inline-block text-yellow-400 ml-2 h-7 w-7" /></h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {podium.map((entry, index) => (
+                {podium.filter(p => p.mainScoreValue > 0).map((entry, index) => (
                   <Card key={entry.userId} className={`bg-card/80 backdrop-blur-xl border-2 ${getPodiumBorderColor(index)} shadow-lg text-center p-6 flex flex-col items-center hover:shadow-2xl transition-all duration-300 ease-in-out transform hover:-translate-y-1`}>
                     <div className={`text-5xl font-black mb-3 ${getPodiumTextColor(index)}`}>
                       {entry.rankPosition}º
@@ -535,7 +479,7 @@ function RankingPageContent() {
             </section>
           )}
 
-          {loggedInUserRank && (
+          {loggedInUserRank && loggedInUserRank.mainScoreValue > 0 && (
             <Card className="my-8 bg-primary/10 border-primary/50 border-2 shadow-xl p-6">
               <CardHeader className="p-0 pb-3 text-center md:text-left">
                 <CardTitle className="text-2xl text-primary flex items-center justify-center md:justify-start">
@@ -584,7 +528,7 @@ function RankingPageContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ranking.map((entry) => (
+                  {ranking.filter(r => r.mainScoreValue > 0).map((entry) => (
                     <TableRow key={entry.userId} className={entry.userId === appUser?.uid ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted/50'}>
                       <TableCell className="font-bold text-lg text-center">{entry.rankPosition}</TableCell>
                       <TableCell>
@@ -637,3 +581,4 @@ export default function RankingPage() {
     </Suspense>
   );
 }
+
