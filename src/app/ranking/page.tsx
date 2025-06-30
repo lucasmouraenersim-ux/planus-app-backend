@@ -120,7 +120,7 @@ function RankingPageContent() {
   }, [periodLeads]);
 
   const rankingData = useMemo(() => {
-    if (allFirestoreUsers.length === 0) {
+    if (allFirestoreUsers.length === 0 || finalizedLeads.length === 0) {
       return [];
     }
     
@@ -128,17 +128,22 @@ function RankingPageContent() {
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
 
     finalizedLeads.forEach(lead => {
-        if (!lead.userId || !lead.completedAt) return;
-        if (!userAllTimeMetrics[lead.userId]) {
-            userAllTimeMetrics[lead.userId] = { totalKwh: 0, monthlySales: {} };
+        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+        if (!seller || !lead.completedAt) return;
+        
+        const userId = seller.uid;
+
+        if (!userAllTimeMetrics[userId]) {
+            userAllTimeMetrics[userId] = { totalKwh: 0, monthlySales: {} };
         }
-        userAllTimeMetrics[lead.userId].totalKwh += lead.kwh || 0;
+        userAllTimeMetrics[userId].totalKwh += lead.kwh || 0;
         
         const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
-        if (!userAllTimeMetrics[lead.userId].monthlySales[monthKey]) {
-            userAllTimeMetrics[lead.userId].monthlySales[monthKey] = 0;
+        if (!userAllTimeMetrics[userId].monthlySales[monthKey]) {
+            userAllTimeMetrics[userId].monthlySales[monthKey] = 0;
         }
-        userAllTimeMetrics[lead.userId].monthlySales[monthKey] += lead.value || 0;
+        // Medal logic is based on raw sales value, not commission
+        userAllTimeMetrics[userId].monthlySales[monthKey] += lead.value || 0;
     });
 
     const usersWhoHit30k = new Set<string>();
@@ -171,31 +176,40 @@ function RankingPageContent() {
     
     const userSalesCycleKwh: Record<string, number> = {};
     salesCycleLeads.forEach(lead => {
-        if (!lead.userId) return;
-        if (!userSalesCycleKwh[lead.userId]) userSalesCycleKwh[lead.userId] = 0;
-        userSalesCycleKwh[lead.userId] += lead.kwh || 0;
+        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+        if (!seller) return;
+        
+        const userId = seller.uid;
+        if (!userSalesCycleKwh[userId]) userSalesCycleKwh[userId] = 0;
+        userSalesCycleKwh[userId] += lead.kwh || 0;
     });
     
     // --- Period-specific metrics ---
     const userMetrics = new Map<string, {
-      totalSalesValue: number,
+      totalSalesValue: number, // This will be commission value
       numberOfSales: number,
       totalKwh: number,
     }>();
 
     periodLeads.forEach(lead => {
-      if (!lead.userId) return;
-      if (!userMetrics.has(lead.userId)) {
-        userMetrics.set(lead.userId, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 });
+      const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+      if (!seller) return;
+
+      if (!userMetrics.has(seller.uid)) {
+        userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 });
       }
-      const metrics = userMetrics.get(lead.userId)!;
-      metrics.totalSalesValue += lead.value || 0;
+      const metrics = userMetrics.get(seller.uid)!;
+      
+      const commissionRate = seller.commissionRate || 40;
+      const commissionValue = (lead.value || 0) * (commissionRate / 100);
+
+      metrics.totalSalesValue += commissionValue; // Storing commission as sales value
       metrics.numberOfSales += 1;
       metrics.totalKwh += lead.kwh || 0;
     });
     
     const calculatedRanking = allFirestoreUsers
-      .filter(user => user.type === 'vendedor' || user.type === 'admin' || user.type === 'superadmin')
+      .filter(user => user.type === 'vendedor' || user.type === 'admin') // Exclude 'superadmin'
       .map(user => {
         const metrics = userMetrics.get(user.uid) || { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 };
         
@@ -450,7 +464,7 @@ function RankingPageContent() {
                 )}
                  {loggedInUserRank.detailScore2Label && (
                    <div className="text-center hidden md:block">
-                    <p className="text-2xl font-semibold text-foreground">{loggedInUserRank.detailScore2Value}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore2Value, 'totalKwh')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore2Label}</p>
                   </div>
                 )}
@@ -493,8 +507,8 @@ function RankingPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{entry.detailScore1Value}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{entry.detailScore2Value}</TableCell>}
+                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatDisplayValue(entry.detailScore1Value, 'default')}</TableCell>}
+                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatDisplayValue(entry.detailScore2Value, 'totalKwh')}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
