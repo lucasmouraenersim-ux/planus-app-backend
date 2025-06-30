@@ -97,7 +97,22 @@ function CrmPageContent() {
             }
         });
 
-        const sortedLeads = Array.from(leadsMap.values()).sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+        const sortedLeads = Array.from(leadsMap.values()).sort((a, b) => {
+          const getDateForSort = (lead: LeadWithId): Date => {
+            if (lead.stageId === 'finalizado' && lead.completedAt) {
+              return new Date(lead.completedAt);
+            }
+            if (lead.stageId === 'assinado' && lead.signedAt) {
+              return new Date(lead.signedAt);
+            }
+            return new Date(lead.lastContact);
+          };
+
+          const dateA = getDateForSort(a);
+          const dateB = getDateForSort(b);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
         setLeads(sortedLeads);
 
         if (isInitialLoadForSpinner) {
