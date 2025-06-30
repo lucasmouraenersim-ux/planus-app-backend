@@ -247,13 +247,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   useEffect(() => {
-    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+    // Fetch all users for ranking if any user is logged in
+    if (firebaseUser && !isLoadingAuth) {
         fetchAllAppUsers();
     } else if (!isLoadingAuth) {
         setAllFirestoreUsers([]);
         setIsLoadingAllUsers(false);
     }
-  }, [userAppRole, isLoadingAuth, fetchAllAppUsers]);
+  }, [firebaseUser, isLoadingAuth, fetchAllAppUsers]);
 
 
   return (
