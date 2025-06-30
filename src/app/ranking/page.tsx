@@ -70,13 +70,11 @@ const getMedalForSeller = (entry: RankingDisplayEntry): string => {
 function RankingPageContent() {
   const { appUser, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
-  const [rankingData, setRankingData] = useState<RankingDisplayEntry[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(PERIOD_OPTIONS[0].value);
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
   const [showSecondNotification, setShowSecondNotification] = useState(false);
-  const [totalKwhSoldInPeriod, setTotalKwhSoldInPeriod] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
@@ -86,21 +84,16 @@ function RankingPageContent() {
         setAllLeads(leads);
       } catch (error) {
         console.error("Failed to load leads for ranking:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
     loadData();
   }, [fetchAllCrmLeadsGlobally]);
+  
+  const finalizedLeads = useMemo(() => allLeads.filter(lead => lead.stageId === 'finalizado'), [allLeads]);
 
-  useEffect(() => {
-    if ((allLeads.length === 0 || allFirestoreUsers.length === 0) && isLoading) {
-        if (allLeads.length > 0 || allFirestoreUsers.length > 0){
-             setIsLoading(false);
-        }
-        return;
-    }
-    setIsLoading(false);
-    
-    // --- Period and Lead Filtering ---
+  const periodLeads = useMemo(() => {
     const getPeriodBounds = (period: string) => {
       const today = new Date();
       if (period === 'monthly_current') {
@@ -115,17 +108,22 @@ function RankingPageContent() {
       }
       return { start: null, end: null }; // all_time
     };
-
-    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     const { start, end } = getPeriodBounds(selectedPeriod);
-    const periodLeads = start && end
-      ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
-      : finalizedLeads;
+    if (start && end) {
+      return finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
+    }
+    return finalizedLeads;
+  }, [finalizedLeads, selectedPeriod]);
 
-    // Update the total KWh sold for the banner
-    const totalKwh = periodLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0);
-    setTotalKwhSoldInPeriod(totalKwh);
+  const totalKwhSoldInPeriod = useMemo(() => {
+    return periodLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [periodLeads]);
 
+  const rankingData = useMemo(() => {
+    if (allFirestoreUsers.length === 0) {
+      return [];
+    }
+    
     // --- All-time metrics calculation for medals ---
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
 
@@ -177,7 +175,7 @@ function RankingPageContent() {
         if (!userSalesCycleKwh[lead.userId]) userSalesCycleKwh[lead.userId] = 0;
         userSalesCycleKwh[lead.userId] += lead.kwh || 0;
     });
-
+    
     // --- Period-specific metrics ---
     const userMetrics = new Map<string, {
       totalSalesValue: number,
@@ -217,7 +215,7 @@ function RankingPageContent() {
           detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
         } else if (selectedCriteria === 'numberOfSales') {
           mainScoreValue = metrics.numberOfSales;
-          mainScoreDisplay = `${metrics.numberOfSales} Vendas`;
+          mainScoreDisplay = `${formatDisplayValue(metrics.numberOfSales, 'numberOfSales')} Vendas`;
           detailScore1Label = "Volume (R$)";
           detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
           detailScore2Label = "Total KWh";
@@ -241,7 +239,7 @@ function RankingPageContent() {
           detailScore1Value,
           detailScore2Label,
           detailScore2Value,
-          kwh: metrics.totalKwh, // kwh for the period
+          kwh: metrics.totalKwh,
           totalKwhAllTime: userAllTimeMetrics[user.uid]?.totalKwh || 0,
           kwhThisSalesCycle: userSalesCycleKwh[user.uid] || 0,
           hasEverHit30kInAMonth: usersWhoHit30k.has(user.uid),
@@ -250,11 +248,11 @@ function RankingPageContent() {
       .sort((a, b) => b.mainScoreValue - a.mainScoreValue)
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
 
-    setRankingData(calculatedRanking);
+    return calculatedRanking;
 
-  }, [selectedPeriod, selectedCriteria, allLeads, allFirestoreUsers, isLoading]);
-
-  const criteriaLabel = CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance";
+  }, [finalizedLeads, periodLeads, allFirestoreUsers, selectedCriteria]);
+  
+  const criteriaLabel = useMemo(() => CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance", [selectedCriteria]);
   const loggedInUserRank = useMemo(() => rankingData.find(entry => entry.userId === appUser?.uid), [rankingData, appUser]);
   const podiumData = useMemo(() => rankingData.slice(0, 3), [rankingData]);
 
@@ -272,10 +270,11 @@ function RankingPageContent() {
     return 'text-foreground';
   };
   
-  if (!appUser) {
+  if (isLoading || !appUser) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
         <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
+        <p className="text-lg font-medium">Carregando ranking...</p>
       </div>
     );
   }
@@ -393,14 +392,12 @@ function RankingPageContent() {
         </CardContent>
       </Card>
       
-      {isLoading && (
+      {isLoading ? (
          <div className="flex flex-col justify-center items-center h-64 bg-transparent text-primary">
             <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
             <p className="text-lg font-medium">Carregando ranking...</p>
         </div>
-      )}
-
-      {!isLoading && rankingData.length > 0 && (
+      ) : rankingData.length > 0 ? (
         <>
           {podiumData.length > 0 && (
             <section className="mb-12">
@@ -416,7 +413,7 @@ function RankingPageContent() {
                         <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
                         <AvatarFallback className="text-2xl">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
-                      <div className="absolute -bottom-2 -right-1 text-4xl bg-card p-1 rounded-full shadow-lg">
+                      <div className="absolute -bottom-2 -right-1 text-4xl bg-card p-0.5 rounded-full shadow-lg">
                         {getMedalForSeller(entry)}
                       </div>
                     </div>
@@ -505,9 +502,7 @@ function RankingPageContent() {
             </CardContent>
           </Card>
         </>
-      )}
-      
-      {!isLoading && rankingData.length === 0 && (
+      ) : (
         <Card className="bg-card/70 backdrop-blur-lg border shadow-xl mt-8">
           <CardContent className="p-10 text-center">
             <ListOrdered className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -533,5 +528,3 @@ export default function RankingPage() {
     </Suspense>
   );
 }
-
-    
