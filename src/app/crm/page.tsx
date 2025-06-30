@@ -71,6 +71,7 @@ function CrmPageContent() {
 
     let unsubscribe1: () => void;
     let unsubscribe2: () => void;
+    let unsubscribe3: () => void; // For sellerName query
     
     const leadsMap = new Map<string, LeadWithId>();
 
@@ -130,13 +131,20 @@ function CrmPageContent() {
       const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
       unsubscribe1 = onSnapshot(q, (snapshot) => processSnapshot(snapshot, true));
     } else if (userAppRole === 'vendedor') {
-      // Query for user's own leads
+      // Query for user's own leads by UID
       const q1 = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid));
       unsubscribe1 = onSnapshot(q1, (snapshot) => processSnapshot(snapshot, true));
 
       // Query for unassigned leads
       const q2 = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
       unsubscribe2 = onSnapshot(q2, (snapshot) => processSnapshot(snapshot, false));
+
+      // Query for user's leads by name (fallback for legacy/imported leads)
+      if (appUser.displayName) {
+        const q3 = query(collection(db, "crm_leads"), where("sellerName", "==", appUser.displayName));
+        unsubscribe3 = onSnapshot(q3, (snapshot) => processSnapshot(snapshot, false));
+      }
+
     } else {
         setIsLoading(false);
         setLeads([]);
@@ -145,6 +153,7 @@ function CrmPageContent() {
     return () => {
       if (unsubscribe1) unsubscribe1();
       if (unsubscribe2) unsubscribe2();
+      if (unsubscribe3) unsubscribe3(); // Cleanup the third listener
     };
   }, [appUser, toast, userAppRole]);
 
