@@ -53,7 +53,25 @@ function mapStatusToStageId(status: string | undefined): StageId | null {
 
 function parseCsvNumber(value: string | undefined): number {
     if (!value) return 0;
-    const cleaned = value.replace('R$', '').trim().replace(/\./g, '').replace(',', '.');
+    // Remove currency symbols, letters, and spaces, keeping only digits, commas, and dots.
+    let cleaned = value.toString().replace(/[^0-9,.]/g, '');
+
+    const lastComma = cleaned.lastIndexOf(',');
+    const lastDot = cleaned.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+        // Handles Brazilian format like "1.234,56"
+        // Remove dots (thousand separators), replace comma with dot (decimal separator)
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else if (lastDot > lastComma) {
+        // Handles US/standard format like "1,234.56"
+        // Remove commas (thousand separators)
+        cleaned = cleaned.replace(/,/g, '');
+    } else {
+        // No separators or only one type. Assume comma is decimal if present.
+        cleaned = cleaned.replace(',', '.');
+    }
+
     const number = parseFloat(cleaned);
     return isNaN(number) ? 0 : number;
 }
