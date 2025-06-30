@@ -22,7 +22,7 @@ const CsvRowSchema = z.object({
   concessionária: z.string().optional(),
   plano: z.string().optional(),
   'consumo (kwh)': z.string().optional(),
-  'valor (rs)': z.string().optional(),
+  'valor (r$)': z.string().optional(),
   status: z.string().optional(),
   'assinado em': z.string().optional(),
   'finalizado em': z.string().optional(),
@@ -137,7 +137,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
 
                   const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
                   const kwh = parseCsvNumber(data['consumo (kwh)']);
-                  const valorFaturado = parseCsvNumber(data['valor (rs)']);
+                  const valorFaturado = parseCsvNumber(data['valor (r$)']);
                   const valorOriginal = kwh * KWH_TO_REAIS_FACTOR;
                   const discountPercentage = valorOriginal > 0 ? (1 - (valorFaturado / valorOriginal)) * 100 : 0;
 
