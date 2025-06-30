@@ -3,6 +3,7 @@
 
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { FirestoreUser } from '@/types/user';
+import type { LeadDocumentData } from '@/types/crm';
 import admin from 'firebase-admin';
 
 export async function syncLegacySellers(): Promise<{ success: boolean; message: string }> {
@@ -21,6 +22,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     const userMapByName = new Map<string, string>(); // Map from displayName.toUpperCase() -> uid
     let karattyUid: string | undefined;
     let superFacilEnergiaUid: string | undefined;
+    let superFacilEnergiaOriginalName = 'SuperFacil Energia';
 
     allUsersSnapshot.forEach(doc => {
         const user = doc.data() as FirestoreUser;
@@ -32,69 +34,68 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
             }
             if (upperCaseName === 'SUPERFACIL ENERGIA') {
                 superFacilEnergiaUid = doc.id;
+                superFacilEnergiaOriginalName = user.displayName.trim();
             }
         }
     });
 
-    // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" with BATCHING ---
-    const lucasNameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
-    const lucasLeadsToUpdateDocs: admin.firestore.QueryDocumentSnapshot[] = [];
-    for (const name of lucasNameVariations) {
-        const snapshot = await leadsRef.where('sellerName', '==', name).get();
-        lucasLeadsToUpdateDocs.push(...snapshot.docs);
-    }
-    const lucasLeadsToUpdateMap = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-    lucasLeadsToUpdateDocs.forEach(doc => {
-        if (!lucasLeadsToUpdateMap.has(doc.id)) lucasLeadsToUpdateMap.set(doc.id, doc);
-    });
-    const lucasUniqueDocs = Array.from(lucasLeadsToUpdateMap.values());
+    // --- Fetch ALL leads once to avoid case-sensitivity issues with queries ---
+    const allLeadsSnapshot = await leadsRef.get();
+    const allLeadDocs = allLeadsSnapshot.docs;
 
-    if (lucasUniqueDocs.length > 0) {
+    // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
+    const lucasLeadsToUpdate = allLeadDocs.filter(doc => {
+        const sellerName = doc.data().sellerName;
+        if (sellerName && typeof sellerName === 'string') {
+            const upperSellerName = sellerName.trim().toUpperCase();
+            return ['LUCAS DE MOURA'].includes(upperSellerName);
+        }
+        return false;
+    });
+
+    if (lucasLeadsToUpdate.length > 0) {
         const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'Karatty Victoria' };
         if (karattyUid) {
             updatePayload.userId = karattyUid;
         }
-        for (let i = 0; i < lucasUniqueDocs.length; i += BATCH_SIZE) {
+        for (let i = 0; i < lucasLeadsToUpdate.length; i += BATCH_SIZE) {
             const batch = adminDb.batch();
-            const chunk = lucasUniqueDocs.slice(i, i + BATCH_SIZE);
+            const chunk = lucasLeadsToUpdate.slice(i, i + BATCH_SIZE);
             chunk.forEach(doc => batch.update(doc.ref, updatePayload));
             await batch.commit();
         }
-        leadsReattributedLucas = lucasUniqueDocs.length;
+        leadsReattributedLucas = lucasLeadsToUpdate.length;
     }
 
-    // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" with BATCHING ---
-    const superFacilNameVariations = ['Super Facil solar', 'SuperFacil Solar'];
-    const superFacilLeadsToUpdateDocs: admin.firestore.QueryDocumentSnapshot[] = [];
-    for (const name of superFacilNameVariations) {
-        const snapshot = await leadsRef.where('sellerName', '==', name).get();
-        superFacilLeadsToUpdateDocs.push(...snapshot.docs);
-    }
-    const superFacilLeadsToUpdateMap = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-    superFacilLeadsToUpdateDocs.forEach(doc => {
-        if (!superFacilLeadsToUpdateMap.has(doc.id)) superFacilLeadsToUpdateMap.set(doc.id, doc);
+    // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" ---
+    const superFacilLeadsToUpdate = allLeadDocs.filter(doc => {
+        const sellerName = doc.data().sellerName;
+        if (sellerName && typeof sellerName === 'string') {
+            const upperSellerName = sellerName.trim().toUpperCase();
+            return ['SUPER FACIL SOLAR', 'SUPERFACIL SOLAR'].includes(upperSellerName);
+        }
+        return false;
     });
-    const superFacilUniqueDocs = Array.from(superFacilLeadsToUpdateMap.values());
     
-    if (superFacilUniqueDocs.length > 0) {
-        const newSellerName = 'SuperFacil Energia';
-        const updatePayload: { sellerName: string; userId?: string } = { sellerName: newSellerName };
+    if (superFacilLeadsToUpdate.length > 0) {
+        const updatePayload: { sellerName: string; userId?: string } = { sellerName: superFacilEnergiaOriginalName };
         if (superFacilEnergiaUid) {
             updatePayload.userId = superFacilEnergiaUid;
         }
-        for (let i = 0; i < superFacilUniqueDocs.length; i += BATCH_SIZE) {
+        for (let i = 0; i < superFacilLeadsToUpdate.length; i += BATCH_SIZE) {
             const batch = adminDb.batch();
-            const chunk = superFacilUniqueDocs.slice(i, i + BATCH_SIZE);
+            const chunk = superFacilLeadsToUpdate.slice(i, i + BATCH_SIZE);
             chunk.forEach(doc => batch.update(doc.ref, updatePayload));
             await batch.commit();
         }
-        leadsReattributedSuperFacil = superFacilUniqueDocs.length;
+        leadsReattributedSuperFacil = superFacilLeadsToUpdate.length;
     }
 
-    // --- Step 2: Create missing user documents from unique seller names ---
-    const allLeadsSnapshot = await leadsRef.get();
+    // --- Step 2: Create missing user documents from unique seller names in ALL leads ---
     const sellerNamesFromLeads = new Map<string, string>(); // Map of upperCaseName -> originalCaseName
-    allLeadsSnapshot.forEach(doc => {
+    // We re-fetch all leads AFTER re-attribution to get the latest names for this step
+    const currentLeadsSnapshot = await leadsRef.get();
+    currentLeadsSnapshot.forEach(doc => {
       const sellerName = doc.data().sellerName;
       if (sellerName && typeof sellerName === 'string' && sellerName.trim() !== '') {
         const trimmedName = sellerName.trim();
@@ -134,11 +135,12 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       usersCreated = sellersToCreate.length;
     }
     
-    // --- Step 3: Sync ALL leads with their correct user ID (with batching) ---
-    const allLeadsForSyncSnapshot = await leadsRef.get();
+    // --- Step 3: Sync ALL leads with their correct user ID (using the already fetched leads) ---
     const leadsToSync: { ref: admin.firestore.DocumentReference; userId: string }[] = [];
+    // Use the most current snapshot again
+    const finalLeadsSnapshot = await leadsRef.get();
 
-    for (const doc of allLeadsForSyncSnapshot.docs) {
+    for (const doc of finalLeadsSnapshot.docs) {
         const lead = doc.data();
         if (lead.sellerName && typeof lead.sellerName === 'string') {
             const sellerNameUpper = lead.sellerName.trim().toUpperCase();
@@ -170,7 +172,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       summaryParts.push(`${leadsReattributedLucas} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
     }
     if (leadsReattributedSuperFacil > 0) {
-        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de variações de 'Super Facil Solar' foram reatribuídos para 'SuperFacil Energia'.`);
+        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de variações de 'Super Facil Solar' foram reatribuídos para '${superFacilEnergiaOriginalName}'.`);
     }
     if (usersCreated > 0) {
       summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados.`);
