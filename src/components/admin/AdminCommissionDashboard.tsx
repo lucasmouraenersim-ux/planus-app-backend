@@ -19,6 +19,7 @@ import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_AD
 import { updateUser } from '@/lib/firebase/firestore';
 import { createUser } from '@/actions/admin/createUser';
 import { syncLegacySellers } from '@/actions/admin/syncLegacySellers';
+import { processOldWithdrawals } from '@/actions/admin/processOldWithdrawals';
 import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
 
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle
+    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote
 } from 'lucide-react';
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -125,6 +126,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isProcessingWithdrawals, setIsProcessingWithdrawals] = useState(false);
   
   const addUserForm = useForm<AddUserFormData>({ 
     resolver: zodResolver(addUserFormSchema), 
@@ -301,6 +303,20 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       setIsSyncing(false);
   };
 
+  const handleProcessOldWithdrawals = async () => {
+    setIsProcessingWithdrawals(true);
+    const result = await processOldWithdrawals();
+    toast({
+        title: result.success ? "Processamento Concluído" : "Erro no Processamento",
+        description: result.message,
+        variant: result.success ? "default" : "destructive",
+        duration: 9000,
+    });
+    // Here you would typically re-fetch withdrawal data.
+    // For this example, we'll just show the toast.
+    setIsProcessingWithdrawals(false);
+  };
+
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const filteredLeads = useMemo(() => {
@@ -370,6 +386,10 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários e suas comissões.</CardDescription></div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={handleProcessOldWithdrawals} size="sm" variant="outline" disabled={isProcessingWithdrawals}>
+              {isProcessingWithdrawals ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />}
+              Processar Saques Antigos
+            </Button>
             <Button onClick={handleSyncSellers} size="sm" variant="outline" disabled={isSyncing}>
               {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shuffle className="mr-2 h-4 w-4" />}
                 Sincronizar Vendedores
