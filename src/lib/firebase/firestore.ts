@@ -107,23 +107,35 @@ export async function updateCrmLeadDetails(
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
 
-  // Always recalculate value and valueAfterDiscount on any update for consistency
-  if ('kwh' in updates || 'discountPercentage' in updates) {
-    const leadDoc = await getDoc(leadRef);
-    const existingData = leadDoc.data() as LeadDocumentData;
+  // Fetch existing data to ensure we have a complete picture for calculations.
+  const leadDoc = await getDoc(leadRef);
+  if (!leadDoc.exists()) {
+    throw new Error("Lead não encontrado para atualização.");
+  }
+  const existingData = leadDoc.data() as LeadDocumentData;
 
-    const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
-    const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
-    
-    const originalValue = kwh * KWH_TO_REAIS_FACTOR;
-    const valueAfterDiscount = originalValue * (1 - ((discount || 0) / 100));
-    
-    finalUpdates.kwh = kwh;
-    finalUpdates.discountPercentage = discount;
-    finalUpdates.value = originalValue;
-    finalUpdates.valueAfterDiscount = valueAfterDiscount;
+  // Determine the definitive KWh and discount percentage for calculation.
+  // Use the value from 'updates' if it exists (even if null), otherwise use existing data.
+  // Default to 0 if neither exists.
+  const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
+  const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
+
+  // Always recalculate value and valueAfterDiscount for consistency.
+  const originalValue = kwh * KWH_TO_REAIS_FACTOR;
+  const valueAfterDiscount = originalValue * (1 - (discount / 100));
+
+  finalUpdates.value = originalValue;
+  finalUpdates.valueAfterDiscount = valueAfterDiscount;
+
+  // If KWh or discount were part of the updates, make sure they are in finalUpdates.
+  if ('kwh' in updates) {
+    finalUpdates.kwh = updates.kwh;
+  }
+  if ('discountPercentage' in updates) {
+    finalUpdates.discountPercentage = updates.discountPercentage;
   }
 
+  // Normalize phone number if present in updates
   if (updates.phone) {
     finalUpdates.phone = updates.phone.replace(/\D/g, '');
   }
@@ -136,6 +148,7 @@ export async function updateCrmLeadDetails(
     finalUpdates.completedAt = Timestamp.fromDate(new Date(updates.completedAt));
   }
   
+  // Handle file uploads
   if (photoFile) {
     const photoPath = `crm_lead_documents/${leadId}/photo_${photoFile.name}`;
     finalUpdates.photoDocumentUrl = await uploadFile(photoFile, photoPath);
@@ -153,8 +166,10 @@ export async function updateCrmLeadDetails(
     finalUpdates.otherDocumentsUrl = await uploadFile(otherDocumentsFile, otherDocsPath);
   }
 
+  // Always update the last contact timestamp
   finalUpdates.lastContact = Timestamp.now();
   
+  // Clean out any keys with 'undefined' values before sending to Firestore
   const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
     if (value !== undefined) {
       (acc as any)[key] = value;
