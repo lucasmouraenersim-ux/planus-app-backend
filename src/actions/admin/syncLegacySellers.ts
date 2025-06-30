@@ -6,6 +6,17 @@ import type { FirestoreUser } from '@/types/user';
 import type { LeadDocumentData } from '@/types/crm';
 import admin from 'firebase-admin';
 
+// Helper function to normalize names for comparison (case-insensitive, accent-insensitive)
+function normalizeName(name: string | null | undefined): string {
+  if (!name) return '';
+  return name
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+
 export async function syncLegacySellers(): Promise<{ success: boolean; message: string }> {
   try {
     const adminDb = await initializeAdmin();
@@ -19,7 +30,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
 
     // --- Pre-fetch all users to create a map for lookups ---
     const allUsersSnapshot = await usersRef.get();
-    const userMapByName = new Map<string, string>(); // Map from displayName.toUpperCase() -> uid
+    const userMapByNormalizedName = new Map<string, string>(); // Map from normalized displayName -> uid
     let karattyUid: string | undefined;
     let superFacilEnergiaUid: string | undefined;
     let superFacilEnergiaOriginalName = 'SuperFacil Energia';
@@ -27,12 +38,13 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     allUsersSnapshot.forEach(doc => {
         const user = doc.data() as FirestoreUser;
         if (user.displayName) {
-            const upperCaseName = user.displayName.trim().toUpperCase();
-            userMapByName.set(upperCaseName, doc.id);
-            if (upperCaseName === 'KARATTY VICTORIA') {
+            const normalized = normalizeName(user.displayName);
+            userMapByNormalizedName.set(normalized, doc.id);
+
+            if (normalized === 'KARATTY VICTORIA') {
                 karattyUid = doc.id;
             }
-            if (upperCaseName === 'SUPERFACIL ENERGIA') {
+            if (normalized === 'SUPERFACIL ENERGIA') {
                 superFacilEnergiaUid = doc.id;
                 superFacilEnergiaOriginalName = user.displayName.trim();
             }
@@ -46,11 +58,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
     const lucasLeadsToUpdate = allLeadDocs.filter(doc => {
         const sellerName = doc.data().sellerName;
-        if (sellerName && typeof sellerName === 'string') {
-            const upperSellerName = sellerName.trim().toUpperCase();
-            return ['LUCAS DE MOURA'].includes(upperSellerName);
-        }
-        return false;
+        return normalizeName(sellerName) === 'LUCAS DE MOURA';
     });
 
     if (lucasLeadsToUpdate.length > 0) {
@@ -68,13 +76,10 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     }
 
     // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" ---
+    const superFacilVariations = ['SUPER FACIL SOLAR', 'SUPERFACIL SOLAR'];
     const superFacilLeadsToUpdate = allLeadDocs.filter(doc => {
         const sellerName = doc.data().sellerName;
-        if (sellerName && typeof sellerName === 'string') {
-            const upperSellerName = sellerName.trim().toUpperCase();
-            return ['SUPER FACIL SOLAR', 'SUPERFACIL SOLAR'].includes(upperSellerName);
-        }
-        return false;
+        return superFacilVariations.includes(normalizeName(sellerName));
     });
     
     if (superFacilLeadsToUpdate.length > 0) {
@@ -92,27 +97,28 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     }
 
     // --- Step 2: Create missing user documents from unique seller names in ALL leads ---
-    const sellerNamesFromLeads = new Map<string, string>(); // Map of upperCaseName -> originalCaseName
+    const sellerNamesFromLeads = new Map<string, string>(); // Map of normalizedName -> originalCaseName
     // We re-fetch all leads AFTER re-attribution to get the latest names for this step
     const currentLeadsSnapshot = await leadsRef.get();
     currentLeadsSnapshot.forEach(doc => {
       const sellerName = doc.data().sellerName;
       if (sellerName && typeof sellerName === 'string' && sellerName.trim() !== '') {
         const trimmedName = sellerName.trim();
-        if (!sellerNamesFromLeads.has(trimmedName.toUpperCase())) {
-            sellerNamesFromLeads.set(trimmedName.toUpperCase(), trimmedName);
+        const normalized = normalizeName(trimmedName);
+        if (!sellerNamesFromLeads.has(normalized)) {
+            sellerNamesFromLeads.set(normalized, trimmedName);
         }
       }
     });
     
     const sellersToCreate = Array.from(sellerNamesFromLeads.keys()).filter(
-      upperCaseName => !userMapByName.has(upperCaseName)
+      normalizedName => !userMapByNormalizedName.has(normalizedName)
     );
 
     if (sellersToCreate.length > 0) {
       const creationBatch = adminDb.batch();
-      for (const upperCaseName of sellersToCreate) {
-        const originalName = sellerNamesFromLeads.get(upperCaseName)!;
+      for (const normalizedName of sellersToCreate) {
+        const originalName = sellerNamesFromLeads.get(normalizedName)!;
         const newUserRef = usersRef.doc();
         const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
           displayName: originalName,
@@ -129,7 +135,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
           canViewCareerPlan: true,
         };
         creationBatch.set(newUserRef, newUserForFirestore);
-        userMapByName.set(upperCaseName, newUserRef.id);
+        userMapByNormalizedName.set(normalizedName, newUserRef.id);
       }
       await creationBatch.commit();
       usersCreated = sellersToCreate.length;
@@ -143,9 +149,9 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     for (const doc of finalLeadsSnapshot.docs) {
         const lead = doc.data();
         if (lead.sellerName && typeof lead.sellerName === 'string') {
-            const sellerNameUpper = lead.sellerName.trim().toUpperCase();
-            if (userMapByName.has(sellerNameUpper)) {
-                const correctUserId = userMapByName.get(sellerNameUpper)!;
+            const normalizedSellerName = normalizeName(lead.sellerName);
+            if (userMapByNormalizedName.has(normalizedSellerName)) {
+                const correctUserId = userMapByNormalizedName.get(normalizedSellerName)!;
                 if (!lead.userId || lead.userId !== correctUserId) {
                     leadsToSync.push({ ref: doc.ref, userId: correctUserId });
                 }
