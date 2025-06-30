@@ -1,4 +1,3 @@
-
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -16,7 +15,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
 
     // --- Pre-fetch all users to create a map for lookups ---
     const allUsersSnapshot = await usersRef.get();
-    const userMapByName = new Map<string, string>(); // Map from displayName -> uid
+    const userMapByName = new Map<string, string>(); // Map from displayName.toUpperCase() -> uid
     let karattyUid: string | undefined;
 
     allUsersSnapshot.forEach(doc => {
@@ -31,14 +30,12 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     });
 
     // --- Step 1: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
-    // Handle multiple variations of the name to ensure all leads are captured.
     const nameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
     const reattributionPromises = nameVariations.map(name => 
         leadsRef.where('sellerName', '==', name).get()
     );
     
     const reattributionSnapshots = await Promise.all(reattributionPromises);
-
     const leadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
     reattributionSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
@@ -49,98 +46,95 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     });
 
     if (leadsToUpdate.size > 0) {
-        const batch = adminDb.batch();
+        const reattributionBatch = adminDb.batch();
         const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'Karatty Victoria' };
         if (karattyUid) {
             updatePayload.userId = karattyUid;
         }
-
         leadsToUpdate.forEach(doc => {
-            batch.update(doc.ref, updatePayload);
+            reattributionBatch.update(doc.ref, updatePayload);
         });
-        await batch.commit();
+        await reattributionBatch.commit();
         leadsReattributed = leadsToUpdate.size;
     }
 
-    // --- Step 2: Sync existing users with their unassigned leads ---
-    // userMapByName is already created above, so we can use it directly.
-    const unassignedLeadsQuery = leadsRef.where('userId', '==', 'unassigned');
-    const unassignedLeadsSnapshot = await unassignedLeadsQuery.get();
-
-    if (!unassignedLeadsSnapshot.empty) {
-        const syncBatch = adminDb.batch();
-        unassignedLeadsSnapshot.docs.forEach(doc => {
-            const lead = doc.data();
-            if (lead.sellerName) {
-                const sellerNameUpper = lead.sellerName.trim().toUpperCase();
-                if (userMapByName.has(sellerNameUpper)) {
-                    const userId = userMapByName.get(sellerNameUpper)!;
-                    syncBatch.update(doc.ref, { userId: userId });
-                    leadsSynced++;
-                }
-            }
-        });
-        if (leadsSynced > 0) {
-            await syncBatch.commit();
-        }
-    }
-
-    // --- Step 3: Sync all seller names from leads to create missing user documents ---
+    // --- Step 2: Create missing user documents from unique seller names ---
     const allLeadsSnapshot = await leadsRef.get();
-    const uniqueSellerNames = new Set<string>();
+    const sellerNamesFromLeads = new Map<string, string>(); // Map of upperCaseName -> originalCaseName
     allLeadsSnapshot.forEach(doc => {
       const sellerName = doc.data().sellerName;
       if (sellerName && typeof sellerName === 'string' && sellerName.trim() !== '') {
-        uniqueSellerNames.add(sellerName.trim());
+        const trimmedName = sellerName.trim();
+        // Only add if not already present to keep the first encountered casing
+        if (!sellerNamesFromLeads.has(trimmedName.toUpperCase())) {
+            sellerNamesFromLeads.set(trimmedName.toUpperCase(), trimmedName);
+        }
       }
     });
-
-    const existingUserDisplayNames = new Set<string>();
-    allUsersSnapshot.forEach(doc => {
-      const displayName = doc.data().displayName;
-      if (displayName) {
-        existingUserDisplayNames.add(displayName.trim());
-      }
-    });
-
-    const sellersToCreate = Array.from(uniqueSellerNames).filter(
-      name => !existingUserDisplayNames.has(name)
+    
+    const sellersToCreate = Array.from(sellerNamesFromLeads.keys()).filter(
+      upperCaseName => !userMapByName.has(upperCaseName)
     );
 
     if (sellersToCreate.length > 0) {
       const creationBatch = adminDb.batch();
-      for (const sellerName of sellersToCreate) {
-        const newUserRef = usersRef.doc(); // Let Firestore generate a new UID
+      for (const upperCaseName of sellersToCreate) {
+        const originalName = sellerNamesFromLeads.get(upperCaseName)!;
+        const newUserRef = usersRef.doc();
         const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
-          displayName: sellerName,
-          email: null, // No email/login
-          cpf: '', // No CPF
+          displayName: originalName,
+          email: null,
+          cpf: '',
           phone: '',
           type: 'vendedor',
           createdAt: admin.firestore.Timestamp.now(),
-          photoURL: `https://placehold.co/40x40.png?text=${sellerName.charAt(0).toUpperCase()}`,
+          photoURL: `https://placehold.co/40x40.png?text=${originalName.charAt(0).toUpperCase()}`,
           personalBalance: 0,
           mlmBalance: 0,
           canViewLeadPhoneNumber: false,
-          canViewCrm: false,
-          canViewCareerPlan: false,
+          canViewCrm: true, // Default to true for new sellers
+          canViewCareerPlan: true, // Default to true
         };
         creationBatch.set(newUserRef, newUserForFirestore);
+        userMapByName.set(upperCaseName, newUserRef.id);
       }
       await creationBatch.commit();
       usersCreated = sellersToCreate.length;
     }
     
+    // --- Step 3: Sync ALL leads with their correct user ID ---
+    const syncBatch = adminDb.batch();
+    // Re-fetch all leads in case any were re-attributed in step 1
+    const allLeadsForSyncSnapshot = await leadsRef.get(); 
+
+    allLeadsForSyncSnapshot.docs.forEach(doc => {
+        const lead = doc.data();
+        if (lead.sellerName && typeof lead.sellerName === 'string') {
+            const sellerNameUpper = lead.sellerName.trim().toUpperCase();
+            if (userMapByName.has(sellerNameUpper)) {
+                const correctUserId = userMapByName.get(sellerNameUpper)!;
+                if (!lead.userId || lead.userId !== correctUserId) {
+                    syncBatch.update(doc.ref, { userId: correctUserId });
+                    leadsSynced++;
+                }
+            }
+        }
+    });
+
+    if (leadsSynced > 0) {
+        await syncBatch.commit();
+    }
+    
     // --- Construct the summary message ---
     let summaryParts: string[] = [];
     if (leadsReattributed > 0) {
-      summaryParts.push(`${leadsReattributed} lead(s) de Lucas de Moura foram reatribuídos para Karatty Victoria.`);
-    }
-    if (leadsSynced > 0) {
-      summaryParts.push(`${leadsSynced} lead(s) foram sincronizados com seus respectivos vendedores.`);
+      summaryParts.push(`${leadsReattributed} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
     }
     if (usersCreated > 0) {
-      summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados a partir dos leads.`);
+      summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados.`);
+    }
+    if (leadsSynced > 0) {
+      summaryParts.push(`${leadsSynced} lead(s) foram sincronizados com o ID de usuário correto.`);
     }
     
     if (summaryParts.length === 0) {
