@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed } from 'lucide-react';
 import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
 import type { LeadWithId } from '@/types/crm';
