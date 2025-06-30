@@ -12,6 +12,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     const usersRef = adminDb.collection('users');
     let leadsReattributed = 0;
     let usersCreated = 0;
+    let leadsSynced = 0;
 
     // --- Step 1: Re-attribute leads from "LUCAS DE MOURA" to "Karatty Victoria" ---
     const lucasLeadsQuery = leadsRef.where('sellerName', '==', 'LUCAS DE MOURA');
@@ -26,7 +27,39 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       leadsReattributed = lucasLeadsSnapshot.size;
     }
 
-    // --- Step 2: Sync all seller names from leads to user documents ---
+    // --- Step 2: Sync existing users with their unassigned leads ---
+    const allUsersSnapshot = await usersRef.get();
+    const userMapByName = new Map<string, string>(); // Map from displayName -> uid
+    allUsersSnapshot.forEach(doc => {
+        const user = doc.data() as FirestoreUser;
+        if (user.displayName) {
+            // Use uppercase for case-insensitive matching
+            userMapByName.set(user.displayName.trim().toUpperCase(), doc.id);
+        }
+    });
+
+    const unassignedLeadsQuery = leadsRef.where('userId', '==', 'unassigned');
+    const unassignedLeadsSnapshot = await unassignedLeadsQuery.get();
+
+    if (!unassignedLeadsSnapshot.empty) {
+        const syncBatch = adminDb.batch();
+        unassignedLeadsSnapshot.docs.forEach(doc => {
+            const lead = doc.data();
+            if (lead.sellerName) {
+                const sellerNameUpper = lead.sellerName.trim().toUpperCase();
+                if (userMapByName.has(sellerNameUpper)) {
+                    const userId = userMapByName.get(sellerNameUpper)!;
+                    syncBatch.update(doc.ref, { userId: userId });
+                    leadsSynced++;
+                }
+            }
+        });
+        if (leadsSynced > 0) {
+            await syncBatch.commit();
+        }
+    }
+
+    // --- Step 3: Sync all seller names from leads to create missing user documents ---
     const allLeadsSnapshot = await leadsRef.get();
     const uniqueSellerNames = new Set<string>();
     allLeadsSnapshot.forEach(doc => {
@@ -36,9 +69,8 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       }
     });
 
-    const existingUsersSnapshot = await usersRef.get();
     const existingUserDisplayNames = new Set<string>();
-    existingUsersSnapshot.forEach(doc => {
+    allUsersSnapshot.forEach(doc => {
       const displayName = doc.data().displayName;
       if (displayName) {
         existingUserDisplayNames.add(displayName.trim());
@@ -77,6 +109,9 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     let summaryParts: string[] = [];
     if (leadsReattributed > 0) {
       summaryParts.push(`${leadsReattributed} lead(s) de LUCAS DE MOURA foram reatribuídos para Karatty Victoria.`);
+    }
+    if (leadsSynced > 0) {
+      summaryParts.push(`${leadsSynced} lead(s) foram sincronizados com seus respectivos vendedores.`);
     }
     if (usersCreated > 0) {
       summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados a partir dos leads.`);
