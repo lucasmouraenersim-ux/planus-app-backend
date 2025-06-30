@@ -12,7 +12,7 @@ import { uploadFile } from './storage';
 const KWH_TO_REAIS_FACTOR = 1.093113;
 
 export async function createCrmLead(
-  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt' | 'value' | 'valueAfterDiscount'> & { kwh: number; discountPercentage?: number },
+  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt' | 'value' | 'valueAfterDiscount'> & { kwh?: number; discountPercentage?: number },
   photoDocumentFile?: File, 
   billDocumentFile?: File,
   legalRepresentativeDocumentFile?: File,
@@ -30,6 +30,7 @@ export async function createCrmLead(
   // Prepare data, excluding file URLs which are added later
   const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl' | 'legalRepresentativeDocumentUrl' | 'otherDocumentsUrl'> = {
     ...leadData,
+    kwh: kwh,
     value: originalValue,
     valueAfterDiscount,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
@@ -110,8 +111,8 @@ export async function updateCrmLeadDetails(
   if (updates.kwh !== undefined || updates.discountPercentage !== undefined) {
     const leadDoc = await getDoc(leadRef);
     const existingData = leadDoc.data() as LeadDocumentData;
-    const kwh = updates.kwh ?? existingData.kwh;
-    const discount = updates.discountPercentage ?? existingData.discountPercentage;
+    const kwh = updates.kwh ?? existingData.kwh ?? 0;
+    const discount = updates.discountPercentage ?? existingData.discountPercentage ?? 0;
     const originalValue = kwh * KWH_TO_REAIS_FACTOR;
     const valueAfterDiscount = originalValue * (1 - ((discount || 0) / 100));
     finalUpdates.value = originalValue;

@@ -42,7 +42,7 @@ const leadFormSchema = z.object({
     z.number().optional()
   ),
   kwh: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val).replace(/\D/g, ''), 10)),
     z.number().int().min(0).optional()
   ),
   discountPercentage: z.preprocess(
@@ -264,7 +264,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Consumo Médio (KWh)</FormLabel>
-                        <FormControl><Input type="number" placeholder="Ex: 350" {...field} /></FormControl>
+                        <FormControl><Input type="number" placeholder="Ex: 350" {...field} value={field.value ?? ''} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -275,7 +275,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Desconto Aplicado (%)</FormLabel>
-                        <FormControl><Input type="number" step="0.1" placeholder="Ex: 15" {...field} /></FormControl>
+                        <FormControl><Input type="number" step="0.1" placeholder="Ex: 15" {...field} value={field.value ?? ''} /></FormControl>
                         <FormDescription className="text-xs">O valor original e com desconto serão calculados.</FormDescription>
                         <FormMessage />
                         </FormItem>
