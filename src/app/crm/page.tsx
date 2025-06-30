@@ -34,6 +34,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface DuplicateGroup {
   key: string; // The CPF or CNPJ
@@ -58,6 +59,11 @@ function CrmPageContent() {
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [leadToDelete, setLeadToDelete] = useState<LeadWithId | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Filter states
+  const [filterName, setFilterName] = useState("");
+  const [filterCpf, setFilterCpf] = useState("");
+  const [filterUc, setFilterUc] = useState("");
 
 
   useEffect(() => {
@@ -142,6 +148,29 @@ function CrmPageContent() {
     };
   }, [appUser, toast, userAppRole]);
 
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      const cleanFilterName = filterName.trim().toLowerCase();
+      const cleanFilterCpf = filterCpf.trim().replace(/\D/g, '');
+      const cleanFilterUc = filterUc.trim().toLowerCase();
+
+      if (cleanFilterName && !lead.name.toLowerCase().includes(cleanFilterName)) {
+        return false;
+      }
+      
+      const leadDocument = (lead.cpf || lead.cnpj || '').replace(/\D/g, '');
+      if (cleanFilterCpf && !leadDocument.includes(cleanFilterCpf)) {
+        return false;
+      }
+        
+      const leadUc = lead.codigoClienteInstalacao || '';
+      if (cleanFilterUc && !leadUc.toLowerCase().includes(cleanFilterUc)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [leads, filterName, filterCpf, filterUc]);
 
   const kwhTotalFinalizado = useMemo(() => {
     return leads
@@ -434,7 +463,7 @@ function CrmPageContent() {
             <h1 className="text-2xl font-semibold text-foreground flex items-center">
               <Users className="w-7 h-7 mr-3 text-primary" />
               CRM - Gestão de Leads
-              <Badge variant="secondary" className="ml-4 text-base font-semibold">{leads.length}</Badge>
+              <Badge variant="secondary" className="ml-4 text-base font-semibold">{filteredLeads.length}</Badge>
             </h1>
             <div className="flex items-center gap-3">
               <Badge variant="outline" className="border-emerald-600/50 text-emerald-500 bg-emerald-600/10 py-1.5">
@@ -455,10 +484,65 @@ function CrmPageContent() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm">
-              <Filter className="w-4 h-4 mr-2" />
-              Filtros
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filtros
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium leading-none">Filtros Ativos</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Filtre os leads por critérios específicos.
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="filterName">Nome</Label>
+                      <Input
+                        id="filterName"
+                        placeholder="Nome do cliente"
+                        value={filterName}
+                        onChange={(e) => setFilterName(e.target.value)}
+                        className="col-span-2 h-8"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="filterCpf">CPF/CNPJ</Label>
+                      <Input
+                        id="filterCpf"
+                        placeholder="Documento"
+                        value={filterCpf}
+                        onChange={(e) => setFilterCpf(e.target.value)}
+                        className="col-span-2 h-8"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="filterUc">UC</Label>
+                      <Input
+                        id="filterUc"
+                        placeholder="Unidade Consumidora"
+                        value={filterUc}
+                        onChange={(e) => setFilterUc(e.target.value)}
+                        className="col-span-2 h-8"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setFilterName('');
+                      setFilterCpf('');
+                      setFilterUc('');
+                    }}
+                  >
+                    Limpar Filtros
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             {userAppRole === 'superadmin' && (
               <>
                 <Button onClick={handleCheckDuplicates} size="sm" variant="outline">
@@ -485,7 +569,7 @@ function CrmPageContent() {
       
       <div className="flex-1 min-w-0 overflow-hidden"> {/* Wrapper for KanbanBoard */}
         <KanbanBoard 
-          leads={leads} 
+          leads={filteredLeads} 
           onViewLeadDetails={handleViewLeadDetails}
           userAppRole={userAppRole}
           onMoveLead={handleMoveLead}
@@ -671,3 +755,5 @@ export default function CRMPage() {
     </Suspense>
   );
 }
+
+    
