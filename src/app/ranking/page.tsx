@@ -116,7 +116,8 @@ function RankingPageContent() {
     const ouroSellers = Object.keys(commissionRateOverrides);
     const sellersToExclude = ['lucas de moura', 'eduardo w', 'eduardo henrique wiegert'];
 
-    const sellers = allFirestoreUsers.filter(user => user.type === 'vendedor');
+    const sellers = allFirestoreUsers.filter(user => user.type === 'vendedor' && !sellersToExclude.includes((user.displayName || '').toLowerCase()));
+    
     const userMapByUid = new Map<string, FirestoreUser>();
     const userMapByName = new Map<string, FirestoreUser>();
     allFirestoreUsers.forEach(user => {
@@ -161,16 +162,14 @@ function RankingPageContent() {
       } else if (lead.sellerName) {
         seller = userMapByName.get(lead.sellerName.trim().toLowerCase());
       }
-  
+      
       if (seller && userMetrics.has(seller.uid)) {
         const metrics = userMetrics.get(seller.uid)!;
         const sellerNameLower = (seller.displayName || '').toLowerCase();
-        
         const commissionRate = commissionRateOverrides[sellerNameLower] || seller.commissionRate || 40;
-        const leadOriginalValue = Number(lead.value) || 0;
+        
         const leadValueWithDiscount = Number(lead.valueAfterDiscount) || 0;
-        const margin = leadOriginalValue > leadValueWithDiscount ? leadOriginalValue - leadValueWithDiscount : 0;
-        const commissionValue = margin > 0 ? margin * (commissionRate / 100) : 0;
+        const commissionValue = leadValueWithDiscount * (commissionRate / 100);
 
         const kwh = Number(lead.kwh) || 0;
 
@@ -247,7 +246,6 @@ function RankingPageContent() {
       });
   
     const finalRanking = unsortedRanking
-      .filter(entry => !sellersToExclude.includes(entry.userName.toLowerCase()))
       .sort((a, b) => b.mainScoreValue - a.mainScoreValue)
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
   
