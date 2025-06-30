@@ -1,3 +1,4 @@
+
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -12,6 +13,22 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     let leadsReattributed = 0;
     let usersCreated = 0;
     let leadsSynced = 0;
+
+    // --- Pre-fetch all users to create a map for lookups ---
+    const allUsersSnapshot = await usersRef.get();
+    const userMapByName = new Map<string, string>(); // Map from displayName -> uid
+    let karattyUid: string | undefined;
+
+    allUsersSnapshot.forEach(doc => {
+        const user = doc.data() as FirestoreUser;
+        if (user.displayName) {
+            const upperCaseName = user.displayName.trim().toUpperCase();
+            userMapByName.set(upperCaseName, doc.id);
+            if (upperCaseName === 'KARATTY VICTORIA') {
+                karattyUid = doc.id;
+            }
+        }
+    });
 
     // --- Step 1: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
     // Handle multiple variations of the name to ensure all leads are captured.
@@ -33,24 +50,20 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
 
     if (leadsToUpdate.size > 0) {
         const batch = adminDb.batch();
+        const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'Karatty Victoria' };
+        if (karattyUid) {
+            updatePayload.userId = karattyUid;
+        }
+
         leadsToUpdate.forEach(doc => {
-            batch.update(doc.ref, { sellerName: 'Karatty Victoria' });
+            batch.update(doc.ref, updatePayload);
         });
         await batch.commit();
         leadsReattributed = leadsToUpdate.size;
     }
 
     // --- Step 2: Sync existing users with their unassigned leads ---
-    const allUsersSnapshot = await usersRef.get();
-    const userMapByName = new Map<string, string>(); // Map from displayName -> uid
-    allUsersSnapshot.forEach(doc => {
-        const user = doc.data() as FirestoreUser;
-        if (user.displayName) {
-            // Use uppercase for case-insensitive matching
-            userMapByName.set(user.displayName.trim().toUpperCase(), doc.id);
-        }
-    });
-
+    // userMapByName is already created above, so we can use it directly.
     const unassignedLeadsQuery = leadsRef.where('userId', '==', 'unassigned');
     const unassignedLeadsSnapshot = await unassignedLeadsQuery.get();
 
