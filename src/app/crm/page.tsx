@@ -228,20 +228,39 @@ function CrmPageContent() {
     setEditingLead(null);
   };
 
-  const handleFormSubmit = async (formData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>, photoFile?: File, billFile?: File) => {
+  const handleFormSubmit = async (
+    formData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>,
+    photoFile?: File,
+    billFile?: File,
+    legalRepFile?: File,
+    otherDocsFile?: File
+  ) => {
     setIsSubmitting(true);
     try {
       if (editingLead) {
-        await updateCrmLeadDetails(editingLead.id, formData, photoFile, billFile);
-        toast({ title: "Lead Atualizado", description: `Os dados de "${formData.name}" foram salvos.` });
+        await updateCrmLeadDetails(
+          editingLead.id,
+          formData,
+          photoFile,
+          billFile,
+          legalRepFile,
+          otherDocsFile
+        );
+        toast({ title: "Lead Atualizado", description: `Os dados de "${formData.name || 'Lead'}" foram salvos.` });
       } else {
         if (!appUser) throw new Error("Usuário não autenticado.");
         const leadDataForCreation = {
           ...formData,
           sellerName: formData.sellerName || appUser.displayName || appUser.email!,
         };
-        await createCrmLead(leadDataForCreation, photoFile, billFile);
-        toast({ title: "Lead Criado", description: `"${formData.name}" foi adicionado ao CRM.` });
+        await createCrmLead(
+          leadDataForCreation,
+          photoFile,
+          billFile,
+          legalRepFile,
+          otherDocsFile
+        );
+        toast({ title: "Lead Criado", description: `"${formData.name || 'Novo Lead'}" foi adicionado ao CRM.` });
       }
       handleCloseForm();
     } catch (error) {
@@ -755,5 +774,3 @@ export default function CRMPage() {
     </Suspense>
   );
 }
-
-    

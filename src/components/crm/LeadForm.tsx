@@ -34,23 +34,23 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 
 const leadFormSchema = z.object({
-  customerType: z.enum(['pf', 'pj'], { required_error: "Selecione o tipo de cliente." }),
-  name: z.string().min(2, "O nome ou razão social é obrigatório."),
+  customerType: z.enum(['pf', 'pj']).optional(),
+  name: z.string().optional(),
   company: z.string().optional(),
   value: z.preprocess(
-    (val) => parseFloat(String(val).replace(",", ".")),
-    z.number().positive("O valor deve ser positivo.")
-  ).optional(), // Value is now calculated
+    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val).replace(",", "."))),
+    z.number().optional()
+  ),
   kwh: z.preprocess(
-    (val) => parseInt(String(val), 10),
-    z.number().int().positive("O consumo em KWh deve ser um inteiro positivo.")
+    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val), 10)),
+    z.number().int().min(0).optional()
   ),
   discountPercentage: z.preprocess(
-    (val) => parseFloat(String(val || "0").replace(",", ".")),
-    z.number().min(0, "Desconto não pode ser negativo.").max(100, "Desconto não pode ser maior que 100.").optional()
+    (val) => (String(val || "").trim() === '' ? undefined : parseFloat(String(val || "0").replace(",", "."))),
+    z.number().min(0).max(100).optional()
   ),
-  stageId: z.enum(STAGE_IDS, { required_error: "O estágio é obrigatório." }),
-  sellerName: z.string().min(1, "O nome do vendedor é obrigatório."),
+  stageId: z.enum(STAGE_IDS).optional().default('contato'), // Default to 'contato'
+  sellerName: z.string().optional(),
   leadSource: z.enum(LEAD_SOURCES).optional(),
   phone: z.string().optional(),
   email: z.string().email("O email fornecido é inválido.").optional().or(z.literal('')),
@@ -82,18 +82,6 @@ const leadFormSchema = z.object({
   billDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
   legalRepresentativeDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
   otherDocumentsFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
-}).refine(data => {
-    if (data.customerType === 'pf') return !!data.cpf && data.cpf.replace(/\D/g, '').length === 11;
-    return true;
-}, {
-    message: "CPF é obrigatório e deve conter 11 dígitos.",
-    path: ["cpf"],
-}).refine(data => {
-    if (data.customerType === 'pj') return !!data.cnpj && data.cnpj.replace(/\D/g, '').length === 14;
-    return true;
-}, {
-    message: "CNPJ é obrigatório e deve conter 14 dígitos.",
-    path: ["cnpj"],
 });
 
 
@@ -113,9 +101,9 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
     defaultValues: {
       name: initialData?.name || "",
       company: initialData?.company || "",
-      value: initialData?.value || 0,
-      kwh: initialData?.kwh || 0,
-      discountPercentage: initialData?.discountPercentage || 0,
+      value: initialData?.value || undefined,
+      kwh: initialData?.kwh || undefined,
+      discountPercentage: initialData?.discountPercentage || undefined,
       stageId: initialData?.stageId || 'contato',
       sellerName: initialData?.sellerName || "Sistema",
       leadSource: initialData?.leadSource || undefined,
@@ -210,7 +198,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{customerType === 'pf' ? 'Nome Completo *' : 'Razão Social *'}</FormLabel>
+                      <FormLabel>{customerType === 'pf' ? 'Nome Completo' : 'Razão Social'}</FormLabel>
                       <FormControl><Input placeholder={customerType === 'pf' ? "Ex: João da Silva" : "Ex: Empresa Exemplo LTDA"} {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -223,7 +211,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     name="cpf"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>CPF *</FormLabel>
+                        <FormLabel>CPF</FormLabel>
                         <FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
@@ -238,7 +226,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                       name="cnpj"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>CNPJ *</FormLabel>
+                          <FormLabel>CNPJ</FormLabel>
                           <FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
@@ -275,7 +263,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     name="kwh"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Consumo Médio (KWh) *</FormLabel>
+                        <FormLabel>Consumo Médio (KWh)</FormLabel>
                         <FormControl><Input type="number" placeholder="Ex: 350" {...field} /></FormControl>
                         <FormMessage />
                         </FormItem>
@@ -299,7 +287,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                   name="stageId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Estágio *</FormLabel>
+                      <FormLabel>Estágio</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Selecione o estágio" /></SelectTrigger></FormControl>
                         <SelectContent>
@@ -315,7 +303,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                   name="sellerName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Vendedor Responsável *</FormLabel>
+                      <FormLabel>Vendedor Responsável</FormLabel>
                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -512,7 +500,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={isSubmitting || !customerType}>
+          <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Salvando..." : (initialData?.id ? "Salvar Alterações" : "Criar Lead")}
           </Button>
         </DialogFooter>
