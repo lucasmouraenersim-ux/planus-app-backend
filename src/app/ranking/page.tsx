@@ -116,8 +116,6 @@ function RankingPageContent() {
     const ouroSellers = Object.keys(commissionRateOverrides);
     const sellersToExclude = ['lucas de moura', 'eduardo w', 'eduardo henrique wiegert'];
 
-    const sellers = allFirestoreUsers.filter(user => user.type === 'vendedor' && !sellersToExclude.includes((user.displayName || '').toLowerCase()));
-    
     const userMapByUid = new Map<string, FirestoreUser>();
     const userMapByName = new Map<string, FirestoreUser>();
     allFirestoreUsers.forEach(user => {
@@ -151,26 +149,32 @@ function RankingPageContent() {
     const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
   
     const userMetrics = new Map<string, { totalSalesValue: number; numberOfSales: number; totalKwh: number; user: FirestoreUser }>();
+    
+    // Initialize metrics for all valid sellers
+    const sellers = allFirestoreUsers.filter(user => user.type === 'vendedor' && !sellersToExclude.includes((user.displayName || '').toLowerCase()));
     sellers.forEach(seller => {
-      userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, user: seller });
+        userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0, user: seller });
     });
-  
+
+    // Attribute leads to sellers
     periodLeads.forEach(lead => {
       let seller: FirestoreUser | undefined;
+
+      // Find seller by userId first, then by name
       if (lead.userId && lead.userId !== 'unassigned') {
-        seller = userMapByUid.get(lead.userId);
-      } else if (lead.sellerName) {
-        seller = userMapByName.get(lead.sellerName.trim().toLowerCase());
+          seller = userMapByUid.get(lead.userId);
+      }
+      if (!seller && lead.sellerName) {
+          seller = userMapByName.get(lead.sellerName.trim().toLowerCase());
       }
       
       if (seller && userMetrics.has(seller.uid)) {
         const metrics = userMetrics.get(seller.uid)!;
         const sellerNameLower = (seller.displayName || '').toLowerCase();
-        const commissionRate = commissionRateOverrides[sellerNameLower] || seller.commissionRate || 40;
+        const commissionRate = commissionRateOverrides[sellerNameLower] || 40;
         
         const leadValueWithDiscount = Number(lead.valueAfterDiscount) || 0;
         const commissionValue = leadValueWithDiscount * (commissionRate / 100);
-
         const kwh = Number(lead.kwh) || 0;
 
         metrics.totalSalesValue += commissionValue;
