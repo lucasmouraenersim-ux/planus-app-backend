@@ -14,6 +14,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     let leadsReattributedSuperFacil = 0;
     let usersCreated = 0;
     let leadsSynced = 0;
+    const BATCH_SIZE = 450;
 
     // --- Pre-fetch all users to create a map for lookups ---
     const allUsersSnapshot = await usersRef.get();
@@ -35,63 +36,60 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
         }
     });
 
-    // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
+    // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" with BATCHING ---
     const lucasNameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
-    const lucasReattributionPromises = lucasNameVariations.map(name => 
-        leadsRef.where('sellerName', '==', name).get()
-    );
-    const lucasReattributionSnapshots = await Promise.all(lucasReattributionPromises);
-    const lucasLeadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-    lucasReattributionSnapshots.forEach(snapshot => {
-        snapshot.docs.forEach(doc => {
-            if (!lucasLeadsToUpdate.has(doc.id)) {
-                lucasLeadsToUpdate.set(doc.id, doc);
-            }
-        });
+    const lucasLeadsToUpdateDocs: admin.firestore.QueryDocumentSnapshot[] = [];
+    for (const name of lucasNameVariations) {
+        const snapshot = await leadsRef.where('sellerName', '==', name).get();
+        lucasLeadsToUpdateDocs.push(...snapshot.docs);
+    }
+    const lucasLeadsToUpdateMap = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    lucasLeadsToUpdateDocs.forEach(doc => {
+        if (!lucasLeadsToUpdateMap.has(doc.id)) lucasLeadsToUpdateMap.set(doc.id, doc);
     });
+    const lucasUniqueDocs = Array.from(lucasLeadsToUpdateMap.values());
 
-    if (lucasLeadsToUpdate.size > 0) {
-        const reattributionBatch = adminDb.batch();
+    if (lucasUniqueDocs.length > 0) {
         const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'Karatty Victoria' };
         if (karattyUid) {
             updatePayload.userId = karattyUid;
         }
-        lucasLeadsToUpdate.forEach(doc => {
-            reattributionBatch.update(doc.ref, updatePayload);
-        });
-        await reattributionBatch.commit();
-        leadsReattributedLucas = lucasLeadsToUpdate.size;
+        for (let i = 0; i < lucasUniqueDocs.length; i += BATCH_SIZE) {
+            const batch = adminDb.batch();
+            const chunk = lucasUniqueDocs.slice(i, i + BATCH_SIZE);
+            chunk.forEach(doc => batch.update(doc.ref, updatePayload));
+            await batch.commit();
+        }
+        leadsReattributedLucas = lucasUniqueDocs.length;
     }
 
-    // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" ---
+    // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" with BATCHING ---
     const superFacilNameVariations = ['Super Facil solar', 'SuperFacil Solar'];
-    const superFacilReattributionPromises = superFacilNameVariations.map(name => 
-        leadsRef.where('sellerName', '==', name).get()
-    );
-    const superFacilReattributionSnapshots = await Promise.all(superFacilReattributionPromises);
-    const superFacilLeadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-    superFacilReattributionSnapshots.forEach(snapshot => {
-        snapshot.docs.forEach(doc => {
-            if (!superFacilLeadsToUpdate.has(doc.id)) {
-                superFacilLeadsToUpdate.set(doc.id, doc);
-            }
-        });
+    const superFacilLeadsToUpdateDocs: admin.firestore.QueryDocumentSnapshot[] = [];
+    for (const name of superFacilNameVariations) {
+        const snapshot = await leadsRef.where('sellerName', '==', name).get();
+        superFacilLeadsToUpdateDocs.push(...snapshot.docs);
+    }
+    const superFacilLeadsToUpdateMap = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    superFacilLeadsToUpdateDocs.forEach(doc => {
+        if (!superFacilLeadsToUpdateMap.has(doc.id)) superFacilLeadsToUpdateMap.set(doc.id, doc);
     });
-
-    if (superFacilLeadsToUpdate.size > 0) {
-        const reattributionBatch = adminDb.batch();
+    const superFacilUniqueDocs = Array.from(superFacilLeadsToUpdateMap.values());
+    
+    if (superFacilUniqueDocs.length > 0) {
         const newSellerName = 'SuperFacil Energia';
         const updatePayload: { sellerName: string; userId?: string } = { sellerName: newSellerName };
         if (superFacilEnergiaUid) {
             updatePayload.userId = superFacilEnergiaUid;
         }
-        superFacilLeadsToUpdate.forEach(doc => {
-            reattributionBatch.update(doc.ref, updatePayload);
-        });
-        await reattributionBatch.commit();
-        leadsReattributedSuperFacil = superFacilLeadsToUpdate.size;
+        for (let i = 0; i < superFacilUniqueDocs.length; i += BATCH_SIZE) {
+            const batch = adminDb.batch();
+            const chunk = superFacilUniqueDocs.slice(i, i + BATCH_SIZE);
+            chunk.forEach(doc => batch.update(doc.ref, updatePayload));
+            await batch.commit();
+        }
+        leadsReattributedSuperFacil = superFacilUniqueDocs.length;
     }
-
 
     // --- Step 2: Create missing user documents from unique seller names ---
     const allLeadsSnapshot = await leadsRef.get();
@@ -156,10 +154,9 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     leadsSynced = leadsToSync.length;
 
     if (leadsSynced > 0) {
-        const batchSize = 450;
-        for (let i = 0; i < leadsSynced; i += batchSize) {
+        for (let i = 0; i < leadsSynced; i += BATCH_SIZE) {
             const batch = adminDb.batch();
-            const chunk = leadsToSync.slice(i, i + batchSize);
+            const chunk = leadsToSync.slice(i, i + BATCH_SIZE);
             for (const { ref, userId } of chunk) {
                 batch.update(ref, { userId: userId });
             }
@@ -173,7 +170,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       summaryParts.push(`${leadsReattributedLucas} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
     }
     if (leadsReattributedSuperFacil > 0) {
-        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de 'Super Facil Solar' foram reatribuídos para 'SuperFacil Energia'.`);
+        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de variações de 'Super Facil Solar' foram reatribuídos para 'SuperFacil Energia'.`);
     }
     if (usersCreated > 0) {
       summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados.`);
