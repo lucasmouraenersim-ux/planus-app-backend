@@ -85,9 +85,6 @@ function RankingPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
   const [showSecondNotification, setShowSecondNotification] = useState(false);
-  
-  const KWH_TO_REAIS_FACTOR = 1.093113;
-  const COMPANY_MARGIN_PERCENTAGE = 0.25;
 
   useEffect(() => {
     const loadData = async () => {
@@ -170,10 +167,12 @@ function RankingPageContent() {
         const sellerNameLower = (seller.displayName || '').toLowerCase();
         
         const commissionRate = commissionRateOverrides[sellerNameLower] || seller.commissionRate || 40;
+        const leadOriginalValue = Number(lead.value) || 0;
+        const leadValueWithDiscount = Number(lead.valueAfterDiscount) || 0;
+        const margin = leadOriginalValue > leadValueWithDiscount ? leadOriginalValue - leadValueWithDiscount : 0;
+        const commissionValue = margin > 0 ? margin * (commissionRate / 100) : 0;
+
         const kwh = Number(lead.kwh) || 0;
-        const billValue = kwh * KWH_TO_REAIS_FACTOR;
-        const companyMargin = billValue * COMPANY_MARGIN_PERCENTAGE;
-        const commissionValue = companyMargin * (commissionRate / 100);
 
         metrics.totalSalesValue += commissionValue;
         metrics.numberOfSales += 1;
@@ -253,7 +252,7 @@ function RankingPageContent() {
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
   
     return { ranking: finalRanking, totalKwhSoldInPeriod, podium: finalRanking.slice(0, 3) };
-  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading, KWH_TO_REAIS_FACTOR, COMPANY_MARGIN_PERCENTAGE]);
+  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading]);
 
 
   const { ranking, totalKwhSoldInPeriod, podium } = processedData;
