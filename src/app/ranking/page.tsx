@@ -30,8 +30,10 @@ interface RankingDisplayEntry {
   mainScoreValue: number; 
   detailScore1Label?: string; 
   detailScore1Value?: string | number;
+  detailScore1Type?: 'currency' | 'kwh' | 'plain';
   detailScore2Label?: string;
   detailScore2Value?: string | number;
+  detailScore2Type?: 'currency' | 'kwh' | 'plain';
   kwh: number;
   totalKwhAllTime: number;
   kwhThisSalesCycle: number;
@@ -129,7 +131,7 @@ function RankingPageContent() {
     // --- Medal Logic (All-time based) ---
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
     finalizedLeads.forEach(lead => {
-        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName?.trim().toLowerCase() === lead.sellerName?.trim().toLowerCase());
         if (!seller || !lead.completedAt) return;
         const userId = seller.uid;
         if (!userAllTimeMetrics[userId]) userAllTimeMetrics[userId] = { totalKwh: 0, monthlySales: {} };
@@ -151,7 +153,7 @@ function RankingPageContent() {
     const { start: cycleStart, end: cycleEnd } = getSalesCycleBounds();
     const salesCycleLeads = finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
     const userSalesCycleKwh = salesCycleLeads.reduce((acc, lead) => {
-        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+        const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName?.trim().toLowerCase() === lead.sellerName?.trim().toLowerCase());
         if (seller) {
             acc[seller.uid] = (acc[seller.uid] || 0) + (Number(lead.kwh) || 0);
         }
@@ -161,49 +163,69 @@ function RankingPageContent() {
     // --- Ranking Calculation (Period) ---
     const userMetrics = new Map<string, { totalSalesValue: number; numberOfSales: number; totalKwh: number; }>();
     periodLeads.forEach(lead => {
-      const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
+      let seller: FirestoreUser | undefined;
+      if (lead.userId && lead.userId !== 'unassigned') {
+        seller = allFirestoreUsers.find(u => u.uid === lead.userId);
+      }
+      if (!seller && lead.sellerName) {
+        const sellerNameLower = lead.sellerName.trim().toLowerCase();
+        seller = allFirestoreUsers.find(u => u.displayName?.trim().toLowerCase() === sellerNameLower);
+      }
+      
       if (!seller) return;
+      
       if (!userMetrics.has(seller.uid)) userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 });
+      
       const metrics = userMetrics.get(seller.uid)!;
       const commissionRate = seller.commissionRate || 40;
       const commissionValue = (Number(lead.value) || 0) * (commissionRate / 100);
+
       metrics.totalSalesValue += commissionValue;
       metrics.numberOfSales += 1;
       metrics.totalKwh += (Number(lead.kwh) || 0);
     });
     
     const ranking = allFirestoreUsers
-      .filter(user => user.type === 'vendedor' || user.type === 'admin')
+      .filter(user => user.type === 'vendedor')
       .map(user => {
         const metrics = userMetrics.get(user.uid) || { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 };
         let mainScoreValue = 0;
         let mainScoreDisplay = "";
         let detailScore1Label = "";
         let detailScore1Value: string | number | undefined = "";
+        let detailScore1Type: 'currency' | 'kwh' | 'plain' | undefined = undefined;
         let detailScore2Label = "";
         let detailScore2Value: string | number | undefined = "";
+        let detailScore2Type: 'currency' | 'kwh' | 'plain' | undefined = undefined;
+
 
         if (selectedCriteria === 'totalSalesValue') {
           mainScoreValue = metrics.totalSalesValue;
           mainScoreDisplay = formatValueForDisplay(metrics.totalSalesValue, 'currency');
           detailScore1Label = "Nº Vendas";
           detailScore1Value = metrics.numberOfSales;
+          detailScore1Type = 'plain';
           detailScore2Label = "Total KWh";
           detailScore2Value = metrics.totalKwh;
+          detailScore2Type = 'kwh';
         } else if (selectedCriteria === 'numberOfSales') {
           mainScoreValue = metrics.numberOfSales;
           mainScoreDisplay = `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas`;
           detailScore1Label = "Volume (R$)";
           detailScore1Value = metrics.totalSalesValue;
+          detailScore1Type = 'currency';
           detailScore2Label = "Total KWh";
           detailScore2Value = metrics.totalKwh;
+          detailScore2Type = 'kwh';
         } else { // totalKwh
           mainScoreValue = metrics.totalKwh;
           mainScoreDisplay = formatValueForDisplay(metrics.totalKwh, 'kwh');
           detailScore1Label = "Volume (R$)";
           detailScore1Value = metrics.totalSalesValue;
+          detailScore1Type = 'currency';
           detailScore2Label = "Nº Vendas";
           detailScore2Value = metrics.numberOfSales;
+          detailScore2Type = 'plain';
         }
         
         return {
@@ -214,8 +236,10 @@ function RankingPageContent() {
           mainScoreDisplay,
           detailScore1Label,
           detailScore1Value,
+          detailScore1Type,
           detailScore2Label,
           detailScore2Value,
+          detailScore2Type,
           kwh: metrics.totalKwh,
           totalKwhAllTime: userAllTimeMetrics[user.uid]?.totalKwh || 0,
           kwhThisSalesCycle: userSalesCycleKwh[user.uid] || 0,
@@ -420,13 +444,13 @@ function RankingPageContent() {
                 </div>
                 {loggedInUserRank.detailScore1Label && (
                    <div className="text-center hidden sm:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore1Value, 'plain')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore1Value, loggedInUserRank.detailScore1Type || 'plain')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore1Label}</p>
                   </div>
                 )}
                  {loggedInUserRank.detailScore2Label && (
                    <div className="text-center hidden md:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore2Value, 'kwh')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore2Value, loggedInUserRank.detailScore2Type || 'plain')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore2Label}</p>
                   </div>
                 )}
@@ -469,8 +493,8 @@ function RankingPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatValueForDisplay(entry.detailScore1Value, 'plain')}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatValueForDisplay(entry.detailScore2Value, 'kwh')}</TableCell>}
+                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</TableCell>}
+                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatValueForDisplay(entry.detailScore2Value, entry.detailScore2Type || 'plain')}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
