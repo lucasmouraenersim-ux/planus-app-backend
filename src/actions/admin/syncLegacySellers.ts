@@ -1,3 +1,4 @@
+
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -18,7 +19,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     const allUsersSnapshot = await usersRef.get();
     const userMapByName = new Map<string, string>(); // Map from displayName.toUpperCase() -> uid
     let karattyUid: string | undefined;
-    let superFacilSolarUid: string | undefined;
+    let superFacilEnergiaUid: string | undefined;
 
     allUsersSnapshot.forEach(doc => {
         const user = doc.data() as FirestoreUser;
@@ -28,8 +29,8 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
             if (upperCaseName === 'KARATTY VICTORIA') {
                 karattyUid = doc.id;
             }
-            if (upperCaseName === 'SUPERFACIL SOLAR') {
-                superFacilSolarUid = doc.id;
+            if (upperCaseName === 'SUPERFACIL ENERGIA') {
+                superFacilEnergiaUid = doc.id;
             }
         }
     });
@@ -62,19 +63,33 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
         leadsReattributedLucas = lucasLeadsToUpdate.size;
     }
 
-    // --- Step 1B: Re-attribute leads from "Super Facil solar" to "SuperFacil Solar" ---
-    const superFacilSnapshot = await leadsRef.where('sellerName', '==', 'Super Facil solar').get();
-    if (!superFacilSnapshot.empty) {
+    // --- Step 1B: Re-attribute leads from "Super Facil Solar" variations to "SuperFacil Energia" ---
+    const superFacilNameVariations = ['Super Facil solar', 'SuperFacil Solar'];
+    const superFacilReattributionPromises = superFacilNameVariations.map(name => 
+        leadsRef.where('sellerName', '==', name).get()
+    );
+    const superFacilReattributionSnapshots = await Promise.all(superFacilReattributionPromises);
+    const superFacilLeadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    superFacilReattributionSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            if (!superFacilLeadsToUpdate.has(doc.id)) {
+                superFacilLeadsToUpdate.set(doc.id, doc);
+            }
+        });
+    });
+
+    if (superFacilLeadsToUpdate.size > 0) {
         const reattributionBatch = adminDb.batch();
-        const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'SuperFacil Solar' };
-        if (superFacilSolarUid) {
-            updatePayload.userId = superFacilSolarUid;
+        const newSellerName = 'SuperFacil Energia';
+        const updatePayload: { sellerName: string; userId?: string } = { sellerName: newSellerName };
+        if (superFacilEnergiaUid) {
+            updatePayload.userId = superFacilEnergiaUid;
         }
-        superFacilSnapshot.docs.forEach(doc => {
+        superFacilLeadsToUpdate.forEach(doc => {
             reattributionBatch.update(doc.ref, updatePayload);
         });
         await reattributionBatch.commit();
-        leadsReattributedSuperFacil = superFacilSnapshot.size;
+        leadsReattributedSuperFacil = superFacilLeadsToUpdate.size;
     }
 
 
@@ -158,7 +173,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       summaryParts.push(`${leadsReattributedLucas} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
     }
     if (leadsReattributedSuperFacil > 0) {
-        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de 'Super Facil solar' foram corrigidos para 'SuperFacil Solar'.`);
+        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de 'Super Facil Solar' foram reatribuídos para 'SuperFacil Energia'.`);
     }
     if (usersCreated > 0) {
       summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados.`);
