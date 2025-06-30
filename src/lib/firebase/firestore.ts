@@ -1,3 +1,4 @@
+
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -11,7 +12,7 @@ import { uploadFile } from './storage';
 const KWH_TO_REAIS_FACTOR = 1.093113;
 
 export async function createCrmLead(
-  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt'>,
+  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt' | 'value' | 'valueAfterDiscount'> & { kwh: number; discountPercentage?: number },
   photoDocumentFile?: File, 
   billDocumentFile?: File,
   legalRepresentativeDocumentFile?: File,
@@ -20,12 +21,16 @@ export async function createCrmLead(
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error("Usuário não autenticado para criar o lead.");
 
-  // Calculate valueAfterDiscount
-  const valueAfterDiscount = (leadData.kwh * KWH_TO_REAIS_FACTOR) * (1 - ((leadData.discountPercentage || 0) / 100));
+  // Calculate value and valueAfterDiscount
+  const kwh = leadData.kwh || 0;
+  const discount = leadData.discountPercentage || 0;
+  const originalValue = kwh * KWH_TO_REAIS_FACTOR;
+  const valueAfterDiscount = originalValue * (1 - (discount / 100));
 
   // Prepare data, excluding file URLs which are added later
   const baseLeadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'photoDocumentUrl' | 'billDocumentUrl' | 'legalRepresentativeDocumentUrl' | 'otherDocumentsUrl'> = {
     ...leadData,
+    value: originalValue,
     valueAfterDiscount,
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
@@ -101,13 +106,16 @@ export async function updateCrmLeadDetails(
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
 
-  // Recalculate valueAfterDiscount if kwh or discountPercentage changes
+  // Recalculate value and valueAfterDiscount if kwh or discountPercentage changes
   if (updates.kwh !== undefined || updates.discountPercentage !== undefined) {
     const leadDoc = await getDoc(leadRef);
     const existingData = leadDoc.data() as LeadDocumentData;
     const kwh = updates.kwh ?? existingData.kwh;
     const discount = updates.discountPercentage ?? existingData.discountPercentage;
-    finalUpdates.valueAfterDiscount = (kwh * KWH_TO_REAIS_FACTOR) * (1 - ((discount || 0) / 100));
+    const originalValue = kwh * KWH_TO_REAIS_FACTOR;
+    const valueAfterDiscount = originalValue * (1 - ((discount || 0) / 100));
+    finalUpdates.value = originalValue;
+    finalUpdates.valueAfterDiscount = valueAfterDiscount;
   }
 
   if (updates.phone) {

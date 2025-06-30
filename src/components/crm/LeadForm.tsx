@@ -40,10 +40,14 @@ const leadFormSchema = z.object({
   value: z.preprocess(
     (val) => parseFloat(String(val).replace(",", ".")),
     z.number().positive("O valor deve ser positivo.")
-  ),
+  ).optional(), // Value is now calculated
   kwh: z.preprocess(
     (val) => parseInt(String(val), 10),
     z.number().int().positive("O consumo em KWh deve ser um inteiro positivo.")
+  ),
+  discountPercentage: z.preprocess(
+    (val) => parseFloat(String(val || "0").replace(",", ".")),
+    z.number().min(0, "Desconto não pode ser negativo.").max(100, "Desconto não pode ser maior que 100.").optional()
   ),
   stageId: z.enum(STAGE_IDS, { required_error: "O estágio é obrigatório." }),
   sellerName: z.string().min(1, "O nome do vendedor é obrigatório."),
@@ -111,6 +115,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
       company: initialData?.company || "",
       value: initialData?.value || 0,
       kwh: initialData?.kwh || 0,
+      discountPercentage: initialData?.discountPercentage || 0,
       stageId: initialData?.stageId || 'contato',
       sellerName: initialData?.sellerName || "Sistema",
       leadSource: initialData?.leadSource || undefined,
@@ -267,22 +272,23 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                     control={form.control}
-                    name="value"
+                    name="kwh"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Valor Estimado (R$) *</FormLabel>
-                        <FormControl><Input type="number" step="0.01" placeholder="Ex: 1500.50" {...field} /></FormControl>
+                        <FormLabel>Consumo Médio (KWh) *</FormLabel>
+                        <FormControl><Input type="number" placeholder="Ex: 350" {...field} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
                     />
                     <FormField
                     control={form.control}
-                    name="kwh"
+                    name="discountPercentage"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Consumo Médio (KWh) *</FormLabel>
-                        <FormControl><Input type="number" placeholder="Ex: 350" {...field} /></FormControl>
+                        <FormLabel>Desconto Aplicado (%)</FormLabel>
+                        <FormControl><Input type="number" step="0.1" placeholder="Ex: 15" {...field} /></FormControl>
+                        <FormDescription className="text-xs">O valor original e com desconto serão calculados.</FormDescription>
                         <FormMessage />
                         </FormItem>
                     )}

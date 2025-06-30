@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -31,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award } from 'lucide-react';
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -45,8 +46,9 @@ interface LeadCardProps {
   onAssignLead: (leadId: string) => void;
 }
 
-const formatCurrency = (value: number) => {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatCurrency = (value: number | undefined) => {
+    if (value === undefined) return "R$ 0,00";
+    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
 export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead }: LeadCardProps) {
@@ -64,12 +66,20 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <div className="flex items-center text-muted-foreground">
-          <DollarSign className="w-4 h-4 mr-2 text-amber-500" />
-          <span>Valor: {formatCurrency(lead.value)}</span>
-        </div>
-        <div className="flex items-center text-muted-foreground">
           <Zap className="w-4 h-4 mr-2 text-sky-500" />
           <span>Consumo: {lead.kwh} kWh</span>
+        </div>
+        <div className="flex items-center text-muted-foreground">
+          <DollarSign className="w-4 h-4 mr-2 text-amber-500" />
+          <span>Valor Original: {formatCurrency(lead.value)}</span>
+        </div>
+         <div className="flex items-center text-muted-foreground">
+          <Banknote className="w-4 h-4 mr-2 text-emerald-500" />
+          <span>Valor c/ Desconto: {formatCurrency(lead.valueAfterDiscount)}</span>
+        </div>
+         <div className="flex items-center text-muted-foreground">
+          <Percent className="w-4 h-4 mr-2 text-indigo-500" />
+          <span>Desconto: {lead.discountPercentage?.toFixed(2) || '0.00'}%</span>
         </div>
         <div className="flex items-center text-muted-foreground">
           <User className="w-4 h-4 mr-2 text-green-500" />

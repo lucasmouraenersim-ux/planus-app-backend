@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -30,12 +31,8 @@ const CsvRowSchema = z.object({
   'atualizado em': z.string().optional(),
 });
 
-/**
- * Maps a status string from the CSV to a CRM StageId.
- * Prioritizes direct stage names and common contract statuses.
- * @param status The status string from the CSV.
- * @returns A StageId or null if no mapping is found.
- */
+const KWH_TO_REAIS_FACTOR = 1.093113;
+
 function mapStatusToStageId(status: string | undefined): StageId | null {
   const s = status?.trim().toUpperCase().replace(/_/g, ' '); // Normalize
   if (!s) return null;
@@ -56,7 +53,6 @@ function mapStatusToStageId(status: string | undefined): StageId | null {
 
 function parseCsvNumber(value: string | undefined): number {
     if (!value) return 0;
-    // Remove currency symbols, thousand separators, and use dot as decimal separator
     const cleaned = value.replace('R$', '').trim().replace(/\./g, '').replace(',', '.');
     const number = parseFloat(cleaned);
     return isNaN(number) ? 0 : number;
@@ -91,18 +87,35 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
         transformHeader: header => header.toLowerCase().trim(),
         complete: async (results) => {
           let successfulImports = 0;
+          let successfulUpdates = 0;
           let failedImports = 0;
           const errors: string[] = [];
-          const batchSize = 400; // Firestore batch limit is 500
-          const batches = [];
 
-          for (let i = 0; i < results.data.length; i += batchSize) {
-              batches.push(results.data.slice(i, i + batchSize));
+          const installationCodes = results.data
+              .map(row => row['instalação']?.trim())
+              .filter((code): code is string => !!code);
+          const uniqueInstallationCodes = [...new Set(installationCodes)];
+
+          const existingLeadsMap = new Map<string, { id: string }>();
+          if (uniqueInstallationCodes.length > 0) {
+              const leadsRef = adminDb.collection("crm_leads");
+              for (let i = 0; i < uniqueInstallationCodes.length; i += 30) {
+                  const chunk = uniqueInstallationCodes.slice(i, i + 30);
+                  const querySnapshot = await leadsRef.where('codigoClienteInstalacao', 'in', chunk).get();
+                  querySnapshot.forEach(doc => {
+                      const data = doc.data() as LeadDocumentData;
+                      if (data.codigoClienteInstalacao) {
+                          existingLeadsMap.set(data.codigoClienteInstalacao, { id: doc.id });
+                      }
+                  });
+              }
           }
-          
-          for (const batchData of batches) {
-              const batch = adminDb.batch();
 
+          const batchSize = 400;
+          for (let i = 0; i < results.data.length; i += batchSize) {
+              const batch = adminDb.batch();
+              const batchData = results.data.slice(i, i + batchSize);
+              
               for (const row of batchData) {
                   const validation = CsvRowSchema.safeParse(row);
                   if (!validation.success) {
@@ -112,64 +125,69 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   }
 
                   const data = validation.data;
-                  const docRef = adminDb.collection("crm_leads").doc();
-                  
-                  // --- New Stage Logic ---
+                  const instalacao = data['instalação']?.trim();
+                  const existingLead = instalacao ? existingLeadsMap.get(instalacao) : undefined;
+
                   const signedAtDate = parseCsvDate(data['assinado em'], 'dd/MM/yyyy HH:mm');
                   const completedAtDate = parseCsvDate(data['finalizado em'], 'dd/MM/yyyy HH:mm');
-                  
                   let stageId: StageId;
-
-                  if (completedAtDate) {
-                    stageId = 'finalizado';
-                  } else if (signedAtDate) {
-                    stageId = 'assinado';
-                  } else {
-                    stageId = mapStatusToStageId(data.status) || 'contato'; // Fallback to status, then to 'contato'
-                  }
-                  // --- End New Stage Logic ---
+                  if (completedAtDate) { stageId = 'finalizado'; } 
+                  else if (signedAtDate) { stageId = 'assinado'; } 
+                  else { stageId = mapStatusToStageId(data.status) || 'contato'; }
 
                   const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
-                  
+                  const kwh = parseCsvNumber(data['consumo (kwh)']);
+                  const valorFaturado = parseCsvNumber(data['valor (rs)']);
+                  const valorOriginal = kwh * KWH_TO_REAIS_FACTOR;
+                  const discountPercentage = valorOriginal > 0 ? (1 - (valorFaturado / valorOriginal)) * 100 : 0;
+
                   const leadDataObject: Partial<LeadDocumentData> = {
                       name: data.cliente,
-                      sellerName: data.vendedor || "Sistema",
+                      sellerName: data.vendedor,
                       cpf: normalizedDocument.length === 11 ? normalizedDocument : undefined,
                       cnpj: normalizedDocument.length === 14 ? normalizedDocument : undefined,
-                      customerType: normalizedDocument.length === 11 ? 'pf' : normalizedDocument.length === 14 ? 'pj' : undefined,
+                      customerType: normalizedDocument.length === 11 ? 'pf' : (normalizedDocument.length === 14 ? 'pj' : undefined),
                       codigoClienteInstalacao: data.instalação,
                       concessionaria: data.concessionária,
                       plano: data.plano,
-                      kwh: parseCsvNumber(data['consumo (kwh)']),
-                      value: parseCsvNumber(data['valor (rs)']),
-                      stageId: stageId, // Use the new logic
-                      signedAt: signedAtDate, // Pass the parsed date
-                      completedAt: completedAtDate, // Pass the parsed date
+                      kwh,
+                      value: valorOriginal,
+                      valueAfterDiscount: valorFaturado,
+                      discountPercentage: discountPercentage,
+                      stageId,
+                      signedAt: signedAtDate,
+                      completedAt: completedAtDate,
                       saleReferenceDate: data['data referencia venda'],
-                      createdAt: parseCsvDate(data['criado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
                       lastContact: parseCsvDate(data['atualizado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
-                      needsAdminApproval: false, // Default for imported leads
-                      userId: 'unassigned', // Default, should be updated manually if needed
                   };
 
-                  // Remove properties that are undefined, as Firestore doesn't allow them.
-                  const cleanLeadData = Object.entries(leadDataObject).reduce((acc, [key, value]) => {
-                    if (value !== undefined) {
-                      acc[key as keyof LeadDocumentData] = value;
-                    }
-                    return acc;
-                  }, {} as Partial<LeadDocumentData>);
-                  
-                  batch.set(docRef, cleanLeadData);
-                  successfulImports++;
+                  const cleanLeadData = Object.fromEntries(
+                    Object.entries(leadDataObject).filter(([, v]) => v !== undefined && v !== null && v !== '')
+                  );
+
+                  if (existingLead) {
+                      const docRef = adminDb.collection("crm_leads").doc(existingLead.id);
+                      batch.update(docRef, cleanLeadData);
+                      successfulUpdates++;
+                  } else if (instalacao) {
+                      const docRef = adminDb.collection("crm_leads").doc();
+                      const createData = {
+                        ...cleanLeadData,
+                        createdAt: parseCsvDate(data['criado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
+                        userId: 'unassigned',
+                        needsAdminApproval: false,
+                        commissionPaid: false,
+                      };
+                      batch.set(docRef, createData);
+                      successfulImports++;
+                  }
               }
-              
               await batch.commit();
           }
 
           resolve({
               success: true,
-              message: `Importação concluída. ${successfulImports} leads importados, ${failedImports} falharam.`,
+              message: `Importação concluída. ${successfulImports} importados, ${successfulUpdates} atualizados, ${failedImports} falharam.`,
           });
         },
         error: (error: Error) => {
