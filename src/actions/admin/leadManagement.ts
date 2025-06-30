@@ -136,11 +136,14 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   else { stageId = mapStatusToStageId(data.status) || 'contato'; }
 
                   const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
+                  
+                  const rawRow = row as any;
+                  const valorFaturadoInput = rawRow['valor (r$)'] || rawRow['valor'];
+                  const valorFaturado = parseCsvNumber(valorFaturadoInput);
                   const kwh = parseCsvNumber(data['consumo (kwh)']);
-                  const valorFaturado = parseCsvNumber(data['valor (r$)']);
                   const valorOriginal = kwh * KWH_TO_REAIS_FACTOR;
-                  const discountPercentage = valorOriginal > 0 ? (1 - (valorFaturado / valorOriginal)) * 100 : 0;
-
+                  const discountPercentage = valorOriginal > 0 && valorFaturado > 0 ? (1 - (valorFaturado / valorOriginal)) * 100 : 0;
+                  
                   const leadDataObject: Partial<LeadDocumentData> = {
                       name: data.cliente,
                       sellerName: data.vendedor,

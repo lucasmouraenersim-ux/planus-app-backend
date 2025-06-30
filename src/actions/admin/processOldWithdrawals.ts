@@ -1,3 +1,4 @@
+
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -11,33 +12,38 @@ export async function processOldWithdrawals(): Promise<{ success: boolean; messa
 
     // Calculate the date one week ago
     const oneWeekAgo = subWeeks(new Date(), 1);
-    const oneWeekAgoTimestamp = admin.firestore.Timestamp.fromDate(oneWeekAgo);
 
-    // Query for pending withdrawals older than one week
-    const q = withdrawalsRef
-      .where('status', '==', 'pendente')
-      .where('requestedAt', '<=', oneWeekAgoTimestamp);
-      
+    // Query for pending withdrawals, then filter by date in code to avoid composite index requirement
+    const q = withdrawalsRef.where('status', '==', 'pendente');
     const querySnapshot = await q.get();
 
     if (querySnapshot.empty) {
-      return { success: true, message: 'Nenhuma solicitação de saque antiga e pendente encontrada para processar.', count: 0 };
+      return { success: true, message: 'Nenhuma solicitação de saque pendente encontrada para processar.', count: 0 };
     }
 
     const batch = adminDb.batch();
     const now = admin.firestore.Timestamp.now();
+    let count = 0;
 
     querySnapshot.docs.forEach(doc => {
-      batch.update(doc.ref, { 
-        status: 'concluido',
-        processedAt: now,
-        adminNotes: 'Processado automaticamente via sistema.' 
-      });
+      const data = doc.data();
+      // Manual date filtering
+      if (data.requestedAt && (data.requestedAt as admin.firestore.Timestamp).toDate() <= oneWeekAgo) {
+          batch.update(doc.ref, { 
+            status: 'concluido',
+            processedAt: now,
+            adminNotes: 'Processado automaticamente via sistema.' 
+          });
+          count++;
+      }
     });
+
+    if (count === 0) {
+        return { success: true, message: 'Nenhuma solicitação de saque antiga e pendente encontrada para processar.', count: 0 };
+    }
 
     await batch.commit();
 
-    const count = querySnapshot.size;
     return {
       success: true,
       message: `${count} solicitação(ões) de saque foram marcadas como 'concluído'.`,
