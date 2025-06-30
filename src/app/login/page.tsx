@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -8,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock } from 'lucide-react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from "@/hooks/use-toast";
@@ -29,12 +28,27 @@ export default function LoginPage() {
       router.push('/'); 
     } catch (error: any) {
       console.error("Login error:", error);
-      let errorMessage = "Falha no login. Verifique suas credenciais.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = "Email ou senha inválidos.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "Formato de email inválido.";
+      let errorMessage = "Ocorreu uma falha no login."; // Default message
+
+      switch (error.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = "Email ou senha inválidos. Por favor, verifique suas credenciais e tente novamente.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "O formato do email é inválido.";
+          break;
+        case 'auth/user-disabled':
+          errorMessage = "Esta conta de usuário foi desativada.";
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = "Acesso bloqueado temporariamente devido a muitas tentativas de login. Tente novamente mais tarde.";
+          break;
+        default:
+          errorMessage = "Ocorreu um erro inesperado. Verifique sua conexão ou tente novamente mais tarde.";
       }
+      
       toast({
         title: "Erro de Login",
         description: errorMessage,
@@ -109,6 +123,7 @@ export default function LoginPage() {
               </div>
             </div>
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLoading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
