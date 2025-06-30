@@ -1,4 +1,3 @@
-
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -14,17 +13,31 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     let usersCreated = 0;
     let leadsSynced = 0;
 
-    // --- Step 1: Re-attribute leads from "LUCAS DE MOURA" to "Karatty Victoria" ---
-    const lucasLeadsQuery = leadsRef.where('sellerName', '==', 'LUCAS DE MOURA');
-    const lucasLeadsSnapshot = await lucasLeadsQuery.get();
+    // --- Step 1: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
+    // Handle multiple variations of the name to ensure all leads are captured.
+    const nameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
+    const reattributionPromises = nameVariations.map(name => 
+        leadsRef.where('sellerName', '==', name).get()
+    );
+    
+    const reattributionSnapshots = await Promise.all(reattributionPromises);
 
-    if (!lucasLeadsSnapshot.empty) {
-      const batch = adminDb.batch();
-      lucasLeadsSnapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { sellerName: 'Karatty Victoria' });
-      });
-      await batch.commit();
-      leadsReattributed = lucasLeadsSnapshot.size;
+    const leadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    reattributionSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+            if (!leadsToUpdate.has(doc.id)) {
+                leadsToUpdate.set(doc.id, doc);
+            }
+        });
+    });
+
+    if (leadsToUpdate.size > 0) {
+        const batch = adminDb.batch();
+        leadsToUpdate.forEach(doc => {
+            batch.update(doc.ref, { sellerName: 'Karatty Victoria' });
+        });
+        await batch.commit();
+        leadsReattributed = leadsToUpdate.size;
     }
 
     // --- Step 2: Sync existing users with their unassigned leads ---
@@ -108,7 +121,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     // --- Construct the summary message ---
     let summaryParts: string[] = [];
     if (leadsReattributed > 0) {
-      summaryParts.push(`${leadsReattributed} lead(s) de LUCAS DE MOURA foram reatribuídos para Karatty Victoria.`);
+      summaryParts.push(`${leadsReattributed} lead(s) de Lucas de Moura foram reatribuídos para Karatty Victoria.`);
     }
     if (leadsSynced > 0) {
       summaryParts.push(`${leadsSynced} lead(s) foram sincronizados com seus respectivos vendedores.`);
