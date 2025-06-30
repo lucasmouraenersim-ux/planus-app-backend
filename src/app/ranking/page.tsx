@@ -6,6 +6,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { DateRange } from "react-day-picker";
+
 import {
   Select,
   SelectContent,
@@ -13,13 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2 } from 'lucide-react';
+import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2, CalendarIcon } from 'lucide-react';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser, UserType } from '@/types/user';
+import { cn } from "@/lib/utils";
+
 
 interface RankingDisplayEntry {
   rankPosition: number;
@@ -44,6 +51,7 @@ interface RankingDisplayEntry {
 const PERIOD_OPTIONS = [
   { value: 'monthly_current', label: 'Mensal (Ciclo de Vendas)' },
   { value: 'all_time', label: 'Todo o Período' },
+  { value: 'custom', label: 'Selecionar intervalo' },
 ];
 
 const CRITERIA_OPTIONS = [
@@ -82,6 +90,7 @@ function RankingPageContent() {
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(PERIOD_OPTIONS[0].value);
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
+  const [date, setDate] = useState<DateRange | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
   const [showSecondNotification, setShowSecondNotification] = useState(false);
@@ -111,23 +120,64 @@ function RankingPageContent() {
       'diogo rodrigo bottona': 60,
       'francisco gregorio da silva filho': 60,
       'valeria da silva': 60,
-      'valeria da silva pereira': 60, // Added variation
+      'valeria da silva pereira': 60,
       'daniel reveles costa': 60,
     };
     const ouroSellers = Object.keys(commissionRateOverrides);
     const sellersToExclude = ['lucas de moura', 'eduardo w', 'eduardo henrique wiegert'];
   
-    const userMapByUid = new Map<string, FirestoreUser>();
-    const userMapByName = new Map<string, FirestoreUser>();
+    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+
+    // Step 1: Discover all sellers from users list and ALL finalized leads
+    const sellerMetrics = new Map<string, { 
+      totalSalesValue: number; 
+      numberOfSales: number; 
+      totalKwh: number; 
+      user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType };
+    }>();
+    
+    // Add all registered users who are sellers
     allFirestoreUsers.forEach(user => {
-      userMapByUid.set(user.uid, user);
-      if (user.displayName) {
-        userMapByName.set(user.displayName.trim().toLowerCase(), user);
+      if ((user.type === 'vendedor' || user.type === 'superadmin' || user.type === 'admin') && !sellersToExclude.includes((user.displayName || '').toLowerCase())) {
+        sellerMetrics.set(user.uid, {
+          totalSalesValue: 0,
+          numberOfSales: 0,
+          totalKwh: 0,
+          user,
+        });
       }
     });
-  
-    const getPeriodBounds = (period: string) => {
+
+    // Add sellers from leads who may not be registered users
+    finalizedLeads.forEach(lead => {
+      if (lead.sellerName && !sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) {
+        const sellerNameLower = lead.sellerName.trim().toLowerCase();
+        let found = false;
+        for (const metrics of sellerMetrics.values()) {
+          if (metrics.user.displayName?.toLowerCase() === sellerNameLower) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+           sellerMetrics.set(sellerNameLower, {
+              totalSalesValue: 0,
+              numberOfSales: 0,
+              totalKwh: 0,
+              user: { uid: sellerNameLower, displayName: lead.sellerName.trim(), type: 'vendedor' }
+           });
+        }
+      }
+    });
+
+
+    // Step 2: Get period boundaries
+    const getPeriodBounds = (period: string, customRange?: DateRange) => {
       const today = new Date();
+      if (period === 'custom' && customRange?.from) {
+        const endDate = customRange.to ? new Date(customRange.to.setHours(23, 59, 59, 999)) : new Date(customRange.from.setHours(23, 59, 59, 999));
+        return { start: customRange.from, end: endDate };
+      }
       if (period === 'monthly_current') {
         const dayOfMonth = today.getDate();
         const currentMonth = today.getMonth();
@@ -140,61 +190,39 @@ function RankingPageContent() {
       }
       return { start: null, end: null };
     };
-  
-    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
-    const { start, end } = getPeriodBounds(selectedPeriod);
+    const { start, end } = getPeriodBounds(selectedPeriod, date);
+
+    // Step 3: Filter leads for the period
     const periodLeads = (start && end)
       ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
-      : finalizedLeads;
-  
+      : (selectedPeriod === 'all_time' ? finalizedLeads : finalizedLeads.filter(l => {
+          const {start: cycleStart, end: cycleEnd} = getPeriodBounds('monthly_current');
+          return l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd
+      }));
     const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
   
-    const sellerMetrics = new Map<string, { 
-      totalSalesValue: number; 
-      numberOfSales: number; 
-      totalKwh: number; 
-      user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType };
-    }>();
-
-    // Initialize metrics for all known sellers so they appear even if they have 0 sales
+    // Step 4: Calculate metrics for the period
+    const userMapByName = new Map<string, FirestoreUser>();
     allFirestoreUsers.forEach(user => {
-      if ((user.type === 'vendedor' || user.type === 'superadmin' || user.type === 'admin') && !sellersToExclude.includes((user.displayName || '').toLowerCase())) {
-        sellerMetrics.set(user.uid, {
-          totalSalesValue: 0,
-          numberOfSales: 0,
-          totalKwh: 0,
-          user,
-        });
-      }
+      if (user.displayName) userMapByName.set(user.displayName.trim().toLowerCase(), user);
     });
 
     periodLeads.forEach(lead => {
-      if (!lead.sellerName) return;
+      if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return;
 
-      const sellerNameForDisplay = lead.sellerName.trim();
-      const sellerNameLower = sellerNameForDisplay.toLowerCase();
-      if (sellersToExclude.includes(sellerNameLower)) return;
+      const sellerNameLower = lead.sellerName.trim().toLowerCase();
+      let metricKey: string | undefined;
 
-      let sellerId: string | undefined;
-      let seller = userMapByName.get(sellerNameLower);
-      if (seller) {
-        sellerId = seller.uid;
-      } else if (lead.userId && lead.userId !== 'unassigned') {
-        sellerId = lead.userId;
-        const userById = userMapByUid.get(lead.userId);
-        if(userById) seller = userById;
+      const userByName = userMapByName.get(sellerNameLower);
+      if (userByName) {
+        metricKey = userByName.uid;
+      } else if (lead.userId && lead.userId !== 'unassigned' && sellerMetrics.has(lead.userId)) {
+        metricKey = lead.userId;
+      } else if (sellerMetrics.has(sellerNameLower)) {
+        metricKey = sellerNameLower;
       }
-
-      const metricKey = sellerId || sellerNameLower;
       
-      if (!sellerMetrics.has(metricKey)) {
-        sellerMetrics.set(metricKey, {
-          totalSalesValue: 0,
-          numberOfSales: 0,
-          totalKwh: 0,
-          user: seller || { uid: metricKey, displayName: sellerNameForDisplay, type: 'vendedor' }
-        });
-      }
+      if (!metricKey || !sellerMetrics.has(metricKey)) return;
 
       const metrics = sellerMetrics.get(metricKey)!;
       const commissionRate = commissionRateOverrides[sellerNameLower] || 40;
@@ -206,22 +234,21 @@ function RankingPageContent() {
       metrics.totalKwh += kwh;
     });
 
+    // All-time and other metrics calculation remains the same
     const allTimeKwhMetrics: Record<string, number> = {};
     const monthlySalesByUser: Record<string, Record<string, number>> = {};
     finalizedLeads.forEach(lead => {
         let sellerId;
-        if (lead.userId && lead.userId !== 'unassigned') {
-          sellerId = lead.userId;
-        } else if(lead.sellerName) {
-            const user = userMapByName.get(lead.sellerName.trim().toLowerCase());
+        const sellerNameLower = lead.sellerName?.trim().toLowerCase();
+        if (sellerNameLower) {
+            const user = userMapByName.get(sellerNameLower);
             if (user) sellerId = user.uid;
         }
+        if (!sellerId && lead.userId && lead.userId !== 'unassigned') sellerId = lead.userId;
         
-        const metricKey = sellerId || lead.sellerName?.trim().toLowerCase();
-
+        const metricKey = sellerId || sellerNameLower;
         if (metricKey) {
             allTimeKwhMetrics[metricKey] = (allTimeKwhMetrics[metricKey] || 0) + (Number(lead.kwh) || 0);
-
             if (lead.completedAt) {
                  const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
                  if (!monthlySalesByUser[metricKey]) monthlySalesByUser[metricKey] = {};
@@ -229,6 +256,7 @@ function RankingPageContent() {
             }
         }
     });
+
     const hasEverHit30kMap: Record<string, boolean> = {};
     Object.keys(monthlySalesByUser).forEach(userId => {
         if (Object.values(monthlySalesByUser[userId]).some(monthlyTotal => monthlyTotal >= 30000)) {
@@ -239,19 +267,19 @@ function RankingPageContent() {
     const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
     const salesCycleLeads = finalizedLeads.filter(l => l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
     const userSalesCycleKwh = salesCycleLeads.reduce((acc, lead) => {
-      let sellerId;
-      if (lead.userId && lead.userId !== 'unassigned') {
-          sellerId = lead.userId;
-      } else if(lead.sellerName) {
-          const user = userMapByName.get(lead.sellerName.trim().toLowerCase());
-          if (user) sellerId = user.uid;
-      }
-      
-      const metricKey = sellerId || lead.sellerName?.trim().toLowerCase();
-      if (metricKey) {
-        acc[metricKey] = (acc[metricKey] || 0) + (Number(lead.kwh) || 0);
-      }
-      return acc;
+        let sellerId;
+        const sellerNameLower = lead.sellerName?.trim().toLowerCase();
+        if (sellerNameLower) {
+            const user = userMapByName.get(sellerNameLower);
+            if (user) sellerId = user.uid;
+        }
+        if (!sellerId && lead.userId && lead.userId !== 'unassigned') sellerId = lead.userId;
+        const metricKey = sellerId || sellerNameLower;
+
+        if (metricKey) {
+            acc[metricKey] = (acc[metricKey] || 0) + (Number(lead.kwh) || 0);
+        }
+        return acc;
     }, {} as Record<string, number>);
   
     const unsortedRanking = Array.from(sellerMetrics.values())
@@ -289,7 +317,7 @@ function RankingPageContent() {
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
   
     return { ranking: finalRanking, totalKwhSoldInPeriod, podium: finalRanking.slice(0, 3) };
-  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading]);
+  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading, date]);
 
 
   const { ranking, totalKwhSoldInPeriod, podium } = processedData;
@@ -406,7 +434,7 @@ function RankingPageContent() {
             Filtros do Ranking
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-4">
+        <CardContent className="grid md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="period-select" className="block text-sm font-medium text-muted-foreground mb-1">Período</label>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
@@ -417,6 +445,47 @@ function RankingPageContent() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+           <div className="flex flex-col">
+            <label htmlFor="date" className="block text-sm font-medium text-muted-foreground mb-1">Intervalo de Datas</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "justify-start text-left font-normal",
+                    !date && "text-muted-foreground",
+                    selectedPeriod !== 'custom' && "cursor-not-allowed opacity-50"
+                  )}
+                  disabled={selectedPeriod !== 'custom'}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {date?.from ? (
+                    date.to ? (
+                      <>
+                        {format(date.from, "dd/MM/yy")} - {format(date.to, "dd/MM/yy")}
+                      </>
+                    ) : (
+                      format(date.from, "dd/MM/yy")
+                    )
+                  ) : (
+                    <span>Selecione</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={date?.from}
+                  selected={date}
+                  onSelect={setDate}
+                  numberOfMonths={2}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div>
             <label htmlFor="criteria-select" className="block text-sm font-medium text-muted-foreground mb-1">Critério</label>
