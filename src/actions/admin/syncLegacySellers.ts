@@ -9,7 +9,8 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     const adminDb = await initializeAdmin();
     const leadsRef = adminDb.collection('crm_leads');
     const usersRef = adminDb.collection('users');
-    let leadsReattributed = 0;
+    let leadsReattributedLucas = 0;
+    let leadsReattributedSuperFacil = 0;
     let usersCreated = 0;
     let leadsSynced = 0;
 
@@ -17,6 +18,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     const allUsersSnapshot = await usersRef.get();
     const userMapByName = new Map<string, string>(); // Map from displayName.toUpperCase() -> uid
     let karattyUid: string | undefined;
+    let superFacilSolarUid: string | undefined;
 
     allUsersSnapshot.forEach(doc => {
         const user = doc.data() as FirestoreUser;
@@ -26,37 +28,55 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
             if (upperCaseName === 'KARATTY VICTORIA') {
                 karattyUid = doc.id;
             }
+            if (upperCaseName === 'SUPERFACIL SOLAR') {
+                superFacilSolarUid = doc.id;
+            }
         }
     });
 
-    // --- Step 1: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
-    const nameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
-    const reattributionPromises = nameVariations.map(name => 
+    // --- Step 1A: Re-attribute leads from "Lucas de Moura" to "Karatty Victoria" ---
+    const lucasNameVariations = ['LUCAS DE MOURA', 'Lucas de Moura'];
+    const lucasReattributionPromises = lucasNameVariations.map(name => 
         leadsRef.where('sellerName', '==', name).get()
     );
-    
-    const reattributionSnapshots = await Promise.all(reattributionPromises);
-    const leadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-    reattributionSnapshots.forEach(snapshot => {
+    const lucasReattributionSnapshots = await Promise.all(lucasReattributionPromises);
+    const lucasLeadsToUpdate = new Map<string, admin.firestore.QueryDocumentSnapshot>();
+    lucasReattributionSnapshots.forEach(snapshot => {
         snapshot.docs.forEach(doc => {
-            if (!leadsToUpdate.has(doc.id)) {
-                leadsToUpdate.set(doc.id, doc);
+            if (!lucasLeadsToUpdate.has(doc.id)) {
+                lucasLeadsToUpdate.set(doc.id, doc);
             }
         });
     });
 
-    if (leadsToUpdate.size > 0) {
+    if (lucasLeadsToUpdate.size > 0) {
         const reattributionBatch = adminDb.batch();
         const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'Karatty Victoria' };
         if (karattyUid) {
             updatePayload.userId = karattyUid;
         }
-        leadsToUpdate.forEach(doc => {
+        lucasLeadsToUpdate.forEach(doc => {
             reattributionBatch.update(doc.ref, updatePayload);
         });
         await reattributionBatch.commit();
-        leadsReattributed = leadsToUpdate.size;
+        leadsReattributedLucas = lucasLeadsToUpdate.size;
     }
+
+    // --- Step 1B: Re-attribute leads from "Super Facil solar" to "SuperFacil Solar" ---
+    const superFacilSnapshot = await leadsRef.where('sellerName', '==', 'Super Facil solar').get();
+    if (!superFacilSnapshot.empty) {
+        const reattributionBatch = adminDb.batch();
+        const updatePayload: { sellerName: string; userId?: string } = { sellerName: 'SuperFacil Solar' };
+        if (superFacilSolarUid) {
+            updatePayload.userId = superFacilSolarUid;
+        }
+        superFacilSnapshot.docs.forEach(doc => {
+            reattributionBatch.update(doc.ref, updatePayload);
+        });
+        await reattributionBatch.commit();
+        leadsReattributedSuperFacil = superFacilSnapshot.size;
+    }
+
 
     // --- Step 2: Create missing user documents from unique seller names ---
     const allLeadsSnapshot = await leadsRef.get();
@@ -65,7 +85,6 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       const sellerName = doc.data().sellerName;
       if (sellerName && typeof sellerName === 'string' && sellerName.trim() !== '') {
         const trimmedName = sellerName.trim();
-        // Only add if not already present to keep the first encountered casing
         if (!sellerNamesFromLeads.has(trimmedName.toUpperCase())) {
             sellerNamesFromLeads.set(trimmedName.toUpperCase(), trimmedName);
         }
@@ -92,8 +111,8 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
           personalBalance: 0,
           mlmBalance: 0,
           canViewLeadPhoneNumber: false,
-          canViewCrm: true, // Default to true for new sellers
-          canViewCareerPlan: true, // Default to true
+          canViewCrm: true,
+          canViewCareerPlan: true,
         };
         creationBatch.set(newUserRef, newUserForFirestore);
         userMapByName.set(upperCaseName, newUserRef.id);
@@ -112,7 +131,6 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
             const sellerNameUpper = lead.sellerName.trim().toUpperCase();
             if (userMapByName.has(sellerNameUpper)) {
                 const correctUserId = userMapByName.get(sellerNameUpper)!;
-                // Add to sync list if the userId is missing or incorrect
                 if (!lead.userId || lead.userId !== correctUserId) {
                     leadsToSync.push({ ref: doc.ref, userId: correctUserId });
                 }
@@ -123,7 +141,7 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     leadsSynced = leadsToSync.length;
 
     if (leadsSynced > 0) {
-        const batchSize = 450; // Firestore batch limit is 500
+        const batchSize = 450;
         for (let i = 0; i < leadsSynced; i += batchSize) {
             const batch = adminDb.batch();
             const chunk = leadsToSync.slice(i, i + batchSize);
@@ -136,8 +154,11 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
     
     // --- Construct the summary message ---
     let summaryParts: string[] = [];
-    if (leadsReattributed > 0) {
-      summaryParts.push(`${leadsReattributed} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
+    if (leadsReattributedLucas > 0) {
+      summaryParts.push(`${leadsReattributedLucas} lead(s) de 'Lucas de Moura' foram reatribuídos para 'Karatty Victoria'.`);
+    }
+    if (leadsReattributedSuperFacil > 0) {
+        summaryParts.push(`${leadsReattributedSuperFacil} lead(s) de 'Super Facil solar' foram corrigidos para 'SuperFacil Solar'.`);
     }
     if (usersCreated > 0) {
       summaryParts.push(`${usersCreated} novo(s) usuário(s) de vendedor foram criados.`);
