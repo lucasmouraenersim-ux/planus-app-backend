@@ -91,23 +91,35 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
           let failedImports = 0;
           const errors: string[] = [];
 
-          const installationCodes = results.data
-              .map(row => row['instalação']?.trim())
-              .filter((code): code is string => !!code);
-          const uniqueInstallationCodes = [...new Set(installationCodes)];
+          // Identify leads by CPF/CNPJ from the 'documento' column
+          const documentNumbers = results.data
+              .map(row => row['documento']?.replace(/\D/g, '').trim())
+              .filter((doc): doc is string => !!doc && (doc.length === 11 || doc.length === 14));
+          const uniqueDocumentNumbers = [...new Set(documentNumbers)];
 
           const existingLeadsMap = new Map<string, { id: string }>();
-          if (uniqueInstallationCodes.length > 0) {
+          if (uniqueDocumentNumbers.length > 0) {
               const leadsRef = adminDb.collection("crm_leads");
-              for (let i = 0; i < uniqueInstallationCodes.length; i += 30) {
-                  const chunk = uniqueInstallationCodes.slice(i, i + 30);
-                  const querySnapshot = await leadsRef.where('codigoClienteInstalacao', 'in', chunk).get();
-                  querySnapshot.forEach(doc => {
+              for (let i = 0; i < uniqueDocumentNumbers.length; i += 30) {
+                  const chunk = uniqueDocumentNumbers.slice(i, i + 30);
+                  const cpfChunk = chunk.filter(c => c.length === 11);
+                  const cnpjChunk = chunk.filter(c => c.length === 14);
+
+                  if (cpfChunk.length > 0) {
+                    const cpfQuerySnapshot = await leadsRef.where('cpf', 'in', cpfChunk).get();
+                    cpfQuerySnapshot.forEach(doc => {
+                        const data = doc.data() as LeadDocumentData;
+                        if (data.cpf) existingLeadsMap.set(data.cpf, { id: doc.id });
+                    });
+                  }
+
+                  if (cnpjChunk.length > 0) {
+                    const cnpjQuerySnapshot = await leadsRef.where('cnpj', 'in', cnpjChunk).get();
+                    cnpjQuerySnapshot.forEach(doc => {
                       const data = doc.data() as LeadDocumentData;
-                      if (data.codigoClienteInstalacao) {
-                          existingLeadsMap.set(data.codigoClienteInstalacao, { id: doc.id });
-                      }
-                  });
+                      if (data.cnpj) existingLeadsMap.set(data.cnpj, { id: doc.id });
+                    });
+                  }
               }
           }
 
@@ -125,8 +137,10 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   }
 
                   const data = validation.data;
-                  const instalacao = data['instalação']?.trim();
-                  const existingLead = instalacao ? existingLeadsMap.get(instalacao) : undefined;
+                  const instalacao = data.instalação?.trim();
+                  const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
+                  
+                  const existingLead = normalizedDocument ? existingLeadsMap.get(normalizedDocument) : undefined;
 
                   const signedAtDate = parseCsvDate(data['assinado em'], 'dd/MM/yyyy HH:mm');
                   const completedAtDate = parseCsvDate(data['finalizado em'], 'dd/MM/yyyy HH:mm');
@@ -134,15 +148,16 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   if (completedAtDate) { stageId = 'finalizado'; } 
                   else if (signedAtDate) { stageId = 'assinado'; } 
                   else { stageId = mapStatusToStageId(data.status) || 'contato'; }
-
-                  const normalizedDocument = data.documento?.replace(/\D/g, '') || '';
                   
                   const rawRow = row as any;
                   const valorFaturadoInput = rawRow['valor (r$)'] || rawRow['valor'];
                   const valorFaturado = parseCsvNumber(valorFaturadoInput);
                   const kwh = parseCsvNumber(data['consumo (kwh)']);
                   const valorOriginal = kwh * KWH_TO_REAIS_FACTOR;
-                  const discountPercentage = valorOriginal > 0 && valorFaturado > 0 ? (1 - (valorFaturado / valorOriginal)) * 100 : 0;
+                  let discountPercentage = 0;
+                  if (valorOriginal > 0 && valorFaturado > 0) {
+                      discountPercentage = (1 - (valorFaturado / valorOriginal)) * 100;
+                  }
                   
                   const leadDataObject: Partial<LeadDocumentData> = {
                       name: data.cliente,
@@ -165,14 +180,14 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   };
 
                   const cleanLeadData = Object.fromEntries(
-                    Object.entries(leadDataObject).filter(([, v]) => v !== undefined && v !== null && v !== '')
+                    Object.entries(leadDataObject).filter(([, v]) => v !== undefined && v !== null && v !== '' && v !== 0 && !Number.isNaN(v))
                   );
 
                   if (existingLead) {
                       const docRef = adminDb.collection("crm_leads").doc(existingLead.id);
                       batch.update(docRef, cleanLeadData);
                       successfulUpdates++;
-                  } else if (instalacao) {
+                  } else if (instalacao || normalizedDocument) {
                       const docRef = adminDb.collection("crm_leads").doc();
                       const createData = {
                         ...cleanLeadData,
@@ -183,6 +198,9 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       };
                       batch.set(docRef, createData);
                       successfulImports++;
+                  } else {
+                    failedImports++;
+                    errors.push(`Linha inválida: ${JSON.stringify(row)}. Faltam CPF/CNPJ ou Instalação.`);
                   }
               }
               await batch.commit();
