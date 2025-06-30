@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, parseISO, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -49,23 +49,29 @@ const CRITERIA_OPTIONS = [
   { value: 'totalKwh', label: 'Total de KWh' },
 ];
 
-const formatDisplayValue = (value: string | number | undefined, criteria: string): string => {
-  if (value === undefined) return 'N/A';
-  if (criteria === 'totalSalesValue') {
-    const num = Number(String(value).replace(/[^0-9,.-]+/g,"").replace('.', '').replace(',', '.'));
-    return isNaN(num) ? String(value) : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-   if (criteria === 'totalKwh') {
-      return `${Number(value).toLocaleString('pt-BR')} kWh`;
-   }
-  return Number(value).toLocaleString('pt-BR');
-};
-
 const getMedalForSeller = (entry: RankingDisplayEntry): string => {
   if (entry.hasEverHit30kInAMonth) return '🥇'; 
   if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) return '🥈';
   return '🥉';
 };
+
+const formatValueForDisplay = (value: string | number | undefined, type: 'currency' | 'kwh' | 'plain'): string => {
+    if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
+        return type === 'currency' ? 'R$ 0,00' : (type === 'kwh' ? '0 kWh' : '0');
+    }
+
+    const numValue = Number(value);
+    if (isNaN(numValue)) return String(value);
+
+    if (type === 'currency') {
+        return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    if (type === 'kwh') {
+        return `${numValue.toLocaleString('pt-BR')} kWh`;
+    }
+    return numValue.toLocaleString('pt-BR');
+};
+
 
 function RankingPageContent() {
   const { appUser, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
@@ -91,9 +97,14 @@ function RankingPageContent() {
     loadData();
   }, [fetchAllCrmLeadsGlobally]);
   
-  const finalizedLeads = useMemo(() => allLeads.filter(lead => lead.stageId === 'finalizado'), [allLeads]);
+  const processedData = useMemo(() => {
+    if (isLoading || allFirestoreUsers.length === 0) {
+      return { ranking: [], totalKwhSoldInPeriod: 0, podium: [] };
+    }
 
-  const periodLeads = useMemo(() => {
+    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+
+    // --- Period Filtering ---
     const getPeriodBounds = (period: string) => {
       const today = new Date();
       if (period === 'monthly_current') {
@@ -106,113 +117,65 @@ function RankingPageContent() {
           return { start: new Date(currentYear, currentMonth, 21), end: new Date(currentYear, currentMonth + 1, 21) };
         }
       }
-      return { start: null, end: null }; // all_time
+      return { start: null, end: null };
     };
     const { start, end } = getPeriodBounds(selectedPeriod);
-    if (start && end) {
-      return finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
-    }
-    return finalizedLeads;
-  }, [finalizedLeads, selectedPeriod]);
+    const periodLeads = (start && end)
+      ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
+      : finalizedLeads;
 
-  const totalKwhSoldInPeriod = useMemo(() => {
-    return periodLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0);
-  }, [periodLeads]);
+    const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
 
-  const rankingData = useMemo(() => {
-    if (allFirestoreUsers.length === 0 || finalizedLeads.length === 0) {
-      return [];
-    }
-    
-    // --- All-time metrics calculation for medals ---
+    // --- Medal Logic (All-time based) ---
     const userAllTimeMetrics: Record<string, { totalKwh: number; monthlySales: Record<string, number> }> = {};
-
     finalizedLeads.forEach(lead => {
         const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
         if (!seller || !lead.completedAt) return;
-        
         const userId = seller.uid;
-
-        if (!userAllTimeMetrics[userId]) {
-            userAllTimeMetrics[userId] = { totalKwh: 0, monthlySales: {} };
-        }
-        userAllTimeMetrics[userId].totalKwh += lead.kwh || 0;
-        
+        if (!userAllTimeMetrics[userId]) userAllTimeMetrics[userId] = { totalKwh: 0, monthlySales: {} };
+        userAllTimeMetrics[userId].totalKwh += (Number(lead.kwh) || 0);
         const monthKey = format(parseISO(lead.completedAt), 'yyyy-MM');
-        if (!userAllTimeMetrics[userId].monthlySales[monthKey]) {
-            userAllTimeMetrics[userId].monthlySales[monthKey] = 0;
-        }
-        // Medal logic is based on raw sales value, not commission
-        userAllTimeMetrics[userId].monthlySales[monthKey] += lead.value || 0;
+        if (!userAllTimeMetrics[userId].monthlySales[monthKey]) userAllTimeMetrics[userId].monthlySales[monthKey] = 0;
+        userAllTimeMetrics[userId].monthlySales[monthKey] += (Number(lead.value) || 0);
     });
 
-    const usersWhoHit30k = new Set<string>();
-    Object.keys(userAllTimeMetrics).forEach(userId => {
-        const monthlySales = userAllTimeMetrics[userId].monthlySales;
-        for (const month in monthlySales) {
-            if (monthlySales[month] >= 30000) {
-                usersWhoHit30k.add(userId);
-                break;
-            }
-        }
-    });
+    const usersWhoHit30k = new Set(Object.keys(userAllTimeMetrics).filter(userId => 
+        Object.values(userAllTimeMetrics[userId].monthlySales).some(monthlyTotal => monthlyTotal >= 30000)
+    ));
 
     const getSalesCycleBounds = () => {
       const today = new Date();
-      const dayOfMonth = today.getDate();
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
-      if (dayOfMonth < 21) {
-          return { start: new Date(currentYear, currentMonth - 1, 21), end: new Date(currentYear, currentMonth, 21) };
-      } else {
-          return { start: new Date(currentYear, currentMonth, 21), end: new Date(currentYear, currentMonth + 1, 21) };
-      }
+      if (today.getDate() < 21) return { start: new Date(today.getFullYear(), today.getMonth() - 1, 21), end: new Date(today.getFullYear(), today.getMonth(), 21) };
+      return { start: new Date(today.getFullYear(), today.getMonth(), 21), end: new Date(today.getFullYear(), today.getMonth() + 1, 21) };
     };
-
     const { start: cycleStart, end: cycleEnd } = getSalesCycleBounds();
-    const salesCycleLeads = cycleStart && cycleEnd
-        ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd)
-        : [];
-    
-    const userSalesCycleKwh: Record<string, number> = {};
-    salesCycleLeads.forEach(lead => {
+    const salesCycleLeads = finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
+    const userSalesCycleKwh = salesCycleLeads.reduce((acc, lead) => {
         const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
-        if (!seller) return;
-        
-        const userId = seller.uid;
-        if (!userSalesCycleKwh[userId]) userSalesCycleKwh[userId] = 0;
-        userSalesCycleKwh[userId] += lead.kwh || 0;
-    });
-    
-    // --- Period-specific metrics ---
-    const userMetrics = new Map<string, {
-      totalSalesValue: number, // This will be commission value
-      numberOfSales: number,
-      totalKwh: number,
-    }>();
+        if (seller) {
+            acc[seller.uid] = (acc[seller.uid] || 0) + (Number(lead.kwh) || 0);
+        }
+        return acc;
+    }, {} as Record<string, number>);
 
+    // --- Ranking Calculation (Period) ---
+    const userMetrics = new Map<string, { totalSalesValue: number; numberOfSales: number; totalKwh: number; }>();
     periodLeads.forEach(lead => {
       const seller = allFirestoreUsers.find(u => u.uid === lead.userId || u.displayName === lead.sellerName);
       if (!seller) return;
-
-      if (!userMetrics.has(seller.uid)) {
-        userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 });
-      }
+      if (!userMetrics.has(seller.uid)) userMetrics.set(seller.uid, { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 });
       const metrics = userMetrics.get(seller.uid)!;
-      
       const commissionRate = seller.commissionRate || 40;
-      const commissionValue = (lead.value || 0) * (commissionRate / 100);
-
-      metrics.totalSalesValue += commissionValue; // Storing commission as sales value
+      const commissionValue = (Number(lead.value) || 0) * (commissionRate / 100);
+      metrics.totalSalesValue += commissionValue;
       metrics.numberOfSales += 1;
-      metrics.totalKwh += lead.kwh || 0;
+      metrics.totalKwh += (Number(lead.kwh) || 0);
     });
     
-    const calculatedRanking = allFirestoreUsers
-      .filter(user => user.type === 'vendedor' || user.type === 'admin') // Exclude 'superadmin'
+    const ranking = allFirestoreUsers
+      .filter(user => user.type === 'vendedor' || user.type === 'admin')
       .map(user => {
         const metrics = userMetrics.get(user.uid) || { totalSalesValue: 0, numberOfSales: 0, totalKwh: 0 };
-        
         let mainScoreValue = 0;
         let mainScoreDisplay = "";
         let detailScore1Label = "";
@@ -222,25 +185,25 @@ function RankingPageContent() {
 
         if (selectedCriteria === 'totalSalesValue') {
           mainScoreValue = metrics.totalSalesValue;
-          mainScoreDisplay = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          mainScoreDisplay = formatValueForDisplay(metrics.totalSalesValue, 'currency');
           detailScore1Label = "Nº Vendas";
-          detailScore1Value = formatDisplayValue(metrics.numberOfSales, 'numberOfSales');
+          detailScore1Value = metrics.numberOfSales;
           detailScore2Label = "Total KWh";
-          detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+          detailScore2Value = metrics.totalKwh;
         } else if (selectedCriteria === 'numberOfSales') {
           mainScoreValue = metrics.numberOfSales;
-          mainScoreDisplay = `${formatDisplayValue(metrics.numberOfSales, 'numberOfSales')} Vendas`;
+          mainScoreDisplay = `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas`;
           detailScore1Label = "Volume (R$)";
-          detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          detailScore1Value = metrics.totalSalesValue;
           detailScore2Label = "Total KWh";
-          detailScore2Value = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+          detailScore2Value = metrics.totalKwh;
         } else { // totalKwh
           mainScoreValue = metrics.totalKwh;
-          mainScoreDisplay = formatDisplayValue(metrics.totalKwh, 'totalKwh');
+          mainScoreDisplay = formatValueForDisplay(metrics.totalKwh, 'kwh');
           detailScore1Label = "Volume (R$)";
-          detailScore1Value = formatDisplayValue(metrics.totalSalesValue, 'totalSalesValue');
+          detailScore1Value = metrics.totalSalesValue;
           detailScore2Label = "Nº Vendas";
-          detailScore2Value = formatDisplayValue(metrics.numberOfSales, 'numberOfSales');
+          detailScore2Value = metrics.numberOfSales;
         }
         
         return {
@@ -262,18 +225,17 @@ function RankingPageContent() {
       .sort((a, b) => b.mainScoreValue - a.mainScoreValue)
       .map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
 
-    return calculatedRanking;
+    return { ranking, totalKwhSoldInPeriod, podium: ranking.slice(0, 3) };
+  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading]);
 
-  }, [finalizedLeads, periodLeads, allFirestoreUsers, selectedCriteria]);
-  
+  const { ranking, totalKwhSoldInPeriod, podium } = processedData;
   const criteriaLabel = useMemo(() => CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance", [selectedCriteria]);
-  const loggedInUserRank = useMemo(() => rankingData.find(entry => entry.userId === appUser?.uid), [rankingData, appUser]);
-  const podiumData = useMemo(() => rankingData.slice(0, 3), [rankingData]);
+  const loggedInUserRank = useMemo(() => ranking.find(entry => entry.userId === appUser?.uid), [ranking, appUser]);
 
   const getPodiumBorderColor = (index: number) => {
-    if (index === 0) return 'border-yellow-400 shadow-yellow-400/30'; // Gold
-    if (index === 1) return 'border-slate-400 shadow-slate-400/30'; // Silver
-    if (index === 2) return 'border-yellow-600 shadow-yellow-600/30'; // Bronze
+    if (index === 0) return 'border-yellow-400 shadow-yellow-400/30';
+    if (index === 1) return 'border-slate-400 shadow-slate-400/30';
+    if (index === 2) return 'border-yellow-600 shadow-yellow-600/30';
     return 'border-border';
   };
   
@@ -411,13 +373,13 @@ function RankingPageContent() {
             <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
             <p className="text-lg font-medium">Carregando ranking...</p>
         </div>
-      ) : rankingData.length > 0 ? (
+      ) : ranking.length > 0 ? (
         <>
-          {podiumData.length > 0 && (
+          {podium.length > 0 && (
             <section className="mb-12">
               <h2 className="text-3xl font-semibold text-center text-foreground mb-8">Pódio dos Campeões <Crown className="inline-block text-yellow-400 ml-2 h-7 w-7" /></h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {podiumData.map((entry, index) => (
+                {podium.map((entry, index) => (
                   <Card key={entry.userId} className={`bg-card/80 backdrop-blur-xl border-2 ${getPodiumBorderColor(index)} shadow-lg text-center p-6 flex flex-col items-center hover:shadow-2xl transition-all duration-300 ease-in-out transform hover:-translate-y-1`}>
                     <div className={`text-5xl font-black mb-3 ${getPodiumTextColor(index)}`}>
                       {entry.rankPosition}º
@@ -458,13 +420,13 @@ function RankingPageContent() {
                 </div>
                 {loggedInUserRank.detailScore1Label && (
                    <div className="text-center hidden sm:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore1Value, 'default')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore1Value, 'plain')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore1Label}</p>
                   </div>
                 )}
                  {loggedInUserRank.detailScore2Label && (
                    <div className="text-center hidden md:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatDisplayValue(loggedInUserRank.detailScore2Value, 'totalKwh')}</p>
+                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore2Value, 'kwh')}</p>
                     <p className="text-muted-foreground">{loggedInUserRank.detailScore2Label}</p>
                   </div>
                 )}
@@ -484,12 +446,12 @@ function RankingPageContent() {
                     <TableHead className="w-[50px]"><Hash className="h-4 w-4 text-muted-foreground"/></TableHead>
                     <TableHead>Consultor</TableHead>
                     <TableHead className="text-right">{selectedCriteria === 'totalSalesValue' ? <DollarSign className="h-4 w-4 inline-block mr-1 text-muted-foreground"/> : <ListOrdered className="h-4 w-4 inline-block mr-1 text-muted-foreground"/>} {criteriaLabel}</TableHead>
-                    {rankingData[0]?.detailScore1Label && <TableHead className="text-right hidden md:table-cell">{rankingData[0].detailScore1Label}</TableHead>}
-                    {rankingData[0]?.detailScore2Label && <TableHead className="text-right hidden lg:table-cell">{rankingData[0].detailScore2Label}</TableHead>}
+                    {ranking[0]?.detailScore1Label && <TableHead className="text-right hidden md:table-cell">{ranking[0].detailScore1Label}</TableHead>}
+                    {ranking[0]?.detailScore2Label && <TableHead className="text-right hidden lg:table-cell">{ranking[0].detailScore2Label}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rankingData.map((entry) => (
+                  {ranking.map((entry) => (
                     <TableRow key={entry.userId} className={entry.userId === appUser?.uid ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted/50'}>
                       <TableCell className="font-bold text-lg text-center">{entry.rankPosition}</TableCell>
                       <TableCell>
@@ -507,8 +469,8 @@ function RankingPageContent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatDisplayValue(entry.detailScore1Value, 'default')}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatDisplayValue(entry.detailScore2Value, 'totalKwh')}</TableCell>}
+                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatValueForDisplay(entry.detailScore1Value, 'plain')}</TableCell>}
+                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatValueForDisplay(entry.detailScore2Value, 'kwh')}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
