@@ -37,17 +37,23 @@ const leadFormSchema = z.object({
   customerType: z.enum(['pf', 'pj']).optional(),
   name: z.string().optional(),
   company: z.string().optional(),
-  value: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseFloat(String(val).replace(",", "."))),
-    z.number().optional()
-  ),
   kwh: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : parseInt(String(val).replace(/\D/g, ''), 10)),
-    z.number().int().min(0).optional()
+    (val) => {
+      const strVal = String(val || "").trim();
+      if (strVal === '') return null;
+      const num = parseInt(strVal.replace(/\D/g, ''), 10);
+      return isNaN(num) ? null : num;
+    },
+    z.number().int().min(0).optional().nullable()
   ),
   discountPercentage: z.preprocess(
-    (val) => (String(val || "").trim() === '' ? undefined : parseFloat(String(val || "0").replace(",", "."))),
-    z.number().min(0).max(100).optional()
+    (val) => {
+      const strVal = String(val || "").trim();
+      if (strVal === '') return null;
+      const num = parseFloat(strVal.replace(",", "."));
+      return isNaN(num) ? null : num;
+    },
+    z.number().min(0).max(100).optional().nullable()
   ),
   stageId: z.enum(STAGE_IDS).optional().default('contato'), // Default to 'contato'
   sellerName: z.string().optional(),
@@ -101,9 +107,8 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
     defaultValues: {
       name: initialData?.name || "",
       company: initialData?.company || "",
-      value: initialData?.value || undefined,
-      kwh: initialData?.kwh || undefined,
-      discountPercentage: initialData?.discountPercentage || undefined,
+      kwh: initialData?.kwh ?? undefined,
+      discountPercentage: initialData?.discountPercentage ?? undefined,
       stageId: initialData?.stageId || 'contato',
       sellerName: initialData?.sellerName || "Sistema",
       leadSource: initialData?.leadSource || undefined,

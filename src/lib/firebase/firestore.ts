@@ -12,7 +12,7 @@ import { uploadFile } from './storage';
 const KWH_TO_REAIS_FACTOR = 1.093113;
 
 export async function createCrmLead(
-  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt' | 'value' | 'valueAfterDiscount'> & { kwh?: number; discountPercentage?: number },
+  leadData: Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId' | 'signedAt' | 'value' | 'valueAfterDiscount'> & { kwh?: number | null; discountPercentage?: number | null },
   photoDocumentFile?: File, 
   billDocumentFile?: File,
   legalRepresentativeDocumentFile?: File,
@@ -107,14 +107,19 @@ export async function updateCrmLeadDetails(
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
 
-  // Recalculate value and valueAfterDiscount if kwh or discountPercentage changes
-  if (updates.kwh !== undefined || updates.discountPercentage !== undefined) {
+  // Always recalculate value and valueAfterDiscount on any update for consistency
+  if ('kwh' in updates || 'discountPercentage' in updates) {
     const leadDoc = await getDoc(leadRef);
     const existingData = leadDoc.data() as LeadDocumentData;
-    const kwh = updates.kwh ?? existingData.kwh ?? 0;
-    const discount = updates.discountPercentage ?? existingData.discountPercentage ?? 0;
+
+    const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
+    const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
+    
     const originalValue = kwh * KWH_TO_REAIS_FACTOR;
     const valueAfterDiscount = originalValue * (1 - ((discount || 0) / 100));
+    
+    finalUpdates.kwh = kwh;
+    finalUpdates.discountPercentage = discount;
     finalUpdates.value = originalValue;
     finalUpdates.valueAfterDiscount = valueAfterDiscount;
   }
