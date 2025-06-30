@@ -102,27 +102,36 @@ export async function syncLegacySellers(): Promise<{ success: boolean; message: 
       usersCreated = sellersToCreate.length;
     }
     
-    // --- Step 3: Sync ALL leads with their correct user ID ---
-    const syncBatch = adminDb.batch();
-    // Re-fetch all leads in case any were re-attributed in step 1
-    const allLeadsForSyncSnapshot = await leadsRef.get(); 
+    // --- Step 3: Sync ALL leads with their correct user ID (with batching) ---
+    const allLeadsForSyncSnapshot = await leadsRef.get();
+    const leadsToSync: { ref: admin.firestore.DocumentReference; userId: string }[] = [];
 
-    allLeadsForSyncSnapshot.docs.forEach(doc => {
+    for (const doc of allLeadsForSyncSnapshot.docs) {
         const lead = doc.data();
         if (lead.sellerName && typeof lead.sellerName === 'string') {
             const sellerNameUpper = lead.sellerName.trim().toUpperCase();
             if (userMapByName.has(sellerNameUpper)) {
                 const correctUserId = userMapByName.get(sellerNameUpper)!;
+                // Add to sync list if the userId is missing or incorrect
                 if (!lead.userId || lead.userId !== correctUserId) {
-                    syncBatch.update(doc.ref, { userId: correctUserId });
-                    leadsSynced++;
+                    leadsToSync.push({ ref: doc.ref, userId: correctUserId });
                 }
             }
         }
-    });
+    }
+    
+    leadsSynced = leadsToSync.length;
 
     if (leadsSynced > 0) {
-        await syncBatch.commit();
+        const batchSize = 450; // Firestore batch limit is 500
+        for (let i = 0; i < leadsSynced; i += batchSize) {
+            const batch = adminDb.batch();
+            const chunk = leadsToSync.slice(i, i + batchSize);
+            for (const { ref, userId } of chunk) {
+                batch.update(ref, { userId: userId });
+            }
+            await batch.commit();
+        }
     }
     
     // --- Construct the summary message ---
