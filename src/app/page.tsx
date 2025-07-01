@@ -1,20 +1,32 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
+import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const LandingPage = () => {
   const [billAmount, setBillAmount] = useState(1000);
   const savings = calculateSavings(billAmount, true);
+  const [stats, setStats] = useState({ totalKwh: 0, pfCount: 0, pjCount: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const result = await getLandingPageStats();
+      if (result.success && result.stats) {
+        setStats(result.stats);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleSliderChange = (value: number[]) => {
     setBillAmount(value[0]);
@@ -36,6 +48,40 @@ const LandingPage = () => {
         <Link href="/login">
             <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">Acessar Área do Consultor</Button>
         </Link>
+      </section>
+
+      {/* Stats Section */}
+      <section className="py-16 px-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Nosso Impacto em Números</h2>
+        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
+            <CardHeader>
+              <Zap className="w-10 h-10 mx-auto text-primary mb-2" />
+              <CardTitle className="text-4xl font-bold">{stats.totalKwh.toLocaleString('pt-BR')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">kWh Conectados</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
+            <CardHeader>
+              <User className="w-10 h-10 mx-auto text-primary mb-2" />
+              <CardTitle className="text-4xl font-bold">{stats.pfCount.toLocaleString('pt-BR')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Clientes Pessoa Física</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
+            <CardHeader>
+              <Briefcase className="w-10 h-10 mx-auto text-primary mb-2" />
+              <CardTitle className="text-4xl font-bold">{stats.pjCount.toLocaleString('pt-BR')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Clientes Pessoa Jurídica</p>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       {/* How it works */}
