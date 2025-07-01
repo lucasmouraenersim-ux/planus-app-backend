@@ -1,36 +1,41 @@
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
+import type { LeadDocumentData } from '@/types/crm';
+import type admin from 'firebase-admin';
 
-type Stats = {
-  totalKwh: number;
-  pfCount: number;
-  pjCount: number;
-};
-
-type ActionResult = {
-  success: boolean;
-  stats?: Stats;
-  error?: string;
-};
-
-export async function getLandingPageStats(): Promise<ActionResult> {
+export async function getLandingPageStats(): Promise<{ success: boolean; stats?: { totalKwh: number; pfCount: number; pjCount: number; }; message?: string; }> {
   try {
     const adminDb = await initializeAdmin();
-    const leadsRef = adminDb.collection("crm_leads");
-    const snapshot = await leadsRef.where('stageId', 'in', ['assinado', 'finalizado']).get();
+    const leadsRef = adminDb.collection('crm_leads');
+    
+    // Query for 'assinado' and 'finalizado' leads separately and merge them.
+    const assinadoSnapshot = await leadsRef.where('stageId', '==', 'assinado').get();
+    const finalizadoSnapshot = await leadsRef.where('stageId', '==', 'finalizado').get();
 
-    if (snapshot.empty) {
+    const allDocs: admin.firestore.QueryDocumentSnapshot[] = [...assinadoSnapshot.docs, ...finalizadoSnapshot.docs];
+    
+    if (allDocs.length === 0) {
+      console.log('No relevant leads found for landing page stats.');
       return { success: true, stats: { totalKwh: 0, pfCount: 0, pjCount: 0 } };
     }
 
     let totalKwh = 0;
     let pfCount = 0;
     let pjCount = 0;
+    const processedIds = new Set<string>();
 
-    snapshot.forEach(doc => {
-      const lead = doc.data();
-      totalKwh += lead.kwh || 0;
+    allDocs.forEach(doc => {
+      // Avoid double counting if a lead somehow matched both (shouldn't happen)
+      if (processedIds.has(doc.id)) return;
+      processedIds.add(doc.id);
+      
+      const lead = doc.data() as LeadDocumentData;
+      
+      // Ensure kwh is treated as a number
+      const kwhValue = Number(lead.kwh) || 0;
+      totalKwh += kwhValue;
+      
       if (lead.customerType === 'pf') {
         pfCount++;
       } else if (lead.customerType === 'pj') {
@@ -40,14 +45,14 @@ export async function getLandingPageStats(): Promise<ActionResult> {
 
     return {
       success: true,
-      stats: {
-        totalKwh,
-        pfCount,
-        pjCount,
-      },
+      stats: { totalKwh, pfCount, pjCount },
     };
+
   } catch (error) {
-    console.error("Error fetching landing page stats:", error);
-    return { success: false, error: "Failed to fetch stats." };
+    console.error('[GET_LANDING_STATS] Error fetching stats:', error);
+    return {
+      success: false,
+      message: 'Failed to fetch landing page statistics.',
+    };
   }
 }
