@@ -227,9 +227,13 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   }, [initialUsers, userSearchTerm, userTypeFilter]);
 
   const handleAddUser = async (data: AddUserFormData) => {
+    if (!userAppRole) {
+      toast({ title: "Erro", description: "Não foi possível identificar sua função. Faça login novamente.", variant: "destructive" });
+      return;
+    }
     setIsSubmittingUser(true);
     try {
-      const result = await createUser(data);
+      const result = await createUser({ ...data, creatorRole: userAppRole });
 
       if (result.success) {
         await refreshUsers();

@@ -18,6 +18,7 @@ const CreateUserInputSchema = z.object({
   phone: z.string().optional(),
   cpf: z.string().min(11, "CPF deve ter 11 dígitos.").max(14, "Formato de CPF inválido."),
   type: z.enum(['admin', 'superadmin', 'vendedor', 'prospector']),
+  creatorRole: z.enum(['admin', 'superadmin', 'vendedor', 'prospector', 'user', 'pending_setup']).optional(),
 });
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
 
@@ -72,13 +73,14 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       phone: input.phone ? input.phone.replace(/\D/g, '') : '',
       personalBalance: 0,
       mlmBalance: 0,
-      recurrenceRate: 1, // Default recurrence to 1% for new users
+      recurrenceRate: input.creatorRole === 'superadmin' ? 1 : undefined,
+      commissionRate: 80,
       canViewLeadPhoneNumber: false,
       canViewCrm: false,
       canViewCareerPlan: false,
     };
     
-    await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore);
+    await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore, { merge: true });
 
     return {
       success: true,
