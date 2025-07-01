@@ -78,7 +78,7 @@ const editUserFormSchema = z.object({
   displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
   phone: z.string().optional(),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
-  commissionRate: z.preprocess((val) => val ? Number(val) : undefined, z.number().optional()),
+  commissionRate: z.preprocess((val) => val === "" || val === null ? undefined : Number(val), z.number().optional()),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
   mlmLevel: z.preprocess((val) => Number(val), z.number().int().min(1).max(4).optional()),
@@ -135,8 +135,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const editUserForm = useForm<EditUserFormData>({ resolver: zodResolver(editUserFormSchema) });
   const updateWithdrawalForm = useForm<UpdateWithdrawalFormData>({ resolver: zodResolver(updateWithdrawalFormSchema) });
 
-  const authorizedEditors = useMemo(() => ['lucasmoura@sentenergia.com'], []);
-  const canEdit = useMemo(() => authorizedEditors.includes(loggedInUser.email || ''), [loggedInUser.email, authorizedEditors]);
+  const canEdit = useMemo(() => userAppRole === 'superadmin' || userAppRole === 'admin', [userAppRole]);
   
   useEffect(() => {
     async function loadLeads() {
