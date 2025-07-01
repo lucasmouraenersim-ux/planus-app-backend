@@ -172,7 +172,7 @@ function ProposalGeneratorPageContent() {
     });
     queryParams.set("comFidelidade", String(form.getValues("comFidelidade")));
 
-    router.push(`/?${queryParams.toString()}`);
+    router.push(`/dashboard?${queryParams.toString()}`);
   }
 
   return (
