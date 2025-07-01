@@ -25,7 +25,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // Firebase onAuthStateChanged in layout.tsx will handle redirect
-      router.push('/'); 
+      router.push('/dashboard'); 
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "Ocorreu uma falha no login."; // Default message

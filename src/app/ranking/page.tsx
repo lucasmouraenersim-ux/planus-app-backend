@@ -581,4 +581,3 @@ export default function RankingPage() {
     </Suspense>
   );
 }
-
