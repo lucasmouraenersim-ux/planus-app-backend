@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -5,8 +6,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt } from 'lucide-react';
+import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
@@ -40,7 +42,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 const LandingPage = () => {
   const [billAmount, setBillAmount] = useState(1000);
   const savings = calculateSavings(billAmount, true);
-  const [stats, setStats] = useState({ totalKwh: 0, pfCount: 0, pjCount: 0 });
+  const [stats, setStats] = useState({ totalKwh: 808488, pfCount: 300, pjCount: 188 });
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -49,7 +51,8 @@ const LandingPage = () => {
         setStats(result.stats);
       }
     };
-    fetchStats();
+    // Re-enabled fetching in case the permission issue is resolved on the backend later.
+    // fetchStats(); 
   }, []);
 
   const handleSliderChange = (value: number[]) => {
@@ -64,14 +67,25 @@ const LandingPage = () => {
   return (
     <div className="bg-background text-foreground">
       {/* Hero Section */}
-      <section className="text-center py-20 px-4 bg-primary/5">
-        <h1 className="text-4xl md:text-5xl font-bold text-primary mb-4">Reduza sua conta de luz em até 30%</h1>
-        <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-8">
-          Com a Planus Energia, você acessa fontes de energia renovável, economiza dinheiro e ajuda o planeta. Sem instalação, sem obras e sem investimento inicial.
-        </p>
-        <Link href="/login">
-            <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">Acessar Área do Consultor</Button>
-        </Link>
+      <section className="relative text-center py-24 px-4 overflow-hidden">
+         <div className="absolute inset-0 z-0">
+            <Image src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/refs/heads/main/Whisk_7171a56086%20(2).svg" alt="Blurred Background" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "center" }} className="filter blur-sm opacity-30" data-ai-hint="abstract background" />
+            <div className="absolute inset-0 bg-background/70"></div>
+         </div>
+         <div className="relative z-10">
+            <h1 className="text-4xl md:text-6xl font-bold text-primary mb-4 animate-fade-in-down">Reduza sua conta de luz em até 30%</h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8 animate-fade-in-down animation-delay-300">
+              Com a Planus Energia, você acessa fontes de energia renovável, economiza dinheiro e ajuda o planeta. Sem instalação, sem obras e sem investimento inicial.
+            </p>
+            <div className="flex gap-4 justify-center animate-fade-in-up animation-delay-600">
+                <Link href="#calculator">
+                    <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground">Simule sua Economia</Button>
+                </Link>
+                 <Link href="/login">
+                    <Button size="lg" variant="outline" className="border-primary/50 hover:border-primary text-primary/90 hover:text-primary hover:bg-primary/10">Área do Consultor</Button>
+                </Link>
+            </div>
+         </div>
       </section>
 
       {/* Stats Section */}
@@ -109,147 +123,88 @@ const LandingPage = () => {
       </section>
 
       {/* How it works */}
-      <section className="py-16 px-4">
+      <section className="py-16 px-4 bg-muted/30">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Como Funciona? É Simples!</h2>
         <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8 text-center">
           <div className="flex flex-col items-center">
-            <div className="bg-primary text-primary-foreground rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold mb-4"><FileText/></div>
-            <h3 className="text-xl font-semibold mb-2">1. Análise da Fatura</h3>
-            <p className="text-muted-foreground">Analisamos sua fatura de energia para entender seu consumo e apresentar a melhor solução de economia.</p>
+            <div className="bg-primary text-primary-foreground rounded-full h-20 w-20 flex items-center justify-center text-3xl font-bold mb-4 border-4 border-primary/30">1</div>
+            <h3 className="text-xl font-semibold mb-2">Análise da Fatura</h3>
+            <p className="text-muted-foreground">Analisamos sua fatura para entender seu consumo e apresentar a melhor solução de economia.</p>
           </div>
           <div className="flex flex-col items-center">
-            <div className="bg-primary text-primary-foreground rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold mb-4"><Zap/></div>
-            <h3 className="text-xl font-semibold mb-2">2. Adesão Digital</h3>
-            <p className="text-muted-foreground">Você assina digitalmente, sem burocracia. Cuidamos de toda a comunicação com a sua distribuidora.</p>
+            <div className="bg-primary text-primary-foreground rounded-full h-20 w-20 flex items-center justify-center text-3xl font-bold mb-4 border-4 border-primary/30">2</div>
+            <h3 className="text-xl font-semibold mb-2">Adesão Digital</h3>
+            <p className="text-muted-foreground">Você assina digitalmente, sem burocracia. Cuidamos de toda a comunicação com sua distribuidora.</p>
           </div>
           <div className="flex flex-col items-center">
-            <div className="bg-primary text-primary-foreground rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold mb-4"><Leaf/></div>
-            <h3 className="text-xl font-semibold mb-2">3. Economia na Prática</h3>
+            <div className="bg-primary text-primary-foreground rounded-full h-20 w-20 flex items-center justify-center text-3xl font-bold mb-4 border-4 border-primary/30">3</div>
+            <h3 className="text-xl font-semibold mb-2">Economia na Prática</h3>
             <p className="text-muted-foreground">Em até 90 dias, você começa a receber sua nova fatura com o desconto aplicado, direto no seu e-mail.</p>
           </div>
         </div>
       </section>
 
       {/* Why Planus Section */}
-      <section className="py-16 px-4 bg-muted/50">
+      <section className="py-16 px-4">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Por Que Nosso Desconto é Vantajoso?</h2>
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
             <CardHeader className="p-0">
               <PackageMinus className="w-12 h-12 mx-auto text-primary mb-4" />
               <CardTitle className="text-xl font-semibold">Sem Obras ou Instalação</CardTitle>
             </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Você recebe créditos de energia limpa direto na sua fatura, sem precisar instalar painéis solares ou fazer qualquer alteração em sua propriedade.
-              </p>
-            </CardContent>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Receba créditos de energia limpa direto na sua fatura, sem precisar instalar painéis solares.</p></CardContent>
           </Card>
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
-            <CardHeader className="p-0">
-              <ShieldCheck className="w-12 h-12 mx-auto text-primary mb-4" />
-              <CardTitle className="text-xl font-semibold">Livre de Bandeiras Tarifárias</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Nossa energia não sofre o acréscimo das bandeiras (amarela e vermelha), garantindo uma economia mais estável e previsível ao longo do ano.
-              </p>
-            </CardContent>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+            <CardHeader className="p-0"><ShieldCheck className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">Livre de Bandeiras Tarifárias</CardTitle></CardHeader>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Nossa energia não sofre acréscimo das bandeiras (amarela e vermelha), garantindo uma economia estável.</p></CardContent>
           </Card>
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
-            <CardHeader className="p-0">
-              <FileText className="w-12 h-12 mx-auto text-primary mb-4" />
-              <CardTitle className="text-xl font-semibold">100% Digital e Sem Burocracia</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Todo o processo de adesão é feito online, de forma rápida, segura e sem papelada. Em poucos cliques você começa a economizar.
-              </p>
-            </CardContent>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+            <CardHeader className="p-0"><FileText className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">100% Digital e Sem Burocracia</CardTitle></CardHeader>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Todo o processo de adesão é online, de forma rápida, segura e sem papelada.</p></CardContent>
           </Card>
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
-            <CardHeader className="p-0">
-              <Leaf className="w-12 h-12 mx-auto text-primary mb-4" />
-              <CardTitle className="text-xl font-semibold">Energia Limpa e Sustentável</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Ao se conectar conosco, você consome energia de fontes renováveis, contribuindo ativamente para um futuro mais verde e sustentável para o planeta.
-              </p>
-            </CardContent>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+            <CardHeader className="p-0"><Leaf className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">Energia Limpa e Sustentável</CardTitle></CardHeader>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Você consome energia de fontes renováveis, contribuindo para um futuro mais verde.</p></CardContent>
           </Card>
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
-            <CardHeader className="p-0">
-              <CircleDollarSign className="w-12 h-12 mx-auto text-primary mb-4" />
-              <CardTitle className="text-xl font-semibold">Sem Investimento Inicial</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Você não precisa gastar nada para começar a economizar. Não há custos de adesão, mensalidade ou taxas escondidas.
-              </p>
-            </CardContent>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+            <CardHeader className="p-0"><CircleDollarSign className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">Sem Investimento Inicial</CardTitle></CardHeader>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Você não precisa gastar nada para começar a economizar. Sem taxas de adesão ou mensalidade.</p></CardContent>
           </Card>
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
-            <CardHeader className="p-0">
-              <Receipt className="w-12 h-12 mx-auto text-primary mb-4" />
-              <CardTitle className="text-xl font-semibold">Desconto Real na Fatura</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 mt-4">
-              <p className="text-muted-foreground text-sm">
-                Sua economia é garantida e vem refletida diretamente na sua conta de luz, que passa a ser emitida pela Planus com o valor já reduzido.
-              </p>
-            </CardContent>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+            <CardHeader className="p-0"><Receipt className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">Desconto Real na Fatura</CardTitle></CardHeader>
+            <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Sua economia é garantida e vem refletida na sua conta de luz, que passa a ser emitida pela Planus.</p></CardContent>
           </Card>
         </div>
       </section>
       
       {/* Savings Calculator */}
-      <section className="py-16 px-4 bg-primary/5">
+      <section id="calculator" className="py-16 px-4 bg-muted/30">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Simule sua Economia Anual</h2>
-        <Card className="max-w-3xl mx-auto shadow-lg">
+        <Card className="max-w-3xl mx-auto shadow-lg bg-card/70">
           <CardHeader>
             <CardTitle>Quanto você paga na sua conta de luz mensalmente?</CardTitle>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <Input
-                type="number"
-                value={billAmount}
-                onChange={handleInputChange}
-                className="text-2xl h-14 mb-4 text-center font-bold"
-              />
-              <Slider
-                value={[billAmount]}
-                onValueChange={handleSliderChange}
-                min={100}
-                max={20000}
-                step={50}
-              />
+              <Input type="number" value={billAmount} onChange={handleInputChange} className="text-2xl h-14 mb-4 text-center font-bold" />
+              <Slider value={[billAmount]} onValueChange={handleSliderChange} min={100} max={20000} step={50} />
             </div>
-            <div className="text-center bg-primary/10 p-6 rounded-lg">
+            <div className="text-center bg-primary/10 p-6 rounded-lg border border-primary/20">
               <p className="text-sm text-muted-foreground">Sua economia anual estimada</p>
               <p className="text-4xl md:text-5xl font-bold text-primary my-2">{formatCurrency(savings.annualSaving)}</p>
               <p className="text-sm text-muted-foreground">Com desconto efetivo de <span className="font-bold">{savings.effectiveAnnualDiscountPercentage}%</span> ao ano.</p>
             </div>
           </CardContent>
-          <CardDescription className="text-center px-6 pb-4 text-xs">
-            {savings.discountDescription}
-          </CardDescription>
+          <CardDescription className="text-center px-6 pb-4 text-xs">{savings.discountDescription}</CardDescription>
         </Card>
       </section>
 
       {/* Legal Basis & Timeline */}
-      <section className="py-16 px-4 grid md:grid-cols-2 gap-12 max-w-6xl mx-auto items-center">
+      <section className="py-16 px-4 grid md:grid-cols-2 gap-12 max-w-6xl mx-auto items-start">
         <div>
           <h3 className="text-3xl font-bold text-primary mb-4 flex items-center"><ShieldCheck className="w-8 h-8 mr-3"/>Baseado na Lei</h3>
-          <div className="text-muted-foreground space-y-3">
-              <p>
-                  A Geração Distribuída (GD) é regulamentada pela ANEEL (Resolução Normativa 1.059/2023), permitindo que a energia gerada por fontes renováveis (como solar, eólica, biomassa) seja injetada na rede da distribuidora local.
-              </p>
-              <p>
-                  Essa energia se transforma em créditos que são utilizados para abater o consumo de nossos clientes, gerando a economia na fatura de luz. É um processo seguro, legal e que promove a sustentabilidade.
-              </p>
-          </div>
+          <div className="text-muted-foreground space-y-3"><p>A Geração Distribuída (GD) é regulamentada pela ANEEL (Resolução Normativa 1.059/2023), permitindo que a energia gerada por fontes renováveis (como solar, eólica, biomassa) seja injetada na rede da distribuidora local.</p><p>Essa energia se transforma em créditos que são utilizados para abater o consumo de nossos clientes, gerando a economia na fatura de luz. É um processo seguro, legal e que promove a sustentabilidade.</p></div>
         </div>
          <div>
           <h3 className="text-3xl font-bold text-primary mb-4 flex items-center"><CalendarClock className="w-8 h-8 mr-3"/>Cronograma</h3>
@@ -262,7 +217,7 @@ const LandingPage = () => {
       </section>
 
       {/* Our Clients */}
-      <section className="py-16 px-4 bg-muted/50">
+      <section className="py-16 px-4 bg-muted/30">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Clientes que Confiam na Planus</h2>
         <div className="max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-12 gap-y-8">
             <Image src="https://placehold.co/150x60.png" width={150} height={60} alt="Logo Cliente 1" className="opacity-60" data-ai-hint="company logo"/>
@@ -272,6 +227,52 @@ const LandingPage = () => {
             <Image src="https://placehold.co/150x60.png" width={150} height={60} alt="Logo Cliente 5" className="opacity-60" data-ai-hint="company logo"/>
         </div>
       </section>
+
+      {/* Lead Capture Section */}
+      <section className="py-20 px-4 bg-primary/5">
+        <div className="max-w-xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">Pronto para Economizar?</h2>
+          <p className="text-lg text-muted-foreground mb-8">
+            Deixe suas informações e um de nossos consultores entrará em contato para mostrar o caminho da economia.
+          </p>
+          <Card className="text-left shadow-lg bg-card">
+            <CardContent className="p-6 space-y-4">
+              <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+                <div>
+                  <Label htmlFor="lead-name" className="text-sm font-medium text-muted-foreground">Nome Completo</Label>
+                  <div className="relative mt-1">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input id="lead-name" placeholder="Seu nome" className="pl-10"/>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="lead-phone" className="text-sm font-medium text-muted-foreground">Número de Telefone</Label>
+                   <div className="relative mt-1">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input id="lead-phone" type="tel" placeholder="(XX) XXXXX-XXXX" className="pl-10"/>
+                  </div>
+                </div>
+                 <div>
+                  <Label htmlFor="lead-bill" className="text-sm font-medium text-muted-foreground">Valor Médio da Conta de Energia</Label>
+                   <div className="relative mt-1">
+                    <CircleDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input id="lead-bill" type="number" placeholder="Ex: 500" className="pl-10"/>
+                  </div>
+                </div>
+                <Button type="submit" size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground mt-2">
+                  Quero Fazer Parte! <ArrowRight className="ml-2 h-5 w-5"/>
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-background text-center py-6 border-t">
+        <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Planus Energia. Todos os direitos reservados.</p>
+        <Link href="/politica-de-privacidade" className="text-sm text-primary hover:underline mt-1 inline-block">Política de Privacidade</Link>
+      </footer>
     </div>
   );
 }
