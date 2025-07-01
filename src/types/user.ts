@@ -19,7 +19,7 @@ export type FirestoreUser = {
   termsAcceptedAt?: Timestamp | string; // New field
   
   // New Commission Fields
-  commissionRate?: 40 | 50 | 60; // Direct commission percentage
+  commissionRate?: 40 | 50 | 60 | 80; // Direct commission percentage
   mlmEnabled?: boolean; // Is this user eligible for MLM overrides?
   uplineUid?: string; // UID of the user this person reports to for MLM
   mlmLevel?: 1 | 2 | 3 | 4; // What override level this person generates for their upline
@@ -47,7 +47,7 @@ export type AppUser = {
   termsAcceptedAt?: string; 
 
   // New Commission Fields
-  commissionRate?: 40 | 50 | 60;
+  commissionRate?: 40 | 50 | 60 | 80;
   mlmEnabled?: boolean;
   uplineUid?: string;
   mlmLevel?: 1 | 2 | 3 | 4;

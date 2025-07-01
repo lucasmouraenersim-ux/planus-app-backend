@@ -72,6 +72,7 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       phone: input.phone ? input.phone.replace(/\D/g, '') : '',
       personalBalance: 0,
       mlmBalance: 0,
+      recurrenceRate: 1, // Default recurrence to 1% for new users
       canViewLeadPhoneNumber: false,
       canViewCrm: false,
       canViewCareerPlan: false,
