@@ -13,6 +13,30 @@ import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const AnimatedNumber = ({ value }: { value: number }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const duration = 1500; // Animation duration in milliseconds
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const animationFrame = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const nextValue = Math.floor(progress * value);
+      
+      setDisplayValue(nextValue);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animationFrame);
+      }
+    };
+    requestAnimationFrame(animationFrame);
+  }, [value, duration]);
+
+  return <>{displayValue.toLocaleString('pt-BR')}</>;
+};
+
+
 const LandingPage = () => {
   const [billAmount, setBillAmount] = useState(1000);
   const savings = calculateSavings(billAmount, true);
@@ -57,7 +81,7 @@ const LandingPage = () => {
           <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
             <CardHeader>
               <Zap className="w-10 h-10 mx-auto text-primary mb-2" />
-              <CardTitle className="text-4xl font-bold">{stats.totalKwh.toLocaleString('pt-BR')}</CardTitle>
+              <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.totalKwh} /></CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">kWh Conectados</p>
@@ -66,7 +90,7 @@ const LandingPage = () => {
           <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
             <CardHeader>
               <User className="w-10 h-10 mx-auto text-primary mb-2" />
-              <CardTitle className="text-4xl font-bold">{stats.pfCount.toLocaleString('pt-BR')}</CardTitle>
+              <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.pfCount} /></CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">Clientes Pessoa Física</p>
@@ -75,7 +99,7 @@ const LandingPage = () => {
           <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
             <CardHeader>
               <Briefcase className="w-10 h-10 mx-auto text-primary mb-2" />
-              <CardTitle className="text-4xl font-bold">{stats.pjCount.toLocaleString('pt-BR')}</CardTitle>
+              <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.pjCount} /></CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">Clientes Pessoa Jurídica</p>

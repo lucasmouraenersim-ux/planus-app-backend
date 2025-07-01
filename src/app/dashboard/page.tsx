@@ -31,8 +31,8 @@ import { useToast } from "@/hooks/use-toast";
 import { MapPin, ChevronLeft, FileText, Loader2 } from 'lucide-react';
 
 const KWH_TO_R_FACTOR = 1.0907; 
-const MIN_KWH_SLIDER = 100;
-const MAX_KWH_SLIDER = 50000; 
+const MIN_KWH_SLIDER = 400;
+const MAX_KWH_SLIDER = 100000; 
 const SLIDER_STEP = 50;
 const DEFAULT_KWH = 1500;
 const DEFAULT_UF = 'MT';
