@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase } from 'lucide-react';
+import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
@@ -129,9 +129,82 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
+
+      {/* Why Planus Section */}
+      <section className="py-16 px-4 bg-muted/50">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Por Que Nosso Desconto é Vantajoso?</h2>
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <PackageMinus className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">Sem Obras ou Instalação</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Você recebe créditos de energia limpa direto na sua fatura, sem precisar instalar painéis solares ou fazer qualquer alteração em sua propriedade.
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <ShieldCheck className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">Livre de Bandeiras Tarifárias</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Nossa energia não sofre o acréscimo das bandeiras (amarela e vermelha), garantindo uma economia mais estável e previsível ao longo do ano.
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <FileText className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">100% Digital e Sem Burocracia</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Todo o processo de adesão é feito online, de forma rápida, segura e sem papelada. Em poucos cliques você começa a economizar.
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <Leaf className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">Energia Limpa e Sustentável</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Ao se conectar conosco, você consome energia de fontes renováveis, contribuindo ativamente para um futuro mais verde e sustentável para o planeta.
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <CircleDollarSign className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">Sem Investimento Inicial</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Você não precisa gastar nada para começar a economizar. Não há custos de adesão, mensalidade ou taxas escondidas.
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6">
+            <CardHeader className="p-0">
+              <Receipt className="w-12 h-12 mx-auto text-primary mb-4" />
+              <CardTitle className="text-xl font-semibold">Desconto Real na Fatura</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 mt-4">
+              <p className="text-muted-foreground text-sm">
+                Sua economia é garantida e vem refletida diretamente na sua conta de luz, que passa a ser emitida pela Planus com o valor já reduzido.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
       
       {/* Savings Calculator */}
-      <section className="py-16 px-4 bg-muted/50">
+      <section className="py-16 px-4 bg-primary/5">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Simule sua Economia Anual</h2>
         <Card className="max-w-3xl mx-auto shadow-lg">
           <CardHeader>
