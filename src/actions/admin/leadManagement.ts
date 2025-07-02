@@ -202,8 +202,9 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                   );
 
                   if (existingLead) {
+                      const { sellerName, ...updateData } = cleanLeadData;
                       const docRef = adminDb.collection("crm_leads").doc(existingLead.id);
-                      batch.update(docRef, cleanLeadData);
+                      batch.update(docRef, updateData);
                       successfulUpdates++;
                   } else if (instalacao || normalizedDocument) {
                       const docRef = adminDb.collection("crm_leads").doc();
