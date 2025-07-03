@@ -78,16 +78,26 @@ const editUserFormSchema = z.object({
   displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
   phone: z.string().optional(),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
-  commissionRate: z.number().optional(),
+  commissionRate: z.preprocess(
+    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().optional()
+  ),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
-  mlmLevel: z.number().int().min(1).max(4).optional(),
-  recurrenceRate: z.number().optional(),
+  mlmLevel: z.preprocess(
+    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().int().min(1).max(4).optional()
+  ),
+  recurrenceRate: z.preprocess(
+    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().optional()
+  ),
   canViewLeadPhoneNumber: z.boolean().default(false),
   canViewCrm: z.boolean().default(false),
   canViewCareerPlan: z.boolean().default(false),
 });
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
+
 
 const updateWithdrawalFormSchema = z.object({
   status: z.enum(WITHDRAWAL_STATUSES_ADMIN as [WithdrawalStatus, ...WithdrawalStatus[]], { required_error: "Status é obrigatório." }),
@@ -500,7 +510,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <FormItem>
                         <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel>
                         <Select 
-                          onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                          onValueChange={field.onChange} 
                           value={field.value !== undefined ? String(field.value) : 'none'} 
                           disabled={!canEdit || isSubmittingAction}
                         >
@@ -519,7 +529,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <FormItem>
                           <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
                           <Select 
-                            onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                            onValueChange={field.onChange}
                             value={field.value !== undefined && field.value !== null ? String(field.value) : 'none'}
                             disabled={!canEdit || isSubmittingAction}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Sem Recorrência" /></SelectTrigger></FormControl>
@@ -538,7 +548,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                           <FormItem>
                             <FormLabel>Nível de Override</FormLabel>
                             <Select 
-                              onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                              onValueChange={field.onChange}
                               value={field.value !== undefined ? String(field.value) : 'none'}
                               disabled={!canEdit || isSubmittingAction}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger></FormControl>
