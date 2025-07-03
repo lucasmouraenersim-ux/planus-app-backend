@@ -81,7 +81,11 @@ const editUserFormSchema = z.object({
   commissionRate: z.preprocess((val) => val === "" || val === null ? undefined : Number(val), z.number().optional()),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
-  mlmLevel: z.preprocess((val) => Number(val), z.number().int().min(1).max(4).optional()),
+  mlmLevel: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    const num = Number(val);
+    return isNaN(num) ? undefined : num;
+  }, z.number().int().min(1).max(4).optional()),
   recurrenceRate: z.preprocess((val) => (val === "" || val === null || val === 'none' ? undefined : Number(val)), z.number().optional()),
   canViewLeadPhoneNumber: z.boolean().default(false),
   canViewCrm: z.boolean().default(false),
@@ -474,7 +478,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <DialogHeader>
               <DialogTitle className="text-primary">Ver / Editar Usuário</DialogTitle>
               <DialogDescription>
-                {userAppRole === 'superadmin' ? 'Altere os dados, permissões e comissões do usuário.' : 'Você está visualizando os detalhes do usuário.'}
+                {canEdit ? 'Altere os dados, permissões e comissões do usuário.' : 'Você está visualizando os detalhes do usuário.'}
               </DialogDescription>
             </DialogHeader>
             <Form {...editUserForm}>
@@ -482,28 +486,28 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 
                 {/* User Info */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Informações Pessoais</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
-                    <FormField control={editUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={editUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input {...field} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={editUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
+                    <FormField control={editUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={editUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone</FormLabel><FormControl><Input {...field} disabled={!canEdit || isSubmittingAction} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={editUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                 </CardContent></Card>
                 
                 {/* Permissions */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Permissões da Plataforma</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
-                    <FormField control={editUserForm.control} name="canViewCrm" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Acesso ao CRM</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl></FormItem>)} />
-                    <FormField control={editUserForm.control} name="canViewCareerPlan" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Plano de Carreira</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl></FormItem>)} />
-                    <FormField control={editUserForm.control} name="canViewLeadPhoneNumber" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Telefone dos Leads</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl></FormItem>)} />
+                    <FormField control={editUserForm.control} name="canViewCrm" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Acesso ao CRM</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
+                    <FormField control={editUserForm.control} name="canViewCareerPlan" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Plano de Carreira</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
+                    <FormField control={editUserForm.control} name="canViewLeadPhoneNumber" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Telefone dos Leads</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                 </CardContent></Card>
 
                 {/* Commissions */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Configurações de Comissão</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
-                    <FormField control={editUserForm.control} name="commissionRate" render={({ field }) => (<FormItem><FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Padrão (40%/50%)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="40">40%</SelectItem><SelectItem value="50">50%</SelectItem><SelectItem value="60">60%</SelectItem><SelectItem value="80">80%</SelectItem></SelectContent></Select></FormItem>)} />
+                    <FormField control={editUserForm.control} name="commissionRate" render={({ field }) => (<FormItem><FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Padrão (40%/50%)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="40">40%</SelectItem><SelectItem value="50">50%</SelectItem><SelectItem value="60">60%</SelectItem><SelectItem value="80">80%</SelectItem></SelectContent></Select></FormItem>)} />
                     <FormField control={editUserForm.control} name="recurrenceRate" render={({ field }) => (
                         <FormItem>
                             <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
                             <Select 
                                 onValueChange={field.onChange} 
                                 defaultValue={field.value !== undefined ? String(field.value) : 'none'}
-                                disabled={userAppRole !== 'superadmin' || isSubmittingAction}>
+                                disabled={!canEdit || isSubmittingAction}>
                                 <FormControl>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Sem Recorrência" />
@@ -517,19 +521,19 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                             </Select>
                         </FormItem>
                     )} />
-                    <FormField control={editUserForm.control} name="mlmEnabled" render={({ field }) => (<FormItem className="flex items-center justify-between"><FormLabel className="flex items-center"><Network className="mr-2 h-4 w-4"/>Ativar Multinível</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={userAppRole !== 'superadmin' || isSubmittingAction} /></FormControl></FormItem>)} />
+                    <FormField control={editUserForm.control} name="mlmEnabled" render={({ field }) => (<FormItem className="flex items-center justify-between"><FormLabel className="flex items-center"><Network className="mr-2 h-4 w-4"/>Ativar Multinível</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                     {editUserForm.watch("mlmEnabled") && (<>
-                        <FormField control={editUserForm.control} name="uplineUid" render={({ field }) => (<FormItem><FormLabel>Upline (Líder Direto)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o upline" /></SelectTrigger></FormControl><SelectContent>{initialUsers.filter(u => u.uid !== selectedUser.uid).map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                        <FormField control={editUserForm.control} name="mlmLevel" render={({ field }) => (<FormItem><FormLabel>Nível de Override</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={userAppRole !== 'superadmin' || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o nível" /></SelectTrigger></FormControl><SelectContent><SelectItem value="1">Nível 1 (5%)</SelectItem><SelectItem value="2">Nível 2 (3%)</SelectItem><SelectItem value="3">Nível 3 (2%)</SelectItem><SelectItem value="4">Nível 4 (1%)</SelectItem></SelectContent></Select></FormItem>)} />
+                        <FormField control={editUserForm.control} name="uplineUid" render={({ field }) => (<FormItem><FormLabel>Upline (Líder Direto)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o upline" /></SelectTrigger></FormControl><SelectContent>{initialUsers.filter(u => u.uid !== selectedUser.uid).map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                        <FormField control={editUserForm.control} name="mlmLevel" render={({ field }) => (<FormItem><FormLabel>Nível de Override</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o nível" /></SelectTrigger></FormControl><SelectContent><SelectItem value="1">Nível 1 (5%)</SelectItem><SelectItem value="2">Nível 2 (3%)</SelectItem><SelectItem value="3">Nível 3 (2%)</SelectItem><SelectItem value="4">Nível 4 (1%)</SelectItem></SelectContent></Select></FormItem>)} />
                     </>)}
                 </CardContent></Card>
 
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isSubmittingAction}>
-                    {userAppRole === 'superadmin' ? 'Cancelar' : 'Fechar'}
+                    {canEdit ? 'Cancelar' : 'Fechar'}
                   </Button>
-                  {userAppRole === 'superadmin' && (
+                  {canEdit && (
                     <Button type="submit" disabled={isSubmittingAction}>
                       {isSubmittingAction && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
                       Salvar Alterações
