@@ -41,8 +41,11 @@ export async function createCrmLead(
     commissionPaid: false, // Default to not paid
   };
 
+  // Clean the object for Firestore to remove 'undefined' values
+  const firestoreData = Object.fromEntries(Object.entries(baseLeadData).filter(([, v]) => v !== undefined));
+
   // Create document in Firestore to get an ID
-  const docRef = await addDoc(collection(db, "crm_leads"), baseLeadData);
+  const docRef = await addDoc(collection(db, "crm_leads"), firestoreData);
   
   // Handle file uploads
   const updates: Partial<LeadDocumentData> = {};
