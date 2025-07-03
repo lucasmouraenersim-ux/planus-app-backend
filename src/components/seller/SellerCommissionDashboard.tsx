@@ -9,52 +9,76 @@ import { ptBR } from 'date-fns/locale';
 import type { AppUser } from '@/types/user';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
+import { useAuth } from '@/contexts/AuthContext';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Badge } from 'lucide-react'; // Added Briefcase & Badge
-
-// Placeholder for actual Firebase functions
-// import { fetchCrmLeads } from '@/lib/firebase/firestore';
-
-const MOCK_SELLER_LEADS: LeadWithId[] = [
-  { id: 'slead1', name: 'Loja de Roupas Elegance', company: 'Elegance Modas LTDA', value: 3500, kwh: 1200, stageId: 'proposta', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 2).toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Indicação" },
-  { id: 'slead2', name: 'Restaurante Sabor Caseiro', value: 8000, kwh: 3000, stageId: 'finalizado', sellerName: 'vendedor1@example.com', createdAt: new Date(Date.now() - 86400000 * 15).toISOString(), lastContact: new Date(Date.now() - 86400000 * 1).toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Tráfego Pago" },
-  { id: 'slead3', name: 'Oficina Mecânica Rápida', value: 1500, kwh: 600, stageId: 'fatura', sellerName: 'vendedor1@example.com', createdAt: new Date().toISOString(), lastContact: new Date().toISOString(), userId: 'user1', needsAdminApproval: false, leadSource: "Porta a Porta (PAP)" },
-];
+import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Badge, Loader2 } from 'lucide-react'; 
 
 interface SellerCommissionDashboardProps {
   loggedInUser: AppUser;
 }
 
 export default function SellerCommissionDashboard({ loggedInUser }: SellerCommissionDashboardProps) {
-  const [leads, setLeads] = useState<LeadWithId[]>(MOCK_SELLER_LEADS);
+  const { fetchAllCrmLeadsGlobally } = useAuth();
+  const [leads, setLeads] = useState<LeadWithId[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // const loadLeads = async () => {
-    //   if (loggedInUser) {
-    //     setLeads(await fetchCrmLeads(loggedInUser) || MOCK_SELLER_LEADS);
-    //   }
-    // };
-    // loadLeads();
-  }, [loggedInUser]);
+    const loadLeads = async () => {
+      if (loggedInUser) {
+        setIsLoading(true);
+        try {
+          const allLeads = await fetchAllCrmLeadsGlobally();
+          // Filter leads to show only those assigned to the logged-in seller
+          const sellerLeads = allLeads.filter(lead => lead.userId === loggedInUser.uid);
+          setLeads(sellerLeads);
+        } catch (error) {
+          console.error("Failed to load seller leads:", error);
+          setLeads([]);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    loadLeads();
+  }, [loggedInUser, fetchAllCrmLeadsGlobally]);
+
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const performanceMetrics = useMemo(() => {
     const activeLeads = leads.filter(l => !['assinado', 'finalizado', 'perdido', 'cancelado'].includes(l.stageId)).length;
-    const finalizedThisMonth = leads.filter(l => l.stageId === 'finalizado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).length;
-    const valueFinalizedThisMonth = leads.filter(l => l.stageId === 'finalizado' && new Date(l.lastContact).getMonth() === new Date().getMonth()).reduce((sum, l) => sum + l.value, 0);
-    return { activeLeads, finalizedThisMonth, valueFinalizedThisMonth };
-  }, [leads]);
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const finalizedThisMonthLeads = leads.filter(l => {
+        if (l.stageId !== 'finalizado' || !l.completedAt) return false;
+        const completedDate = parseISO(l.completedAt);
+        return completedDate.getMonth() === currentMonth && completedDate.getFullYear() === currentYear;
+    });
+
+    const finalizedThisMonthCount = finalizedThisMonthLeads.length;
+    const valueFinalizedThisMonth = finalizedThisMonthLeads.reduce((sum, l) => sum + (l.value || 0), 0);
+
+    return { activeLeads, finalizedThisMonth: finalizedThisMonthCount, valueFinalizedThisMonth };
+}, [leads]);
   
   const getStageBadgeStyle = (stageId: StageId) => {
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
     return stageConfig ? `${stageConfig.colorClass} text-white` : 'bg-gray-500 text-white';
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -124,18 +148,19 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
           <Table>
             <TableHeader><TableRow><TableHead>Nome do Lead</TableHead><TableHead>Empresa</TableHead><TableHead>Valor (R$)</TableHead><TableHead>KWh</TableHead><TableHead>Estágio</TableHead><TableHead>Último Contato</TableHead></TableRow></TableHeader>
             <TableBody>
-              {leads.slice(0, 5).map(lead => ( // Show first 5 for brevity
-                <TableRow key={lead.id}>
-                  <TableCell className="font-medium">{lead.name}</TableCell>
-                  <TableCell>{lead.company || 'N/A'}</TableCell>
-                  <TableCell>{formatCurrency(lead.value)}</TableCell>
-                  <TableCell>{lead.kwh} kWh</TableCell>
-                  <TableCell><span className={`px-2 py-0.5 text-xs rounded-full ${getStageBadgeStyle(lead.stageId)}`}>{STAGES_CONFIG.find(s=>s.id === lead.stageId)?.title || lead.stageId}</span></TableCell>
-                  <TableCell>{lead.lastContact ? format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", {locale: ptBR}) : 'N/A'}</TableCell>
-                </TableRow>
-              ))}
-               {leads.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum lead encontrado.</TableCell></TableRow>
+              {leads.length > 0 ? (
+                  leads.slice(0, 5).map(lead => ( // Show first 5 for brevity
+                    <TableRow key={lead.id}>
+                      <TableCell className="font-medium">{lead.name}</TableCell>
+                      <TableCell>{lead.company || 'N/A'}</TableCell>
+                      <TableCell>{formatCurrency(lead.value)}</TableCell>
+                      <TableCell>{lead.kwh} kWh</TableCell>
+                      <TableCell><span className={`px-2 py-0.5 text-xs rounded-full ${getStageBadgeStyle(lead.stageId)}`}>{STAGES_CONFIG.find(s=>s.id === lead.stageId)?.title || lead.stageId}</span></TableCell>
+                      <TableCell>{lead.lastContact ? format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", {locale: ptBR}) : 'N/A'}</TableCell>
+                    </TableRow>
+                  ))
+              ) : (
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-10">Nenhum lead encontrado.</TableCell></TableRow>
               )}
             </TableBody>
              <TableCaption>
