@@ -51,6 +51,7 @@ function CrmPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const knownLeadIds = useRef<Set<string>>(new Set());
+  const leadsMap = useRef(new Map<string, LeadWithId>());
   
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isUploadingLeads, setIsUploadingLeads] = useState(false);
@@ -67,23 +68,15 @@ function CrmPageContent() {
 
 
   useEffect(() => {
-    if (isLoadingAllUsers) {
-      setIsLoading(true);
-      return;
-    }
-    
-    if (!appUser) {
-      setIsLoading(false);
-      return;
+    if (isLoadingAllUsers || !appUser) {
+        setIsLoading(true);
+        return;
     }
 
-    const unsubscribers: (() => void)[] = [];
-    const leadsMap = new Map<string, LeadWithId>();
-
-    const processSnapshot = (snapshot: any, isInitialLoadForSpinner = false) => {
+    const processSnapshot = (snapshot: any) => {
         snapshot.docChanges().forEach((change: any) => {
             if (change.type === "removed") {
-                leadsMap.delete(change.doc.id);
+                leadsMap.current.delete(change.doc.id);
             } else {
                 const data = change.doc.data();
                 const lead: LeadWithId = {
@@ -104,60 +97,61 @@ function CrmPageContent() {
                     knownLeadIds.current.add(lead.id);
                 }
 
-                leadsMap.set(change.doc.id, lead);
+                leadsMap.current.set(change.doc.id, lead);
             }
         });
 
-        const sortedLeads = Array.from(leadsMap.values()).sort((a, b) => {
-          const getDateForSort = (lead: LeadWithId): Date => {
-            if (lead.stageId === 'finalizado' && lead.completedAt) return new Date(lead.completedAt);
-            if (lead.stageId === 'assinado' && lead.signedAt) return new Date(lead.signedAt);
-            return new Date(lead.lastContact);
-          };
-          return getDateForSort(b).getTime() - getDateForSort(a).getTime();
+        const sortedLeads = Array.from(leadsMap.current.values()).sort((a, b) => {
+            const getDateForSort = (lead: LeadWithId): Date => {
+                if (lead.stageId === 'finalizado' && lead.completedAt) return new Date(lead.completedAt);
+                if (lead.stageId === 'assinado' && lead.signedAt) return new Date(lead.signedAt);
+                return new Date(lead.lastContact);
+            };
+            return getDateForSort(b).getTime() - getDateForSort(a).getTime();
         });
-        
-        setLeads(sortedLeads);
 
-        if (isInitialLoadForSpinner) {
+        setLeads(sortedLeads);
+        if (isLoading) {
             setIsLoading(false);
         }
     };
 
+    const unsubscribers: (() => void)[] = [];
+    leadsMap.current.clear();
+
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
         const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
-        unsubscribers.push(onSnapshot(q, (snapshot) => processSnapshot(snapshot, true)));
+        unsubscribers.push(onSnapshot(q, processSnapshot));
     } else if (userAppRole === 'vendedor') {
         const getFullDownlineUids = (uplineId: string): string[] => {
             const directDownline = allFirestoreUsers
                 .filter(u => u.uplineUid === uplineId && u.mlmEnabled)
                 .map(u => u.uid);
-            if (directDownline.length === 0) return [];
 
             const allUids = [...directDownline];
             directDownline.forEach(uid => {
                 allUids.push(...getFullDownlineUids(uid));
             });
-            return [...new Set(allUids)]; // Use Set to remove duplicates
+            return [...new Set(allUids)];
         };
 
         const downlineUids = getFullDownlineUids(appUser.uid);
         const uidsToQuery = [appUser.uid, ...downlineUids];
-        const chunks = [];
+        const uidChunks = [];
         for (let i = 0; i < uidsToQuery.length; i += 30) {
-            chunks.push(uidsToQuery.slice(i, i + 30));
+            uidChunks.push(uidsToQuery.slice(i, i + 30));
         }
 
-        chunks.forEach(chunk => {
-            const q = query(collection(db, "crm_leads"), where("userId", "in", chunk));
-            unsubscribers.push(onSnapshot(q, (snapshot) => processSnapshot(snapshot, false)));
+        uidChunks.forEach(chunk => {
+            if (chunk.length > 0) {
+                const q = query(collection(db, "crm_leads"), where("userId", "in", chunk));
+                unsubscribers.push(onSnapshot(q, processSnapshot));
+            }
         });
 
         const qUnassigned = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
-        unsubscribers.push(onSnapshot(qUnassigned, (snapshot) => {
-            processSnapshot(snapshot, false);
-            if (isLoading) setIsLoading(false); // Make sure loader stops
-        }));
+        unsubscribers.push(onSnapshot(qUnassigned, processSnapshot));
+
     } else {
         setIsLoading(false);
         setLeads([]);
