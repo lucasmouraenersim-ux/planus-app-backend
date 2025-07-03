@@ -7,7 +7,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { uploadFile } from '@/lib/firebase/storage'; // Import uploadFile
+import { uploadFile } from '@/lib/firebase/storage';
+import { getTeamForUser } from '@/actions/user/getTeam';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -16,11 +17,11 @@ interface AuthContextType {
   userAppRole: UserType | null;
   allFirestoreUsers: FirestoreUser[];
   isLoadingAllUsers: boolean;
-  fetchAllAppUsers: () => Promise<void>;
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
   updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
   acceptUserTerms: () => Promise<void>;
+  refreshUsers: () => Promise<void>; // Expose a manual refresh function
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -168,29 +169,65 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const fetchAllAppUsers = useCallback(async () => {
+  const fetchUsersBasedOnRole = useCallback(async (user: FirebaseUser, role: UserType, appUser: AppUser) => {
     setIsLoadingAllUsers(true);
     try {
+      if (role === 'admin' || role === 'superadmin') {
         const usersCollectionRef = collection(db, "users");
         const usersSnapshot = await getDocs(usersCollectionRef);
         const usersList = usersSnapshot.docs.map(docSnap => {
-            const data = docSnap.data() as Omit<FirestoreUser, 'uid'>;
-            return {
-                ...data,
-                uid: docSnap.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                lastSignInTime: (data.lastSignInTime as Timestamp)?.toDate().toISOString() || undefined,
-                termsAcceptedAt: (data.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
-            } as FirestoreUser;
+          const data = docSnap.data();
+          return {
+            uid: docSnap.id, ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+            lastSignInTime: (data.lastSignInTime as Timestamp)?.toDate().toISOString() || undefined,
+            termsAcceptedAt: (data.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
+          } as FirestoreUser;
         });
         setAllFirestoreUsers(usersList);
+      } else if (role === 'vendedor') {
+        const team = await getTeamForUser(user.uid);
+        const meAsFirestoreUser = { ...appUser, uid: user.uid } as FirestoreUser;
+        setAllFirestoreUsers([meAsFirestoreUser, ...team]);
+      } else {
+         const meAsFirestoreUser = { ...appUser, uid: user.uid } as FirestoreUser;
+        setAllFirestoreUsers([meAsFirestoreUser]);
+      }
     } catch (error) {
-        console.error("Erro ao buscar todos os usuários do Firestore:", error);
-        setAllFirestoreUsers([]);
+      console.error("Error fetching permission-based user list:", error);
+      setAllFirestoreUsers([]);
     } finally {
-        setIsLoadingAllUsers(false);
+      setIsLoadingAllUsers(false);
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setIsLoadingAuth(true);
+      if (user) {
+        setFirebaseUser(user);
+        const fetchedAppUser = await fetchFirestoreUser(user);
+        setAppUser(fetchedAppUser);
+        const role = fetchedAppUser?.type || 'pending_setup';
+        setUserAppRole(role);
+
+        if (fetchedAppUser) {
+          await fetchUsersBasedOnRole(user, role, fetchedAppUser);
+        } else {
+          setIsLoadingAllUsers(false);
+        }
+        
+      } else {
+        setFirebaseUser(null);
+        setAppUser(null);
+        setUserAppRole(null);
+        setAllFirestoreUsers([]);
+        setIsLoadingAllUsers(false);
+      }
+      setIsLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, [fetchUsersBasedOnRole]);
 
   const fetchAllCrmLeadsGlobally = useCallback(async (): Promise<LeadWithId[]> => {
     try {
@@ -214,51 +251,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setIsLoadingAuth(true);
-      setFirebaseUser(user);
-
-      if (user) {
-        try {
-          const userDocRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists() && user.metadata.lastSignInTime) {
-            await updateDoc(userDocRef, {
-              lastSignInTime: Timestamp.fromDate(new Date(user.metadata.lastSignInTime))
-            });
-          }
-        } catch (error) {
-          console.error("Failed to update last sign-in time for user:", user.uid, error);
-        }
-        
-        const fetchedAppUser = await fetchFirestoreUser(user);
-        setAppUser(fetchedAppUser);
-        setUserAppRole(fetchedAppUser?.type || 'pending_setup');
-      } else {
-        setAppUser(null);
-        setUserAppRole(null);
-        setAllFirestoreUsers([]);
-      }
-      setIsLoadingAuth(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    // Fetch all users for ranking if any user is logged in
-    if (firebaseUser && !isLoadingAuth) {
-        fetchAllAppUsers();
-    } else if (!isLoadingAuth) {
-        setAllFirestoreUsers([]);
-        setIsLoadingAllUsers(false);
+  const refreshUsers = useCallback(async () => {
+    if (firebaseUser && userAppRole && appUser) {
+        await fetchUsersBasedOnRole(firebaseUser, userAppRole, appUser);
     }
-  }, [firebaseUser, isLoadingAuth, fetchAllAppUsers]);
+  }, [firebaseUser, userAppRole, appUser, fetchUsersBasedOnRole]);
 
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllAppUsers, fetchAllCrmLeadsGlobally, updateAppUserProfile, changeUserPassword, acceptUserTerms }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllCrmLeadsGlobally, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers }}>
       {children}
     </AuthContext.Provider>
   );
