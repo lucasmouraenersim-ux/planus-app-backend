@@ -123,16 +123,31 @@ function CrmPageContent() {
         const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
         unsubscribers.push(onSnapshot(q, processSnapshot));
     } else if (userAppRole === 'vendedor') {
-        const getFullDownlineUids = (uplineId: string): string[] => {
+        // Robust, iterative function to get all downline UIDs
+        const getFullDownlineUids = (startUplineId: string): string[] => {
+          const allDownlineUids = new Set<string>();
+          const queue: string[] = [startUplineId];
+          const visited = new Set<string>(); // To prevent infinite loops in case of cyclic dependencies
+    
+          while (queue.length > 0) {
+            const currentUplineId = queue.shift()!;
+            if (visited.has(currentUplineId)) {
+              continue;
+            }
+            visited.add(currentUplineId);
+    
             const directDownline = allFirestoreUsers
-                .filter(u => u.uplineUid === uplineId && u.mlmEnabled)
-                .map(u => u.uid);
-
-            const allUids = [...directDownline];
-            directDownline.forEach(uid => {
-                allUids.push(...getFullDownlineUids(uid));
-            });
-            return [...new Set(allUids)];
+              .filter(u => u.uplineUid === currentUplineId && u.mlmEnabled)
+              .map(u => u.uid);
+    
+            for (const uid of directDownline) {
+              if (!allDownlineUids.has(uid)) {
+                allDownlineUids.add(uid);
+                queue.push(uid);
+              }
+            }
+          }
+          return Array.from(allDownlineUids);
         };
 
         const downlineUids = getFullDownlineUids(appUser.uid);
