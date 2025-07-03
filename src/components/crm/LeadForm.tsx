@@ -316,8 +316,10 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Sistema">Sistema</SelectItem>
-                          {allUsers.filter(u => u.type === 'vendedor' || u.type === 'admin' || u.type === 'superadmin').map(user => (
+                          <SelectItem key="Sistema" value="Sistema">Sistema</SelectItem>
+                          {allUsers
+                            .filter(u => (u.type === 'vendedor' || u.type === 'admin' || u.type === 'superadmin') && u.displayName?.toLowerCase() !== 'sistema')
+                            .map(user => (
                             <SelectItem key={user.uid} value={user.displayName || user.email!}>
                               {user.displayName || user.email}
                             </SelectItem>
