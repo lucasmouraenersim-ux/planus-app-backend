@@ -280,23 +280,3 @@ export async function requestWithdrawal(userId: string, userEmail: string, userN
   const docRef = await addDoc(collection(db, "withdrawal_requests"), newRequest);
   return docRef.id;
 }
-
-export async function fetchWithdrawalHistory(userId: string): Promise<WithdrawalRequestWithId[]> {
-  // The original query required a composite index. By removing the orderBy clause here
-  // and sorting the results in memory, we can avoid the need for that index.
-  const q = query(collection(db, "withdrawal_requests"), where("userId", "==", userId));
-  const querySnapshot = await getDocs(q);
-
-  const requests = querySnapshot.docs.map(docSnap => {
-    const data = docSnap.data() as WithdrawalRequestData;
-    return {
-      id: docSnap.id,
-      ...data,
-      requestedAt: (data.requestedAt as Timestamp).toDate().toISOString(),
-      processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
-    };
-  });
-
-  // Sort by requestedAt date in descending order (most recent first)
-  return requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-}

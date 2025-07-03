@@ -7,8 +7,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,8 +59,10 @@ import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalSta
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
 import { PIX_KEY_TYPES, WITHDRAWAL_TYPES } from '@/types/wallet';
-import { requestWithdrawal, fetchWithdrawalHistory, updateLeadCommissionStatus } from '@/lib/firebase/firestore'; 
+import { requestWithdrawal, updateLeadCommissionStatus } from '@/lib/firebase/firestore'; 
 import { useAuth } from '@/contexts/AuthContext';
+import { getWithdrawalHistoryForUser } from '@/actions/user/getWithdrawalHistory';
+import { getLeadsForTeam } from '@/actions/user/getTeamLeads';
 
 
 const withdrawalFormSchema = z.object({
@@ -121,57 +121,30 @@ function WalletPageContent() {
 
   useEffect(() => {
     if (!appUser) return;
-    
-    setIsLoadingHistory(true);
-    fetchWithdrawalHistory(appUser.uid)
-      .then(setWithdrawalHistory)
-      .catch(error => {
-          console.error("Error fetching withdrawal history:", error);
-          toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive"});
-      })
-      .finally(() => setIsLoadingHistory(false));
-  }, [appUser, toast]);
 
-  useEffect(() => {
-    const loadLeads = async () => {
-      if (!appUser || allFirestoreUsers.length === 0) {
-        setIsLoadingLeads(false);
-        return;
-      }
+    const loadWalletData = async () => {
+      setIsLoadingHistory(true);
       setIsLoadingLeads(true);
+
       try {
-        const teamUids = allFirestoreUsers.map(u => u.uid);
-        const leadsData: LeadWithId[] = [];
-        
-        for (let i = 0; i < teamUids.length; i += 30) {
-          const uidsChunk = teamUids.slice(i, i + 30);
-          if (uidsChunk.length > 0) {
-            const q = query(collection(db, "crm_leads"), where("userId", "in", uidsChunk));
-            const querySnapshot = await getDocs(q);
-            querySnapshot.forEach(docSnap => {
-              const data = docSnap.data();
-              leadsData.push({
-                id: docSnap.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-                completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-              } as LeadWithId);
-            });
-          }
-        }
-        setAllLeads(leadsData);
+        const [history, leads] = await Promise.all([
+          getWithdrawalHistoryForUser(appUser.uid),
+          getLeadsForTeam(appUser.uid)
+        ]);
+
+        setWithdrawalHistory(history);
+        setAllLeads(leads);
       } catch (error) {
-        console.error("Error fetching leads for wallet:", error);
-        toast({ title: "Erro", description: "Não foi possível carregar os contratos.", variant: "destructive"});
-        setAllLeads([]);
+        console.error("Error loading wallet data:", error);
+        toast({ title: "Erro", description: "Não foi possível carregar os dados da carteira.", variant: "destructive" });
       } finally {
+        setIsLoadingHistory(false);
         setIsLoadingLeads(false);
       }
     };
-    loadLeads();
-  }, [appUser, allFirestoreUsers, toast]);
+
+    loadWalletData();
+  }, [appUser, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {

@@ -1,3 +1,4 @@
+
 // src/components/seller/SellerCommissionDashboard.tsx
 "use client";
 
@@ -10,8 +11,6 @@ import type { AppUser } from '@/types/user';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,53 +20,12 @@ import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Loader2 } from '
 
 interface SellerCommissionDashboardProps {
   loggedInUser: AppUser;
+  leads: LeadWithId[];
+  isLoading: boolean;
 }
 
-export default function SellerCommissionDashboard({ loggedInUser }: SellerCommissionDashboardProps) {
+export default function SellerCommissionDashboard({ loggedInUser, leads, isLoading }: SellerCommissionDashboardProps) {
   const { allFirestoreUsers } = useAuth();
-  const [leads, setLeads] = useState<LeadWithId[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const loadLeads = async () => {
-      if (loggedInUser && allFirestoreUsers.length > 0) {
-        setIsLoading(true);
-        try {
-          const teamUids = allFirestoreUsers.map(u => u.uid);
-          const leadsData: LeadWithId[] = [];
-          
-          for (let i = 0; i < teamUids.length; i += 30) {
-            const uidsChunk = teamUids.slice(i, i + 30);
-            if (uidsChunk.length > 0) {
-              const q = query(collection(db, "crm_leads"), where("userId", "in", uidsChunk));
-              const querySnapshot = await getDocs(q);
-              querySnapshot.forEach(docSnap => {
-                const data = docSnap.data();
-                leadsData.push({
-                  id: docSnap.id,
-                  ...data,
-                  createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                  lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-                  signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-                  completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-                } as LeadWithId);
-              });
-            }
-          }
-          setLeads(leadsData);
-        } catch (error) {
-          console.error("Failed to load seller/team leads:", error);
-          setLeads([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (!loggedInUser || allFirestoreUsers.length === 0) {
-        setIsLoading(false);
-      }
-    };
-    loadLeads();
-  }, [loggedInUser, allFirestoreUsers]);
-
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
@@ -130,7 +88,7 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-96">
+      <div className="flex justify-center items-center h-[calc(100vh-150px)]">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
