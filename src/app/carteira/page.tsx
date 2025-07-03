@@ -181,52 +181,69 @@ function WalletPageContent() {
 
   const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return { mlmCommissionsToReceive: [], totalMlmCommissionToReceive: 0 };
-
-    const findDownline = (uplineId: string, level = 1, maxLevel = 4): { user: FirestoreUser, level: number }[] => {
-        if (level > maxLevel) return [];
-        const directDownline = allFirestoreUsers.filter(u => u.uplineUid === uplineId && u.mlmEnabled);
-        let fullDownline = directDownline.map(u => ({ user: u, level }));
-        directDownline.forEach(u => {
-            fullDownline = [...fullDownline, ...findDownline(u.uid, level + 1, maxLevel)];
-        });
-        return fullDownline;
+  
+    // Iterative function to find the entire downline, preventing stack overflows and handling cycles.
+    const findDownline = (startUplineId: string, maxLevel = 4): { user: FirestoreUser, level: number }[] => {
+      const allDownline: { user: FirestoreUser, level: number }[] = [];
+      let currentLevelUids: string[] = [startUplineId];
+      let level = 1;
+  
+      while (level <= maxLevel && currentLevelUids.length > 0) {
+        const nextLevelUids: string[] = [];
+        const foundMembers = allFirestoreUsers.filter(u => 
+          u.uplineUid && 
+          currentLevelUids.includes(u.uplineUid) && 
+          u.mlmEnabled
+        );
+  
+        for (const member of foundMembers) {
+          allDownline.push({ user: member, level: level });
+          nextLevelUids.push(member.uid);
+        }
+  
+        currentLevelUids = nextLevelUids;
+        level++;
+      }
+      return allDownline;
     };
     
     const downlineWithLevels = findDownline(appUser.uid);
     const downlineUids = downlineWithLevels.map(d => d.user.uid);
-
+  
     const downlineFinalizedLeads = allLeads.filter(lead => 
-        lead.stageId === 'finalizado' && 
-        downlineUids.includes(lead.userId) &&
-        !lead.commissionPaid
+      lead.stageId === 'finalizado' && 
+      lead.userId &&
+      downlineUids.includes(lead.userId) &&
+      !lead.commissionPaid
     );
-
+  
     const commissionRates: { [key: number]: number } = { 1: 0.05, 2: 0.03, 3: 0.02, 4: 0.01 };
-
+  
     const commissions = downlineFinalizedLeads.map(lead => {
-        const downlineMember = downlineWithLevels.find(d => d.user.uid === lead.userId);
-        if (!downlineMember) return null;
+      const downlineMember = downlineWithLevels.find(d => d.user.uid === lead.userId);
+      if (!downlineMember) return null;
         
-        const levelForCommission = downlineMember.level; // Use the calculated level from the hierarchy
-        const commissionRate = commissionRates[levelForCommission];
+      const levelForCommission = downlineMember.level;
+      const commissionRate = commissionRates[levelForCommission];
         
-        if (!commissionRate) return null;
-
-        const commission = (lead.valueAfterDiscount || 0) * commissionRate;
-
-        return {
-            leadId: lead.id,
-            clientName: lead.name,
-            downlineSellerName: downlineMember.user.displayName || 'N/A',
-            downlineLevel: levelForCommission,
-            valueAfterDiscount: lead.valueAfterDiscount || 0,
-            commission
-        };
+      if (!commissionRate) return null;
+  
+      const commission = (lead.valueAfterDiscount || 0) * commissionRate;
+      if (commission <= 0) return null; // Do not show zero or negative commissions
+  
+      return {
+        leadId: lead.id,
+        clientName: lead.name,
+        downlineSellerName: downlineMember.user.displayName || 'N/A',
+        downlineLevel: levelForCommission,
+        valueAfterDiscount: lead.valueAfterDiscount || 0,
+        commission
+      };
     }).filter((c): c is NonNullable<typeof c> => c !== null);
-
+  
     const total = commissions.reduce((sum, item) => sum + item.commission, 0);
     return { mlmCommissionsToReceive: commissions, totalMlmCommissionToReceive: total };
-
+  
   }, [allLeads, allFirestoreUsers, appUser]);
 
   const handleToggleCommissionPaid = async (leadId: string, currentStatus: boolean) => {
