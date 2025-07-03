@@ -1,5 +1,4 @@
 
-// src/app/dashboard/seller/page.tsx
 "use client";
 
 import { Suspense, useEffect, useState, useMemo } from 'react'; 
@@ -8,11 +7,13 @@ import SellerCommissionDashboard from '@/components/seller/SellerCommissionDashb
 import type { AppUser } from '@/types/user'; 
 import { useAuth } from '@/contexts/AuthContext'; 
 import { Loader2 } from 'lucide-react';
-import { getLeadsForTeam } from '@/actions/user/getTeamLeads';
 import type { LeadWithId } from '@/types/crm';
+import { collection, onSnapshot, query, where, or, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { parseISO } from 'date-fns';
 
 function SellerDashboardPageContent() {
-  const { appUser, isLoadingAuth, userAppRole } = useAuth();
+  const { appUser, isLoadingAuth, userAppRole, allFirestoreUsers } = useAuth();
   const router = useRouter();
   const [leads, setLeads] = useState<LeadWithId[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
@@ -26,15 +27,43 @@ function SellerDashboardPageContent() {
   useEffect(() => {
     if (appUser && userAppRole === 'vendedor') {
       setIsLoadingLeads(true);
-      getLeadsForTeam(appUser.uid)
-        .then(setLeads)
-        .catch(error => {
-          console.error("Error fetching team leads for dashboard:", error);
-          setLeads([]);
-        })
-        .finally(() => setIsLoadingLeads(false));
+      
+      const downlineUids = allFirestoreUsers
+        .filter(u => u.uplineUid === appUser.uid)
+        .map(u => u.uid);
+      
+      const uidsToQuery = [appUser.uid, ...downlineUids];
+      
+      if (uidsToQuery.length === 0) {
+        setLeads([]);
+        setIsLoadingLeads(false);
+        return;
+      }
+      
+      const q = query(collection(db, 'crm_leads'), where('userId', 'in', uidsToQuery));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const teamLeads = snapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+            lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+            signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+            completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+          } as LeadWithId
+        });
+        setLeads(teamLeads);
+        setIsLoadingLeads(false);
+      }, (error) => {
+        console.error("Error fetching seller and team leads:", error);
+        setIsLoadingLeads(false);
+      });
+
+      return () => unsubscribe();
     }
-  }, [appUser, userAppRole]);
+  }, [appUser, userAppRole, allFirestoreUsers]);
 
   if (isLoadingAuth || !appUser || userAppRole !== 'vendedor') {
     return (

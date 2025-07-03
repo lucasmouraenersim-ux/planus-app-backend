@@ -1,13 +1,14 @@
+
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc, query, orderBy } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
-import { getTeamForUser } from '@/actions/user/getTeam';
+import type { LeadWithId } from '@/types/crm';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -19,7 +20,8 @@ interface AuthContextType {
   updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
   acceptUserTerms: () => Promise<void>;
-  refreshUsers: () => Promise<void>; // Expose a manual refresh function
+  refreshUsers: () => Promise<void>; 
+  fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,7 +31,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [userAppRole, setUserAppRole] = useState<AuthContextType['userAppRole']>(null);
-
   const [allFirestoreUsers, setAllFirestoreUsers] = useState<FirestoreUser[]>([]);
   const [isLoadingAllUsers, setIsLoadingAllUsers] = useState<boolean>(true);
 
@@ -167,35 +168,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const fetchUsersBasedOnRole = useCallback(async (user: FirebaseUser, role: UserType, appUser: AppUser) => {
+  const refreshUsers = useCallback(async () => {
     setIsLoadingAllUsers(true);
     try {
-      if (role === 'admin' || role === 'superadmin') {
-        const usersCollectionRef = collection(db, "users");
-        const usersSnapshot = await getDocs(usersCollectionRef);
-        const usersList = usersSnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          return {
-            uid: docSnap.id, ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            lastSignInTime: (data.lastSignInTime as Timestamp)?.toDate().toISOString() || undefined,
-            termsAcceptedAt: (data.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
-          } as FirestoreUser;
-        });
-        setAllFirestoreUsers(usersList);
-      } else if (role === 'vendedor') {
-        const team = await getTeamForUser(user.uid);
-        const meAsFirestoreUser = { ...appUser, uid: user.uid } as FirestoreUser;
-        setAllFirestoreUsers([meAsFirestoreUser, ...team]);
-      } else {
-         const meAsFirestoreUser = { ...appUser, uid: user.uid } as FirestoreUser;
-        setAllFirestoreUsers([meAsFirestoreUser]);
-      }
+      const usersCollectionRef = collection(db, "users");
+      const usersSnapshot = await getDocs(usersCollectionRef);
+      const usersList = usersSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          uid: docSnap.id, ...data,
+          createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+          lastSignInTime: (data.lastSignInTime as Timestamp)?.toDate().toISOString() || undefined,
+          termsAcceptedAt: (data.termsAcceptedAt as Timestamp)?.toDate().toISOString() || undefined,
+        } as FirestoreUser;
+      });
+      setAllFirestoreUsers(usersList);
     } catch (error) {
-      console.error("Error fetching permission-based user list:", error);
+      console.error("Error fetching all users (this is expected for non-admins):", error);
       setAllFirestoreUsers([]);
     } finally {
       setIsLoadingAllUsers(false);
+    }
+  }, []);
+
+  const fetchAllCrmLeadsGlobally = useCallback(async (): Promise<LeadWithId[]> => {
+    try {
+      const leadsCollectionRef = collection(db, "crm_leads");
+      const q = query(leadsCollectionRef, orderBy("lastContact", "desc"));
+      const leadsSnapshot = await getDocs(q);
+      return leadsSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+          lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+          signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+          completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+        } as LeadWithId;
+      });
+    } catch (error) {
+      console.error("Error fetching all CRM leads globally (this is expected for non-admins):", error);
+      return [];
     }
   }, []);
 
@@ -208,13 +222,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAppUser(fetchedAppUser);
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
-
-        if (fetchedAppUser) {
-          await fetchUsersBasedOnRole(user, role, fetchedAppUser);
-        } else {
-          setIsLoadingAllUsers(false);
-        }
-        
+        await refreshUsers();
       } else {
         setFirebaseUser(null);
         setAppUser(null);
@@ -225,17 +233,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [fetchUsersBasedOnRole]);
-
-  const refreshUsers = useCallback(async () => {
-    if (firebaseUser && userAppRole && appUser) {
-        await fetchUsersBasedOnRole(firebaseUser, userAppRole, appUser);
-    }
-  }, [firebaseUser, userAppRole, appUser, fetchUsersBasedOnRole]);
+  }, [refreshUsers]);
 
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, fetchAllCrmLeadsGlobally }}>
       {children}
     </AuthContext.Provider>
   );

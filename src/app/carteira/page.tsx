@@ -61,8 +61,8 @@ import type { FirestoreUser } from '@/types/user';
 import { PIX_KEY_TYPES, WITHDRAWAL_TYPES } from '@/types/wallet';
 import { requestWithdrawal, updateLeadCommissionStatus } from '@/lib/firebase/firestore'; 
 import { useAuth } from '@/contexts/AuthContext';
-import { getWithdrawalHistoryForUser } from '@/actions/user/getWithdrawalHistory';
-import { getLeadsForTeam } from '@/actions/user/getTeamLeads';
+import { collection, onSnapshot, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 
 const withdrawalFormSchema = z.object({
@@ -102,7 +102,7 @@ interface MlmCommission {
 
 function WalletPageContent() {
   const { toast } = useToast();
-  const { appUser, userAppRole, isLoadingAuth, allFirestoreUsers } = useAuth();
+  const { appUser, userAppRole, isLoadingAuth, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequestWithId[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -122,29 +122,48 @@ function WalletPageContent() {
   useEffect(() => {
     if (!appUser) return;
 
-    const loadWalletData = async () => {
-      setIsLoadingHistory(true);
-      setIsLoadingLeads(true);
+    setIsLoadingHistory(true);
+    const q = query(
+      collection(db, 'withdrawal_requests'), 
+      where('userId', '==', appUser.uid), 
+      orderBy('requestedAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const history = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          requestedAt: (data.requestedAt as Timestamp).toDate().toISOString(),
+          processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
+        } as WithdrawalRequestWithId;
+      });
+      setWithdrawalHistory(history);
+      setIsLoadingHistory(false);
+    }, (error) => {
+      console.error("Error fetching withdrawal history:", error);
+      toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive" });
+      setIsLoadingHistory(false);
+    });
 
-      try {
-        const [history, leads] = await Promise.all([
-          getWithdrawalHistoryForUser(appUser.uid),
-          getLeadsForTeam(appUser.uid)
-        ]);
-
-        setWithdrawalHistory(history);
-        setAllLeads(leads);
-      } catch (error) {
-        console.error("Error loading wallet data:", error);
-        toast({ title: "Erro", description: "Não foi possível carregar os dados da carteira.", variant: "destructive" });
-      } finally {
-        setIsLoadingHistory(false);
-        setIsLoadingLeads(false);
-      }
-    };
-
-    loadWalletData();
+    return () => unsubscribe();
   }, [appUser, toast]);
+
+  useEffect(() => {
+    if (!appUser) return;
+    setIsLoadingLeads(true);
+    fetchAllCrmLeadsGlobally()
+      .then(leads => {
+        setAllLeads(leads);
+      })
+      .catch(error => {
+        console.error("Error loading leads:", error);
+        toast({ title: "Erro", description: "Não foi possível carregar os leads.", variant: "destructive" });
+      })
+      .finally(() => {
+        setIsLoadingLeads(false);
+      });
+  }, [appUser, fetchAllCrmLeadsGlobally, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
@@ -153,7 +172,7 @@ function WalletPageContent() {
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     
     let userVisibleLeads = finalizedLeads;
-    if (userAppRole !== 'superadmin') {
+    if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
       userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
     }
 
@@ -182,35 +201,20 @@ function WalletPageContent() {
             recurrence,
             isPaid: lead.commissionPaid || false,
         };
-    });
+    }).filter((c): c is NonNullable<typeof c> => c !== null);
 
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
 
   const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return { mlmCommissionsToReceive: [], totalMlmCommissionToReceive: 0 };
   
-    // Iterative function to find the entire downline, preventing stack overflows and handling cycles.
-    const findDownline = (startUplineId: string, maxLevel = 4): { user: FirestoreUser, level: number }[] => {
-      const allDownline: { user: FirestoreUser, level: number }[] = [];
-      let currentLevelUids: string[] = [startUplineId];
-      let level = 1;
-  
-      while (level <= maxLevel && currentLevelUids.length > 0) {
-        const nextLevelUids: string[] = [];
-        const foundMembers = allFirestoreUsers.filter(u => 
-          u.uplineUid && 
-          currentLevelUids.includes(u.uplineUid) && 
-          u.mlmEnabled
-        );
-  
-        for (const member of foundMembers) {
-          allDownline.push({ user: member, level: level });
-          nextLevelUids.push(member.uid);
-        }
-  
-        currentLevelUids = nextLevelUids;
-        level++;
-      }
+    const findDownline = (uplineId: string, level = 1, maxLevel = 4): { user: FirestoreUser, level: number }[] => {
+      if (level > maxLevel) return [];
+      const directDownline = allFirestoreUsers.filter(u => u.uplineUid === uplineId && u.mlmEnabled);
+      let allDownline: { user: FirestoreUser, level: number }[] = directDownline.map(u => ({ user: u, level }));
+      directDownline.forEach(u => {
+        allDownline = [...allDownline, ...findDownline(u.uid, level + 1)];
+      });
       return allDownline;
     };
     
