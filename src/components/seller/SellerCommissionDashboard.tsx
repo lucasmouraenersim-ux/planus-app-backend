@@ -3,10 +3,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import type { AppUser } from '@/types/user';
+import type { AppUser, FirestoreUser } from '@/types/user';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,50 +22,118 @@ interface SellerCommissionDashboardProps {
 }
 
 export default function SellerCommissionDashboard({ loggedInUser }: SellerCommissionDashboardProps) {
-  const { fetchAllCrmLeadsGlobally } = useAuth();
+  const { fetchAllCrmLeadsGlobally, allFirestoreUsers } = useAuth();
   const [leads, setLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadLeads = async () => {
-      if (loggedInUser) {
+      if (loggedInUser && allFirestoreUsers.length > 0) {
         setIsLoading(true);
         try {
+          const getFullDownlineUids = (startUplineId: string): string[] => {
+            const allDownlineUids = new Set<string>();
+            const queue: string[] = [startUplineId];
+            const visited = new Set<string>();
+            while (queue.length > 0) {
+              const currentUplineId = queue.shift()!;
+              if (visited.has(currentUplineId)) continue;
+              visited.add(currentUplineId);
+              const directDownline = allFirestoreUsers
+                .filter(u => u.uplineUid === currentUplineId && u.mlmEnabled)
+                .map(u => u.uid);
+              for (const uid of directDownline) {
+                if (!allDownlineUids.has(uid)) {
+                  allDownlineUids.add(uid);
+                  queue.push(uid);
+                }
+              }
+            }
+            return Array.from(allDownlineUids);
+          };
+
+          const downlineUids = getFullDownlineUids(loggedInUser.uid);
+          const teamUids = [loggedInUser.uid, ...downlineUids];
+          
           const allLeads = await fetchAllCrmLeadsGlobally();
-          // Filter leads to show only those assigned to the logged-in seller
-          const sellerLeads = allLeads.filter(lead => lead.userId === loggedInUser.uid);
-          setLeads(sellerLeads);
+          const teamLeads = allLeads.filter(lead => lead.userId && teamUids.includes(lead.userId));
+          setLeads(teamLeads);
         } catch (error) {
-          console.error("Failed to load seller leads:", error);
+          console.error("Failed to load seller/team leads:", error);
           setLeads([]);
         } finally {
           setIsLoading(false);
         }
+      } else if (!loggedInUser) {
+        setIsLoading(false);
       }
     };
-    loadLeads();
-  }, [loggedInUser, fetchAllCrmLeadsGlobally]);
 
+    if (allFirestoreUsers.length > 0) {
+       loadLeads();
+    } else {
+        // Wait for allFirestoreUsers to be populated by the context
+        setIsLoading(true);
+    }
+  }, [loggedInUser, fetchAllCrmLeadsGlobally, allFirestoreUsers]);
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const performanceMetrics = useMemo(() => {
-    const activeLeads = leads.filter(l => !['assinado', 'finalizado', 'perdido', 'cancelado'].includes(l.stageId)).length;
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
 
-    const finalizedThisMonthLeads = leads.filter(l => {
-        if (l.stageId !== 'finalizado' || !l.completedAt) return false;
-        const completedDate = parseISO(l.completedAt);
-        return completedDate.getMonth() === currentMonth && completedDate.getFullYear() === currentYear;
-    });
+      const getMonthKey = (date: Date) => format(date, 'yyyy-MM');
+      const currentMonthKey = getMonthKey(now);
 
-    const finalizedThisMonthCount = finalizedThisMonthLeads.length;
-    const valueFinalizedThisMonth = finalizedThisMonthLeads.reduce((sum, l) => sum + (l.value || 0), 0);
+      let activeLeads = 0;
+      let finalizedThisMonthCount = 0;
+      let valueFinalizedThisMonth = 0;
+      let personalGainsThisMonth = 0;
+      let networkGainsThisMonth = 0;
 
-    return { activeLeads, finalizedThisMonth: finalizedThisMonthCount, valueFinalizedThisMonth };
-}, [leads]);
+      const commissionRates: { [key: number]: number } = { 1: 0.05, 2: 0.03, 3: 0.02, 4: 0.01 };
+      
+      const downlineLevelMap = new Map<string, number>();
+      const buildDownlineMap = (uplineId: string, level = 1) => {
+        if (level > 4) return;
+        allFirestoreUsers
+          .filter(u => u.uplineUid === uplineId && u.mlmEnabled)
+          .forEach(u => {
+            downlineLevelMap.set(u.uid, level);
+            buildDownlineMap(u.uid, level + 1);
+          });
+      };
+      if (loggedInUser) buildDownlineMap(loggedInUser.uid);
+
+      leads.forEach(l => {
+        if (!['assinado', 'finalizado', 'perdido', 'cancelado'].includes(l.stageId)) {
+          activeLeads++;
+        }
+
+        if (l.stageId === 'finalizado' && l.completedAt) {
+          const completedDate = parseISO(l.completedAt);
+          if (getMonthKey(completedDate) === currentMonthKey) {
+            finalizedThisMonthCount++;
+            valueFinalizedThisMonth += (l.valueAfterDiscount || 0); // Use value with discount for finalized value
+            
+            // Calculate gains
+            if (l.userId === loggedInUser.uid) {
+              const userCommissionRate = loggedInUser.commissionRate || 40; // Defaulting to 40 for simplicity
+              personalGainsThisMonth += (l.valueAfterDiscount || 0) * (userCommissionRate / 100);
+            } else {
+              const sellerLevel = downlineLevelMap.get(l.userId);
+              if (sellerLevel && commissionRates[sellerLevel]) {
+                networkGainsThisMonth += (l.valueAfterDiscount || 0) * commissionRates[sellerLevel];
+              }
+            }
+          }
+        }
+      });
+
+      return { activeLeads, finalizedThisMonth: finalizedThisMonthCount, valueFinalizedThisMonth, personalGainsThisMonth, networkGainsThisMonth };
+  }, [leads, loggedInUser, allFirestoreUsers]);
   
   const getStageBadgeStyle = (stageId: StageId) => {
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
@@ -114,26 +182,26 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
         </Card>
         <Card className="bg-card/70 backdrop-blur-lg border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Ganhos Pessoais (Mês)</CardTitle><LineChart className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{formatCurrency(550.20)}</div><p className="text-xs text-muted-foreground">+10% vs mês anterior</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{formatCurrency(performanceMetrics.personalGainsThisMonth)}</div></CardContent>
         </Card>
          <Card className="bg-card/70 backdrop-blur-lg border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Ganhos Rede (Mês)</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{formatCurrency(120.75)}</div><p className="text-xs text-muted-foreground">+5% vs mês anterior</p></CardContent>
+          <CardContent><div className="text-2xl font-bold">{formatCurrency(performanceMetrics.networkGainsThisMonth)}</div></CardContent>
         </Card>
       </div>
 
       {/* Desempenho de Vendas e Leads */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Leads Ativos</CardTitle><Briefcase className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Leads Ativos (Equipe)</CardTitle><Briefcase className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{performanceMetrics.activeLeads}</div></CardContent>
         </Card>
         <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Finalizados (Mês)</CardTitle><Zap className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Finalizados (Equipe/Mês)</CardTitle><Zap className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{performanceMetrics.finalizedThisMonth}</div></CardContent>
         </Card>
         <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Valor Finalizado (Mês)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Valor Finalizado (Equipe/Mês)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader>
           <CardContent><div className="text-2xl font-bold">{formatCurrency(performanceMetrics.valueFinalizedThisMonth)}</div></CardContent>
         </Card>
       </div>
@@ -141,26 +209,26 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
       {/* Meus Leads */}
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader>
-            <CardTitle className="text-primary">Meus Leads</CardTitle>
-            <CardDescription>Acompanhe o progresso dos seus leads.</CardDescription>
+            <CardTitle className="text-primary">Leads da Equipe</CardTitle>
+            <CardDescription>Acompanhe o progresso dos seus leads e da sua equipe.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Nome do Lead</TableHead><TableHead>Empresa</TableHead><TableHead>Valor (R$)</TableHead><TableHead>KWh</TableHead><TableHead>Estágio</TableHead><TableHead>Último Contato</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Nome do Lead</TableHead><TableHead>Vendedor</TableHead><TableHead>Valor (c/ desc.)</TableHead><TableHead>KWh</TableHead><TableHead>Estágio</TableHead><TableHead>Último Contato</TableHead></TableRow></TableHeader>
             <TableBody>
               {leads.length > 0 ? (
-                  leads.slice(0, 5).map(lead => ( // Show first 5 for brevity
+                  leads.slice(0, 5).map(lead => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.name}</TableCell>
-                      <TableCell>{lead.company || 'N/A'}</TableCell>
-                      <TableCell>{formatCurrency(lead.value)}</TableCell>
+                      <TableCell>{lead.userId === loggedInUser.uid ? "Você" : lead.sellerName}</TableCell>
+                      <TableCell>{formatCurrency(lead.valueAfterDiscount)}</TableCell>
                       <TableCell>{lead.kwh} kWh</TableCell>
                       <TableCell><span className={`px-2 py-0.5 text-xs rounded-full ${getStageBadgeStyle(lead.stageId)}`}>{STAGES_CONFIG.find(s=>s.id === lead.stageId)?.title || lead.stageId}</span></TableCell>
                       <TableCell>{lead.lastContact ? format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", {locale: ptBR}) : 'N/A'}</TableCell>
                     </TableRow>
                   ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-10">Nenhum lead encontrado.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-10">Nenhum lead encontrado para você ou sua equipe.</TableCell></TableRow>
               )}
             </TableBody>
              <TableCaption>
@@ -174,8 +242,11 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
 
       {/* Placeholder Seção Rede MLM */}
       <Card className="bg-card/70 backdrop-blur-lg border">
-        <CardHeader><CardTitle className="text-primary">Minha Rede MLM (Em Breve)</CardTitle><CardDescription>Visualize sua downline e comissões de rede.</CardDescription></CardHeader>
-        <CardContent className="h-32 flex items-center justify-center"><Network className="w-12 h-12 text-muted-foreground/50"/></CardContent>
+        <CardHeader><CardTitle className="text-primary">Minha Rede MLM</CardTitle><CardDescription>Visualize sua downline e comissões de rede.</CardDescription></CardHeader>
+        <CardContent className="h-32 flex items-center justify-center">
+            {/* TODO: Add a table or visual representation of the downline */}
+            <p className="text-muted-foreground">Funcionalidade em desenvolvimento.</p>
+        </CardContent>
       </Card>
     </div>
   );
