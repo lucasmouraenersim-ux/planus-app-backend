@@ -54,7 +54,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed } from 'lucide-react';
+import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed, Network } from 'lucide-react';
 import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
@@ -87,6 +87,15 @@ interface ContractToReceive {
     commission: number;
     recurrence?: number;
     isPaid: boolean;
+}
+
+interface MlmCommission {
+    leadId: string;
+    clientName: string;
+    downlineSellerName: string;
+    downlineLevel: number;
+    valueAfterDiscount: number;
+    commission: number;
 }
 
 function WalletPageContent() {
@@ -169,6 +178,56 @@ function WalletPageContent() {
     });
 
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
+
+  const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
+    if (!appUser || !allLeads.length || !allFirestoreUsers.length) return { mlmCommissionsToReceive: [], totalMlmCommissionToReceive: 0 };
+
+    const findDownline = (uplineId: string, level = 1, maxLevel = 4): { user: FirestoreUser, level: number }[] => {
+        if (level > maxLevel) return [];
+        const directDownline = allFirestoreUsers.filter(u => u.uplineUid === uplineId && u.mlmEnabled);
+        let fullDownline = directDownline.map(u => ({ user: u, level }));
+        directDownline.forEach(u => {
+            fullDownline = [...fullDownline, ...findDownline(u.uid, level + 1, maxLevel)];
+        });
+        return fullDownline;
+    };
+    
+    const downlineWithLevels = findDownline(appUser.uid);
+    const downlineUids = downlineWithLevels.map(d => d.user.uid);
+
+    const downlineFinalizedLeads = allLeads.filter(lead => 
+        lead.stageId === 'finalizado' && 
+        downlineUids.includes(lead.userId) &&
+        !lead.commissionPaid
+    );
+
+    const commissionRates: { [key: number]: number } = { 1: 0.05, 2: 0.03, 3: 0.02, 4: 0.01 };
+
+    const commissions = downlineFinalizedLeads.map(lead => {
+        const downlineMember = downlineWithLevels.find(d => d.user.uid === lead.userId);
+        if (!downlineMember) return null;
+        
+        const levelForCommission = downlineMember.user.mlmLevel || downlineMember.level;
+        const commissionRate = commissionRates[levelForCommission];
+        
+        if (!commissionRate) return null;
+
+        const commission = (lead.valueAfterDiscount || 0) * commissionRate;
+
+        return {
+            leadId: lead.id,
+            clientName: lead.name,
+            downlineSellerName: downlineMember.user.displayName || 'N/A',
+            downlineLevel: levelForCommission,
+            valueAfterDiscount: lead.valueAfterDiscount || 0,
+            commission
+        };
+    }).filter((c): c is NonNullable<typeof c> => c !== null);
+
+    const total = commissions.reduce((sum, item) => sum + item.commission, 0);
+    return { mlmCommissionsToReceive: commissions, totalMlmCommissionToReceive: total };
+
+  }, [allLeads, allFirestoreUsers, appUser]);
 
   const handleToggleCommissionPaid = async (leadId: string, currentStatus: boolean) => {
     try {
@@ -292,15 +351,15 @@ function WalletPageContent() {
         </CardHeader>
         <CardContent className="space-y-3 text-lg">
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
-            <span className="text-muted-foreground">Saldo Pessoal:</span>
+            <span className="text-muted-foreground">Saldo Pessoal (Disponível):</span>
             <span className="font-semibold text-foreground">{formatCurrency(appUser.personalBalance)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
-            <span className="text-muted-foreground">Saldo de Rede (MLM):</span>
+            <span className="text-muted-foreground">Saldo de Rede (Disponível):</span>
             <span className="font-semibold text-foreground">{formatCurrency(appUser.mlmBalance)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-primary/10 rounded-md mt-2">
-            <span className="font-bold text-primary">SALDO TOTAL:</span>
+            <span className="font-bold text-primary">SALDO TOTAL DISPONÍVEL:</span>
             <span className="font-bold text-primary text-xl">{formatCurrency(appUser.personalBalance + appUser.mlmBalance)}</span>
           </div>
         </CardContent>
@@ -340,9 +399,9 @@ function WalletPageContent() {
         <CardHeader>
           <CardTitle className="text-xl text-primary flex items-center">
             <FileSignature className="w-6 h-6 mr-2" />
-            Contratos e Valor a Receber
+            Comissões de Vendas Diretas a Receber
           </CardTitle>
-          <CardDescription>Comissões geradas por contratos finalizados.</CardDescription>
+          <CardDescription>Comissões geradas por contratos finalizados, pendentes de pagamento.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingLeads ? (
@@ -396,6 +455,52 @@ function WalletPageContent() {
           )}
         </CardContent>
       </Card>
+      
+      <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-xl text-primary flex items-center">
+            <Network className="w-6 h-6 mr-2" />
+            Comissões de Rede a Receber (Pendente)
+          </CardTitle>
+          <CardDescription>Comissões geradas pela sua equipe, pendentes de pagamento. Total: <span className="font-bold text-foreground">{formatCurrency(totalMlmCommissionToReceive)}</span></CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingLeads ? (
+            <div className="flex justify-center items-center h-32"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
+          ) : mlmCommissionsToReceive.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+                <Info size={48} className="mx-auto mb-4 opacity-50" />
+                <p>Nenhuma comissão de rede encontrada.</p>
+                <p className="text-sm">Quando sua equipe finalizar contratos, as comissões aparecerão aqui.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableCaption>Comissões de sua rede de vendedores.</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente Final</TableHead>
+                  <TableHead>Vendedor da Rede</TableHead>
+                  <TableHead>Nível</TableHead>
+                  <TableHead>Valor Base</TableHead>
+                  <TableHead>Sua Comissão</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mlmCommissionsToReceive.map((item) => (
+                  <TableRow key={item.leadId}>
+                    <TableCell className="font-medium">{item.clientName}</TableCell>
+                    <TableCell>{item.downlineSellerName}</TableCell>
+                    <TableCell><Badge variant="secondary">Nível {item.downlineLevel}</Badge></TableCell>
+                    <TableCell>{formatCurrency(item.valueAfterDiscount)}</TableCell>
+                    <TableCell className="font-semibold text-green-500">{formatCurrency(item.commission)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
 
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
         <CardHeader>

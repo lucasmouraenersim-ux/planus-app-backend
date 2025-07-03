@@ -510,7 +510,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <FormItem>
                         <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel>
                         <Select 
-                          onValueChange={field.onChange} 
+                          onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
                           value={field.value !== undefined ? String(field.value) : 'none'} 
                           disabled={!canEdit || isSubmittingAction}
                         >
@@ -529,7 +529,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <FormItem>
                           <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
                           <Select 
-                            onValueChange={field.onChange}
+                            onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))}
                             value={field.value !== undefined && field.value !== null ? String(field.value) : 'none'}
                             disabled={!canEdit || isSubmittingAction}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Sem Recorrência" /></SelectTrigger></FormControl>
@@ -548,7 +548,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                           <FormItem>
                             <FormLabel>Nível de Override</FormLabel>
                             <Select 
-                              onValueChange={field.onChange}
+                              onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))}
                               value={field.value !== undefined ? String(field.value) : 'none'}
                               disabled={!canEdit || isSubmittingAction}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger></FormControl>

@@ -67,11 +67,12 @@ function CrmPageContent() {
 
 
   useEffect(() => {
-    if (!appUser) return;
+    if (!appUser) {
+      setIsLoading(false);
+      return;
+    }
 
-    let unsubscribe1: (() => void) | undefined;
-    let unsubscribe2: (() => void) | undefined;
-    
+    const unsubscribers: (() => void)[] = [];
     const leadsMap = new Map<string, LeadWithId>();
 
     const processSnapshot = (snapshot: any, isInitialLoadForSpinner = false) => {
@@ -89,10 +90,9 @@ function CrmPageContent() {
                     completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
                 } as LeadWithId;
 
-                // Toast notification for new leads
                 if (change.type === 'added' && !knownLeadIds.current.has(lead.id)) {
                     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-                         toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
+                        toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
                     } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
                         toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
                     }
@@ -105,18 +105,11 @@ function CrmPageContent() {
 
         const sortedLeads = Array.from(leadsMap.values()).sort((a, b) => {
           const getDateForSort = (lead: LeadWithId): Date => {
-            if (lead.stageId === 'finalizado' && lead.completedAt) {
-              return new Date(lead.completedAt);
-            }
-            if (lead.stageId === 'assinado' && lead.signedAt) {
-              return new Date(lead.signedAt);
-            }
+            if (lead.stageId === 'finalizado' && lead.completedAt) return new Date(lead.completedAt);
+            if (lead.stageId === 'assinado' && lead.signedAt) return new Date(lead.signedAt);
             return new Date(lead.lastContact);
           };
-
-          const dateA = getDateForSort(a);
-          const dateB = getDateForSort(b);
-          return dateB.getTime() - dateA.getTime();
+          return getDateForSort(b).getTime() - getDateForSort(a).getTime();
         });
         
         setLeads(sortedLeads);
@@ -125,34 +118,51 @@ function CrmPageContent() {
             setIsLoading(false);
         }
     };
-    
+
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-      const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
-      unsubscribe1 = onSnapshot(q, (snapshot) => processSnapshot(snapshot, true));
+        const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+        unsubscribers.push(onSnapshot(q, (snapshot) => processSnapshot(snapshot, true)));
     } else if (userAppRole === 'vendedor') {
-      // Query for user's own leads (by UID or Name) and unassigned leads
-      const userLeadsQuery = or(
-          where("userId", "==", appUser.uid),
-          where("sellerName", "==", appUser.displayName || '')
-      );
+        const getFullDownlineUids = (uplineId: string): string[] => {
+            const directDownline = allFirestoreUsers
+                .filter(u => u.uplineUid === uplineId && u.mlmEnabled)
+                .map(u => u.uid);
+            if (directDownline.length === 0) return [];
 
-      const q1 = query(collection(db, "crm_leads"), userLeadsQuery);
-      unsubscribe1 = onSnapshot(q1, (snapshot) => processSnapshot(snapshot, true));
+            const allUids = [...directDownline];
+            directDownline.forEach(uid => {
+                allUids.push(...getFullDownlineUids(uid));
+            });
+            return [...new Set(allUids)]; // Use Set to remove duplicates
+        };
 
-      // Query for unassigned leads, handled by a separate listener
-      const q2 = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
-      unsubscribe2 = onSnapshot(q2, (snapshot) => processSnapshot(snapshot, false));
+        const downlineUids = getFullDownlineUids(appUser.uid);
+        const uidsToQuery = [appUser.uid, ...downlineUids];
+        const chunks = [];
+        for (let i = 0; i < uidsToQuery.length; i += 30) {
+            chunks.push(uidsToQuery.slice(i, i + 30));
+        }
 
+        chunks.forEach(chunk => {
+            const q = query(collection(db, "crm_leads"), where("userId", "in", chunk));
+            unsubscribers.push(onSnapshot(q, (snapshot) => processSnapshot(snapshot, false)));
+        });
+
+        const qUnassigned = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
+        unsubscribers.push(onSnapshot(qUnassigned, (snapshot) => {
+            processSnapshot(snapshot, false);
+            if (isLoading) setIsLoading(false); // Make sure loader stops
+        }));
     } else {
         setIsLoading(false);
         setLeads([]);
     }
 
     return () => {
-      if (unsubscribe1) unsubscribe1();
-      if (unsubscribe2) unsubscribe2();
+        unsubscribers.forEach(unsub => unsub());
     };
-  }, [appUser, toast, userAppRole]);
+}, [appUser, userAppRole, allFirestoreUsers, toast, isLoading]); // Add allFirestoreUsers and isLoading
+
 
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -601,6 +611,8 @@ function CrmPageContent() {
           onDeleteLead={handleDeleteLead}
           onEditLead={handleOpenForm}
           onAssignLead={handleAssignLead}
+          allFirestoreUsers={allFirestoreUsers}
+          loggedInUser={appUser as AppUser}
         />
       </div>
 

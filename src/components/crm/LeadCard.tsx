@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { LeadWithId, StageId } from '@/types/crm';
-import type { UserType } from '@/types/user';
+import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent } from 'lucide-react';
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -44,6 +44,8 @@ interface LeadCardProps {
   onDeleteLead: (leadId: string) => void;
   onEditLead: (lead: LeadWithId) => void;
   onAssignLead: (leadId: string) => void;
+  allFirestoreUsers: FirestoreUser[];
+  loggedInUser: AppUser;
 }
 
 const formatCurrency = (value: number | undefined) => {
@@ -51,8 +53,12 @@ const formatCurrency = (value: number | undefined) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead }: LeadCardProps) {
+export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser }: LeadCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  
+  const leadSeller = useMemo(() => allFirestoreUsers.find(u => u.uid === lead.userId), [allFirestoreUsers, lead.userId]);
+  const isMyDownline = leadSeller?.uplineUid === loggedInUser.uid;
+
 
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
@@ -84,6 +90,9 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
         <div className="flex items-center text-muted-foreground">
           <User className="w-4 h-4 mr-2 text-green-500" />
           <span className="truncate">Vendedor: {lead.sellerName}</span>
+          {isMyDownline && leadSeller?.mlmLevel && (
+            <Badge variant="secondary" className="ml-2 text-xs">Nível {leadSeller.mlmLevel}</Badge>
+          )}
         </div>
         <div className="flex items-center text-muted-foreground">
           <CalendarDays className="w-4 h-4 mr-2 text-purple-500" />

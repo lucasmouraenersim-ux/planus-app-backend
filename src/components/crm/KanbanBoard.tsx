@@ -5,7 +5,7 @@ import type { LeadWithId, Stage, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { LeadCard } from './LeadCard';
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import type { UserType } from '@/types/user';
+import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import { Zap } from 'lucide-react';
 
 interface KanbanBoardProps {
@@ -16,9 +16,11 @@ interface KanbanBoardProps {
   onDeleteLead: (leadId: string) => void;
   onEditLead: (lead: LeadWithId) => void;
   onAssignLead: (leadId: string) => void;
+  allFirestoreUsers: FirestoreUser[];
+  loggedInUser: AppUser;
 }
 
-export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead }: KanbanBoardProps) {
+export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser }: KanbanBoardProps) {
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-md ">
       <div className="flex w-max space-x-4 p-4">
@@ -37,7 +39,6 @@ export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead,
               </div>
               <div className="bg-card/50 backdrop-blur-sm border border-t-0 rounded-b-lg p-2 h-[calc(100vh-220px)] overflow-y-auto">
                 {stageLeads
-                  // Sorting is now handled by the parent query
                   .map(lead => (
                     <LeadCard 
                       key={lead.id} 
@@ -48,6 +49,8 @@ export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead,
                       onDeleteLead={onDeleteLead}
                       onEditLead={onEditLead}
                       onAssignLead={onAssignLead}
+                      allFirestoreUsers={allFirestoreUsers}
+                      loggedInUser={loggedInUser}
                     />
                   ))}
                 {stageLeads.length === 0 && (
