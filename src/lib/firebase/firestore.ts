@@ -55,7 +55,7 @@ export async function createCrmLead(
   }
   if (billDocumentFile) {
     const billPath = `crm_lead_documents/${docRef.id}/bill_${billDocumentFile.name}`;
-    updates.billDocumentUrl = await uploadFile(billFile, billPath);
+    updates.billDocumentUrl = await uploadFile(billDocumentFile, billPath);
   }
   if (legalRepresentativeDocumentFile) {
     const legalRepDocPath = `crm_lead_documents/${docRef.id}/legal_rep_doc_${legalRepresentativeDocumentFile.name}`;
