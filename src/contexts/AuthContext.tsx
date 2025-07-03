@@ -2,7 +2,6 @@
 
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
-import type { LeadWithId } from '@/types/crm';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc } from 'firebase/firestore';
@@ -17,7 +16,6 @@ interface AuthContextType {
   userAppRole: UserType | null;
   allFirestoreUsers: FirestoreUser[];
   isLoadingAllUsers: boolean;
-  fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
   updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
   acceptUserTerms: () => Promise<void>;
@@ -229,28 +227,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, [fetchUsersBasedOnRole]);
 
-  const fetchAllCrmLeadsGlobally = useCallback(async (): Promise<LeadWithId[]> => {
-    try {
-      const leadsCollectionRef = collection(db, "crm_leads");
-      const leadsSnapshot = await getDocs(leadsCollectionRef);
-      const leadsList = leadsSnapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          ...data,
-          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-          lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-          signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-          completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-        } as LeadWithId;
-      });
-      return leadsList;
-    } catch (error) {
-      console.error("Erro ao buscar todos os leads do CRM:", error);
-      return [];
-    }
-  }, []);
-
   const refreshUsers = useCallback(async () => {
     if (firebaseUser && userAppRole && appUser) {
         await fetchUsersBasedOnRole(firebaseUser, userAppRole, appUser);
@@ -259,7 +235,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllCrmLeadsGlobally, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers }}>
       {children}
     </AuthContext.Provider>
   );

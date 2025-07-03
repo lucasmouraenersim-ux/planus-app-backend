@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -100,7 +102,7 @@ interface MlmCommission {
 
 function WalletPageContent() {
   const { toast } = useToast();
-  const { appUser, userAppRole, isLoadingAuth, fetchAllCrmLeadsGlobally, allFirestoreUsers } = useAuth();
+  const { appUser, userAppRole, isLoadingAuth, allFirestoreUsers } = useAuth();
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
   const [withdrawalHistory, setWithdrawalHistory] = useState<WithdrawalRequestWithId[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -128,17 +130,49 @@ function WalletPageContent() {
           toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive"});
       })
       .finally(() => setIsLoadingHistory(false));
+  }, [appUser, toast]);
 
-    setIsLoadingLeads(true);
-    fetchAllCrmLeadsGlobally()
-      .then(setAllLeads)
-      .catch(error => {
-          console.error("Error fetching leads:", error);
-          toast({ title: "Erro", description: "Não foi possível carregar os contratos.", variant: "destructive"});
-      })
-      .finally(() => setIsLoadingLeads(false));
+  useEffect(() => {
+    const loadLeads = async () => {
+      if (!appUser || allFirestoreUsers.length === 0) {
+        setIsLoadingLeads(false);
+        return;
+      }
+      setIsLoadingLeads(true);
+      try {
+        const teamUids = allFirestoreUsers.map(u => u.uid);
+        const leadsData: LeadWithId[] = [];
+        
+        for (let i = 0; i < teamUids.length; i += 30) {
+          const uidsChunk = teamUids.slice(i, i + 30);
+          if (uidsChunk.length > 0) {
+            const q = query(collection(db, "crm_leads"), where("userId", "in", uidsChunk));
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach(docSnap => {
+              const data = docSnap.data();
+              leadsData.push({
+                id: docSnap.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+              } as LeadWithId);
+            });
+          }
+        }
+        setAllLeads(leadsData);
+      } catch (error) {
+        console.error("Error fetching leads for wallet:", error);
+        toast({ title: "Erro", description: "Não foi possível carregar os contratos.", variant: "destructive"});
+        setAllLeads([]);
+      } finally {
+        setIsLoadingLeads(false);
+      }
+    };
+    loadLeads();
+  }, [appUser, allFirestoreUsers, toast]);
 
-  }, [appUser, toast, fetchAllCrmLeadsGlobally]);
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return [];

@@ -3,26 +3,28 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-import type { AppUser, FirestoreUser } from '@/types/user';
+import type { AppUser } from '@/types/user';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { useAuth } from '@/contexts/AuthContext';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Badge, Loader2 } from 'lucide-react'; 
+import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Loader2 } from 'lucide-react'; 
 
 interface SellerCommissionDashboardProps {
   loggedInUser: AppUser;
 }
 
 export default function SellerCommissionDashboard({ loggedInUser }: SellerCommissionDashboardProps) {
-  const { fetchAllCrmLeadsGlobally, allFirestoreUsers } = useAuth();
+  const { allFirestoreUsers } = useAuth();
   const [leads, setLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,59 +33,46 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
       if (loggedInUser && allFirestoreUsers.length > 0) {
         setIsLoading(true);
         try {
-          const getFullDownlineUids = (startUplineId: string): string[] => {
-            const allDownlineUids = new Set<string>();
-            const queue: string[] = [startUplineId];
-            const visited = new Set<string>();
-            while (queue.length > 0) {
-              const currentUplineId = queue.shift()!;
-              if (visited.has(currentUplineId)) continue;
-              visited.add(currentUplineId);
-              const directDownline = allFirestoreUsers
-                .filter(u => u.uplineUid === currentUplineId && u.mlmEnabled)
-                .map(u => u.uid);
-              for (const uid of directDownline) {
-                if (!allDownlineUids.has(uid)) {
-                  allDownlineUids.add(uid);
-                  queue.push(uid);
-                }
-              }
-            }
-            return Array.from(allDownlineUids);
-          };
-
-          const downlineUids = getFullDownlineUids(loggedInUser.uid);
-          const teamUids = [loggedInUser.uid, ...downlineUids];
+          const teamUids = allFirestoreUsers.map(u => u.uid);
+          const leadsData: LeadWithId[] = [];
           
-          const allLeads = await fetchAllCrmLeadsGlobally();
-          const teamLeads = allLeads.filter(lead => lead.userId && teamUids.includes(lead.userId));
-          setLeads(teamLeads);
+          for (let i = 0; i < teamUids.length; i += 30) {
+            const uidsChunk = teamUids.slice(i, i + 30);
+            if (uidsChunk.length > 0) {
+              const q = query(collection(db, "crm_leads"), where("userId", "in", uidsChunk));
+              const querySnapshot = await getDocs(q);
+              querySnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                leadsData.push({
+                  id: docSnap.id,
+                  ...data,
+                  createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                  lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                  signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                  completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+                } as LeadWithId);
+              });
+            }
+          }
+          setLeads(leadsData);
         } catch (error) {
           console.error("Failed to load seller/team leads:", error);
           setLeads([]);
         } finally {
           setIsLoading(false);
         }
-      } else if (!loggedInUser) {
+      } else if (!loggedInUser || allFirestoreUsers.length === 0) {
         setIsLoading(false);
       }
     };
+    loadLeads();
+  }, [loggedInUser, allFirestoreUsers]);
 
-    if (allFirestoreUsers.length > 0) {
-       loadLeads();
-    } else {
-        // Wait for allFirestoreUsers to be populated by the context
-        setIsLoading(true);
-    }
-  }, [loggedInUser, fetchAllCrmLeadsGlobally, allFirestoreUsers]);
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const performanceMetrics = useMemo(() => {
       const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-
       const getMonthKey = (date: Date) => format(date, 'yyyy-MM');
       const currentMonthKey = getMonthKey(now);
 
@@ -116,11 +105,10 @@ export default function SellerCommissionDashboard({ loggedInUser }: SellerCommis
           const completedDate = parseISO(l.completedAt);
           if (getMonthKey(completedDate) === currentMonthKey) {
             finalizedThisMonthCount++;
-            valueFinalizedThisMonth += (l.valueAfterDiscount || 0); // Use value with discount for finalized value
+            valueFinalizedThisMonth += (l.valueAfterDiscount || 0);
             
-            // Calculate gains
             if (l.userId === loggedInUser.uid) {
-              const userCommissionRate = loggedInUser.commissionRate || 40; // Defaulting to 40 for simplicity
+              const userCommissionRate = loggedInUser.commissionRate || (l.value > 20000 ? 50 : 40);
               personalGainsThisMonth += (l.valueAfterDiscount || 0) * (userCommissionRate / 100);
             } else {
               const sellerLevel = downlineLevelMap.get(l.userId);
