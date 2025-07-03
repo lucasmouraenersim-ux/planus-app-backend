@@ -78,15 +78,11 @@ const editUserFormSchema = z.object({
   displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
   phone: z.string().optional(),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
-  commissionRate: z.preprocess((val) => val === "" || val === null ? undefined : Number(val), z.number().optional()),
+  commissionRate: z.number().optional(),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
-  mlmLevel: z.preprocess((val) => {
-    if (val === "" || val === null || val === undefined) return undefined;
-    const num = Number(val);
-    return isNaN(num) ? undefined : num;
-  }, z.number().int().min(1).max(4).optional()),
-  recurrenceRate: z.preprocess((val) => (val === "" || val === null || val === 'none' ? undefined : Number(val)), z.number().optional()),
+  mlmLevel: z.number().int().min(1).max(4).optional(),
+  recurrenceRate: z.number().optional(),
   canViewLeadPhoneNumber: z.boolean().default(false),
   canViewCrm: z.boolean().default(false),
   canViewCareerPlan: z.boolean().default(false),
@@ -500,31 +496,62 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
                 {/* Commissions */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Configurações de Comissão</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
-                    <FormField control={editUserForm.control} name="commissionRate" render={({ field }) => (<FormItem><FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Padrão (40%/50%)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="40">40%</SelectItem><SelectItem value="50">50%</SelectItem><SelectItem value="60">60%</SelectItem><SelectItem value="80">80%</SelectItem></SelectContent></Select></FormItem>)} />
+                    <FormField control={editUserForm.control} name="commissionRate" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta</FormLabel>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                          value={field.value !== undefined ? String(field.value) : 'none'} 
+                          disabled={!canEdit || isSubmittingAction}
+                        >
+                          <FormControl><SelectTrigger><SelectValue placeholder="Padrão (40%/50%)" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Padrão do Nível</SelectItem>
+                            <SelectItem value="40">40%</SelectItem>
+                            <SelectItem value="50">50%</SelectItem>
+                            <SelectItem value="60">60%</SelectItem>
+                            <SelectItem value="80">80%</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )} />
                     <FormField control={editUserForm.control} name="recurrenceRate" render={({ field }) => (
                         <FormItem>
-                            <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
-                            <Select 
-                                onValueChange={field.onChange} 
-                                defaultValue={field.value !== undefined ? String(field.value) : 'none'}
-                                disabled={!canEdit || isSubmittingAction}>
-                                <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Sem Recorrência" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value="none">Sem Recorrência</SelectItem>
-                                    <SelectItem value="0.5">0.5%</SelectItem>
-                                    <SelectItem value="1">1%</SelectItem>
-                                </SelectContent>
-                            </Select>
+                          <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência</FormLabel>
+                          <Select 
+                            onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                            value={field.value !== undefined && field.value !== null ? String(field.value) : 'none'}
+                            disabled={!canEdit || isSubmittingAction}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Sem Recorrência" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Sem Recorrência</SelectItem>
+                              <SelectItem value="0.5">0.5%</SelectItem>
+                              <SelectItem value="1">1%</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </FormItem>
                     )} />
                     <FormField control={editUserForm.control} name="mlmEnabled" render={({ field }) => (<FormItem className="flex items-center justify-between"><FormLabel className="flex items-center"><Network className="mr-2 h-4 w-4"/>Ativar Multinível</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                     {editUserForm.watch("mlmEnabled") && (<>
                         <FormField control={editUserForm.control} name="uplineUid" render={({ field }) => (<FormItem><FormLabel>Upline (Líder Direto)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o upline" /></SelectTrigger></FormControl><SelectContent>{initialUsers.filter(u => u.uid !== selectedUser.uid).map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                        <FormField control={editUserForm.control} name="mlmLevel" render={({ field }) => (<FormItem><FormLabel>Nível de Override</FormLabel><Select onValueChange={field.onChange} defaultValue={String(field.value || '')} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o nível" /></SelectTrigger></FormControl><SelectContent><SelectItem value="1">Nível 1 (5%)</SelectItem><SelectItem value="2">Nível 2 (3%)</SelectItem><SelectItem value="3">Nível 3 (2%)</SelectItem><SelectItem value="4">Nível 4 (1%)</SelectItem></SelectContent></Select></FormItem>)} />
+                        <FormField control={editUserForm.control} name="mlmLevel" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nível de Override</FormLabel>
+                            <Select 
+                              onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                              value={field.value !== undefined ? String(field.value) : 'none'}
+                              disabled={!canEdit || isSubmittingAction}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">Nenhum</SelectItem>
+                                <SelectItem value="1">Nível 1 (5%)</SelectItem>
+                                <SelectItem value="2">Nível 2 (3%)</SelectItem>
+                                <SelectItem value="3">Nível 3 (2%)</SelectItem>
+                                <SelectItem value="4">Nível 4 (1%)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )} />
                     </>)}
                 </CardContent></Card>
 
