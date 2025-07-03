@@ -46,6 +46,7 @@ interface LeadCardProps {
   onAssignLead: (leadId: string) => void;
   allFirestoreUsers: FirestoreUser[];
   loggedInUser: AppUser;
+  downlineLevelMap: Map<string, number>;
 }
 
 const formatCurrency = (value: number | undefined) => {
@@ -53,12 +54,9 @@ const formatCurrency = (value: number | undefined) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser }: LeadCardProps) {
+export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap }: LeadCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  
-  const leadSeller = useMemo(() => allFirestoreUsers.find(u => u.uid === lead.userId), [allFirestoreUsers, lead.userId]);
-  const isMyDownline = leadSeller?.uplineUid === loggedInUser.uid;
-
+  const level = downlineLevelMap.get(lead.userId);
 
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
@@ -90,8 +88,8 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
         <div className="flex items-center text-muted-foreground">
           <User className="w-4 h-4 mr-2 text-green-500" />
           <span className="truncate">Vendedor: {lead.sellerName}</span>
-          {isMyDownline && leadSeller?.mlmLevel && (
-            <Badge variant="secondary" className="ml-2 text-xs">Nível {leadSeller.mlmLevel}</Badge>
+          {level && (
+            <Badge variant="secondary" className="ml-2 text-xs">Nível {level}</Badge>
           )}
         </div>
         <div className="flex items-center text-muted-foreground">

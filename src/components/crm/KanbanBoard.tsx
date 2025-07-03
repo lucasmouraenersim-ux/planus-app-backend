@@ -18,9 +18,10 @@ interface KanbanBoardProps {
   onAssignLead: (leadId: string) => void;
   allFirestoreUsers: FirestoreUser[];
   loggedInUser: AppUser;
+  downlineLevelMap: Map<string, number>;
 }
 
-export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser }: KanbanBoardProps) {
+export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap }: KanbanBoardProps) {
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-md ">
       <div className="flex w-max space-x-4 p-4">
@@ -51,6 +52,7 @@ export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead,
                       onAssignLead={onAssignLead}
                       allFirestoreUsers={allFirestoreUsers}
                       loggedInUser={loggedInUser}
+                      downlineLevelMap={downlineLevelMap}
                     />
                   ))}
                 {stageLeads.length === 0 && (

@@ -207,7 +207,7 @@ function WalletPageContent() {
         const downlineMember = downlineWithLevels.find(d => d.user.uid === lead.userId);
         if (!downlineMember) return null;
         
-        const levelForCommission = downlineMember.user.mlmLevel || downlineMember.level;
+        const levelForCommission = downlineMember.level; // Use the calculated level from the hierarchy
         const commissionRate = commissionRates[levelForCommission];
         
         if (!commissionRate) return null;

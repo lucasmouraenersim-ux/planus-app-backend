@@ -42,7 +42,7 @@ interface DuplicateGroup {
 }
 
 function CrmPageContent() {
-  const { appUser, userAppRole, allFirestoreUsers } = useAuth();
+  const { appUser, userAppRole, allFirestoreUsers, isLoadingAllUsers } = useAuth();
   const { toast } = useToast();
   const [leads, setLeads] = useState<LeadWithId[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -67,6 +67,11 @@ function CrmPageContent() {
 
 
   useEffect(() => {
+    if (isLoadingAllUsers) {
+      setIsLoading(true);
+      return;
+    }
+    
     if (!appUser) {
       setIsLoading(false);
       return;
@@ -161,7 +166,7 @@ function CrmPageContent() {
     return () => {
         unsubscribers.forEach(unsub => unsub());
     };
-}, [appUser, userAppRole, allFirestoreUsers, toast, isLoading]); // Add allFirestoreUsers and isLoading
+}, [appUser, userAppRole, allFirestoreUsers, toast, isLoading, isLoadingAllUsers]);
 
 
   const filteredLeads = useMemo(() => {
@@ -233,6 +238,21 @@ function CrmPageContent() {
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
 
+  const downlineLevelMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const findDownline = (uplineId: string, level = 1, maxLevel = 4) => {
+        if (level > maxLevel) return;
+        const directDownline = allFirestoreUsers.filter(u => u.uplineUid === uplineId && u.mlmEnabled);
+        directDownline.forEach(u => {
+            map.set(u.uid, level);
+            findDownline(u.uid, level + 1, maxLevel);
+        });
+    };
+    if (appUser) {
+        findDownline(appUser.uid);
+    }
+    return map;
+  }, [allFirestoreUsers, appUser]);
 
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
     setEditingLead(leadToEdit || null);
@@ -480,7 +500,7 @@ function CrmPageContent() {
   };
 
 
-  if (isLoading) {
+  if (isLoading || isLoadingAllUsers) {
      return (
       <div className="flex flex-col justify-center items-center h-[calc(100vh-56px)] bg-transparent text-primary">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
@@ -613,6 +633,7 @@ function CrmPageContent() {
           onAssignLead={handleAssignLead}
           allFirestoreUsers={allFirestoreUsers}
           loggedInUser={appUser as AppUser}
+          downlineLevelMap={downlineLevelMap}
         />
       </div>
 
