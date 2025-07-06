@@ -11,22 +11,18 @@ export async function uploadFile(file: File, path: string): Promise<string> {
   };
 
   try {
-    // 1. Upload with explicit metadata.
+    // Upload with explicit metadata. The updateMetadata call was redundant and causing permission issues.
     await uploadBytes(fileRef, file, metadata);
     
-    // 2. Force update metadata after upload as a failsafe.
-    // This can fix cases where the initial metadata is ignored by Firebase Storage.
-    await updateMetadata(fileRef, { contentType: file.type });
-
-    // 3. Get the URL only after all operations are complete.
+    // Get the URL after upload is complete.
     const downloadURL = await getDownloadURL(fileRef);
-    console.log("File uploaded successfully with metadata. Download URL:", downloadURL);
+    console.log("File uploaded successfully. Download URL:", downloadURL);
     return downloadURL;
 
   } catch (error) {
-    console.error("Critical error during file upload or metadata update:", error);
+    console.error("Critical error during file upload:", error);
     // Re-throw the error to be handled by the calling function
-    throw new Error("Failed to upload file or set metadata correctly.");
+    throw new Error("Failed to upload file.");
   }
 }
 
