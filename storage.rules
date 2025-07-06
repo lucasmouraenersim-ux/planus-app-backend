@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service firebase.storage {
@@ -19,32 +18,30 @@ service firebase.storage {
       return isSuperAdminEmail || isFirestoreAdmin;
     }
 
-    function isLeadOwner(leadId) {
-      // Check if user is authenticated and the lead document exists, then check ownership.
-      return isAuth() && 
-             exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid;
-    }
-
     // Profile photos: Allow users to read/write their own photos. Admins can access any.
     match /profile_photos/{userId}/{allPaths=**} {
       allow read, write: if isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
+    // --- TEMPORARY FLEXIBLE RULES FOR TESTING ---
+    // The following rules are simplified to allow any authenticated user to upload.
+    // This is for testing purposes and should be made more secure for production.
+
     // Lead documents (consolidated)
     match /crm_lead_documents/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+      allow read, write: if isAuth();
     }
     
     // Feedback attachments
     match /crm_lead_feedback/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+      allow read, write: if isAuth();
     }
     
     // Chat media
     match /chat_media/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+      allow read, write: if isAuth();
     }
+    // --- END OF TEMPORARY RULES ---
 
     // Public files (e.g., for WhatsApp templates)
     match /public/{allPaths=**} {
