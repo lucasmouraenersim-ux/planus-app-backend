@@ -1,9 +1,8 @@
-
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
-import { Timestamp, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, arrayUnion, getDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, arrayUnion, getDoc, writeBatch, getCountFromServer } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { uploadFile } from './storage';
 
@@ -105,32 +104,27 @@ export async function updateCrmLeadDetails(
   photoFile?: File,
   billFile?: File,
   legalRepresentativeDocumentFile?: File,
-  otherDocumentsFile?: File
+  otherDocumentsFile?: File,
+  feedbackAttachmentFile?: File
 ): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
   const finalUpdates: { [key: string]: any } = { ...updates };
 
-  // Fetch existing data to ensure we have a complete picture for calculations.
   const leadDoc = await getDoc(leadRef);
   if (!leadDoc.exists()) {
     throw new Error("Lead não encontrado para atualização.");
   }
   const existingData = leadDoc.data() as LeadDocumentData;
 
-  // Determine the definitive KWh and discount percentage for calculation.
-  // Use the value from 'updates' if it exists (even if null), otherwise use existing data.
-  // Default to 0 if neither exists.
   const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
   const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
 
-  // Always recalculate value and valueAfterDiscount for consistency.
   const originalValue = kwh * KWH_TO_REAIS_FACTOR;
   const valueAfterDiscount = originalValue * (1 - (discount / 100));
 
   finalUpdates.value = originalValue;
   finalUpdates.valueAfterDiscount = valueAfterDiscount;
 
-  // If KWh or discount were part of the updates, make sure they are in finalUpdates.
   if ('kwh' in updates) {
     finalUpdates.kwh = updates.kwh;
   }
@@ -138,12 +132,10 @@ export async function updateCrmLeadDetails(
     finalUpdates.discountPercentage = updates.discountPercentage;
   }
 
-  // Normalize phone number if present in updates
   if (updates.phone) {
     finalUpdates.phone = updates.phone.replace(/\D/g, '');
   }
   
-  // Handle date string to Timestamp conversion for specific fields
   if (updates.signedAt && typeof updates.signedAt === 'string') {
     finalUpdates.signedAt = Timestamp.fromDate(new Date(updates.signedAt));
   }
@@ -151,7 +143,6 @@ export async function updateCrmLeadDetails(
     finalUpdates.completedAt = Timestamp.fromDate(new Date(updates.completedAt));
   }
   
-  // Handle file uploads
   if (photoFile) {
     const photoPath = `crm_lead_documents/${leadId}/photo_${photoFile.name}`;
     finalUpdates.photoDocumentUrl = await uploadFile(photoFile, photoPath);
@@ -168,11 +159,14 @@ export async function updateCrmLeadDetails(
     const otherDocsPath = `crm_lead_documents/${leadId}/other_docs_${otherDocumentsFile.name}`;
     finalUpdates.otherDocumentsUrl = await uploadFile(otherDocumentsFile, otherDocsPath);
   }
+  if (feedbackAttachmentFile) {
+    const feedbackPath = `crm_lead_feedback/${leadId}/feedback_${Date.now()}_${feedbackAttachmentFile.name}`;
+    finalUpdates.feedbackAttachmentUrl = await uploadFile(feedbackAttachmentFile, feedbackPath);
+    finalUpdates.hasFeedbackAttachment = true;
+  }
 
-  // Always update the last contact timestamp
   finalUpdates.lastContact = Timestamp.now();
   
-  // Clean out any keys with 'undefined' values before sending to Firestore
   const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
     if (value !== undefined) {
       (acc as any)[key] = value;
@@ -199,10 +193,27 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
 }
 
 export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
+  const activeStages: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'conformidade', 'assinado', 'para-validacao'];
+  const leadsRef = collection(db, "crm_leads");
+  
+  const q = query(
+    leadsRef,
+    where("userId", "==", seller.uid),
+    where("stageId", "in", activeStages),
+    where("hasFeedbackAttachment", "==", false)
+  );
+
+  const snapshot = await getCountFromServer(q);
+  const activeLeadCount = snapshot.data().count;
+
+  if (activeLeadCount >= 2) {
+    throw new Error("Limite de 2 leads ativos atingido. Forneça feedback (com anexo) em um lead existente para liberar espaço.");
+  }
+
+
   const leadRef = doc(db, "crm_leads", leadId);
   const leadDoc = await getDoc(leadRef);
 
-  // Check if the lead is available to be assigned.
   if (!leadDoc.exists() || (leadDoc.data().stageId !== 'para-atribuir')) {
     throw new Error("Este lead não está mais disponível para atribuição.");
   }
@@ -210,7 +221,7 @@ export async function assignLeadToSeller(leadId: string, seller: { uid: string; 
   await updateDoc(leadRef, {
     userId: seller.uid,
     sellerName: seller.name,
-    stageId: 'contato', // Move to 'contato' stage after assignment
+    stageId: 'contato',
     lastContact: Timestamp.now(),
   });
 }
@@ -255,12 +266,10 @@ export async function updateUser(userId: string, updates: Partial<FirestoreUser>
     finalUpdates.phone = String(updates.phone).replace(/\D/g, '');
   }
 
-  // Remove UID from the update object if it exists to avoid errors
   if ('uid' in finalUpdates) {
     delete finalUpdates.uid;
   }
 
-  // Ensure only valid, non-undefined fields are sent
   const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
     if (value !== undefined) {
       (acc as any)[key] = value;

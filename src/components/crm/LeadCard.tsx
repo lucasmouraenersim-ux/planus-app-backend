@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import type { LeadWithId, StageId } from '@/types/crm';
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import { STAGES_CONFIG } from '@/config/crm-stages';
@@ -35,6 +35,13 @@ import {
 import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
 
 interface LeadCardProps {
   lead: LeadWithId;
@@ -47,6 +54,8 @@ interface LeadCardProps {
   allFirestoreUsers: FirestoreUser[];
   loggedInUser: AppUser;
   downlineLevelMap: Map<string, number>;
+  activeAssignedLeadsCount: number;
+  assignmentLimit: number;
 }
 
 const formatCurrency = (value: number | undefined) => {
@@ -54,9 +63,10 @@ const formatCurrency = (value: number | undefined) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap }: LeadCardProps) {
+export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap, activeAssignedLeadsCount, assignmentLimit }: LeadCardProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const level = downlineLevelMap.get(lead.userId);
+  const isAssignmentDisabled = activeAssignedLeadsCount >= assignmentLimit;
 
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
@@ -118,10 +128,28 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
       </CardContent>
       <CardFooter className="flex items-center justify-between">
         {lead.stageId === 'para-atribuir' && userAppRole === 'vendedor' ? (
-          <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={() => onAssignLead(lead.id)}>
-            <Handshake className="w-4 h-4 mr-2" />
-            Atribuir a mim
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="w-full">
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => onAssignLead(lead.id)}
+                    disabled={isAssignmentDisabled}
+                  >
+                    <Handshake className="w-4 h-4 mr-2" />
+                    Atribuir a mim
+                  </Button>
+                </div>
+              </TooltipTrigger>
+              {isAssignmentDisabled && (
+                <TooltipContent>
+                  <p>Limite de {assignmentLimit} leads ativos atingido.</p>
+                  <p className="text-xs text-muted-foreground">Envie feedback com anexo em um lead para liberar.</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         ) : (
           <>
             <Button variant="outline" size="sm" className="flex-1" onClick={() => onViewDetails(lead)}>

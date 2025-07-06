@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -14,7 +15,7 @@ import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark, Download
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
@@ -296,6 +297,26 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                         </a>
                     )}
                   </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {(lead.sellerNotes || lead.feedbackAttachmentUrl) && (
+            <Card className="mb-4 bg-background/50 border-border">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base text-foreground">Feedback do Vendedor</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-2 px-4 pb-3">
+                {lead.sellerNotes && (
+                  <p className="text-muted-foreground whitespace-pre-wrap"><strong>Notas:</strong> {lead.sellerNotes}</p>
+                )}
+                {lead.feedbackAttachmentUrl && (
+                  <div className="flex items-center gap-4 pt-2">
+                    <a href={lead.feedbackAttachmentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><Download className="w-3.5 h-3.5 mr-2"/>Ver Anexo de Feedback</Button>
+                    </a>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

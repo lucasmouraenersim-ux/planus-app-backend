@@ -263,6 +263,16 @@ function CrmPageContent() {
     return map;
   }, [allFirestoreUsers, appUser]);
 
+  const activeAssignedLeadsCount = useMemo(() => {
+    if (!appUser) return 0;
+    // An active lead is assigned to the user, not in a final state, and has no feedback attachment yet.
+    return leads.filter(lead => 
+      lead.userId === appUser.uid && 
+      !['finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
+      !lead.hasFeedbackAttachment
+    ).length;
+  }, [leads, appUser]);
+
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
     setEditingLead(leadToEdit || null);
     setIsFormOpen(true);
@@ -278,7 +288,8 @@ function CrmPageContent() {
     photoFile?: File,
     billFile?: File,
     legalRepFile?: File,
-    otherDocsFile?: File
+    otherDocsFile?: File,
+    feedbackAttachmentFile?: File
   ) => {
     setIsSubmitting(true);
     try {
@@ -289,7 +300,8 @@ function CrmPageContent() {
           photoFile,
           billFile,
           legalRepFile,
-          otherDocsFile
+          otherDocsFile,
+          feedbackAttachmentFile
         );
         toast({ title: "Lead Atualizado", description: `Os dados de "${formData.name || 'Lead'}" foram salvos.` });
       } else {
@@ -388,9 +400,9 @@ function CrmPageContent() {
         title: "Lead Atribuído!",
         description: "O lead agora é seu e foi movido para 'Contato Inicial'.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error assigning lead:", error);
-      toast({ title: "Erro ao Atribuir", description: "Não foi possível atribuir o lead. Pode já ter sido pego por outro vendedor.", variant: "destructive" });
+      toast({ title: "Erro ao Atribuir", description: error.message || "Não foi possível atribuir o lead. Pode já ter sido pego por outro vendedor.", variant: "destructive" });
     }
   };
 
@@ -643,6 +655,7 @@ function CrmPageContent() {
           allFirestoreUsers={allFirestoreUsers}
           loggedInUser={appUser as AppUser}
           downlineLevelMap={downlineLevelMap}
+          activeAssignedLeadsCount={activeAssignedLeadsCount}
         />
       </div>
 

@@ -88,13 +88,15 @@ const leadFormSchema = z.object({
   billDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
   legalRepresentativeDocumentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
   otherDocumentsFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
+  sellerNotes: z.string().optional(),
+  feedbackAttachmentFile: (typeof window === 'undefined' ? z.any() : z.instanceof(FileList)).optional(),
 });
 
 
 type LeadFormData = z.infer<typeof leadFormSchema>;
 
 interface LeadFormProps {
-  onSubmit: (data: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile'>, photoFile?: File, billFile?: File, legalRepFile?: File, otherDocsFile?: File) => Promise<void>;
+  onSubmit: (data: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile' | 'feedbackAttachmentFile'>, photoFile?: File, billFile?: File, legalRepFile?: File, otherDocsFile?: File, feedbackAttachmentFile?: File) => Promise<void>;
   onCancel: () => void;
   initialData?: Partial<LeadDocumentData & { id?: string }>; // For editing
   isSubmitting?: boolean;
@@ -132,6 +134,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
       legalRepresentativeBirthDate: initialData?.legalRepresentativeBirthDate || "",
       legalRepresentativeProfession: initialData?.legalRepresentativeProfession || "",
       legalRepresentativeNationality: initialData?.legalRepresentativeNationality || "",
+      sellerNotes: initialData?.sellerNotes || "",
     },
   });
 
@@ -139,6 +142,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
   const billFileRef = form.register("billDocumentFile");
   const legalRepFileRef = form.register("legalRepresentativeDocumentFile");
   const otherDocsFileRef = form.register("otherDocumentsFile");
+  const feedbackAttachmentFileRef = form.register("feedbackAttachmentFile");
 
 
   const handleSubmit = async (values: LeadFormData) => {
@@ -146,14 +150,16 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
     const billFile = values.billDocumentFile?.[0];
     const legalRepFile = values.legalRepresentativeDocumentFile?.[0];
     const otherDocsFile = values.otherDocumentsFile?.[0];
+    const feedbackAttachmentFile = values.feedbackAttachmentFile?.[0];
 
-    const dataToSubmit: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile'> = { ...values };
+    const dataToSubmit: Omit<LeadFormData, 'photoDocumentFile' | 'billDocumentFile' | 'legalRepresentativeDocumentFile' | 'otherDocumentsFile' | 'feedbackAttachmentFile'> = { ...values };
     delete (dataToSubmit as any).photoDocumentFile;
     delete (dataToSubmit as any).billDocumentFile;
     delete (dataToSubmit as any).legalRepresentativeDocumentFile;
     delete (dataToSubmit as any).otherDocumentsFile;
+    delete (dataToSubmit as any).feedbackAttachmentFile;
     
-    await onSubmit(dataToSubmit, photoFile, billFile, legalRepFile, otherDocsFile);
+    await onSubmit(dataToSubmit, photoFile, billFile, legalRepFile, otherDocsFile, feedbackAttachmentFile);
   };
   
   const customerType = form.watch('customerType');
@@ -485,19 +491,42 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                    <FormField control={form.control} name="otherDocumentsFile" render={() => (<FormItem><FormLabel>Demais Documentos (Opcional)</FormLabel><FormControl><Input type="file" {...otherDocsFileRef} /></FormControl><FormDescription>Anexe outros documentos relevantes para o cliente PJ.</FormDescription><FormMessage /></FormItem>)} />
                 )}
 
-                {initialData?.id && ( // Only show for existing leads being edited
-                    <FormField
-                    control={form.control}
-                    name="correctionReason"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Motivo da Correção (se aplicável)</FormLabel>
-                        <FormControl><Textarea placeholder="Admin solicitou correção por..." {...field} /></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
+                {initialData?.id && (
+                  <Card className="p-4 bg-background/50">
+                    <CardHeader className="p-0 mb-4">
+                      <CardTitle className="text-lg text-primary">Feedback do Vendedor</CardTitle>
+                      <CardDescription className="text-xs">Para liberar um novo slot de lead, adicione um feedback e anexe um comprovante (print da conversa, proposta, etc).</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0 space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="sellerNotes"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Observações / Atualização de Status</FormLabel>
+                            <FormControl><Textarea placeholder="Ex: Cliente pediu para retornar na sexta-feira. Proposta enviada." {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={form.control}
+                        name="feedbackAttachmentFile"
+                        render={() => (
+                          <FormItem>
+                              <FormLabel>Anexo de Feedback (Comprovante)</FormLabel>
+                              <FormControl><Input type="file" {...feedbackAttachmentFileRef} /></FormControl>
+                              <FormDescription className="text-xs">
+                                Anexar uma imagem desbloqueia um slot para pegar um novo lead.
+                              </FormDescription>
+                              <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </Card>
                 )}
+
               </>
             )}
 
