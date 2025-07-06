@@ -3,60 +3,55 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Helper functions to keep rules clean and readable
-    function isAuth() {
+    // Helper function to check if a user is authenticated.
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function leadDoc(leadId) {
-      return get(/databases/$(database)/documents/crm_leads/$(leadId)).data;
-    }
-
+    // Helper function to check if the signed-in user is an admin or superadmin.
     function isAdmin() {
       // Allow specific superadmin emails to bypass Firestore read for initial setup
-      let isSuperAdminEmail = request.auth.token.email in ['lucasmoura@sentenergia.com', 'eduardo.w@sentenergia.com'];
-      // Check for admin/superadmin role in Firestore, only if the user document exists
-      let isAdminRole = exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-                         (userDoc().type == 'admin' || userDoc().type == 'superadmin');
-      return isAuth() && (isSuperAdminEmail || isAdminRole);
+      if (request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com') {
+        return true;
+      }
+      // Check for admin/superadmin role in Firestore, ensuring the user doc exists.
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'superadmin');
     }
 
+    // Helper function to check if the signed-in user is the owner of a specific lead.
     function isLeadOwner(leadId) {
-      // Check if the user is authenticated, the lead exists, the lead has a userId field, and the userId matches the user's uid
-      return isAuth() && 
+      // Ensure the lead document exists before trying to access its data.
+      return isSignedIn() &&
              exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-             'userId' in leadDoc(leadId) &&
-             leadDoc(leadId).userId == request.auth.uid;
+             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid;
     }
 
-    // Profile photos: Allow users to read/write their own photos. Admins can access any.
+    // --- Path Rules ---
+
+    // Profile photos: Users can manage their own photo. Admins can manage any.
     match /profile_photos/{userId}/{allPaths=**} {
-      allow read, write: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
-    // Lead-related documents: Allow the lead's assigned seller or an admin to read/write.
-    // This rule covers documents, bills, and other lead-specific files.
+    // General lead documents (proposals, bills, etc.).
     match /crm_lead_documents/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+      allow read, write: if isSignedIn() && (isLeadOwner(leadId) || isAdmin());
     }
     
-    // Feedback attachments: Same permissions as other lead documents.
-    // A seller can only upload feedback for a lead that is assigned to them.
+    // Feedback attachments for leads.
     match /crm_lead_feedback/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+      allow read, write: if isSignedIn() && (isLeadOwner(leadId) || isAdmin());
+    }
+    
+    // Media (images, audio) sent in the chat.
+    match /chat_media/{leadId}/{allPaths=**} {
+      allow read, write: if isSignedIn() && (isLeadOwner(leadId) || isAdmin());
     }
 
-    // Chat media: Allow lead owners and admins to upload media through the chat interface.
-    match /chat_media/{leadId}/{allPaths=**} {
-      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
-    }
-    
-    // Allow public read for any files in a 'public' folder (e.g., for WhatsApp templates)
-    // Only admins can write to this folder.
+    // Public files (e.g., for WhatsApp templates) can be read by anyone.
     match /public/{allPaths=**} {
       allow get;
       allow write: if isAdmin();

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -68,6 +67,9 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
   const level = downlineLevelMap.get(lead.userId);
   const isAssignmentDisabled = activeAssignedLeadsCount >= assignmentLimit;
 
+  const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
+  const isOwner = lead.userId === loggedInUser.uid;
+
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="pb-3">
@@ -107,7 +109,7 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
           <span>Último Contato: {format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", { locale: ptBR })}</span>
         </div>
         
-        {(loggedInUser.canViewLeadPhoneNumber || lead.showPhoneNumber) && lead.phone && (
+        {(isAdmin || (isOwner && lead.showPhoneNumber)) && lead.phone && (
           <div className="flex items-center text-muted-foreground pt-1">
             <PhoneCall className="w-4 h-4 mr-2 text-blue-500" />
             <a href={`tel:${lead.phone}`} className="text-blue-500 hover:underline">{lead.phone}</a>
