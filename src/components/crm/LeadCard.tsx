@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network } from 'lucide-react';
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network, PhoneCall } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -107,6 +107,13 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
           <span>Último Contato: {format(parseISO(lead.lastContact), "dd/MM/yy HH:mm", { locale: ptBR })}</span>
         </div>
         
+        {(loggedInUser.canViewLeadPhoneNumber || lead.showPhoneNumber) && lead.phone && (
+          <div className="flex items-center text-muted-foreground pt-1">
+            <PhoneCall className="w-4 h-4 mr-2 text-blue-500" />
+            <a href={`tel:${lead.phone}`} className="text-blue-500 hover:underline">{lead.phone}</a>
+          </div>
+        )}
+
         {lead.signedAt && (
             <div className="flex items-center text-muted-foreground text-xs pt-1">
                 <CheckCircle className="w-3.5 h-3.5 mr-1.5 text-green-500" />

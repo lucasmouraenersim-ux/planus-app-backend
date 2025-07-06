@@ -7,7 +7,7 @@ import admin from 'firebase-admin';
 import { z } from 'zod';
 import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage';
-import type { ChatMessage } from '@/types/crm';
+import type { ChatMessage, LeadDocumentData, StageId } from '@/types/crm';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import { transcribeAudio } from '@/ai/flows/transcribe-audio-flow';
 
@@ -34,6 +34,7 @@ const SendChatMessageOutputSchema = z.object({
     success: z.boolean(),
     message: z.string().optional(),
     chatMessage: ChatMessageSchema.optional(),
+    showCallPrompt: z.boolean().optional(),
 });
 export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
@@ -43,6 +44,8 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' of type '${type}' with text: "${text}"`);
 
   const leadRef = adminDb.collection("crm_leads").doc(leadId);
+  const batch = adminDb.batch();
+  let showCallPrompt = false;
   
   try {
     const leadDoc = await leadRef.get();
@@ -50,12 +53,19 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
       console.error(`[SEND_CHAT_ACTION] Lead with ID '${leadId}' not found.`);
       return { success: false, message: `Lead not found with ID: ${leadId}` };
     }
+    
+    const leadData = leadDoc.data() as LeadDocumentData;
+    const activeStagesForPrompt: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'conformidade'];
+    if (sender === 'user' && leadData.stageId && activeStagesForPrompt.includes(leadData.stageId) && !leadData.showPhoneNumber) {
+        batch.update(leadRef, { showPhoneNumber: true });
+        showCallPrompt = true;
+    }
+
   } catch (error: any) {
      console.error(`[SEND_CHAT_ACTION] CRITICAL ERROR checking for lead existence for lead ${leadId}:`, error);
      return { success: false, message: `A server error occurred while trying to access the database. Please ensure the server has the correct permissions and project configuration. Details: ${error.message}` };
   }
   
-  const batch = adminDb.batch();
   const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
 
   let transcription: string | undefined = undefined;
@@ -101,7 +111,7 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
   if (sender === 'user') {
       if (!phone || phone.trim() === '') {
           console.log(`[SEND_CHAT_ACTION] Message for ${leadId} saved to history, but lead has no phone number. Not sending to WhatsApp.`);
-          return { success: true, message: 'Message saved, but lead has no phone number to send to.', chatMessage: savedChatMessage };
+          return { success: true, message: 'Message saved, but lead has no phone number to send to.', chatMessage: savedChatMessage, showCallPrompt };
       }
       
       console.log(`[SEND_CHAT_ACTION] Attempting to send WhatsApp message to ${phone}.`);
@@ -124,10 +134,10 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
 
       if (!whatsappResult.success) {
           console.error(`[SEND_CHAT_ACTION] WhatsApp send failed for ${leadId}:`, whatsappResult.error);
-          return { success: false, message: `Failed to send WhatsApp message: ${whatsappResult.error}`, chatMessage: savedChatMessage };
+          return { success: false, message: `Failed to send WhatsApp message: ${whatsappResult.error}`, chatMessage: savedChatMessage, showCallPrompt: false };
       }
       console.log(`[SEND_CHAT_ACTION] WhatsApp message sent successfully for lead ${leadId}.`);
   }
   
-  return { success: true, message: 'Message sent and saved successfully.', chatMessage: savedChatMessage };
+  return { success: true, message: 'Message sent and saved successfully.', chatMessage: savedChatMessage, showCallPrompt };
 }

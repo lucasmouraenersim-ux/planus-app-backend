@@ -101,6 +101,7 @@ export interface LeadDocumentData {
   sellerNotes?: string;
   feedbackAttachmentUrl?: string;
   hasFeedbackAttachment?: boolean;
+  showPhoneNumber?: boolean;
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'> {

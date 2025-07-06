@@ -126,7 +126,13 @@ export function ChatLayout() {
         });
 
         if (result.success && result.chatMessage) {
-            // No optimistic update needed, listener will handle it
+            if (result.showCallPrompt && selectedLead.phone) {
+                toast({
+                    title: "Não perca a venda!",
+                    description: `Ligue para o cliente ${selectedLead.name} no número abaixo:\n${selectedLead.phone}`,
+                    duration: 10000,
+                });
+            }
         } else {
             toast({ title: "Erro", description: result.message || "Falha ao enviar mensagem.", variant: "destructive" });
         }
