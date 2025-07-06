@@ -8,25 +8,29 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isRole(role) {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role;
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function leadDoc(leadId) {
+      return get(/databases/$(database)/documents/crm_leads/$(leadId)).data;
     }
 
     function isAdmin() {
       // Allow specific superadmin emails to bypass Firestore read for initial setup
-      let isSuperAdminEmail = request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com';
-      // Check for admin/superadmin role in Firestore
-      let isAdminRole = isAuth() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'superadmin'
-      );
-      return isSuperAdminEmail || isAdminRole;
+      let isSuperAdminEmail = request.auth.token.email in ['lucasmoura@sentenergia.com', 'eduardo.w@sentenergia.com'];
+      // Check for admin/superadmin role in Firestore, only if the user document exists
+      let isAdminRole = exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+                         (userDoc().type == 'admin' || userDoc().type == 'superadmin');
+      return isAuth() && (isSuperAdminEmail || isAdminRole);
     }
 
     function isLeadOwner(leadId) {
+      // Check if the user is authenticated, the lead exists, the lead has a userId field, and the userId matches the user's uid
       return isAuth() && 
              exists(/databases/$(database)/documents/crm_leads/$(leadId)) &&
-             get(/databases/$(database)/documents/crm_leads/$(leadId)).data.userId == request.auth.uid;
+             'userId' in leadDoc(leadId) &&
+             leadDoc(leadId).userId == request.auth.uid;
     }
 
     // Profile photos: Allow users to read/write their own photos. Admins can access any.
@@ -45,6 +49,11 @@ service firebase.storage {
     match /crm_lead_feedback/{leadId}/{allPaths=**} {
       allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
     }
+
+    // Chat media: Allow lead owners and admins to upload media through the chat interface.
+    match /chat_media/{leadId}/{allPaths=**} {
+      allow read, write: if isAuth() && (isLeadOwner(leadId) || isAdmin());
+    }
     
     // Allow public read for any files in a 'public' folder (e.g., for WhatsApp templates)
     // Only admins can write to this folder.
@@ -52,7 +61,5 @@ service firebase.storage {
       allow get;
       allow write: if isAdmin();
     }
-
-    // Default deny all other paths
   }
 }
