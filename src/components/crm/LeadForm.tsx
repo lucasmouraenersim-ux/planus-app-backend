@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 
 
 const leadFormSchema = z.object({
@@ -495,7 +494,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                   <Card className="p-4 bg-background/50">
                     <CardHeader className="p-0 mb-4">
                       <CardTitle className="text-lg text-primary">Feedback do Vendedor</CardTitle>
-                      <CardDescription className="text-xs">Para liberar um novo slot de lead, adicione um feedback e anexe um comprovante (print da conversa, proposta, etc).</CardDescription>
+                      <CardDescription className="text-xs text-muted-foreground">Para liberar um novo slot de lead, adicione um feedback e anexe um comprovante (print da conversa, proposta, etc).</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0 space-y-4">
                       <FormField
