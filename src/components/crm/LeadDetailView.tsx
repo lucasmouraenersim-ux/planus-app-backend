@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -25,6 +24,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -40,6 +40,7 @@ interface LeadDetailViewProps {
 
 export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRequestCorrection }: LeadDetailViewProps) {
   const { toast } = useToast();
+  const { appUser } = useAuth();
   const [chatMessages, setChatMessages] = useState<ChatMessageType[]>([]);
   const [isLoadingChat, setIsLoadingChat] = useState(true);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -57,6 +58,8 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [newCompletedDate, setNewCompletedDate] = useState<Date | undefined>(
     lead.completedAt ? parseISO(lead.completedAt) : undefined
   );
+
+  const isOwner = appUser?.uid === lead.userId;
 
   useEffect(() => {
     if (!lead.id) return;
@@ -382,7 +385,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4 flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => onEdit(lead)}><Edit className="w-4 h-4 mr-2"/>Editar Lead</Button>
+            {(isAdmin || isOwner) && (
+              <Button variant="outline" onClick={() => onEdit(lead)}><Edit className="w-4 h-4 mr-2"/>Editar Lead</Button>
+            )}
             <Link href={`/chat?leadId=${lead.id}`} passHref>
                 <Button variant="outline">
                     <MessagesSquare className="w-4 h-4 mr-2" />
