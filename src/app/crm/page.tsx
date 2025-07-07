@@ -7,7 +7,7 @@ import { KanbanBoard } from '@/components/crm/KanbanBoard';
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2, CopyCheck, Trash2, Edit } from 'lucide-react';
+import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2, CopyCheck, Trash2, Edit, HelpCircle, BookOpen, MessageSquare, CheckCircle as CheckCircleIcon, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -35,11 +35,43 @@ import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card } from '@/components/ui/card';
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DuplicateGroup {
   key: string; // The CPF or CNPJ
   leads: LeadWithId[];
 }
+
+const tutorialSteps = [
+    {
+        icon: BookOpen,
+        title: "Como dar Feedback e Liberar Leads",
+        description: "Este guia rápido mostrará como atualizar o status de seus leads para poder atribuir novos."
+    },
+    {
+        icon: Edit,
+        title: "Passo 1: Edite o Lead",
+        description: "Encontre o lead que você já atendeu no Kanban e, no menu de ações, clique em 'Editar' para abrir o formulário."
+    },
+    {
+        icon: MessageSquare,
+        title: "Passo 2: Adicione uma Observação",
+        description: "No formulário, vá até a seção 'Feedback do Vendedor' e escreva uma nota sobre o status da negociação (Ex: 'Proposta enviada, aguardando resposta')."
+    },
+    {
+        icon: Upload,
+        title: "Passo 3: Anexe um Comprovante",
+        description: "Esta é a parte mais importante. Anexe um arquivo que comprove seu feedback, como um print da conversa, a proposta enviada, etc."
+    },
+    {
+        icon: CheckCircleIcon,
+        title: "Pronto! Vaga Liberada!",
+        description: "Ao salvar, o sistema entende que você deu o feedback necessário e libera um novo espaço para você atribuir mais leads a si mesmo."
+    }
+];
+
 
 function CrmPageContent() {
   const { appUser, userAppRole, allFirestoreUsers, isLoadingAllUsers } = useAuth();
@@ -65,6 +97,29 @@ function CrmPageContent() {
   const [filterName, setFilterName] = useState("");
   const [filterCpf, setFilterCpf] = useState("");
   const [filterUc, setFilterUc] = useState("");
+
+  // Tutorial states
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [dontShowTutorialAgain, setDontShowTutorialAgain] = useState(false);
+
+  useEffect(() => {
+    // This effect runs on the client, so localStorage is available.
+    if (userAppRole === 'vendedor') {
+        const tutorialSeen = localStorage.getItem('planusCrmTutorialSeen');
+        if (!tutorialSeen) {
+            setIsTutorialOpen(true);
+        }
+    }
+  }, [userAppRole]);
+
+  const handleCloseTutorial = () => {
+    if (dontShowTutorialAgain) {
+        localStorage.setItem('planusCrmTutorialSeen', 'true');
+    }
+    setIsTutorialOpen(false);
+    setTutorialStep(0); // Reset for next time if needed
+  };
 
 
   useEffect(() => {
@@ -560,6 +615,24 @@ function CrmPageContent() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
+             {userAppRole === 'vendedor' && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Card className="px-3 py-2 border-primary/30">
+                                <div className="flex items-center">
+                                    <span className="text-sm text-muted-foreground mr-2">Feedbacks Pendentes:</span>
+                                    <span className="text-xl font-bold text-primary">{activeAssignedLeadsCount}</span>
+                                    <HelpCircle className="w-4 h-4 ml-2 text-muted-foreground cursor-help" />
+                                </div>
+                            </Card>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p className="max-w-xs">Este é o número de leads ativos que<br/> aguardam seu feedback com anexo. Zere<br/> o contador para poder atribuir mais leads.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -668,6 +741,38 @@ function CrmPageContent() {
       >
         <Plus className="w-7 h-7" />
       </Button>
+
+      <Dialog open={isTutorialOpen} onOpenChange={(open) => {if (!open) handleCloseTutorial()}}>
+        <DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-lg border text-foreground">
+          <DialogHeader>
+            <div className="text-center mb-4">
+              {React.createElement(tutorialSteps[tutorialStep].icon, { className: "w-12 h-12 mx-auto text-primary" })}
+            </div>
+            <DialogTitle className="text-primary text-center">{tutorialSteps[tutorialStep].title}</DialogTitle>
+            <DialogDescription className="text-center min-h-[60px]">
+              {tutorialSteps[tutorialStep].description}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center space-x-2 pt-2">
+            {tutorialSteps.map((_, index) => (
+                <div key={index} className={`h-2 w-2 rounded-full transition-colors ${index === tutorialStep ? 'bg-primary' : 'bg-muted'}`} />
+            ))}
+          </div>
+          <DialogFooter className="mt-4 sm:justify-between">
+            <div className="flex items-center space-x-2">
+                <Checkbox id="dont-show-again" checked={dontShowTutorialAgain} onCheckedChange={(checked) => setDontShowTutorialAgain(Boolean(checked))} />
+                <Label htmlFor="dont-show-again" className="text-xs text-muted-foreground">Não mostrar novamente</Label>
+            </div>
+            <div className="flex gap-2">
+                {tutorialStep > 0 && <Button variant="outline" onClick={() => setTutorialStep(s => s - 1)}><ArrowLeft className="w-4 h-4 mr-1" /> Anterior</Button>}
+                {tutorialStep < tutorialSteps.length - 1 
+                  ? <Button onClick={() => setTutorialStep(s => s + 1)}>Próximo <ArrowRight className="w-4 h-4 ml-1" /></Button>
+                  : <Button onClick={handleCloseTutorial}>Entendi!</Button>
+                }
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isFormOpen} onOpenChange={(open) => !open && handleCloseForm()}>
         <DialogContent className="sm:max-w-[600px] bg-card/70 backdrop-blur-lg border shadow-2xl text-foreground">
