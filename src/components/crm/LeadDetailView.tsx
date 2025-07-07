@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -253,18 +254,6 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                     </>
                   )}
                 </div>
-                <div className="flex items-center gap-4 pt-2">
-                  {lead.photoDocumentUrl && (
-                    <a href={lead.photoDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
-                      <Button variant="outline" size="sm"><FileText className="w-3.5 h-3.5 mr-2"/>Ver Doc. Cliente</Button>
-                    </a>
-                  )}
-                  {lead.billDocumentUrl && (
-                    <a href={lead.billDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
-                       <Button variant="outline" size="sm"><Banknote className="w-3.5 h-3.5 mr-2"/>Ver Fatura</Button>
-                    </a>
-                  )}
-                </div>
                 {lead.correctionReason && <p className="pt-2 text-amber-600"><strong>Motivo Correção:</strong> {lead.correctionReason}</p>}
               </CardContent>
             </Card>
@@ -288,18 +277,38 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                     <p><strong>Profissão:</strong> {lead.legalRepresentativeProfession || 'N/A'}</p>
                     <p><strong>Nacionalidade:</strong> {lead.legalRepresentativeNationality || 'N/A'}</p>
                  </div>
-                 <div className="flex items-center gap-4 pt-2">
-                    {lead.legalRepresentativeDocumentUrl && (
-                        <a href={lead.legalRepresentativeDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
-                            <Button variant="outline" size="sm"><UserSquare className="w-3.5 h-3.5 mr-2"/>Ver Doc. Representante</Button>
-                        </a>
-                    )}
-                    {lead.otherDocumentsUrl && (
-                        <a href={lead.otherDocumentsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
-                            <Button variant="outline" size="sm"><Landmark className="w-3.5 h-3.5 mr-2"/>Ver Demais Docs.</Button>
-                        </a>
-                    )}
-                  </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(lead.photoDocumentUrl || lead.billDocumentUrl || lead.legalRepresentativeDocumentUrl || lead.otherDocumentsUrl) && (
+            <Card className="mb-4 bg-background/50 border-border">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base text-foreground">Documentos Anexados</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3">
+                <div className="flex flex-wrap items-center gap-4">
+                  {lead.photoDocumentUrl && (
+                    <a href={lead.photoDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><FileText className="w-3.5 h-3.5 mr-2"/>Ver Doc. Cliente</Button>
+                    </a>
+                  )}
+                  {lead.billDocumentUrl && (
+                    <a href={lead.billDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><Banknote className="w-3.5 h-3.5 mr-2"/>Ver Fatura</Button>
+                    </a>
+                  )}
+                  {lead.legalRepresentativeDocumentUrl && (
+                    <a href={lead.legalRepresentativeDocumentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><UserSquare className="w-3.5 h-3.5 mr-2"/>Ver Doc. Representante</Button>
+                    </a>
+                  )}
+                  {lead.otherDocumentsUrl && (
+                    <a href={lead.otherDocumentsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                      <Button variant="outline" size="sm"><Landmark className="w-3.5 h-3.5 mr-2"/>Ver Demais Docs.</Button>
+                    </a>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
