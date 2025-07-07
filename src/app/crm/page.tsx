@@ -106,6 +106,8 @@ function CrmPageContent() {
   const [dontShowTutorialAgain, setDontShowTutorialAgain] = useState(false);
   const [isFeedbackPopoverOpen, setIsFeedbackPopoverOpen] = useState(false);
 
+  const assignmentLimit = 2; // Define the lead assignment limit
+
   useEffect(() => {
     // This effect runs on the client, so localStorage is available.
     if (userAppRole === 'vendedor') {
