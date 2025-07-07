@@ -98,6 +98,7 @@ function CrmPageContent() {
   const [filterName, setFilterName] = useState("");
   const [filterCpf, setFilterCpf] = useState("");
   const [filterUc, setFilterUc] = useState("");
+  const [filterPhone, setFilterPhone] = useState("");
 
   // Tutorial states
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -240,6 +241,7 @@ function CrmPageContent() {
       const cleanFilterName = filterName.trim().toLowerCase();
       const cleanFilterCpf = filterCpf.trim().replace(/\D/g, '');
       const cleanFilterUc = filterUc.trim().toLowerCase();
+      const cleanFilterPhone = filterPhone.trim().replace(/\D/g, '');
 
       if (cleanFilterName && !lead.name.toLowerCase().includes(cleanFilterName)) {
         return false;
@@ -255,9 +257,14 @@ function CrmPageContent() {
         return false;
       }
 
+      const leadPhone = lead.phone || '';
+      if (cleanFilterPhone && !leadPhone.includes(cleanFilterPhone)) {
+        return false;
+      }
+
       return true;
     });
-  }, [leads, filterName, filterCpf, filterUc]);
+  }, [leads, filterName, filterCpf, filterUc, filterPhone]);
 
   const kwhTotalFinalizado = useMemo(() => {
     return leads
@@ -729,12 +736,23 @@ function CrmPageContent() {
                         className="col-span-2 h-8"
                       />
                     </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="filterPhone">Telefone</Label>
+                      <Input
+                        id="filterPhone"
+                        placeholder="Telefone"
+                        value={filterPhone}
+                        onChange={(e) => setFilterPhone(e.target.value)}
+                        className="col-span-2 h-8"
+                      />
+                    </div>
                   </div>
                   <Button
                     onClick={() => {
                       setFilterName('');
                       setFilterCpf('');
                       setFilterUc('');
+                      setFilterPhone('');
                     }}
                   >
                     Limpar Filtros
@@ -779,6 +797,7 @@ function CrmPageContent() {
           loggedInUser={appUser as AppUser}
           downlineLevelMap={downlineLevelMap}
           activeAssignedLeadsCount={activeAssignedLeadsCount}
+          assignmentLimit={assignmentLimit}
         />
       </div>
 
