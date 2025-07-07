@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from 'react';
 import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { KanbanBoard } from '@/components/crm/KanbanBoard';
