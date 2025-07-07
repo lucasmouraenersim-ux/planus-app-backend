@@ -103,6 +103,7 @@ function CrmPageContent() {
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [dontShowTutorialAgain, setDontShowTutorialAgain] = useState(false);
+  const [isFeedbackPopoverOpen, setIsFeedbackPopoverOpen] = useState(false);
 
   useEffect(() => {
     // This effect runs on the client, so localStorage is available.
@@ -327,6 +328,16 @@ function CrmPageContent() {
       !['finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
       !lead.hasFeedbackAttachment
     ).length;
+  }, [leads, appUser]);
+  
+  const leadsWithPendingFeedback = useMemo(() => {
+    if (!appUser) return [];
+    // An active lead is assigned to the user, not in a final state, and has no feedback attachment yet.
+    return leads.filter(lead => 
+      lead.userId === appUser.uid && 
+      !['finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
+      !lead.hasFeedbackAttachment
+    );
   }, [leads, appUser]);
 
   const handleOpenForm = (leadToEdit?: LeadWithId) => {
@@ -617,22 +628,60 @@ function CrmPageContent() {
           </div>
           <div className="flex items-center space-x-2">
              {userAppRole === 'vendedor' && (
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Card className="px-3 py-2 border-primary/30">
-                                <div className="flex items-center">
-                                    <span className="text-sm text-muted-foreground mr-2">Feedbacks Pendentes:</span>
-                                    <span className="text-xl font-bold text-primary">{activeAssignedLeadsCount}</span>
-                                    <HelpCircle className="w-4 h-4 ml-2 text-muted-foreground cursor-help" />
-                                </div>
-                            </Card>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p className="max-w-xs">Este é o número de leads ativos que<br/> aguardam seu feedback com anexo. Zere<br/> o contador para poder atribuir mais leads.</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                <Popover open={isFeedbackPopoverOpen} onOpenChange={setIsFeedbackPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Card className="px-3 py-2 border-primary/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center">
+                          <span className="text-sm text-muted-foreground mr-2">Feedbacks Pendentes:</span>
+                          <span className="text-xl font-bold text-primary">{activeAssignedLeadsCount}</span>
+                          <TooltipProvider delayDuration={0}>
+                              <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span onClick={(e) => e.stopPropagation()}>
+                                      <HelpCircle className="w-4 h-4 ml-2 text-muted-foreground cursor-help" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                      <p className="max-w-xs">Este é o número de leads ativos que<br/> aguardam seu feedback com anexo. Zere<br/> o contador para poder atribuir mais leads.</p>
+                                  </TooltipContent>
+                              </Tooltip>
+                          </TooltipProvider>
+                      </div>
+                    </Card>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                      <div className="grid gap-4">
+                          <div className="space-y-2">
+                              <h4 className="font-medium leading-none">Leads com Feedback Pendente</h4>
+                              <p className="text-sm text-muted-foreground">
+                                  Adicione um feedback com anexo para liberar novos slots.
+                              </p>
+                          </div>
+                          <ScrollArea className="max-h-60">
+                            <div className="grid gap-2 pr-4">
+                                {leadsWithPendingFeedback.length > 0 ? leadsWithPendingFeedback.map(lead => (
+                                    <div key={lead.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                        <span className="text-sm font-medium truncate pr-2">{lead.name}</span>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2"
+                                            onClick={() => {
+                                                handleOpenForm(lead);
+                                                setIsFeedbackPopoverOpen(false);
+                                            }}
+                                        >
+                                            <Edit className="w-3 h-3 mr-1" /> Editar
+                                        </Button>
+                                    </div>
+                                )) : (
+                                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum feedback pendente!</p>
+                                )}
+                            </div>
+                          </ScrollArea>
+                      </div>
+                  </PopoverContent>
+                </Popover>
             )}
             <Popover>
               <PopoverTrigger asChild>
