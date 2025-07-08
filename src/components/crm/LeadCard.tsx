@@ -73,29 +73,27 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
   return (
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="pb-3">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg font-semibold text-primary flex items-center" title={lead.name}>
-            {lead.leadScore && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="mr-2 cursor-help flex-shrink-0">
-                      <TrendingUp className="w-4 h-4 mr-1 text-orange-400"/> {lead.leadScore}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="max-w-xs text-sm">
-                      <strong className="text-foreground">Pontuação de Lead (IA): {lead.leadScore}/100</strong><br/>
-                      <span className="text-muted-foreground">{lead.scoreJustification || "Análise pendente."}</span>
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <span className="truncate">{lead.name}</span>
-          </CardTitle>
-        </div>
-        {lead.company && <CardDescription className="text-xs text-muted-foreground truncate">{lead.company}</CardDescription>}
+        <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2 min-w-0" title={lead.name}>
+          {lead.leadScore && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className="cursor-help flex-shrink-0">
+                    <TrendingUp className="w-4 h-4 mr-1 text-orange-400"/> {lead.leadScore}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs text-sm">
+                    <strong className="text-foreground">Pontuação de Lead (IA): {lead.leadScore}/100</strong><br/>
+                    <span className="text-muted-foreground">{lead.scoreJustification || "Análise pendente."}</span>
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          <span className="truncate">{lead.name}</span>
+        </CardTitle>
+        {lead.company && <CardDescription className="text-xs text-muted-foreground truncate mt-1">{lead.company}</CardDescription>}
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <div className="flex items-center text-muted-foreground">
