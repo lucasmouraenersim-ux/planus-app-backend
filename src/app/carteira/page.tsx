@@ -195,7 +195,7 @@ function WalletPageContent() {
         return {
             leadId: lead.id,
             clientName: lead.name,
-            kwh: lead.kwh,
+            kwh: lead.kwh || 0,
             valueAfterDiscount: lead.valueAfterDiscount || 0,
             commission,
             recurrence,
@@ -337,8 +337,8 @@ function WalletPageContent() {
     }
   };
 
-  const formatCurrency = (value: number | undefined) => {
-    if (value === undefined) return "R$ 0,00";
+  const formatCurrency = (value: number | undefined | null) => {
+    if (value === undefined || value === null || isNaN(value)) return "R$ 0,00";
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
