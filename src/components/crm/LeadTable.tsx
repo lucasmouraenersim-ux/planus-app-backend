@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, StageId } from '@/types/crm';
@@ -35,6 +34,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
