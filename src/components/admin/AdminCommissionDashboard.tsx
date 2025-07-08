@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,9 +11,12 @@ import { z } from "zod";
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { STAGES_CONFIG } from '@/config/crm-stages';
+
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
-import type { LeadWithId } from '@/types/crm';
+import type { LeadWithId, StageId } from '@/types/crm';
 import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
@@ -21,7 +24,7 @@ import { createUser } from '@/actions/admin/createUser';
 import { deleteUser } from '@/actions/admin/deleteUser';
 import { syncLegacySellers } from '@/actions/admin/syncLegacySellers';
 import { processOldWithdrawals } from '@/actions/admin/processOldWithdrawals';
-import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
+import { useAuth } from '@/contexts/AuthContext'; 
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -57,7 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 
@@ -374,6 +377,76 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     return { paidCommissions, pendingCommissions, finalizedLeadsValue };
   }, [withdrawalRequests, filteredLeads]);
 
+  const funnelMetrics = useMemo(() => {
+    const funnelOrder: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'assinado', 'finalizado'];
+    const stageIndices = funnelOrder.reduce((acc, stage, index) => {
+        acc[stage] = index;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const leadsPassingThrough = funnelOrder.map(stageId => {
+        const stageIndex = stageIndices[stageId];
+        const count = filteredLeads.filter(lead => {
+            const leadStageIndex = stageIndices[lead.stageId];
+            return leadStageIndex !== undefined && leadStageIndex >= stageIndex;
+        }).length;
+        return { 
+            name: STAGES_CONFIG.find(s => s.id === stageId)?.title || stageId, 
+            value: count 
+        };
+    });
+    
+    return funnelOrder.map((stageId, index) => {
+        const currentStage = leadsPassingThrough.find(s => s.name === (STAGES_CONFIG.find(conf => conf.id === stageId)?.title || stageId));
+        const prevStageCount = index > 0 ? leadsPassingThrough[index - 1].value : (currentStage?.value || 0);
+        const conversionRate = prevStageCount > 0 ? ((currentStage?.value || 0) / prevStageCount) * 100 : 100;
+        
+        return {
+            name: currentStage?.name || 'N/A',
+            value: currentStage?.value || 0,
+            conversion: conversionRate.toFixed(1) + '%',
+        };
+    }).filter(d => d.value > 0);
+  }, [filteredLeads]);
+
+
+  const leadSourceMetrics = useMemo(() => {
+    const finalizedLeads = filteredLeads.filter(l => l.stageId === 'finalizado');
+    const sourceCounts = finalizedLeads.reduce((acc, lead) => {
+        const source = lead.leadSource || 'Não Informado';
+        acc[source] = (acc[source] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(sourceCounts).map(([name, value]) => ({ name, value }));
+  }, [filteredLeads]);
+  
+
+  const sellerPerformanceMetrics = useMemo(() => {
+    return filteredUsers
+      .map(user => {
+        const userLeads = filteredLeads.filter(lead => lead.userId === user.uid);
+        if (userLeads.length === 0) return null;
+
+        const finalizedLeads = userLeads.filter(l => l.stageId === 'finalizado' && l.completedAt && l.createdAt);
+        const totalTimeToClose = finalizedLeads.reduce((sum, l) => sum + differenceInDays(parseISO(l.completedAt!), parseISO(l.createdAt)), 0);
+        
+        return {
+          uid: user.uid,
+          name: user.displayName || user.email || 'N/A',
+          totalLeads: userLeads.length,
+          finalizedLeads: finalizedLeads.length,
+          conversionRate: finalizedLeads.length > 0 ? ((finalizedLeads.length / userLeads.length) * 100).toFixed(1) + '%' : '0.0%',
+          avgTimeToClose: finalizedLeads.length > 0 ? (totalTimeToClose / finalizedLeads.length).toFixed(1) + ' dias' : 'N/A',
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.finalizedLeads - a.finalizedLeads);
+  }, [filteredLeads, filteredUsers]);
+
+
+  const CHART_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F'];
+
   const getUserTypeBadgeStyle = (type?: UserType) => {
     if (!type) return 'bg-gray-500/20 text-gray-400';
     switch (type) {
@@ -416,11 +489,87 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Total de Usuários</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{initialUsers.length}</div></CardContent></Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-        <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Leads Assinados por Vendedor</CardTitle><CardDescription>Distribuição no período selecionado.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><PieChartIcon className="w-16 h-16 text-muted-foreground/50"/> </CardContent></Card>
-        <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Origem dos Leads Assinados</CardTitle><CardDescription>Fontes dos leads convertidos no período.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><BarChartHorizontalBig className="w-16 h-16 text-muted-foreground/50"/></CardContent></Card>
-        <Card className="bg-card/70 backdrop-blur-lg border lg:col-span-1"><CardHeader><CardTitle className="text-primary">Consumo (kWh) dos Leads</CardTitle><CardDescription>Distribuição de consumo dos leads assinados.</CardDescription></CardHeader><CardContent className="h-[250px] flex items-center justify-center"><Activity className="w-16 h-16 text-muted-foreground/50"/></CardContent></Card>
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+          <Card className="bg-card/70 backdrop-blur-lg border">
+              <CardHeader>
+                  <CardTitle className="text-primary flex items-center"><TrendingUp className="mr-2 h-5 w-5"/>Funil de Vendas</CardTitle>
+                  <CardDescription>Conversão de leads entre estágios no período selecionado.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                  {funnelMetrics.length > 0 ? (
+                      funnelMetrics.map((stage, index) => (
+                          <div key={stage.name} className="flex items-center">
+                              <div className="flex-1 space-y-1">
+                                  <div className="flex justify-between">
+                                      <p className="font-medium">{stage.name}</p>
+                                      <p className="font-semibold text-foreground">{stage.value} Leads</p>
+                                  </div>
+                                  <div className="h-2 w-full bg-muted rounded-full">
+                                      <div className="h-2 bg-primary rounded-full" style={{ width: `${(stage.value / funnelMetrics[0].value) * 100}%` }}></div>
+                                  </div>
+                              </div>
+                              {index > 0 && (
+                                  <div className="text-center w-24 flex-shrink-0">
+                                      <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground" />
+                                      <p className="text-xs font-semibold text-green-500">{stage.conversion}</p>
+                                  </div>
+                              )}
+                          </div>
+                      ))
+                  ) : (
+                      <p className="text-center text-muted-foreground py-10">Nenhum dado para o funil neste período.</p>
+                  )}
+              </CardContent>
+          </Card>
+          <Card className="bg-card/70 backdrop-blur-lg border">
+              <CardHeader>
+                  <CardTitle className="text-primary flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Origem dos Leads Convertidos</CardTitle>
+                  <CardDescription>Distribuição de fontes para leads finalizados no período.</CardDescription>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                  {leadSourceMetrics.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                              <Pie data={leadSourceMetrics} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => { const radius = innerRadius + (outerRadius - innerRadius) * 1.2; const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180)); const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180)); return (<text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs fill-muted-foreground">{`${(percent * 100).toFixed(0)}%`}</text>);}}>
+                                  {leadSourceMetrics.map((entry, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}
+                              </Pie>
+                              <RechartsTooltip formatter={(value: number) => `${value} leads`} />
+                              <Legend />
+                          </PieChart>
+                      </ResponsiveContainer>
+                  ) : (
+                      <p className="text-center text-muted-foreground pt-10">Nenhum lead convertido no período para exibir.</p>
+                  )}
+              </CardContent>
+          </Card>
       </div>
+
+      <Card className="bg-card/70 backdrop-blur-lg border">
+          <CardHeader>
+              <CardTitle className="text-primary flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5"/>Relatório de Performance por Vendedor</CardTitle>
+              <CardDescription>Análise detalhada do desempenho da equipe no período.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              {sellerPerformanceMetrics.length > 0 ? (
+                  <Table>
+                      <TableHeader><TableRow><TableHead>Vendedor</TableHead><TableHead>Leads Trabalhados</TableHead><TableHead>Leads Finalizados</TableHead><TableHead>Taxa de Conversão</TableHead><TableHead>Tempo Médio de Fechamento</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                          {sellerPerformanceMetrics.map(seller => (
+                              <TableRow key={seller.uid}>
+                                  <TableCell className="font-medium">{seller.name}</TableCell>
+                                  <TableCell>{seller.totalLeads}</TableCell>
+                                  <TableCell className="font-semibold text-primary">{seller.finalizedLeads}</TableCell>
+                                  <TableCell>{seller.conversionRate}</TableCell>
+                                  <TableCell>{seller.avgTimeToClose}</TableCell>
+                              </TableRow>
+                          ))}
+                      </TableBody>
+                  </Table>
+              ) : (
+                  <p className="text-center text-muted-foreground py-10">Nenhum dado de performance para exibir no período selecionado.</p>
+              )}
+          </CardContent>
+      </Card>
 
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
