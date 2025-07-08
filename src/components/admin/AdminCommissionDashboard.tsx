@@ -18,6 +18,7 @@ import type { WithdrawalRequestWithId, WithdrawalStatus } from '@/types/wallet';
 import { USER_TYPE_FILTER_OPTIONS, USER_TYPE_ADD_OPTIONS, WITHDRAWAL_STATUSES_ADMIN } from '@/config/admin-config';
 import { updateUser } from '@/lib/firebase/firestore';
 import { createUser } from '@/actions/admin/createUser';
+import { deleteUser } from '@/actions/admin/deleteUser';
 import { syncLegacySellers } from '@/actions/admin/syncLegacySellers';
 import { processOldWithdrawals } from '@/actions/admin/processOldWithdrawals';
 import { useAuth } from '@/contexts/AuthContext'; // Using useAuth to fetch data
@@ -56,7 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote
 } from 'lucide-react';
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -129,9 +130,11 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const [isUpdateWithdrawalModalOpen, setIsUpdateWithdrawalModalOpen] = useState(false);
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequestWithId | null>(null);
+  const [userToDelete, setUserToDelete] = useState<FirestoreUser | null>(null);
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
@@ -223,6 +226,32 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }
   };
 
+  const handleOpenDeleteModal = (user: FirestoreUser) => {
+    setUserToDelete(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setIsSubmittingAction(true);
+    try {
+        const result = await deleteUser(userToDelete.uid);
+        if (result.success) {
+            toast({ title: "Usuário Excluído", description: result.message });
+            await refreshUsers();
+        } else {
+            toast({ title: "Erro ao Excluir", description: result.message, variant: "destructive" });
+        }
+    } catch (error) {
+        console.error("Error deleting user:", error);
+        toast({ title: "Erro", description: "Não foi possível excluir o usuário.", variant: "destructive" });
+    } finally {
+        setIsSubmittingAction(false);
+        setIsDeleteDialogOpen(false);
+        setUserToDelete(null);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return initialUsers.filter(user => {
       const searchTermLower = userSearchTerm.toLowerCase();
@@ -236,13 +265,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   }, [initialUsers, userSearchTerm, userTypeFilter]);
 
   const handleAddUser = async (data: AddUserFormData) => {
-    if (!userAppRole) {
-      toast({ title: "Erro", description: "Não foi possível identificar sua função. Faça login novamente.", variant: "destructive" });
-      return;
-    }
     setIsSubmittingUser(true);
     try {
-      const result = await createUser({ ...data, creatorRole: userAppRole });
+      const result = await createUser(data);
 
       if (result.success) {
         await refreshUsers();
@@ -443,6 +468,12 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                             <ShieldAlert className="mr-2 h-4 w-4" />
                             Redefinir Senha
                           </DropdownMenuItem>)}
+                          {canEdit && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir Usuário
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -586,6 +617,30 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></DialogFooter></form></Form></DialogContent></Dialog>)}
       
       <AlertDialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Redefinição de Senha</AlertDialogTitle><AlertDialogDescription>Um email será enviado para <strong>{selectedUser?.email}</strong> com instruções para criar uma nova senha. O usuário será desconectado de todas as sessões ativas. Deseja continuar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmResetPassword} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar Email</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza que deseja excluir?</AlertDialogTitle>
+            <AlertDialogDescription>
+                Esta ação não pode ser desfeita. Isso excluirá permanentemente o usuário{' '}
+                <strong className="text-foreground">{userToDelete?.displayName}</strong> ({userToDelete?.email}) e
+                reatribuirá todos os seus leads para "Sistema".
+            </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setUserToDelete(null)} disabled={isSubmittingAction}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={handleConfirmDelete}
+                disabled={isSubmittingAction}
+            >
+                {isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sim, Excluir Usuário
+            </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
