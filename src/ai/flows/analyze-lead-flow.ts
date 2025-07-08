@@ -78,13 +78,24 @@ const analyzeLeadFlow = ai.defineFlow(
     const leadData = leadDoc.data() as LeadDocumentData;
     const messages = (chatDoc.exists && chatDoc.data()?.messages) ? (chatDoc.data()?.messages as ChatMessage[]) : [];
 
+    // Convert Firestore Timestamps to strings to ensure serializability before passing to the prompt.
+    const serializableLeadData: { [key: string]: any } = {};
+    for (const key in leadData) {
+      const value = (leadData as any)[key];
+      if (value instanceof admin.firestore.Timestamp) {
+        serializableLeadData[key] = value.toDate().toISOString();
+      } else {
+        serializableLeadData[key] = value;
+      }
+    }
+
     // 2. Format data for the prompt
     const transcript = messages.length > 0
       ? messages.map(msg => `${msg.sender === 'user' ? 'Vendedor' : 'Cliente'}: ${msg.text}`).join('\n')
       : "No conversation history.";
 
-    // 3. Call the AI model
-    const llmResponse = await leadAnalysisPrompt({ leadData, transcript });
+    // 3. Call the AI model with serializable data
+    const llmResponse = await leadAnalysisPrompt({ leadData: serializableLeadData, transcript });
     const analysisResult = llmResponse.output;
 
     if (!analysisResult) {
