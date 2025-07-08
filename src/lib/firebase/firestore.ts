@@ -192,7 +192,7 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
   console.log(`Successfully deleted lead ${leadId} and its chat history.`);
 }
 
-export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
+export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }, limit: number): Promise<void> {
   const activeStages: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'conformidade', 'para-validacao'];
   const leadsRef = collection(db, "crm_leads");
   
@@ -206,8 +206,8 @@ export async function assignLeadToSeller(leadId: string, seller: { uid: string; 
   const snapshot = await getCountFromServer(q);
   const activeLeadCount = snapshot.data().count;
 
-  if (activeLeadCount >= 2) {
-    throw new Error("Limite de 2 leads ativos atingido. Forneça feedback (com anexo) em um lead existente para liberar espaço.");
+  if (activeLeadCount >= limit) {
+    throw new Error(`Limite de ${limit} leads ativos atingido. Forneça feedback (com anexo) em um lead existente para liberar espaço.`);
   }
 
 

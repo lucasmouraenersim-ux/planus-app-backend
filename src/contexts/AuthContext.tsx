@@ -66,6 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           canViewLeadPhoneNumber: isSuperAdmin || firestoreUserData.canViewLeadPhoneNumber || false,
           canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,
           canViewCrm: isSuperAdmin || firestoreUserData.canViewCrm || false,
+          assignmentLimit: firestoreUserData.assignmentLimit,
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);

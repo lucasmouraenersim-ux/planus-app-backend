@@ -29,6 +29,7 @@ export type FirestoreUser = {
   canViewLeadPhoneNumber?: boolean;
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
+  assignmentLimit?: number; // Max number of active leads a seller can have
 };
 
 // User object available in the auth context or passed as props
@@ -57,4 +58,5 @@ export type AppUser = {
   canViewLeadPhoneNumber?: boolean;
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
+  assignmentLimit?: number;
 };

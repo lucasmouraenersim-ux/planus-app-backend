@@ -111,7 +111,7 @@ function CrmPageContent() {
   const [dontShowTutorialAgain, setDontShowTutorialAgain] = useState(false);
   const [isFeedbackPopoverOpen, setIsFeedbackPopoverOpen] = useState(false);
 
-  const assignmentLimit = 2; // Define the lead assignment limit
+  const assignmentLimit = appUser?.assignmentLimit ?? 2; // Use dynamic limit, default to 2
 
   useEffect(() => {
     // This effect runs on the client, so localStorage is available.
@@ -501,7 +501,7 @@ function CrmPageContent() {
       await assignLeadToSeller(leadId, {
         uid: appUser.uid,
         name: appUser.displayName || appUser.email!,
-      });
+      }, assignmentLimit);
       toast({
         title: "Lead Atribuído!",
         description: "O lead agora é seu e foi movido para 'Contato Inicial'.",

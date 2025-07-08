@@ -20,10 +20,10 @@ interface KanbanBoardProps {
   loggedInUser: AppUser;
   downlineLevelMap: Map<string, number>;
   activeAssignedLeadsCount: number;
+  assignmentLimit: number;
 }
 
-export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap, activeAssignedLeadsCount }: KanbanBoardProps) {
-  const assignmentLimit = 2;
+export function KanbanBoard({ leads, onViewLeadDetails, userAppRole, onMoveLead, onDeleteLead, onEditLead, onAssignLead, allFirestoreUsers, loggedInUser, downlineLevelMap, activeAssignedLeadsCount, assignmentLimit }: KanbanBoardProps) {
 
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-md ">

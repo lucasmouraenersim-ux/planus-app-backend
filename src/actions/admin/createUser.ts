@@ -76,6 +76,7 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       canViewLeadPhoneNumber: false,
       canViewCrm: false,
       canViewCareerPlan: false,
+      assignmentLimit: 2, // Default limit for new users
     };
     
     await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore);

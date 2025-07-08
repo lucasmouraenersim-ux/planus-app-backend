@@ -60,7 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 
@@ -100,6 +100,10 @@ const editUserFormSchema = z.object({
   canViewLeadPhoneNumber: z.boolean().default(false),
   canViewCrm: z.boolean().default(false),
   canViewCareerPlan: z.boolean().default(false),
+  assignmentLimit: z.preprocess(
+    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
+    z.number().int().optional()
+  ),
 });
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
 
@@ -178,6 +182,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       canViewLeadPhoneNumber: user.canViewLeadPhoneNumber || false,
       canViewCrm: user.canViewCrm || false,
       canViewCareerPlan: user.canViewCareerPlan || false,
+      assignmentLimit: user.assignmentLimit,
     });
     setIsEditUserModalOpen(true);
   };
@@ -198,6 +203,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         canViewLeadPhoneNumber: data.canViewLeadPhoneNumber,
         canViewCrm: data.canViewCrm,
         canViewCareerPlan: data.canViewCareerPlan,
+        assignmentLimit: data.assignmentLimit,
       });
       await refreshUsers();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
@@ -684,6 +690,31 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                     <FormField control={editUserForm.control} name="canViewCrm" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Acesso ao CRM</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                     <FormField control={editUserForm.control} name="canViewCareerPlan" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Plano de Carreira</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                     <FormField control={editUserForm.control} name="canViewLeadPhoneNumber" render={({ field }) => (<FormItem className="flex items-center justify-between"><div className="space-y-0.5"><FormLabel>Ver Telefone dos Leads</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
+                    <FormField
+                      control={editUserForm.control}
+                      name="assignmentLimit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center"><ClipboardList className="mr-2 h-4 w-4" />Limite de Leads Ativos</FormLabel>
+                          <Select 
+                            onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))} 
+                            value={field.value !== undefined ? String(field.value) : '2'} // Default to 2 if undefined
+                            disabled={!canEdit || isSubmittingAction}
+                          >
+                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              <SelectItem value="2">2 (Padrão)</SelectItem>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="20">20</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="9999">Ilimitado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormDescription className="text-xs">Máximo de leads sem feedback que o vendedor pode ter.</FormDescription>
+                        </FormItem>
+                      )}
+                    />
                 </CardContent></Card>
 
                 {/* Commissions */}
