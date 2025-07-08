@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -59,6 +59,7 @@ import {
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
     Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote
 } from 'lucide-react';
+import type { DateRange } from "react-day-picker";
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
   { id: 'wd1', userId: 'user1', userEmail: 'vendedor1@example.com', userName: 'Vendedor Um', amount: 500, pixKeyType: 'CPF/CNPJ', pixKey: '111.111.111-11', status: 'pendente', requestedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'personal' },
@@ -116,7 +117,7 @@ interface AdminCommissionDashboardProps {
 export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, refreshUsers }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
   const { userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
   
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
@@ -359,8 +360,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
   const filteredLeads = useMemo(() => {
     return allLeads.filter(lead => {
+      if (!dateRange || !dateRange.from) return true; // Show all if no date range
       const createdAt = new Date(lead.createdAt);
-      const inRange = (!dateRange.from || createdAt >= dateRange.from) && (!dateRange.to || createdAt <= dateRange.to);
+      const inRange = createdAt >= dateRange.from && (!dateRange.to || createdAt <= dateRange.to);
       return inRange;
     });
   }, [allLeads, dateRange]);
@@ -397,7 +399,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yy")} - ${format(dateRange.to, "dd/MM/yy")}` : format(dateRange.from, "dd/MM/yy")) : (<span>Selecione o período</span>)}
+                {dateRange?.from ? (dateRange.to ? `${format(dateRange.from, "dd/MM/yy")} - ${format(dateRange.to, "dd/MM/yy")}` : format(dateRange.from, "dd/MM/yy")) : (<span>Selecione o período</span>)}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end"><Calendar mode="range" selected={dateRange} onSelect={setDateRange} initialFocus locale={ptBR} /></PopoverContent>
