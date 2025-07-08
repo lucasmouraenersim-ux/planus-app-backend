@@ -23,7 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -152,6 +152,17 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
+                         
+                         {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
+                            <SidebarMenuItem>
+                                <Link href="/team">
+                                    <SidebarMenuButton isActive={currentPathname === '/team'} tooltip="Minha Equipe">
+                                        <Network />Minha Equipe
+                                    </SidebarMenuButton>
+                                </Link>
+                            </SidebarMenuItem>
+                         )}
+
                          {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/profile"><SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}><CircleUserRound />Perfil</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/sobre"><SidebarMenuButton tooltip="Sobre o App" isActive={currentPathname.startsWith('/sobre')}><Info />Sobre</SidebarMenuButton></Link></SidebarMenuItem>
