@@ -125,8 +125,7 @@ function WalletPageContent() {
     setIsLoadingHistory(true);
     const q = query(
       collection(db, 'withdrawal_requests'), 
-      where('userId', '==', appUser.uid), 
-      orderBy('requestedAt', 'desc')
+      where('userId', '==', appUser.uid)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const history = snapshot.docs.map(doc => {
@@ -138,6 +137,7 @@ function WalletPageContent() {
           processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
         } as WithdrawalRequestWithId;
       });
+      history.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
       setWithdrawalHistory(history);
       setIsLoadingHistory(false);
     }, (error) => {
