@@ -15,11 +15,21 @@ import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark, Download
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark, Download, Lightbulb
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
+import { summarizeChat } from '@/ai/flows/summarize-chat-flow';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
@@ -59,6 +69,10 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [newCompletedDate, setNewCompletedDate] = useState<Date | undefined>(
     lead.completedAt ? parseISO(lead.completedAt) : undefined
   );
+
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
 
   const isOwner = appUser?.uid === lead.userId;
 
@@ -166,6 +180,24 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             description: "Não foi possível salvar a nova data.",
             variant: "destructive",
         });
+    }
+  };
+
+  const handleSummarizeChat = async () => {
+    if (chatMessages.length === 0) {
+        toast({ title: "Conversa Vazia", description: "Não há mensagens para resumir.", variant: "default" });
+        return;
+    }
+    setIsSummarizing(true);
+    try {
+        const result = await summarizeChat(lead.id);
+        setSummary(result.summary);
+        setIsSummaryDialogOpen(true);
+    } catch (error) {
+        console.error("Error summarizing chat:", error);
+        toast({ title: "Erro ao Resumir", description: "Não foi possível gerar o resumo.", variant: "destructive" });
+    } finally {
+        setIsSummarizing(false);
     }
   };
 
@@ -393,7 +425,11 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             </div>
           </div>
         </CardContent>
-        <CardFooter className="border-t pt-4 flex justify-end space-x-2">
+        <CardFooter className="border-t pt-4 flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={handleSummarizeChat} disabled={isSummarizing}>
+                {isSummarizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Lightbulb className="w-4 h-4 mr-2"/>}
+                Resumir com IA
+            </Button>
             {(isAdmin || isOwner) && (
               <Button variant="outline" onClick={() => onEdit(lead)}><Edit className="w-4 h-4 mr-2"/>Editar Lead</Button>
             )}
@@ -406,6 +442,29 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <Button onClick={onClose}>Fechar</Button>
         </CardFooter>
       </Card>
+      
+      <AlertDialog open={isSummaryDialogOpen} onOpenChange={setIsSummaryDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <Lightbulb className="w-5 h-5 mr-2 text-primary"/>Resumo da Conversa
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Gerado por IA. Verifique as informações importantes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ScrollArea className="max-h-[50vh] pr-4">
+              <div className="prose prose-sm dark:prose-invert whitespace-pre-wrap text-foreground">
+                  {summary}
+              </div>
+          </ScrollArea>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Fechar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
