@@ -193,7 +193,7 @@ export async function deleteCrmLead(leadId: string): Promise<void> {
 }
 
 export async function assignLeadToSeller(leadId: string, seller: { uid: string; name: string }): Promise<void> {
-  const activeStages: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'conformidade', 'assinado', 'para-validacao'];
+  const activeStages: StageId[] = ['contato', 'fatura', 'proposta', 'contrato', 'conformidade', 'para-validacao'];
   const leadsRef = collection(db, "crm_leads");
   
   const q = query(

@@ -364,7 +364,7 @@ function CrmPageContent() {
     // An active lead is assigned to the user, not in a final state, and has no feedback attachment yet.
     return leads.filter(lead => 
       lead.userId === appUser.uid && 
-      !['finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
+      !['assinado', 'finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
       !lead.hasFeedbackAttachment
     ).length;
   }, [leads, appUser]);
@@ -374,7 +374,7 @@ function CrmPageContent() {
     // An active lead is assigned to the user, not in a final state, and has no feedback attachment yet.
     return leads.filter(lead => 
       lead.userId === appUser.uid && 
-      !['finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
+      !['assinado', 'finalizado', 'perdido', 'cancelado'].includes(lead.stageId) &&
       !lead.hasFeedbackAttachment
     );
   }, [leads, appUser]);
