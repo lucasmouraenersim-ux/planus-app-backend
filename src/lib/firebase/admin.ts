@@ -2,17 +2,14 @@
 'use server';
 import admin from 'firebase-admin';
 
-const PROJECT_ID = "energisa-invoice-editor";
-
 // This function ensures Firebase Admin is initialized only once.
 export async function initializeAdmin() {
-  if (!admin.apps.length) {
+  if (admin.apps.length === 0) {
     try {
-      // Explicitly initialize with the project ID to avoid ambiguity in server environments.
-      admin.initializeApp({
-        projectId: PROJECT_ID,
-      });
-      console.log(`[Firebase Admin] SDK initialized successfully for project: ${PROJECT_ID}.`);
+      // In Google Cloud environments (like App Hosting), initializeApp() 
+      // with no arguments uses Application Default Credentials.
+      admin.initializeApp();
+      console.log(`[Firebase Admin] SDK initialized successfully.`);
     } catch (error: any) {
       // This can happen in serverless environments with multiple concurrent executions.
       // If it's a duplicate app error, we can safely ignore it and use the existing app.
