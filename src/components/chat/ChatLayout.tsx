@@ -9,7 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Square } from 'lucide-react';
+import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Square, Lightbulb } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -20,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { CHAT_TEMPLATES, type MessageTemplate } from '@/config/chat-templates';
 
 export function ChatLayout() {
   const { appUser, userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
@@ -43,6 +45,8 @@ export function ChatLayout() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [isTemplatesPopoverOpen, setIsTemplatesPopoverOpen] = useState(false);
+
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -243,7 +247,16 @@ export function ChatLayout() {
         console.error("Error accessing media devices.", error);
         toast({ title: "Erro de Microfone", description: "Não foi possível acessar o microfone. Verifique as permissões do navegador.", variant: "destructive" });
     }
-};
+  };
+
+  const handleTemplateSelect = (template: MessageTemplate) => {
+    if (!selectedLead || !appUser) return;
+    const populatedBody = template.body
+      .replace(/{{leadName}}/g, selectedLead.name)
+      .replace(/{{userName}}/g, appUser.displayName || '');
+    setNewMessage(populatedBody);
+    setIsTemplatesPopoverOpen(false);
+  };
 
 
   const filteredLeads = useMemo(() => {
@@ -352,6 +365,28 @@ export function ChatLayout() {
 
             <footer className="p-4 border-t bg-card/50 flex-shrink-0">
               <div className="flex items-center gap-2">
+                <Popover open={isTemplatesPopoverOpen} onOpenChange={setIsTemplatesPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={isSending || isRecording || isUploadingMedia}>
+                      <Lightbulb className="h-5 w-5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 mb-2">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Templates de Mensagem</h4>
+                        <p className="text-sm text-muted-foreground">Selecione uma mensagem para usar.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        {CHAT_TEMPLATES.map((template) => (
+                          <Button key={template.name} variant="outline" size="sm" onClick={() => handleTemplateSelect(template)}>
+                            {template.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Input 
                   placeholder="Digite uma mensagem..." 
                   className="flex-1"

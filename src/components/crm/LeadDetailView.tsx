@@ -36,6 +36,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { CHAT_TEMPLATES, type MessageTemplate } from '@/config/chat-templates';
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -73,6 +74,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
+  const [isTemplatesPopoverOpen, setIsTemplatesPopoverOpen] = useState(false);
 
   const isOwner = appUser?.uid === lead.userId;
 
@@ -199,6 +201,15 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     } finally {
         setIsSummarizing(false);
     }
+  };
+
+  const handleTemplateSelect = (template: MessageTemplate) => {
+    if (!appUser) return;
+    const populatedBody = template.body
+      .replace(/{{leadName}}/g, lead.name)
+      .replace(/{{userName}}/g, appUser.displayName || '');
+    setNewMessage(populatedBody);
+    setIsTemplatesPopoverOpen(false);
   };
 
   const stageInfo = STAGES_CONFIG.find(s => s.id === lead.stageId);
@@ -417,6 +428,28 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
               <div ref={chatEndRef} />
             </ScrollArea>
             <div className="flex gap-2 flex-shrink-0">
+              <Popover open={isTemplatesPopoverOpen} onOpenChange={setIsTemplatesPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isSendingMessage}>
+                    <Lightbulb className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 mb-2">
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium leading-none">Templates de Mensagem</h4>
+                      <p className="text-sm text-muted-foreground">Selecione uma mensagem para usar.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      {CHAT_TEMPLATES.map((template) => (
+                        <Button key={template.name} variant="outline" size="sm" onClick={() => handleTemplateSelect(template)}>
+                          {template.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite uma mensagem..." onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} disabled={isSendingMessage} />
               <Button onClick={handleSendMessage} disabled={isSendingMessage}>
                 {isSendingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-0 md:mr-2"/>}
