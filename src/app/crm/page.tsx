@@ -5,10 +5,11 @@ import React from 'react';
 import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import type { LeadWithId, StageId } from '@/types/crm';
 import { KanbanBoard } from '@/components/crm/KanbanBoard';
+import { LeadTable } from '@/components/crm/LeadTable'; 
 import { LeadForm } from '@/components/crm/LeadForm';
 import { LeadDetailView } from '@/components/crm/LeadDetailView';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2, CopyCheck, Trash2, Edit, HelpCircle, BookOpen, MessageSquare, CheckCircle as CheckCircleIcon, ArrowLeft, ArrowRight } from 'lucide-react';
+import { PlusCircle, Users, Filter, Plus, Zap, Upload, Download, Loader2, CopyCheck, Trash2, Edit, HelpCircle, BookOpen, MessageSquare, CheckCircle as CheckCircleIcon, ArrowLeft, ArrowRight, Kanban, List } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -100,6 +101,10 @@ function CrmPageContent() {
   const [filterUc, setFilterUc] = useState("");
   const [filterPhone, setFilterPhone] = useState("");
 
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof LeadWithId; direction: 'ascending' | 'descending' } | null>({ key: 'lastContact', direction: 'descending' });
+
+
   // Tutorial states
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
@@ -161,16 +166,9 @@ function CrmPageContent() {
             }
         });
 
-        const sortedLeads = Array.from(leadsMap.current.values()).sort((a, b) => {
-            const getDateForSort = (lead: LeadWithId): Date => {
-                if (lead.stageId === 'finalizado' && lead.completedAt) return new Date(lead.completedAt);
-                if (lead.stageId === 'assinado' && lead.signedAt) return new Date(lead.signedAt);
-                return new Date(lead.lastContact);
-            };
-            return getDateForSort(b).getTime() - getDateForSort(a).getTime();
-        });
+        const allLeads = Array.from(leadsMap.current.values());
 
-        setLeads(sortedLeads);
+        setLeads(allLeads);
         if (isLoading) {
             setIsLoading(false);
         }
@@ -237,9 +235,20 @@ function CrmPageContent() {
     };
 }, [appUser, userAppRole, allFirestoreUsers, toast, isLoading, isLoadingAllUsers]);
 
+  const handleSort = (key: keyof LeadWithId) => {
+    setSortConfig(current => {
+      if (current?.key === key && current.direction === 'ascending') {
+        return { key, direction: 'descending' };
+      }
+      return { key, direction: 'ascending' };
+    });
+  };
+
 
   const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
+    let sortableLeads = [...leads];
+
+    sortableLeads = sortableLeads.filter(lead => {
       const cleanFilterName = filterName.trim().toLowerCase();
       const cleanFilterCpf = filterCpf.trim().replace(/\D/g, '');
       const cleanFilterUc = filterUc.trim().toLowerCase();
@@ -266,7 +275,28 @@ function CrmPageContent() {
 
       return true;
     });
-  }, [leads, filterName, filterCpf, filterUc, filterPhone]);
+
+    if (sortConfig !== null) {
+      sortableLeads.sort((a, b) => {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+
+        if (aValue === undefined || aValue === null) return 1;
+        if (bValue === undefined || bValue === null) return -1;
+        
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+
+    return sortableLeads;
+  }, [leads, filterName, filterCpf, filterUc, filterPhone, sortConfig]);
 
   const kwhTotalFinalizado = useMemo(() => {
     return leads
@@ -762,6 +792,16 @@ function CrmPageContent() {
                 </div>
               </PopoverContent>
             </Popover>
+             <div className="p-1 bg-muted rounded-md flex items-center">
+                <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')} className="h-8">
+                    <Kanban className="w-4 h-4 mr-2" />
+                    Kanban
+                </Button>
+                <Button variant={viewMode === 'table' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('table')} className="h-8">
+                    <List className="w-4 h-4 mr-2" />
+                    Lista
+                </Button>
+            </div>
             {userAppRole === 'superadmin' && (
               <>
                 <Button onClick={handleCheckDuplicates} size="sm" variant="outline">
@@ -786,21 +826,34 @@ function CrmPageContent() {
         </div>
       </header>
       
-      <div className="flex-1 min-w-0 overflow-hidden"> {/* Wrapper for KanbanBoard */}
-        <KanbanBoard 
-          leads={filteredLeads} 
-          onViewLeadDetails={handleViewLeadDetails}
-          userAppRole={userAppRole}
-          onMoveLead={handleMoveLead}
-          onDeleteLead={handleDeleteLead}
-          onEditLead={handleOpenForm}
-          onAssignLead={handleAssignLead}
-          allFirestoreUsers={allFirestoreUsers}
-          loggedInUser={appUser as AppUser}
-          downlineLevelMap={downlineLevelMap}
-          activeAssignedLeadsCount={activeAssignedLeadsCount}
-          assignmentLimit={assignmentLimit}
-        />
+      <div className="flex-1 min-w-0 overflow-auto">
+        {viewMode === 'kanban' ? (
+           <KanbanBoard 
+            leads={filteredLeads} 
+            onViewLeadDetails={handleViewLeadDetails}
+            userAppRole={userAppRole}
+            onMoveLead={handleMoveLead}
+            onDeleteLead={handleDeleteLead}
+            onEditLead={handleOpenForm}
+            onAssignLead={handleAssignLead}
+            allFirestoreUsers={allFirestoreUsers}
+            loggedInUser={appUser as AppUser}
+            downlineLevelMap={downlineLevelMap}
+            activeAssignedLeadsCount={activeAssignedLeadsCount}
+            assignmentLimit={assignmentLimit}
+          />
+        ) : (
+          <LeadTable
+            leads={filteredLeads}
+            onViewLeadDetails={handleViewLeadDetails}
+            userAppRole={userAppRole}
+            onMoveLead={handleMoveLead}
+            onDeleteLead={handleDeleteLead}
+            onEditLead={handleOpenForm}
+            sortConfig={sortConfig}
+            onSort={handleSort}
+          />
+        )}
       </div>
 
       {/* Floating Action Button */}
