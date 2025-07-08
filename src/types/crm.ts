@@ -102,14 +102,21 @@ export interface LeadDocumentData {
   feedbackAttachmentUrl?: string;
   hasFeedbackAttachment?: boolean;
   showPhoneNumber?: boolean;
+
+  // AI Fields
+  leadScore?: number;
+  scoreJustification?: string;
+  nextActionSuggestion?: string;
+  lastAnalyzedAt?: Timestamp | string;
 }
 
-export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'> {
+export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt' | 'lastAnalyzedAt'> {
   id: string;
   createdAt: string; // Always string on client
   lastContact: string; // Always string on client
   signedAt?: string; // Always string on client
   completedAt?: string; // Always string on client
+  lastAnalyzedAt?: string; // Always string on client
 }
 
 export interface OutboundLead {

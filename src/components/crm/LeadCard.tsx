@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network, PhoneCall } from 'lucide-react';
+import { DollarSign, Zap, User, CalendarDays, ExternalLink, MoreHorizontal, Move, Trash2, Edit2, Handshake, CheckCircle, Award, Banknote, Percent, Network, PhoneCall, TrendingUp } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -74,7 +74,24 @@ export function LeadCard({ lead, onViewDetails, userAppRole, onMoveLead, onDelet
     <Card className="mb-4 bg-card/70 backdrop-blur-lg border shadow-md hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
-          <CardTitle className="text-lg font-semibold text-primary truncate" title={lead.name}>
+          <CardTitle className="text-lg font-semibold text-primary truncate flex items-center" title={lead.name}>
+             {lead.leadScore && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="mr-2 cursor-help">
+                      <TrendingUp className="w-4 h-4 mr-1 text-orange-400"/> {lead.leadScore}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-sm">
+                      <strong className="text-foreground">Pontuação de Lead (IA): {lead.leadScore}/100</strong><br/>
+                      <span className="text-muted-foreground">{lead.scoreJustification || "Análise pendente."}</span>
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {lead.name}
           </CardTitle>
         </div>

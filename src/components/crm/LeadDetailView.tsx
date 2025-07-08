@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -15,7 +14,7 @@ import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { 
     DollarSign, Zap, User, CalendarDays, MessageSquare, Send, Edit, Paperclip, 
-    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark, Download, Lightbulb
+    CheckCircle, XCircle, AlertTriangle, X, Loader2, MessagesSquare, FileText, Banknote, UserSquare, Landmark, Download, Lightbulb, TrendingUp, Sparkles, BrainCircuit
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -29,7 +28,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
-import { summarizeChat } from '@/ai/flows/summarize-chat-flow';
+import { analyzeLead, type AnalyzeLeadOutput } from '@/ai/flows/analyze-lead-flow';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
@@ -71,9 +70,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     lead.completedAt ? parseISO(lead.completedAt) : undefined
   );
 
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
-  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalyzeLeadOutput | null>(null);
+
   const [isTemplatesPopoverOpen, setIsTemplatesPopoverOpen] = useState(false);
 
   const isOwner = appUser?.uid === lead.userId;
@@ -185,23 +184,24 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
     }
   };
 
-  const handleSummarizeChat = async () => {
-    if (chatMessages.length === 0) {
-        toast({ title: "Conversa Vazia", description: "Não há mensagens para resumir.", variant: "default" });
-        return;
-    }
-    setIsSummarizing(true);
+  const handleAnalyzeLead = async () => {
+    setIsAnalyzing(true);
+    setAnalysisResult(null);
     try {
-        const result = await summarizeChat(lead.id);
-        setSummary(result.summary);
-        setIsSummaryDialogOpen(true);
+        const result = await analyzeLead(lead.id);
+        setAnalysisResult(result);
+        toast({
+            title: "Análise Concluída",
+            description: "A pontuação do lead e a sugestão de ação foram atualizadas.",
+        });
     } catch (error) {
-        console.error("Error summarizing chat:", error);
-        toast({ title: "Erro ao Resumir", description: "Não foi possível gerar o resumo.", variant: "destructive" });
+        console.error("Error analyzing lead:", error);
+        toast({ title: "Erro na Análise", description: "Não foi possível analisar o lead.", variant: "destructive" });
     } finally {
-        setIsSummarizing(false);
+        setIsAnalyzing(false);
     }
   };
+
 
   const handleTemplateSelect = (template: MessageTemplate) => {
     if (!appUser) return;
@@ -213,6 +213,7 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   };
 
   const stageInfo = STAGES_CONFIG.find(s => s.id === lead.stageId);
+  const displayAnalysis = analysisResult || (lead.leadScore ? { leadScore: lead.leadScore, scoreJustification: lead.scoreJustification, nextActionSuggestion: lead.nextActionSuggestion } : null);
 
   return (
     <div className="p-0 md:p-2">
@@ -269,8 +270,32 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
                 </Popover>
               )}
             </div>
-
           </div>
+          
+          {displayAnalysis && (
+            <Card className="mb-4 bg-primary/5 border-primary/20">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-base text-primary flex items-center">
+                  <BrainCircuit className="w-5 h-5 mr-2" />
+                  Insights da IA
+                  {lead.lastAnalyzedAt && <CardDescription className="text-xs ml-auto">Última análise: {format(parseISO(lead.lastAnalyzedAt), "dd/MM/yy HH:mm")}</CardDescription>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 space-y-2 text-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center font-semibold">
+                    <TrendingUp className="w-4 h-4 mr-2 text-orange-400" />
+                    Pontuação: <span className="ml-2 text-foreground text-base">{displayAnalysis.leadScore}/100</span>
+                  </div>
+                  <p className="text-muted-foreground flex-1">({displayAnalysis.scoreJustification})</p>
+                </div>
+                <div className="flex items-center font-semibold">
+                  <Sparkles className="w-4 h-4 mr-2 text-amber-400" />
+                  Próxima Ação Sugerida: <span className="ml-2 text-foreground font-normal">{displayAnalysis.nextActionSuggestion}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {isAdmin && (
             <Card className="mb-4 bg-background/50 border-border">
@@ -459,9 +484,9 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
           </div>
         </CardContent>
         <CardFooter className="border-t pt-4 flex-wrap gap-2 justify-end">
-            <Button variant="outline" onClick={handleSummarizeChat} disabled={isSummarizing}>
-                {isSummarizing ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Lightbulb className="w-4 h-4 mr-2"/>}
-                Resumir com IA
+            <Button variant="outline" onClick={handleAnalyzeLead} disabled={isAnalyzing}>
+                {isAnalyzing ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <BrainCircuit className="w-4 h-4 mr-2"/>}
+                Analisar com IA
             </Button>
             {(isAdmin || isOwner) && (
               <Button variant="outline" onClick={() => onEdit(lead)}><Edit className="w-4 h-4 mr-2"/>Editar Lead</Button>
@@ -475,29 +500,6 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             <Button onClick={onClose}>Fechar</Button>
         </CardFooter>
       </Card>
-      
-      <AlertDialog open={isSummaryDialogOpen} onOpenChange={setIsSummaryDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center">
-              <Lightbulb className="w-5 h-5 mr-2 text-primary"/>Resumo da Conversa
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Gerado por IA. Verifique as informações importantes.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <ScrollArea className="max-h-[50vh] pr-4">
-              <div className="prose prose-sm dark:prose-invert whitespace-pre-wrap text-foreground">
-                  {summary}
-              </div>
-          </ScrollArea>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Fechar</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
-
-    
