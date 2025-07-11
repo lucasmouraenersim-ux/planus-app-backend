@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from "react-day-picker";
 
@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2, CalendarIcon } from 'lucide-react';
+import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2, CalendarIcon, ClipboardCheck } from 'lucide-react';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser, UserType } from '@/types/user';
 import { cn } from "@/lib/utils";
@@ -60,6 +60,12 @@ const CRITERIA_OPTIONS = [
   { value: 'totalKwh', label: 'Total de KWh' },
 ];
 
+const STAGE_FILTER_OPTIONS = [
+    { value: 'finalizado', label: 'Apenas Finalizados' },
+    { value: 'assinado_finalizado', label: 'Assinados + Finalizados' },
+];
+
+
 const getMedalForSeller = (entry: RankingDisplayEntry): string => {
   if (entry.isOuro) return '🥇';
   if (entry.hasEverHit30kInAMonth) return '🥇'; 
@@ -90,6 +96,7 @@ function RankingPageContent() {
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(PERIOD_OPTIONS[0].value);
   const [selectedCriteria, setSelectedCriteria] = useState<string>(CRITERIA_OPTIONS[0].value);
+  const [selectedStageFilter, setSelectedStageFilter] = useState<string>(STAGE_FILTER_OPTIONS[0].value);
   const [date, setDate] = useState<DateRange | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotification, setShowNotification] = useState(true);
@@ -121,9 +128,12 @@ function RankingPageContent() {
     };
     const ouroSellers = Object.keys(commissionRateOverrides);
     const sellersToExclude = ['lucas de moura', 'eduardo w', 'eduardo henrique wiegert'];
-    const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+    const targetStages = selectedStageFilter === 'assinado_finalizado' ? ['finalizado', 'assinado'] : ['finalizado'];
+    
+    const leadsForRanking = allLeads.filter(lead => targetStages.includes(lead.stageId));
+    const allFinalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
   
-    // 1. Discover all sellers from user list and ALL finalized leads
+    // 1. Discover all sellers from user list and leads
     const sellerMetrics = new Map<string, { 
       totalSalesValue: number; numberOfSales: number; totalKwh: number;
       user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType };
@@ -137,7 +147,7 @@ function RankingPageContent() {
       }
     });
 
-    finalizedLeads.forEach(lead => {
+    leadsForRanking.forEach(lead => {
       if (lead.sellerName && !sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) {
         const sellerNameLower = lead.sellerName.trim().toLowerCase();
         if (!userMapByName.has(sellerNameLower) && !sellerMetrics.has(sellerNameLower)) {
@@ -168,10 +178,18 @@ function RankingPageContent() {
     const { start, end } = getPeriodBounds(selectedPeriod, date);
     
     const periodLeads = (start && end)
-      ? finalizedLeads.filter(l => l.completedAt && new Date(l.completedAt) >= start && new Date(l.completedAt) < end)
-      : (selectedPeriod === 'all_time' ? finalizedLeads : finalizedLeads.filter(l => {
+      ? leadsForRanking.filter(l => {
+          const relevantDateStr = l.stageId === 'finalizado' ? l.completedAt : l.signedAt;
+          if (!relevantDateStr) return false;
+          const relevantDate = new Date(relevantDateStr);
+          return relevantDate >= start && relevantDate < end;
+      })
+      : (selectedPeriod === 'all_time' ? leadsForRanking : leadsForRanking.filter(l => {
           const {start: cycleStart, end: cycleEnd} = getPeriodBounds('monthly_current');
-          return l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd
+          const relevantDateStr = l.stageId === 'finalizado' ? l.completedAt : l.signedAt;
+          if (!relevantDateStr || !cycleStart || !cycleEnd) return false;
+          const relevantDate = new Date(relevantDateStr);
+          return relevantDate >= cycleStart && relevantDate < cycleEnd;
       }));
     
     const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
@@ -196,7 +214,7 @@ function RankingPageContent() {
     const allTimeKwhMetrics: Record<string, number> = {};
     const monthlySalesByUser: Record<string, Record<string, number>> = {};
     
-    finalizedLeads.forEach(lead => {
+    allFinalizedLeads.forEach(lead => {
       if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return;
       const sellerNameLower = lead.sellerName.trim().toLowerCase();
       const userByDisplayName = userMapByName.get(sellerNameLower);
@@ -220,7 +238,7 @@ function RankingPageContent() {
     });
     
     const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
-    const salesCycleLeads = finalizedLeads.filter(l => l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
+    const salesCycleLeads = allFinalizedLeads.filter(l => l.completedAt && cycleStart && cycleEnd && new Date(l.completedAt) >= cycleStart && new Date(l.completedAt) < cycleEnd);
     const userSalesCycleKwh = salesCycleLeads.reduce((acc, lead) => {
         if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return acc;
         const sellerNameLower = lead.sellerName.trim().toLowerCase();
@@ -261,7 +279,7 @@ function RankingPageContent() {
     const finalRanking = unsortedRanking.sort((a, b) => b.mainScoreValue - a.mainScoreValue).map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
     return { ranking: finalRanking, totalKwhSoldInPeriod, podium: finalRanking.slice(0, 3) };
 
-  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, isLoading, date]);
+  }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, selectedStageFilter, isLoading, date]);
 
 
   const { ranking, totalKwhSoldInPeriod, podium } = processedData;
@@ -362,7 +380,7 @@ function RankingPageContent() {
         <CardHeader>
           <CardTitle className="text-xl font-medium text-primary flex items-center justify-center">
             <Zap className="w-6 h-6 mr-2" />
-            Total de KWh Vendido (Time)
+            Total de KWh (Time)
           </CardTitle>
           <CardDescription>Performance total da equipe no período selecionado.</CardDescription>
         </CardHeader>
@@ -378,7 +396,7 @@ function RankingPageContent() {
             Filtros do Ranking
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-4">
+        <CardContent className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label htmlFor="period-select" className="block text-sm font-medium text-muted-foreground mb-1">Período</label>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
@@ -437,6 +455,17 @@ function RankingPageContent() {
               <SelectTrigger id="criteria-select"><SelectValue placeholder="Selecione o critério" /></SelectTrigger>
               <SelectContent>
                 {CRITERIA_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label htmlFor="stage-filter-select" className="block text-sm font-medium text-muted-foreground mb-1">Estágio do Lead</label>
+            <Select value={selectedStageFilter} onValueChange={setSelectedStageFilter}>
+              <SelectTrigger id="stage-filter-select"><SelectValue placeholder="Selecione o estágio" /></SelectTrigger>
+              <SelectContent>
+                {STAGE_FILTER_OPTIONS.map(option => (
                   <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                 ))}
               </SelectContent>
