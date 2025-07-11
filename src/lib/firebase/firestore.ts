@@ -84,20 +84,6 @@ export async function createCrmLead(
 }
 
 
-export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
-  const leadRef = doc(db, "crm_leads", leadId);
-  const updates: { [key: string]: any } = {
-    stageId: newStageId,
-    lastContact: Timestamp.now(),
-  };
-
-  if (newStageId === 'finalizado') {
-    updates.completedAt = Timestamp.now();
-  }
-  
-  await updateDoc(leadRef, updates);
-}
-
 export async function updateCrmLeadDetails(
   leadId: string,
   updates: Partial<Omit<LeadDocumentData, 'id' | 'createdAt' | 'lastContact' | 'userId'>>,
@@ -116,20 +102,34 @@ export async function updateCrmLeadDetails(
   }
   const existingData = leadDoc.data() as LeadDocumentData;
 
-  const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
-  const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
+  // Determine if a recalculation is needed
+  const kwhChanged = 'kwh' in updates && updates.kwh !== existingData.kwh;
+  const valueAfterDiscountChanged = 'valueAfterDiscount' in updates && updates.valueAfterDiscount !== existingData.valueAfterDiscount;
+  const discountPercentageChanged = 'discountPercentage' in updates && updates.discountPercentage !== existingData.discountPercentage;
+  
+  // Only recalculate if kwh or valueAfterDiscount changes, but NOT if only discountPercentage changes.
+  if (kwhChanged || valueAfterDiscountChanged) {
+      const kwh = 'kwh' in updates ? (updates.kwh ?? 0) : (existingData.kwh ?? 0);
+      const valueAfterDiscount = 'valueAfterDiscount' in updates ? (updates.valueAfterDiscount ?? 0) : (existingData.valueAfterDiscount ?? 0);
 
-  const originalValue = kwh * KWH_TO_REAIS_FACTOR;
-  const valueAfterDiscount = originalValue * (1 - (discount / 100));
+      const originalValue = kwh * KWH_TO_REAIS_FACTOR;
+      finalUpdates.value = originalValue;
 
-  finalUpdates.value = originalValue;
-  finalUpdates.valueAfterDiscount = valueAfterDiscount;
-
-  if ('kwh' in updates) {
-    finalUpdates.kwh = updates.kwh;
+      // If valueAfterDiscount was the field that changed, calculate the new discount percentage
+      if (valueAfterDiscountChanged && originalValue > 0) {
+          const newDiscountPercentage = (1 - (valueAfterDiscount / originalValue)) * 100;
+          finalUpdates.discountPercentage = newDiscountPercentage;
+      } 
+      // If kwh changed, recalculate valueAfterDiscount based on the existing or newly provided discount percentage
+      else if (kwhChanged) {
+          const discount = 'discountPercentage' in updates ? (updates.discountPercentage ?? 0) : (existingData.discountPercentage ?? 0);
+          const newValueAfterDiscount = originalValue * (1 - (discount / 100));
+          finalUpdates.valueAfterDiscount = newValueAfterDiscount;
+      }
   }
-  if ('discountPercentage' in updates) {
-    finalUpdates.discountPercentage = updates.discountPercentage;
+  // If only the discount percentage was changed, we just save it without recalculating other values.
+  else if (discountPercentageChanged) {
+     finalUpdates.discountPercentage = updates.discountPercentage;
   }
 
   if (updates.phone) {
@@ -222,6 +222,14 @@ export async function assignLeadToSeller(leadId: string, seller: { uid: string; 
     userId: seller.uid,
     sellerName: seller.name,
     stageId: 'contato',
+    lastContact: Timestamp.now(),
+  });
+}
+
+export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
+  const leadRef = doc(db, "crm_leads", leadId);
+  await updateDoc(leadRef, {
+    stageId: newStageId,
     lastContact: Timestamp.now(),
   });
 }

@@ -45,6 +45,15 @@ const leadFormSchema = z.object({
     },
     z.number().int().min(0).optional().nullable()
   ),
+  valueAfterDiscount: z.preprocess(
+    (val) => {
+      const strVal = String(val || "").trim();
+      if (strVal === '') return null;
+      const num = parseFloat(strVal.replace(",", "."));
+      return isNaN(num) ? null : num;
+    },
+    z.number().min(0).optional().nullable()
+  ),
   discountPercentage: z.preprocess(
     (val) => {
       const strVal = String(val || "").trim();
@@ -109,6 +118,7 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
       name: initialData?.name || "",
       company: initialData?.company || "",
       kwh: initialData?.kwh ?? undefined,
+      valueAfterDiscount: initialData?.valueAfterDiscount ?? undefined,
       discountPercentage: initialData?.discountPercentage ?? undefined,
       stageId: initialData?.stageId || 'contato',
       sellerName: initialData?.sellerName || "Sistema",
@@ -281,17 +291,30 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                     />
                     <FormField
                     control={form.control}
-                    name="discountPercentage"
+                    name="valueAfterDiscount"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Desconto Aplicado (%)</FormLabel>
-                        <FormControl><Input type="number" step="0.1" placeholder="Ex: 15" {...field} value={field.value ?? ''} /></FormControl>
-                        <FormDescription className="text-xs">O valor original e com desconto serão calculados.</FormDescription>
+                        <FormLabel>Valor com Desconto (R$)</FormLabel>
+                        <FormControl><Input type="number" step="0.01" placeholder="Ex: 850,50" {...field} value={field.value ?? ''} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
                     />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="discountPercentage"
+                  render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Desconto Aplicado (%)</FormLabel>
+                    <FormControl><Input type="number" step="0.1" placeholder="Ex: 15" {...field} value={field.value ?? ''} /></FormControl>
+                    <FormDescription className="text-xs">
+                      {initialData?.id ? "Alterar este campo NÃO recalculará o 'Valor com Desconto'." : "O valor com desconto será calculado com base neste percentual."}
+                    </FormDescription>
+                    <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="stageId"
