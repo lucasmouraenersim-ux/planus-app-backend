@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -106,7 +105,7 @@ const editUserFormSchema = z.object({
   canViewCrm: z.boolean().default(false),
   canViewCareerPlan: z.boolean().default(false),
   assignmentLimit: z.preprocess(
-    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
+    (val) => (val === 'none' || val === '' || val === null || val === undefined ? 2 : Number(val)),
     z.number().int().optional()
   ),
 });
@@ -192,7 +191,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     setIsEditUserModalOpen(true);
   };
 
-  const handleUpdateUser = async (data: EditUserFormData) => {
+  const handleUpdateUser = async (data: EditUserFormData, refreshFn: () => Promise<void>) => {
     if (!selectedUser) return;
     setIsSubmittingAction(true);
     try {
@@ -210,7 +209,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         canViewCareerPlan: data.canViewCareerPlan,
         assignmentLimit: data.assignmentLimit,
       });
-      await refreshUsers();
+      await refreshFn();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
       setIsEditUserModalOpen(false);
     } catch (error) {
@@ -681,7 +680,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
               </DialogDescription>
             </DialogHeader>
             <Form {...editUserForm}>
-              <form onSubmit={editUserForm.handleSubmit(handleUpdateUser)} className="space-y-4 py-3">
+              <form onSubmit={editUserForm.handleSubmit((data) => handleUpdateUser(data, refreshUsers))} className="space-y-4 py-3">
                 
                 {/* User Info */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Informações Pessoais</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
