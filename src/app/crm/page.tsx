@@ -100,6 +100,7 @@ function CrmPageContent() {
   const [filterCpf, setFilterCpf] = useState("");
   const [filterUc, setFilterUc] = useState("");
   const [filterPhone, setFilterPhone] = useState("");
+  const [filterSeller, setFilterSeller] = useState("");
 
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [sortConfig, setSortConfig] = useState<{ key: keyof LeadWithId; direction: 'ascending' | 'descending' } | null>({ key: 'lastContact', direction: 'descending' });
@@ -253,6 +254,7 @@ function CrmPageContent() {
       const cleanFilterCpf = filterCpf.trim().replace(/\D/g, '');
       const cleanFilterUc = filterUc.trim().toLowerCase();
       const cleanFilterPhone = filterPhone.trim().replace(/\D/g, '');
+      const cleanFilterSeller = filterSeller.trim().toLowerCase();
 
       if (cleanFilterName && !lead.name.toLowerCase().includes(cleanFilterName)) {
         return false;
@@ -270,6 +272,10 @@ function CrmPageContent() {
 
       const leadPhone = lead.phone || '';
       if (cleanFilterPhone && !leadPhone.includes(cleanFilterPhone)) {
+        return false;
+      }
+
+      if (cleanFilterSeller && !(lead.sellerName || '').toLowerCase().includes(cleanFilterSeller)) {
         return false;
       }
 
@@ -296,7 +302,7 @@ function CrmPageContent() {
 
 
     return sortableLeads;
-  }, [leads, filterName, filterCpf, filterUc, filterPhone, sortConfig]);
+  }, [leads, filterName, filterCpf, filterUc, filterPhone, filterSeller, sortConfig]);
 
   const kwhTotalFinalizado = useMemo(() => {
     return leads
@@ -778,6 +784,16 @@ function CrmPageContent() {
                         className="col-span-2 h-8"
                       />
                     </div>
+                    <div className="grid grid-cols-3 items-center gap-4">
+                      <Label htmlFor="filterSeller">Vendedor</Label>
+                      <Input
+                        id="filterSeller"
+                        placeholder="Nome do vendedor"
+                        value={filterSeller}
+                        onChange={(e) => setFilterSeller(e.target.value)}
+                        className="col-span-2 h-8"
+                      />
+                    </div>
                   </div>
                   <Button
                     onClick={() => {
@@ -785,6 +801,7 @@ function CrmPageContent() {
                       setFilterCpf('');
                       setFilterUc('');
                       setFilterPhone('');
+                      setFilterSeller('');
                     }}
                   >
                     Limpar Filtros
