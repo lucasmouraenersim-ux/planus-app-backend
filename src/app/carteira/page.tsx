@@ -63,6 +63,7 @@ import { requestWithdrawal, updateLeadCommissionStatus } from '@/lib/firebase/fi
 import { useAuth } from '@/contexts/AuthContext';
 import { collection, onSnapshot, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getWithdrawalHistoryForUser } from '@/actions/user/getWithdrawalHistory';
 
 
 const withdrawalFormSchema = z.object({
@@ -121,32 +122,21 @@ function WalletPageContent() {
 
   useEffect(() => {
     if (!appUser) return;
-
-    setIsLoadingHistory(true);
-    const q = query(
-      collection(db, 'withdrawal_requests'), 
-      where('userId', '==', appUser.uid)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const history = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          requestedAt: (data.requestedAt as Timestamp).toDate().toISOString(),
-          processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
-        } as WithdrawalRequestWithId;
-      });
-      history.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-      setWithdrawalHistory(history);
-      setIsLoadingHistory(false);
-    }, (error) => {
-      console.error("Error fetching withdrawal history:", error);
-      toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive" });
-      setIsLoadingHistory(false);
-    });
-
-    return () => unsubscribe();
+    
+    const fetchHistory = async () => {
+        setIsLoadingHistory(true);
+        try {
+            const history = await getWithdrawalHistoryForUser(appUser.uid);
+            setWithdrawalHistory(history);
+        } catch (error) {
+            console.error("Error fetching withdrawal history via action:", error);
+            toast({ title: "Erro", description: "Não foi possível carregar o histórico de saques.", variant: "destructive" });
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    };
+    
+    fetchHistory();
   }, [appUser, toast]);
 
   useEffect(() => {
