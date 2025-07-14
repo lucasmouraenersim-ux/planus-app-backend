@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { LeadWithId, ChatMessage as ChatMessageType } from '@/types/crm';
@@ -26,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
+import { updateCrmLeadDetails, approveFinalizedLead } from '@/lib/firebase/firestore';
 import { sendChatMessage } from '@/actions/chat/sendChatMessage';
 import { analyzeLead, type AnalyzeLeadOutput } from '@/ai/flows/analyze-lead-flow';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -181,6 +182,18 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             description: "Não foi possível salvar a nova data.",
             variant: "destructive",
         });
+    }
+  };
+
+  const handleApproveAndFinalize = async () => {
+    if (!isAdmin) return;
+    try {
+      await approveFinalizedLead(lead.id);
+      toast({ title: "Lead Finalizado", description: "O lead foi movido para o estágio Finalizado com sucesso." });
+      onClose(); // Close the detail view
+    } catch (error) {
+      console.error("Error finalizing lead:", error);
+      toast({ title: "Erro", description: "Não foi possível finalizar o lead.", variant: "destructive" });
     }
   };
 
@@ -401,15 +414,26 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
             </Card>
           )}
 
-          {isAdmin && lead.needsAdminApproval && (
+          {isAdmin && lead.stageId === 'assinado' && lead.needsAdminApproval && (
             <Card className="mb-4 border-amber-500 bg-amber-500/10">
-              <CardHeader><CardTitle className="text-amber-600 text-base flex items-center"><AlertTriangle className="w-5 h-5 mr-2"/>Aguardando Aprovação</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-amber-600 text-base flex items-center"><AlertTriangle className="w-5 h-5 mr-2"/>Aguardando Aprovação de Contrato</CardTitle></CardHeader>
               <CardContent className="space-x-2">
-                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => onApprove && onApprove(lead.id)}><CheckCircle className="w-4 h-4 mr-2"/>Aprovar Lead</Button>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => onApprove && onApprove(lead.id)}><CheckCircle className="w-4 h-4 mr-2"/>Aprovar Contrato</Button>
                 <Button size="sm" variant="outline" onClick={() => setShowCorrectionInput(true)}>Solicitar Correção</Button>
               </CardContent>
             </Card>
           )}
+          
+          {isAdmin && lead.stageId === 'conformidade' && lead.needsAdminApproval && (
+            <Card className="mb-4 border-violet-500 bg-violet-500/10">
+              <CardHeader><CardTitle className="text-violet-600 text-base flex items-center"><AlertTriangle className="w-5 h-5 mr-2"/>Aguardando Finalização</CardTitle></CardHeader>
+              <CardContent className="space-x-2">
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleApproveAndFinalize}><CheckCircle className="w-4 h-4 mr-2"/>Aprovar e Finalizar</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowCorrectionInput(true)}>Solicitar Correção</Button>
+              </CardContent>
+            </Card>
+          )}
+
           {isAdmin && showCorrectionInput && (
             <div className="mb-4 p-4 border rounded-md bg-background">
               <Label htmlFor="correctionReason" className="font-semibold">Motivo da Solicitação de Correção:</Label>

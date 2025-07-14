@@ -1,3 +1,4 @@
+
 // src/lib/firebase/firestore.ts
 import type { LeadDocumentData, LeadWithId, ChatMessage as ChatMessageType, StageId } from '@/types/crm';
 import type { WithdrawalRequestData, WithdrawalRequestWithId, PixKeyType, WithdrawalStatus, WithdrawalType } from '@/types/wallet';
@@ -228,10 +229,26 @@ export async function assignLeadToSeller(leadId: string, seller: { uid: string; 
 
 export async function updateCrmLeadStage(leadId: string, newStageId: StageId): Promise<void> {
   const leadRef = doc(db, "crm_leads", leadId);
-  await updateDoc(leadRef, {
-    stageId: newStageId,
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("Usuário não autenticado.");
+
+  const userDocRef = doc(db, "users", currentUser.uid);
+  const userDocSnap = await getDoc(userDocRef);
+  const userType = userDocSnap.exists() ? (userDocSnap.data() as FirestoreUser).type : null;
+  
+  let finalStageId = newStageId;
+  const updates: any = {
     lastContact: Timestamp.now(),
-  });
+  };
+
+  // Rule: If a non-admin tries to move to 'finalizado', move to 'conformidade' for approval instead.
+  if (newStageId === 'finalizado' && userType !== 'admin' && userType !== 'superadmin') {
+    finalStageId = 'conformidade';
+    updates.needsAdminApproval = true;
+  }
+  
+  updates.stageId = finalStageId;
+  await updateDoc(leadRef, updates);
 }
 
 export async function approveCrmLead(leadId: string): Promise<void> {
@@ -241,6 +258,17 @@ export async function approveCrmLead(leadId: string): Promise<void> {
     needsAdminApproval: false,
     correctionReason: '',
     signedAt: Timestamp.now(), 
+    lastContact: Timestamp.now(),
+  });
+}
+
+export async function approveFinalizedLead(leadId: string): Promise<void> {
+  const leadRef = doc(db, "crm_leads", leadId);
+  await updateDoc(leadRef, {
+    stageId: 'finalizado',
+    needsAdminApproval: false,
+    correctionReason: '',
+    completedAt: Timestamp.now(),
     lastContact: Timestamp.now(),
   });
 }

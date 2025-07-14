@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export type StageId =
@@ -7,7 +8,7 @@ export type StageId =
   | 'fatura'           // Bill collected, under analysis
   | 'proposta'         // Proposal sent to lead
   | 'contrato'         // Contract sent, awaiting signature
-  | 'conformidade'     // Contract signed, under compliance review
+  | 'conformidade'     // Contract signed, under compliance review. WAITING FOR FINALIZATION APPROVAL.
   | 'assinado'         // Contract signed and approved (deal won)
   | 'finalizado'       // Lead finalized, commissions are calculated from this stage
   | 'cancelado'        // Lead or client cancelled
