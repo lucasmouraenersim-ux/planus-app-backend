@@ -27,7 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, onSnapshot, orderBy, Timestamp, where, or } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { createCrmLead, updateCrmLeadDetails, approveCrmLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
+import { createCrmLead, updateCrmLeadDetails, approveFinalizedLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
 import { Badge } from '@/components/ui/badge';
 import { importLeadsFromCSV } from '@/actions/admin/leadManagement';
@@ -175,29 +175,40 @@ function CrmPageContent() {
         }
     };
 
-    const unsubscribers: (() => void)[] = [];
-    leadsMap.current.clear();
+    let finalQuery;
+    const leadsCollection = collection(db, "crm_leads");
 
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-        const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
-        unsubscribers.push(onSnapshot(q, processSnapshot));
+        finalQuery = query(leadsCollection, orderBy("lastContact", "desc"));
     } else if (userAppRole === 'vendedor') {
-        // Vendedor vê os leads atribuídos a ele E os leads disponíveis para atribuição
-        const qAssigned = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid));
-        unsubscribers.push(onSnapshot(qAssigned, processSnapshot));
-
-        const qUnassigned = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
-        unsubscribers.push(onSnapshot(qUnassigned, processSnapshot));
-
+        finalQuery = query(
+            leadsCollection,
+            or(
+                where("userId", "==", appUser.uid),
+                where("stageId", "==", "para-atribuir")
+            ),
+            orderBy("lastContact", "desc")
+        );
     } else {
         setIsLoading(false);
         setLeads([]);
+        return;
     }
+    
+    const unsubscribe = onSnapshot(finalQuery, processSnapshot, (error) => {
+        console.error("Error fetching CRM leads:", error);
+        toast({
+            title: "Erro ao Carregar Leads",
+            description: "Não foi possível carregar os dados do CRM. Verifique as permissões do Firestore.",
+            variant: "destructive",
+        });
+        setIsLoading(false);
+    });
 
     return () => {
-        unsubscribers.forEach(unsub => unsub());
+        unsubscribe();
     };
-}, [appUser, userAppRole, allFirestoreUsers, toast, isLoading, isLoadingAllUsers]);
+}, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers]);
 
   const handleSort = (key: keyof LeadWithId) => {
     setSortConfig(current => {
@@ -413,12 +424,12 @@ function CrmPageContent() {
 
   const handleApproveLead = async (leadId: string) => {
     try {
-      await approveCrmLead(leadId);
-      toast({ title: "Lead Aprovado", description: "O lead foi movido para 'Assinado'." });
+      await approveFinalizedLead(leadId);
+      toast({ title: "Lead Finalizado", description: "O lead foi movido para 'Finalizado' com sucesso." });
       handleCloseLeadDetails();
     } catch (error) {
       console.error("Error approving lead:", error);
-      toast({ title: "Erro ao Aprovar", description: "Não foi possível aprovar o lead.", variant: "destructive" });
+      toast({ title: "Erro ao Aprovar", description: "Não foi possível finalizar o lead.", variant: "destructive" });
     }
   };
 
