@@ -1,10 +1,9 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Regra flexível: Permite leitura e escrita para qualquer usuário autenticado.
-    // A lógica de quem pode ver o quê é controlada pelo código do aplicativo.
+    // Allow any authenticated user to read and write any file.
+    // The application logic is now responsible for controlling file access.
     match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
