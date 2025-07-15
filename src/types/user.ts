@@ -22,7 +22,6 @@ export type FirestoreUser = {
   commissionRate?: 40 | 50 | 60 | 80; // Direct commission percentage
   mlmEnabled?: boolean; // Is this user eligible for MLM overrides?
   uplineUid?: string; // UID of the user this person reports to for MLM
-  mlmLevel?: 1 | 2 | 3 | 4; // What override level this person generates for their upline
   recurrenceRate?: 0.5 | 1; // Recurrence percentage
 
   // Permissions
@@ -51,7 +50,6 @@ export type AppUser = {
   commissionRate?: 40 | 50 | 60 | 80;
   mlmEnabled?: boolean;
   uplineUid?: string;
-  mlmLevel?: 1 | 2 | 3 | 4;
   recurrenceRate?: 0.5 | 1;
   
   // Permissions

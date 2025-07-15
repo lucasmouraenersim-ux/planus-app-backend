@@ -61,7 +61,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           commissionRate: firestoreUserData.commissionRate,
           mlmEnabled: firestoreUserData.mlmEnabled,
           uplineUid: firestoreUserData.uplineUid,
-          mlmLevel: firestoreUserData.mlmLevel,
           recurrenceRate: firestoreUserData.recurrenceRate,
           canViewLeadPhoneNumber: isSuperAdmin || firestoreUserData.canViewLeadPhoneNumber || false,
           canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,

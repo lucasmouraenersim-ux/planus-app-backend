@@ -292,7 +292,7 @@ export async function updateLeadCommissionStatus(leadId: string, isPaid: boolean
 }
 
 // --- User Management ---
-export async function updateUser(userId: string, updates: Partial<FirestoreUser>): Promise<void> {
+export async function updateUser(userId: string, updates: Partial<Omit<FirestoreUser, 'uid'>>): Promise<void> {
   if (!userId) throw new Error("User ID is required.");
   const userRef = doc(db, "users", userId);
   
@@ -305,13 +305,14 @@ export async function updateUser(userId: string, updates: Partial<FirestoreUser>
   if ('uid' in finalUpdates) {
     delete finalUpdates.uid;
   }
+  
+  // This logic is now removed from here, as level should not be manually set.
+  // It will be calculated dynamically on the client based on the upline chain.
+  if ('mlmLevel' in finalUpdates) {
+    delete finalUpdates.mlmLevel;
+  }
 
-  const cleanUpdates = Object.entries(finalUpdates).reduce((acc, [key, value]) => {
-    if (value !== undefined) {
-      (acc as any)[key] = value;
-    }
-    return acc;
-  }, {});
+  const cleanUpdates = Object.fromEntries(Object.entries(finalUpdates).filter(([_, value]) => value !== undefined));
   
   if (Object.keys(cleanUpdates).length > 0) {
     await updateDoc(userRef, cleanUpdates);

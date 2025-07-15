@@ -93,10 +93,6 @@ const editUserFormSchema = z.object({
   ),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
-  mlmLevel: z.preprocess(
-    (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
-    z.number().int().min(1).max(4).optional()
-  ),
   recurrenceRate: z.preprocess(
     (val) => (val === 'none' || val === '' || val === null || val === undefined ? undefined : Number(val)),
     z.number().optional()
@@ -181,7 +177,6 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       commissionRate: user.commissionRate,
       mlmEnabled: user.mlmEnabled || false,
       uplineUid: user.uplineUid,
-      mlmLevel: user.mlmLevel,
       recurrenceRate: user.recurrenceRate,
       canViewLeadPhoneNumber: user.canViewLeadPhoneNumber || false,
       canViewCrm: user.canViewCrm || false,
@@ -191,7 +186,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     setIsEditUserModalOpen(true);
   };
 
-  const handleUpdateUser = async (data: EditUserFormData, refreshFn: () => Promise<void>) => {
+  const handleUpdateUser = async (data: EditUserFormData) => {
     if (!selectedUser) return;
     setIsSubmittingAction(true);
     try {
@@ -202,14 +197,13 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         commissionRate: data.commissionRate,
         mlmEnabled: data.mlmEnabled,
         uplineUid: data.uplineUid,
-        mlmLevel: data.mlmLevel,
         recurrenceRate: data.recurrenceRate,
         canViewLeadPhoneNumber: data.canViewLeadPhoneNumber,
         canViewCrm: data.canViewCrm,
         canViewCareerPlan: data.canViewCareerPlan,
         assignmentLimit: data.assignmentLimit,
       });
-      await refreshFn();
+      await refreshUsers();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
       setIsEditUserModalOpen(false);
     } catch (error) {
@@ -680,7 +674,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
               </DialogDescription>
             </DialogHeader>
             <Form {...editUserForm}>
-              <form onSubmit={editUserForm.handleSubmit((data) => handleUpdateUser(data, refreshUsers))} className="space-y-4 py-3">
+              <form onSubmit={editUserForm.handleSubmit(handleUpdateUser)} className="space-y-4 py-3">
                 
                 {/* User Info */}
                 <Card><CardHeader className="p-3"><CardTitle className="text-base">Informações Pessoais</CardTitle></CardHeader><CardContent className="p-3 space-y-3">
@@ -761,24 +755,6 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                     <FormField control={editUserForm.control} name="mlmEnabled" render={({ field }) => (<FormItem className="flex items-center justify-between"><FormLabel className="flex items-center"><Network className="mr-2 h-4 w-4"/>Ativar Multinível</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit || isSubmittingAction} /></FormControl></FormItem>)} />
                     {editUserForm.watch("mlmEnabled") && (<>
                         <FormField control={editUserForm.control} name="uplineUid" render={({ field }) => (<FormItem><FormLabel>Upline (Líder Direto)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} disabled={!canEdit || isSubmittingAction}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o upline" /></SelectTrigger></FormControl><SelectContent>{initialUsers.filter(u => u.uid !== selectedUser.uid).map(u => <SelectItem key={u.uid} value={u.uid}>{u.displayName}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                        <FormField control={editUserForm.control} name="mlmLevel" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nível de Override</FormLabel>
-                            <Select 
-                              onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))}
-                              value={field.value !== undefined ? String(field.value) : 'none'}
-                              disabled={!canEdit || isSubmittingAction}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">Nenhum</SelectItem>
-                                <SelectItem value="1">Nível 1 (5%)</SelectItem>
-                                <SelectItem value="2">Nível 2 (3%)</SelectItem>
-                                <SelectItem value="3">Nível 3 (2%)</SelectItem>
-                                <SelectItem value="4">Nível 4 (1%)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormItem>
-                        )} />
                     </>)}
                 </CardContent></Card>
 

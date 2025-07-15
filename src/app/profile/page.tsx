@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -31,9 +31,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { UserCircle, Edit3, Save, X, Mail, Shield, Calendar, KeyRound, Camera, Loader2, Phone } from 'lucide-react';
+import { UserCircle, Edit3, Save, X, Mail, Shield, Calendar, KeyRound, Camera, Loader2, Phone, Network } from 'lucide-react';
 
-import type { AppUser } from '@/types/user'; 
+import type { AppUser, FirestoreUser } from '@/types/user'; 
 import { useAuth } from '@/contexts/AuthContext';
 
 const profileFormSchema = z.object({
@@ -56,7 +56,7 @@ type PasswordFormData = z.infer<typeof passwordFormSchema>;
 
 function ProfilePageContent() {
   const { toast } = useToast();
-  const { appUser, isLoadingAuth: isLoadingAuthContext, updateAppUserProfile, changeUserPassword } = useAuth(); 
+  const { appUser, allFirestoreUsers, isLoadingAuth: isLoadingAuthContext, updateAppUserProfile, changeUserPassword } = useAuth(); 
   const router = useRouter(); 
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -73,6 +73,27 @@ function ProfilePageContent() {
       phone: "",
     },
   });
+
+  const uplineHierarchy = useMemo(() => {
+    if (!appUser?.uplineUid || !allFirestoreUsers.length) return [];
+    
+    const hierarchy = [];
+    let currentUplineId: string | undefined = appUser.uplineUid;
+    const userMap = new Map(allFirestoreUsers.map(u => [u.uid, u]));
+
+    while (currentUplineId) {
+      const uplineUser = userMap.get(currentUplineId);
+      if (!uplineUser) break; 
+      hierarchy.push(uplineUser);
+      currentUplineId = uplineUser.uplineUid;
+    }
+    return hierarchy;
+  }, [appUser, allFirestoreUsers]);
+
+  const userMlmLevel = useMemo(() => {
+     if (!appUser?.uplineUid || !allFirestoreUsers.length) return null;
+     return uplineHierarchy.length;
+  }, [appUser, allFirestoreUsers, uplineHierarchy.length]);
 
   useEffect(() => {
     if (!isLoadingAuthContext && !appUser) {
@@ -184,158 +205,187 @@ function ProfilePageContent() {
         </p>
       </header>
 
-      <Card className="max-w-2xl mx-auto bg-card/70 backdrop-blur-lg border shadow-xl">
-        <CardHeader>
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <div className="relative">
-                <Avatar className="w-32 h-32 border-4 border-primary">
-                    <AvatarImage src={previewImage || appUser.photoURL || undefined} alt={appUser.displayName || "User"} data-ai-hint="user avatar large" />
-                    <AvatarFallback className="text-4xl">{appUser.displayName?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
-                </Avatar>
-                {isEditingProfile && (
-                    <Label htmlFor="photoInput" className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer hover:bg-primary/90">
-                        <Camera size={18} />
-                        <Input id="photoInput" type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} />
-                    </Label>
-                )}
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <CardTitle className="text-2xl text-foreground">{isEditingProfile ? profileForm.watch("displayName") : appUser.displayName}</CardTitle>
-              <CardDescription className="text-muted-foreground">{appUser.email}</CardDescription>
-              <div className="mt-3 space-y-1 text-sm">
-                <div className="flex items-center justify-center md:justify-start text-muted-foreground">
-                    <Shield size={16} className="mr-2 text-primary/80" /> Tipo: <span className="font-medium text-foreground ml-1 capitalize">{appUser.type}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2 bg-card/70 backdrop-blur-lg border shadow-xl">
+          <CardHeader>
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+              <div className="relative">
+                  <Avatar className="w-32 h-32 border-4 border-primary">
+                      <AvatarImage src={previewImage || appUser.photoURL || undefined} alt={appUser.displayName || "User"} data-ai-hint="user avatar large" />
+                      <AvatarFallback className="text-4xl">{appUser.displayName?.charAt(0).toUpperCase() || 'U'}</AvatarFallback>
+                  </Avatar>
+                  {isEditingProfile && (
+                      <Label htmlFor="photoInput" className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer hover:bg-primary/90">
+                          <Camera size={18} />
+                          <Input id="photoInput" type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} />
+                      </Label>
+                  )}
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <CardTitle className="text-2xl text-foreground">{isEditingProfile ? profileForm.watch("displayName") : appUser.displayName}</CardTitle>
+                <CardDescription className="text-muted-foreground">{appUser.email}</CardDescription>
+                <div className="mt-3 space-y-1 text-sm">
+                  <div className="flex items-center justify-center md:justify-start text-muted-foreground">
+                      <Shield size={16} className="mr-2 text-primary/80" /> Tipo: <span className="font-medium text-foreground ml-1 capitalize">{appUser.type}</span>
+                  </div>
+                  {appUser.cpf && (
+                      <div className="flex items-center justify-center md:justify-start text-muted-foreground">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-primary/80 lucide lucide-credit-card"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                          CPF: <span className="font-medium text-foreground ml-1">{appUser.cpf}</span>
+                      </div>
+                  )}
+                  {appUser.phone && (
+                      <div className="flex items-center justify-center md:justify-start text-muted-foreground">
+                          <Phone size={16} className="mr-2 text-primary/80" />
+                          Telefone: <span className="font-medium text-foreground ml-1">{profileForm.watch("phone") || appUser.phone}</span>
+                      </div>
+                  )}
+                  {createdAtString && (
+                      <div className="flex items-center justify-center md:justify-start text-muted-foreground">
+                          <Calendar size={16} className="mr-2 text-primary/80" /> Membro desde: <span className="font-medium text-foreground ml-1">{format(parseISO(createdAtString), "dd/MM/yyyy", { locale: ptBR })}</span>
+                      </div>
+                  )}
                 </div>
-                {appUser.cpf && (
-                    <div className="flex items-center justify-center md:justify-start text-muted-foreground">
-                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-primary/80 lucide lucide-credit-card"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
-                         CPF: <span className="font-medium text-foreground ml-1">{appUser.cpf}</span>
-                    </div>
-                )}
-                {appUser.phone && (
-                    <div className="flex items-center justify-center md:justify-start text-muted-foreground">
-                         <Phone size={16} className="mr-2 text-primary/80" />
-                         Telefone: <span className="font-medium text-foreground ml-1">{profileForm.watch("phone") || appUser.phone}</span>
-                    </div>
-                )}
-                {createdAtString && (
-                    <div className="flex items-center justify-center md:justify-start text-muted-foreground">
-                        <Calendar size={16} className="mr-2 text-primary/80" /> Membro desde: <span className="font-medium text-foreground ml-1">{format(parseISO(createdAtString), "dd/MM/yyyy", { locale: ptBR })}</span>
-                    </div>
-                )}
               </div>
             </div>
-          </div>
-        </CardHeader>
+          </CardHeader>
 
-        <CardContent className="mt-2">
-          {!isEditingProfile && !isChangingPassword && (
-            <div className="flex flex-col sm:flex-row gap-2 justify-end">
-              <Button variant="outline" onClick={() => setIsChangingPassword(true)} className="w-full sm:w-auto">
-                <KeyRound className="mr-2 h-4 w-4" /> Alterar Senha
-              </Button>
-              <Button onClick={() => setIsEditingProfile(true)} className="w-full sm:w-auto">
-                <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
-              </Button>
-            </div>
-          )}
+          <CardContent className="mt-2">
+            {!isEditingProfile && !isChangingPassword && (
+              <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                <Button variant="outline" onClick={() => setIsChangingPassword(true)} className="w-full sm:w-auto">
+                  <KeyRound className="mr-2 h-4 w-4" /> Alterar Senha
+                </Button>
+                <Button onClick={() => setIsEditingProfile(true)} className="w-full sm:w-auto">
+                  <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
+                </Button>
+              </div>
+            )}
 
-          {isEditingProfile && (
-            <Form {...profileForm}>
-              <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)} className="space-y-6">
-                <FormField
-                  control={profileForm.control}
-                  name="displayName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome de Exibição</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Seu nome completo" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={profileForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Telefone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="(XX) XXXXX-XXXX" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormDescription className="text-xs text-center">
-                    Para alterar o email ou CPF, por favor, entre em contato com o suporte.
-                </FormDescription>
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="ghost" onClick={() => { setIsEditingProfile(false); setPreviewImage(appUser.photoURL || null); profileForm.reset({displayName: appUser.displayName || "", phone: appUser.phone || ""}); setSelectedPhotoFile(null); }} disabled={isSubmittingProfile}>
-                    <X className="mr-2 h-4 w-4" /> Cancelar
-                  </Button>
-                  <Button type="submit" disabled={isSubmittingProfile}>
-                    {isSubmittingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Salvar Alterações
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          )}
-
-        {isChangingPassword && (
-            <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit(handlePasswordChangeSubmit)} className="space-y-6 mt-6 pt-6 border-t">
-                    <h3 className="text-lg font-semibold text-center text-primary mb-4">Alterar Senha</h3>
-                    <FormField
-                        control={passwordForm.control}
-                        name="currentPassword"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Senha Atual</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={passwordForm.control}
-                        name="newPassword"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Nova Senha</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={passwordForm.control}
-                        name="confirmPassword"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Confirmar Nova Senha</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <div className="flex justify-end gap-2 pt-4">
-                        <Button type="button" variant="ghost" onClick={() => { setIsChangingPassword(false); passwordForm.reset(); }} disabled={isSubmittingPassword}>
-                           <X className="mr-2 h-4 w-4" /> Cancelar
-                        </Button>
-                        <Button type="submit" disabled={isSubmittingPassword}>
-                            {isSubmittingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Salvar Nova Senha
-                        </Button>
-                    </div>
+            {isEditingProfile && (
+              <Form {...profileForm}>
+                <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)} className="space-y-6">
+                  <FormField
+                    control={profileForm.control}
+                    name="displayName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome de Exibição</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Seu nome completo" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Telefone</FormLabel>
+                        <FormControl>
+                          <Input placeholder="(XX) XXXXX-XXXX" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormDescription className="text-xs text-center">
+                      Para alterar o email ou CPF, por favor, entre em contato com o suporte.
+                  </FormDescription>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button type="button" variant="ghost" onClick={() => { setIsEditingProfile(false); setPreviewImage(appUser.photoURL || null); profileForm.reset({displayName: appUser.displayName || "", phone: appUser.phone || ""}); setSelectedPhotoFile(null); }} disabled={isSubmittingProfile}>
+                      <X className="mr-2 h-4 w-4" /> Cancelar
+                    </Button>
+                    <Button type="submit" disabled={isSubmittingProfile}>
+                      {isSubmittingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Salvar Alterações
+                    </Button>
+                  </div>
                 </form>
-            </Form>
-        )}
-        </CardContent>
-      </Card>
+              </Form>
+            )}
+
+          {isChangingPassword && (
+              <Form {...passwordForm}>
+                  <form onSubmit={passwordForm.handleSubmit(handlePasswordChangeSubmit)} className="space-y-6 mt-6 pt-6 border-t">
+                      <h3 className="text-lg font-semibold text-center text-primary mb-4">Alterar Senha</h3>
+                      <FormField
+                          control={passwordForm.control}
+                          name="currentPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Senha Atual</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={passwordForm.control}
+                          name="newPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Nova Senha</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={passwordForm.control}
+                          name="confirmPassword"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Confirmar Nova Senha</FormLabel>
+                                  <FormControl><Input type="password" {...field} /></FormControl>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                      <div className="flex justify-end gap-2 pt-4">
+                          <Button type="button" variant="ghost" onClick={() => { setIsChangingPassword(false); passwordForm.reset(); }} disabled={isSubmittingPassword}>
+                            <X className="mr-2 h-4 w-4" /> Cancelar
+                          </Button>
+                          <Button type="submit" disabled={isSubmittingPassword}>
+                              {isSubmittingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Salvar Nova Senha
+                          </Button>
+                      </div>
+                  </form>
+              </Form>
+          )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
+            <CardHeader>
+                <CardTitle className="text-primary flex items-center">
+                    <Network className="mr-2 h-5 w-5" />
+                    Minha Posição na Rede
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {uplineHierarchy.length > 0 ? (
+                    <ul className="space-y-2 text-sm">
+                        {uplineHierarchy.map((leader, index) => (
+                            <li key={leader.uid}>
+                                <span className="text-muted-foreground">Nível {index + 1}:</span>
+                                <span className="font-medium text-foreground ml-2">{leader.displayName || 'Líder sem nome'}</span>
+                            </li>
+                        ))}
+                         <li className="pt-2 border-t mt-2">
+                             <span className="text-muted-foreground">Seu Nível de Override:</span>
+                             <span className="font-bold text-primary ml-2">Nível {userMlmLevel}</span>
+                         </li>
+                    </ul>
+                ) : (
+                    <p className="text-sm text-muted-foreground">Você ainda não tem um líder (upline) definido ou não está ativo no multinível.</p>
+                )}
+            </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
