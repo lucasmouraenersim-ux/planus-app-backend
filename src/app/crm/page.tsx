@@ -140,36 +140,33 @@ function CrmPageContent() {
     }
 
     const processSnapshot = (snapshot: any) => {
-        snapshot.docChanges().forEach((change: any) => {
-            if (change.type === "removed") {
-                leadsMap.current.delete(change.doc.id);
-            } else {
-                const data = change.doc.data();
-                const lead: LeadWithId = {
-                    id: change.doc.id,
-                    ...data,
-                    createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                    lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-                    signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-                    completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-                } as LeadWithId;
+        const newLeads: LeadWithId[] = [];
+        snapshot.forEach((doc: any) => {
+            const data = doc.data();
+            const lead: LeadWithId = {
+                id: doc.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+            } as LeadWithId;
 
-                if (change.type === 'added' && !knownLeadIds.current.has(lead.id)) {
-                    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-                        toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
-                    } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
-                        toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
-                    }
-                    knownLeadIds.current.add(lead.id);
+            if (!leadsMap.current.has(lead.id)) {
+                if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+                    toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
+                } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
+                    toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
                 }
-
-                leadsMap.current.set(change.doc.id, lead);
             }
+            leadsMap.current.set(lead.id, lead);
+            newLeads.push(lead);
         });
 
-        const allLeads = Array.from(leadsMap.current.values());
+        // Sort leads on the client side
+        const sortedLeads = newLeads.sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+        setLeads(sortedLeads);
 
-        setLeads(allLeads);
         if (isLoading) {
             setIsLoading(false);
         }
@@ -181,13 +178,13 @@ function CrmPageContent() {
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
         finalQuery = query(leadsCollection, orderBy("lastContact", "desc"));
     } else if (userAppRole === 'vendedor') {
+        // Query without ordering to avoid composite index requirement
         finalQuery = query(
             leadsCollection,
             or(
                 where("userId", "==", appUser.uid),
                 where("stageId", "==", "para-atribuir")
-            ),
-            orderBy("lastContact", "desc")
+            )
         );
     } else {
         setIsLoading(false);
@@ -209,6 +206,7 @@ function CrmPageContent() {
         unsubscribe();
     };
 }, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers]);
+
 
   const handleSort = (key: keyof LeadWithId) => {
     setSortConfig(current => {
