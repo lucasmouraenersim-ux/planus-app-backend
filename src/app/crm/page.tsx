@@ -182,46 +182,9 @@ function CrmPageContent() {
         const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
         unsubscribers.push(onSnapshot(q, processSnapshot));
     } else if (userAppRole === 'vendedor') {
-        // Robust, iterative function to get all downline UIDs
-        const getFullDownlineUids = (startUplineId: string): string[] => {
-          const allDownlineUids = new Set<string>();
-          const queue: string[] = [startUplineId];
-          const visited = new Set<string>(); // To prevent infinite loops in case of cyclic dependencies
-    
-          while (queue.length > 0) {
-            const currentUplineId = queue.shift()!;
-            if (visited.has(currentUplineId)) {
-              continue;
-            }
-            visited.add(currentUplineId);
-    
-            const directDownline = allFirestoreUsers
-              .filter(u => u.uplineUid === currentUplineId && u.mlmEnabled)
-              .map(u => u.uid);
-    
-            for (const uid of directDownline) {
-              if (!allDownlineUids.has(uid)) {
-                allDownlineUids.add(uid);
-                queue.push(uid);
-              }
-            }
-          }
-          return Array.from(allDownlineUids);
-        };
-
-        const downlineUids = getFullDownlineUids(appUser.uid);
-        const uidsToQuery = [appUser.uid, ...downlineUids];
-        const uidChunks = [];
-        for (let i = 0; i < uidsToQuery.length; i += 30) {
-            uidChunks.push(uidsToQuery.slice(i, i + 30));
-        }
-
-        uidChunks.forEach(chunk => {
-            if (chunk.length > 0) {
-                const q = query(collection(db, "crm_leads"), where("userId", "in", chunk));
-                unsubscribers.push(onSnapshot(q, processSnapshot));
-            }
-        });
+        // Vendedor vê os leads atribuídos a ele E os leads disponíveis para atribuição
+        const qAssigned = query(collection(db, "crm_leads"), where("userId", "==", appUser.uid));
+        unsubscribers.push(onSnapshot(qAssigned, processSnapshot));
 
         const qUnassigned = query(collection(db, "crm_leads"), where("stageId", "==", "para-atribuir"));
         unsubscribers.push(onSnapshot(qUnassigned, processSnapshot));

@@ -141,19 +141,51 @@ function WalletPageContent() {
 
   useEffect(() => {
     if (!appUser) return;
+    
     setIsLoadingLeads(true);
-    fetchAllCrmLeadsGlobally()
-      .then(leads => {
-        setAllLeads(leads);
-      })
-      .catch(error => {
-        console.error("Error loading leads:", error);
-        toast({ title: "Erro", description: "Não foi possível carregar os leads.", variant: "destructive" });
-      })
-      .finally(() => {
+    let unsubscribe: () => void = () => {};
+
+    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+      const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const leadsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+          lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+          signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+          completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+        } as LeadWithId));
+        setAllLeads(leadsData);
         setIsLoadingLeads(false);
       });
-  }, [appUser, fetchAllCrmLeadsGlobally, toast]);
+    } else {
+        // Vendedor só precisa dos seus próprios leads E os da sua downline para calcular comissões
+        const downlineUids = allFirestoreUsers.filter(u => u.uplineUid === appUser.uid).map(u => u.uid); // Apenas Nivel 1 por enquanto, pode expandir
+        const userIdsToQuery = [appUser.uid, ...downlineUids];
+        
+        if (userIdsToQuery.length > 0) {
+            const q = query(collection(db, "crm_leads"), where("userId", "in", userIdsToQuery));
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                const leadsData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+                    lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+                    signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+                    completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+                } as LeadWithId));
+                setAllLeads(leadsData);
+                setIsLoadingLeads(false);
+            });
+        } else {
+            setAllLeads([]);
+            setIsLoadingLeads(false);
+        }
+    }
+
+    return () => unsubscribe();
+}, [appUser, userAppRole, allFirestoreUsers, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
@@ -162,6 +194,7 @@ function WalletPageContent() {
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     
     let userVisibleLeads = finalizedLeads;
+    // Admins e SuperAdmins veem todos, vendedores só os seus.
     if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
       userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
     }
