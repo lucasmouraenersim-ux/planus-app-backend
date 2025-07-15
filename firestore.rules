@@ -1,60 +1,12 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isUserRole(role) {
-      // An admin has a specific email OR a firestore doc with type 'admin'.
-      // This allows initial admins to function before their Firestore document is created.
-      // Other roles are checked directly from the Firestore doc.
-      return isSignedIn() && (
-        (role == 'admin' && (
-            (request.auth.token.email == 'lucasmoura@sentenergia.com' || request.auth.token.email == 'eduardo.w@sentenergia.com') ||
-            (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == 'admin')
-          )
-        ) ||
-        (role != 'admin' &&
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type == role)
-        )
-      );
-    }
-    
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // User profile rules
-    match /users/{userId} {
-      allow get: if isSignedIn();
-      // Only admins can create, list, or delete users.
-      // This uses the special logic in isUserRole to allow initial admins to create users.
-      allow list, create, delete: if isUserRole('admin');
-      // An admin or the user themselves can update their own profile.
-      allow update: if isUserRole('admin') || isOwner(userId);
-    }
-
-    // CRM Leads: Admins and Vendedores can manage leads.
-    match /crm_leads/{leadId} {
-      allow read, list, create, update: if isUserRole('admin') || isUserRole('vendedor');
-      allow delete: if isUserRole('admin');
-    }
-
-    // CRM Lead Chats: Admins and Vendedores can read/write to any chat.
-    match /crm_lead_chats/{leadId} {
-      allow read, write: if isUserRole('admin') || isUserRole('vendedor');
-    }
-
-    // Withdrawal requests
-    match /withdrawal_requests/{requestId} {
-      allow get: if isUserRole('admin') || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow list, update, delete: if isUserRole('admin');
-      // A user can only create a withdrawal request for themselves.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    // Regra flexível: Permite leitura e escrita para qualquer usuário autenticado.
+    // A lógica de quem pode ver o quê é controlada pelo código do aplicativo.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
