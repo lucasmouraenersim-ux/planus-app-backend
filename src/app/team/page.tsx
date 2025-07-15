@@ -43,12 +43,14 @@ function TeamPageContent() {
       if (!appUser) return;
       setIsLoading(true);
 
+      const allTeamMembers = await getTeamForUser(appUser.uid);
+      const allUsersMap = new Map(allFirestoreUsers.map(u => [u.uid, u]));
+
       const fetchDownlineRecursive = (
         uplineId: string,
         level: number,
-        allUsers: FirestoreUser[]
       ): TeamMemberWithLevel[] => {
-        const directDownline = allUsers
+        const directDownline = allTeamMembers
           .filter(u => u.uplineUid === uplineId)
           .map(u => ({ ...u, level }));
 
@@ -57,14 +59,14 @@ function TeamPageContent() {
         directDownline.forEach(member => {
           fullDownline = [
             ...fullDownline,
-            ...fetchDownlineRecursive(member.uid, level + 1, allUsers),
+            ...fetchDownlineRecursive(member.uid, level + 1),
           ];
         });
 
         return fullDownline;
       };
-
-      const membersWithLevel = fetchDownlineRecursive(appUser.uid, 1, allFirestoreUsers);
+      
+      const membersWithLevel = fetchDownlineRecursive(appUser.uid, 1);
       
       const leads = await getLeadsForTeam(appUser.uid);
 
@@ -72,7 +74,7 @@ function TeamPageContent() {
       setTeamLeads(leads.sort((a,b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime()));
       setIsLoading(false);
     }
-    if (appUser && allFirestoreUsers.length > 0) {
+    if (appUser) {
       loadTeamData();
     }
   }, [appUser, allFirestoreUsers]);
