@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -6,7 +7,7 @@ import { getTeamForUser } from '@/actions/user/getTeam';
 import { getLeadsForTeam } from '@/actions/user/getTeamLeads';
 import type { FirestoreUser } from '@/types/user';
 import type { LeadWithId } from '@/types/crm';
-import { Loader2, Network, UsersRound, FileText } from 'lucide-react';
+import { Loader2, Network, UsersRound, FileText, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,39 +17,59 @@ import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 
+interface TeamMemberWithLevel extends FirestoreUser {
+    level: number;
+}
+
 function TeamPageContent() {
   const { appUser, allFirestoreUsers, isLoadingAuth } = useAuth();
-  const [teamMembers, setTeamMembers] = useState<FirestoreUser[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberWithLevel[]>([]);
   const [teamLeads, setTeamLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const userMap = useMemo(() => {
+    const map = new Map<string, FirestoreUser>();
+    allFirestoreUsers.forEach(user => {
+      map.set(user.uid, user);
+    });
+    if (appUser) {
+        map.set(appUser.uid, appUser as FirestoreUser);
+    }
+    return map;
+  }, [allFirestoreUsers, appUser]);
 
   useEffect(() => {
     async function loadTeamData() {
       if (!appUser) return;
       setIsLoading(true);
+      
       const [members, leads] = await Promise.all([
         getTeamForUser(appUser.uid),
         getLeadsForTeam(appUser.uid)
       ]);
-      setTeamMembers(members);
+
+      // Calculate level for each member
+      const membersWithLevel = members.map(member => {
+          let level = 0;
+          let currentUplineId = member.uplineUid;
+          while(currentUplineId && currentUplineId !== appUser.uid) {
+              const upline = userMap.get(currentUplineId);
+              currentUplineId = upline?.uplineUid;
+              level++;
+          }
+          // The loop counts connections. Level is connections + 1.
+          return { ...member, level: level + 1 };
+      });
+
+      setTeamMembers(membersWithLevel);
       setTeamLeads(leads.sort((a,b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime()));
       setIsLoading(false);
     }
     if (appUser) {
       loadTeamData();
     }
-  }, [appUser]);
+  }, [appUser, userMap]);
 
-  const userMap = useMemo(() => {
-    const map = new Map<string, string>();
-    if (appUser) {
-      map.set(appUser.uid, appUser.displayName || 'Você');
-    }
-    allFirestoreUsers.forEach(user => {
-      map.set(user.uid, user.displayName || user.email || user.uid);
-    });
-    return map;
-  }, [appUser, allFirestoreUsers]);
 
   const getStageBadgeStyle = (stageId: LeadWithId['stageId']) => {
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
@@ -97,6 +118,7 @@ function TeamPageContent() {
                     <TableHead>Consultor</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Nível</TableHead>
                     <TableHead>Líder Direto (Upline)</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -114,11 +136,17 @@ function TeamPageContent() {
                       </TableCell>
                       <TableCell>{member.email}</TableCell>
                       <TableCell><Badge variant="outline">{member.type}</Badge></TableCell>
-                      <TableCell>{userMap.get(member.uplineUid || '') || 'N/A'}</TableCell>
+                       <TableCell>
+                        <Badge variant="secondary" className="flex items-center gap-1.5 w-fit">
+                            <TrendingUp className="h-3.5 w-3.5"/>
+                            Nível {member.level}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{userMap.get(member.uplineUid || '')?.displayName || 'N/A'}</TableCell>
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">Você ainda não possui membros na sua equipe.</TableCell>
+                      <TableCell colSpan={5} className="h-24 text-center">Você ainda não possui membros na sua equipe.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
