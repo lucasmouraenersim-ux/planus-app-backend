@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, where, or } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where, or, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveFinalizedLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
@@ -85,7 +85,6 @@ function CrmPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const knownLeadIds = useRef<Set<string>>(new Set());
-  const leadsMap = useRef(new Map<string, LeadWithId>());
   
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isUploadingLeads, setIsUploadingLeads] = useState(false);
@@ -139,71 +138,86 @@ function CrmPageContent() {
         return;
     }
 
-    const processSnapshot = (snapshot: any) => {
-        const newLeads: LeadWithId[] = [];
-        snapshot.forEach((doc: any) => {
-            const data = doc.data();
-            const lead: LeadWithId = {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-                completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-            } as LeadWithId;
+    const leadsCollection = collection(db, "crm_leads");
 
-            if (!leadsMap.current.has(lead.id)) {
-                if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-                    toast({ title: "✨ Novo Lead Recebido!", description: `Lead "${lead.name}" foi adicionado ao CRM.` });
-                } else if (userAppRole === 'vendedor' && lead.stageId === 'para-atribuir') {
-                    toast({ title: "📢 Novo Lead Disponível!", description: `Lead "${lead.name}" está disponível para atribuição.` });
-                }
-            }
-            leadsMap.current.set(lead.id, lead);
-            newLeads.push(lead);
-        });
-
-        // Sort leads on the client side
+    const processAndSetLeads = (newLeads: LeadWithId[], isInitialLoad: boolean) => {
         const sortedLeads = newLeads.sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
         setLeads(sortedLeads);
+
+        if (isInitialLoad && !isLoading) {
+             const newLeadCount = sortedLeads.filter(l => !knownLeadIds.current.has(l.id)).length;
+             if (newLeadCount > 0) {
+                 toast({ title: "Novos Leads!", description: `${newLeadCount} novo(s) lead(s) foram adicionados ou atualizados.` });
+             }
+        }
+        
+        sortedLeads.forEach(l => knownLeadIds.current.add(l.id));
 
         if (isLoading) {
             setIsLoading(false);
         }
     };
+    
+    const mapDocToLead = (doc: any): LeadWithId => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+            lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+            signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+            completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+        } as LeadWithId;
+    };
 
-    let finalQuery;
-    const leadsCollection = collection(db, "crm_leads");
+    let unsubscribes: (() => void)[] = [];
 
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-        finalQuery = query(leadsCollection, orderBy("lastContact", "desc"));
+        const q = query(leadsCollection, orderBy("lastContact", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const freshLeads = snapshot.docs.map(mapDocToLead);
+            processAndSetLeads(freshLeads, !isLoading);
+        }, (error) => {
+            console.error("Error fetching admin leads:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
+        unsubscribes.push(unsubscribe);
     } else if (userAppRole === 'vendedor') {
-        // Query without ordering to avoid composite index requirement
-        finalQuery = query(
-            leadsCollection,
-            or(
-                where("userId", "==", appUser.uid),
-                where("stageId", "==", "para-atribuir")
-            )
-        );
+        // Query 1: Leads assigned to the current user
+        const userLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+        
+        // Query 2: Leads available for assignment
+        const unassignedLeadsQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+
+        let userLeads: LeadWithId[] = [];
+        let unassignedLeads: LeadWithId[] = [];
+
+        const combineAndSetLeads = () => {
+            const combined = [...userLeads, ...unassignedLeads];
+            const uniqueLeads = Array.from(new Map(combined.map(lead => [lead.id, lead])).values());
+            processAndSetLeads(uniqueLeads, !isLoading);
+        };
+        
+        const unsubUser = onSnapshot(userLeadsQuery, (snapshot) => {
+            userLeads = snapshot.docs.map(mapDocToLead);
+            combineAndSetLeads();
+        }, (error) => console.error("Error fetching user leads:", error));
+        
+        const unsubUnassigned = onSnapshot(unassignedLeadsQuery, (snapshot) => {
+            unassignedLeads = snapshot.docs.map(mapDocToLead);
+            combineAndSetLeads();
+        }, (error) => console.error("Error fetching unassigned leads:", error));
+
+        unsubscribes.push(unsubUser, unsubUnassigned);
+
     } else {
         setIsLoading(false);
         setLeads([]);
-        return;
     }
-    
-    const unsubscribe = onSnapshot(finalQuery, processSnapshot, (error) => {
-        console.error("Error fetching CRM leads:", error);
-        toast({
-            title: "Erro ao Carregar Leads",
-            description: "Não foi possível carregar os dados do CRM. Verifique as permissões do Firestore.",
-            variant: "destructive",
-        });
-        setIsLoading(false);
-    });
 
     return () => {
-        unsubscribe();
+        unsubscribes.forEach(unsub => unsub());
     };
 }, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers]);
 
