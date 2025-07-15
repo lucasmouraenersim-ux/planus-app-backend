@@ -42,33 +42,40 @@ function TeamPageContent() {
     async function loadTeamData() {
       if (!appUser) return;
       setIsLoading(true);
-      
-      const [members, leads] = await Promise.all([
-        getTeamForUser(appUser.uid),
-        getLeadsForTeam(appUser.uid)
-      ]);
 
-      // Calculate level for each member
-      const membersWithLevel = members.map(member => {
-          let level = 0;
-          let currentUplineId = member.uplineUid;
-          while(currentUplineId && currentUplineId !== appUser.uid) {
-              const upline = userMap.get(currentUplineId);
-              currentUplineId = upline?.uplineUid;
-              level++;
-          }
-          // The loop counts connections. Level is connections + 1.
-          return { ...member, level: level + 1 };
-      });
+      const fetchDownlineRecursive = (
+        uplineId: string,
+        level: number,
+        allUsers: FirestoreUser[]
+      ): TeamMemberWithLevel[] => {
+        const directDownline = allUsers
+          .filter(u => u.uplineUid === uplineId)
+          .map(u => ({ ...u, level }));
+
+        let fullDownline = [...directDownline];
+        
+        directDownline.forEach(member => {
+          fullDownline = [
+            ...fullDownline,
+            ...fetchDownlineRecursive(member.uid, level + 1, allUsers),
+          ];
+        });
+
+        return fullDownline;
+      };
+
+      const membersWithLevel = fetchDownlineRecursive(appUser.uid, 1, allFirestoreUsers);
+      
+      const leads = await getLeadsForTeam(appUser.uid);
 
       setTeamMembers(membersWithLevel);
       setTeamLeads(leads.sort((a,b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime()));
       setIsLoading(false);
     }
-    if (appUser) {
+    if (appUser && allFirestoreUsers.length > 0) {
       loadTeamData();
     }
-  }, [appUser, userMap]);
+  }, [appUser, allFirestoreUsers]);
 
 
   const getStageBadgeStyle = (stageId: LeadWithId['stageId']) => {
@@ -78,7 +85,7 @@ function TeamPageContent() {
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
-  if (isLoading || isLoadingAuth) {
+  if (isLoadingAuth || (isLoading && teamMembers.length === 0)) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
         <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
