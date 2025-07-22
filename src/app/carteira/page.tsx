@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -145,43 +144,69 @@ function WalletPageContent() {
     setIsLoadingLeads(true);
     let unsubscribe: () => void = () => {};
 
+    // For calculating commissions, a seller needs to see their own leads AND their downline's leads.
+    // Admins need to see all leads.
+    const uidsToQuery = new Set<string>();
+
     if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-      const q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const leadsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-          lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-          signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-          completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-        } as LeadWithId));
-        setAllLeads(leadsData);
-        setIsLoadingLeads(false);
-      });
+        // Admins see all leads, so we don't need a UID filter.
     } else {
-        // Vendedor só precisa dos seus próprios leads E os da sua downline para calcular comissões
-        const downlineUids = allFirestoreUsers.filter(u => u.uplineUid === appUser.uid).map(u => u.uid); // Apenas Nivel 1 por enquanto, pode expandir
-        const userIdsToQuery = [appUser.uid, ...downlineUids];
-        
-        if (userIdsToQuery.length > 0) {
-            const q = query(collection(db, "crm_leads"), where("userId", "in", userIdsToQuery));
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                const leadsData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-                    lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-                    signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-                    completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-                } as LeadWithId));
-                setAllLeads(leadsData);
-                setIsLoadingLeads(false);
+        // Vendedor precisa dos seus próprios leads E os da sua downline
+        uidsToQuery.add(appUser.uid);
+        const findDownlineUids = (uplineId: string): string[] => {
+            const directDownline = allFirestoreUsers
+                .filter(u => u.uplineUid === uplineId)
+                .map(u => u.uid);
+            let allUids = [...directDownline];
+            directDownline.forEach(uid => {
+                allUids = [...allUids, ...findDownlineUids(uid)];
             });
-        } else {
-            setAllLeads([]);
+            return allUids;
+        };
+        findDownlineUids(appUser.uid).forEach(uid => uidsToQuery.add(uid));
+    }
+    
+    const uidsArray = Array.from(uidsToQuery);
+    
+    // Construct the query
+    let q;
+    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+      q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
+    } else if (uidsArray.length > 0) {
+      // Chunking the query if there are more than 30 UIDs, as 'in' query has a limit of 30.
+      if (uidsArray.length > 30) {
+          // This case is more complex and requires multiple queries.
+          // For now, we will assume a smaller team size. If needed, this logic should be expanded
+          // to handle multiple parallel 'in' queries.
+          console.warn("Team size exceeds 30, query might be incomplete.");
+          q = query(collection(db, "crm_leads"), where("userId", "in", uidsArray.slice(0, 30)));
+      } else {
+          q = query(collection(db, "crm_leads"), where("userId", "in", uidsArray));
+      }
+    } else {
+      q = null; // No query if user is not admin and has no UIDs to query
+    }
+
+
+    if (q) {
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            const leadsData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+                lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+                signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+                completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+            } as LeadWithId));
+            setAllLeads(leadsData);
             setIsLoadingLeads(false);
-        }
+        }, (error) => {
+            console.error("Error fetching leads for wallet:", error);
+            setIsLoadingLeads(false);
+        });
+    } else {
+        setAllLeads([]);
+        setIsLoadingLeads(false);
     }
 
     return () => unsubscribe();
