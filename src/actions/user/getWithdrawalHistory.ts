@@ -18,7 +18,9 @@ export async function getWithdrawalHistoryForUser(userId: string): Promise<Withd
 
   try {
     const adminDb = await initializeAdmin();
-    const q = adminDb.collection('withdrawal_requests').where('userId', '==', userId).orderBy('requestedAt', 'desc');
+    // Removed orderBy('requestedAt', 'desc') to avoid composite index requirement.
+    // Sorting will be done on the client-side.
+    const q = adminDb.collection('withdrawal_requests').where('userId', '==', userId);
     const querySnapshot = await q.get();
 
     if (querySnapshot.empty) {
@@ -34,6 +36,9 @@ export async function getWithdrawalHistoryForUser(userId: string): Promise<Withd
         processedAt: data.processedAt ? (data.processedAt as Timestamp).toDate().toISOString() : undefined,
       } as WithdrawalRequestWithId;
     });
+    
+    // Sort manually after fetching
+    requests.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
 
     return requests;
   } catch (error) {

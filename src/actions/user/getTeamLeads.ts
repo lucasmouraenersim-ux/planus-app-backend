@@ -1,8 +1,9 @@
+
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { LeadWithId } from '@/types/crm';
-import type { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore'; // Import Timestamp as a value
 import { getTeamForUser } from './getTeam';
 
 // Helper to convert Firestore Timestamps in leads to ISO strings for client compatibility
