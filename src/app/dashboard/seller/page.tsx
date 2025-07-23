@@ -8,7 +8,7 @@ import type { AppUser } from '@/types/user';
 import { useAuth } from '@/contexts/AuthContext'; 
 import { Loader2 } from 'lucide-react';
 import type { LeadWithId } from '@/types/crm';
-import { collection, onSnapshot, query, where, or, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { parseISO } from 'date-fns';
 
@@ -25,44 +25,51 @@ function SellerDashboardPageContent() {
   }, [isLoadingAuth, appUser, userAppRole, router]);
 
   useEffect(() => {
-    if (appUser && userAppRole === 'vendedor') {
-      setIsLoadingLeads(true);
-      
-      const downlineUids = allFirestoreUsers
-        .filter(u => u.uplineUid === appUser.uid)
-        .map(u => u.uid);
-      
-      const uidsToQuery = [appUser.uid, ...downlineUids];
-      
-      if (uidsToQuery.length === 0) {
-        setLeads([]);
-        setIsLoadingLeads(false);
-        return;
-      }
-      
-      const q = query(collection(db, 'crm_leads'), where('userId', 'in', uidsToQuery));
-      
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const teamLeads = snapshot.docs.map(docSnap => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-            lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-            signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-            completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-          } as LeadWithId
-        });
-        setLeads(teamLeads);
-        setIsLoadingLeads(false);
-      }, (error) => {
-        console.error("Error fetching seller and team leads:", error);
-        setIsLoadingLeads(false);
-      });
+    if (!appUser || !allFirestoreUsers.length) return;
+  
+    const fetchLeads = async () => {
+        setIsLoadingLeads(true);
+        const downlineUids = allFirestoreUsers
+            .filter(u => u.uplineUid === appUser.uid)
+            .map(u => u.uid);
+        
+        const uidsToQuery = [appUser.uid, ...downlineUids];
+        const allFetchedLeads: LeadWithId[] = [];
+        const leadsCollectionRef = collection(db, 'crm_leads');
 
-      return () => unsubscribe();
-    }
+        if (uidsToQuery.length === 0) {
+            setLeads([]);
+            setIsLoadingLeads(false);
+            return;
+        }
+
+        try {
+            // Firestore 'in' query is limited to 30 items. We must chunk the requests.
+            for (let i = 0; i < uidsToQuery.length; i += 30) {
+                const chunk = uidsToQuery.slice(i, i + 30);
+                const q = query(leadsCollectionRef, where('userId', 'in', chunk));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    allFetchedLeads.push({
+                        id: docSnap.id,
+                        ...data,
+                        createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                        lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+                        signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
+                        completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+                    } as LeadWithId);
+                });
+            }
+            setLeads(allFetchedLeads);
+        } catch (error) {
+            console.error("Error fetching seller and team leads:", error);
+        } finally {
+            setIsLoadingLeads(false);
+        }
+    };
+  
+    fetchLeads();
   }, [appUser, userAppRole, allFirestoreUsers]);
 
   if (isLoadingAuth || !appUser || userAppRole !== 'vendedor') {

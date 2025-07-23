@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -60,7 +61,7 @@ import type { FirestoreUser } from '@/types/user';
 import { PIX_KEY_TYPES, WITHDRAWAL_TYPES } from '@/types/wallet';
 import { requestWithdrawal, updateLeadCommissionStatus } from '@/lib/firebase/firestore'; 
 import { useAuth } from '@/contexts/AuthContext';
-import { collection, onSnapshot, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getWithdrawalHistoryForUser } from '@/actions/user/getWithdrawalHistory';
 
@@ -139,78 +140,74 @@ function WalletPageContent() {
   }, [appUser, toast]);
 
   useEffect(() => {
-    if (!appUser) return;
-    
-    setIsLoadingLeads(true);
-    let unsubscribe: () => void = () => {};
-
-    // For calculating commissions, a seller needs to see their own leads AND their downline's leads.
-    // Admins need to see all leads.
-    const uidsToQuery = new Set<string>();
-
-    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-        // Admins see all leads, so we don't need a UID filter.
-    } else {
-        // Vendedor precisa dos seus próprios leads E os da sua downline
-        uidsToQuery.add(appUser.uid);
-        const findDownlineUids = (uplineId: string): string[] => {
-            const directDownline = allFirestoreUsers
-                .filter(u => u.uplineUid === uplineId)
-                .map(u => u.uid);
-            let allUids = [...directDownline];
-            directDownline.forEach(uid => {
-                allUids = [...allUids, ...findDownlineUids(uid)];
-            });
-            return allUids;
-        };
-        findDownlineUids(appUser.uid).forEach(uid => uidsToQuery.add(uid));
-    }
-    
-    const uidsArray = Array.from(uidsToQuery);
-    
-    // Construct the query
-    let q;
-    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-      q = query(collection(db, "crm_leads"), orderBy("lastContact", "desc"));
-    } else if (uidsArray.length > 0) {
-      // Chunking the query if there are more than 30 UIDs, as 'in' query has a limit of 30.
-      if (uidsArray.length > 30) {
-          // This case is more complex and requires multiple queries.
-          // For now, we will assume a smaller team size. If needed, this logic should be expanded
-          // to handle multiple parallel 'in' queries.
-          console.warn("Team size exceeds 30, query might be incomplete.");
-          q = query(collection(db, "crm_leads"), where("userId", "in", uidsArray.slice(0, 30)));
-      } else {
-          q = query(collection(db, "crm_leads"), where("userId", "in", uidsArray));
-      }
-    } else {
-      q = null; // No query if user is not admin and has no UIDs to query
-    }
-
-
-    if (q) {
-        unsubscribe = onSnapshot(q, (snapshot) => {
-            const leadsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-                signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-                completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-            } as LeadWithId));
-            setAllLeads(leadsData);
-            setIsLoadingLeads(false);
-        }, (error) => {
+    if (!appUser || !allFirestoreUsers.length) return;
+  
+    const fetchLeads = async () => {
+        setIsLoadingLeads(true);
+  
+        const uidsToQuery = new Set<string>();
+        if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+            // No UID filter for admins
+        } else {
+            uidsToQuery.add(appUser.uid);
+            const findDownlineUids = (uplineId: string): string[] => {
+                const directDownline = allFirestoreUsers
+                    .filter(u => u.uplineUid === uplineId)
+                    .map(u => u.uid);
+                let allUids = [...directDownline];
+                directDownline.forEach(uid => {
+                    allUids = [...allUids, ...findDownlineUids(uid)];
+                });
+                return allUids;
+            };
+            findDownlineUids(appUser.uid).forEach(uid => uidsToQuery.add(uid));
+        }
+  
+        const uidsArray = Array.from(uidsToQuery);
+        const leadsCollectionRef = collection(db, "crm_leads");
+        const allFetchedLeads: LeadWithId[] = [];
+  
+        try {
+            if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+                const q = query(leadsCollectionRef);
+                const snapshot = await getDocs(q);
+                snapshot.forEach(doc => allFetchedLeads.push({
+                    id: doc.id,
+                    ...doc.data(),
+                    createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+                    lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+                    signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+                    completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+                } as LeadWithId));
+            } else if (uidsArray.length > 0) {
+                // Chunk the UIDs array into groups of 30 for the 'in' query limit
+                for (let i = 0; i < uidsArray.length; i += 30) {
+                    const chunk = uidsArray.slice(i, i + 30);
+                    const q = query(leadsCollectionRef, where("userId", "in", chunk));
+                    const snapshot = await getDocs(q);
+                    snapshot.forEach(doc => allFetchedLeads.push({
+                        id: doc.id,
+                        ...doc.data(),
+                        createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+                        lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+                        signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+                        completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+                    } as LeadWithId));
+                }
+            }
+            
+            setAllLeads(allFetchedLeads);
+  
+        } catch (error) {
             console.error("Error fetching leads for wallet:", error);
+            toast({ title: "Erro ao carregar dados", description: "Não foi possível buscar os contratos da equipe.", variant: "destructive" });
+        } finally {
             setIsLoadingLeads(false);
-        });
-    } else {
-        setAllLeads([]);
-        setIsLoadingLeads(false);
-    }
-
-    return () => unsubscribe();
-}, [appUser, userAppRole, allFirestoreUsers, toast]);
+        }
+    };
+  
+    fetchLeads();
+  }, [appUser, userAppRole, allFirestoreUsers, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
