@@ -5,11 +5,14 @@ import * as React from "react"
 import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { BarChart, Bitcoin, AreaChart } from 'lucide-react';
+import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw } from 'lucide-react';
+import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 export interface ProjectionConfig {
   name: string;
@@ -42,7 +45,7 @@ const formatCurrency = (value: number, currency: 'USD' | 'BRL' = 'USD') => {
     });
 };
 
-export const ProjectionView = ({ config }: { config: ProjectionConfig }) => {
+export const ProjectionView = ({ config, onNewProjection }: { config: ProjectionConfig, onNewProjection: () => void }) => {
     const projectionData = useMemo(() => {
         const data: ProjectionDay[] = [];
         const endDate = endOfYear(config.startDate);
@@ -92,17 +95,58 @@ export const ProjectionView = ({ config }: { config: ProjectionConfig }) => {
 
         return data;
     }, [config]);
+
+    const chartData = useMemo(() => {
+      return projectionData.map(day => ({
+        name: `Dia ${day.day}`,
+        '1%': day.projections['1'].capitalUSD,
+        '2%': day.projections['2'].capitalUSD,
+        '3%': day.projections['3'].capitalUSD,
+        '4%': day.projections['4'].capitalUSD,
+        '5%': day.projections['5'].capitalUSD,
+      }));
+    }, [projectionData]);
+
+    const lineColors = {
+      '1%': 'hsl(var(--chart-1))',
+      '2%': 'hsl(var(--chart-2))',
+      '3%': 'hsl(var(--chart-3))',
+      '4%': 'hsl(var(--chart-4))',
+      '5%': 'hsl(var(--chart-5))',
+    };
+
+    const CustomTooltip = ({ active, payload, label }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="p-2 bg-background/80 backdrop-blur-sm border rounded-lg shadow-lg text-sm">
+            <p className="font-bold text-foreground mb-2">{label}</p>
+            {payload.map((pld: any) => (
+              <div key={pld.dataKey} style={{ color: pld.color }}>
+                {pld.dataKey}: {formatCurrency(pld.value, 'USD')}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return null;
+    };
     
     return (
         <div className="p-4 md:p-6 w-full">
-            <header className="mb-6">
-                <h1 className="text-3xl font-bold text-foreground">{config.name}</h1>
-                <p className="text-muted-foreground">
-                    Iniciado em {format(config.startDate, 'dd/MM/yyyy')} com {formatCurrency(config.initialCapital, 'USD')}
-                </p>
+            <header className="mb-6 flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-foreground">{config.name}</h1>
+                    <p className="text-muted-foreground">
+                        Iniciado em {format(config.startDate, 'dd/MM/yyyy')} com {formatCurrency(config.initialCapital, 'USD')}
+                    </p>
+                </div>
+                <Button variant="outline" onClick={onNewProjection}>
+                    <RefreshCw className="w-4 h-4 mr-2"/>
+                    Nova Projeção
+                </Button>
             </header>
 
-            <Tabs defaultValue="projection">
+            <Tabs defaultValue="dashboard">
                 <TabsList className="mb-4">
                     <TabsTrigger value="projection"><AreaChart className="w-4 h-4 mr-2" />Projeção</TabsTrigger>
                     <TabsTrigger value="dashboard"><BarChart className="w-4 h-4 mr-2" />Dashboard</TabsTrigger>
@@ -166,7 +210,59 @@ export const ProjectionView = ({ config }: { config: ProjectionConfig }) => {
                     </Card>
                 </TabsContent>
                 <TabsContent value="dashboard">
-                    <p>Dashboard de performance em desenvolvimento.</p>
+                   <div className="space-y-4">
+                     <div className="flex items-center gap-4">
+                        <Select defaultValue="all_time">
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Selecione o período" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all_time">Todo o Período</SelectItem>
+                                <SelectItem value="last_30">Últimos 30 dias</SelectItem>
+                                <SelectItem value="last_7">Últimos 7 dias</SelectItem>
+                                <SelectItem value="custom">Personalizado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-sm text-muted-foreground">
+                            Feche pelo menos 2 operações no período selecionado para ver as métricas.
+                        </p>
+                    </div>
+                    <Card className="bg-card/70">
+                        <CardHeader>
+                            <CardTitle>Gráfico de Evolução de Capital</CardTitle>
+                            <CardDescription>Comparativo entre o capital atual e as projeções de lucro.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-[400px] w-full">
+                           <ResponsiveContainer width="100%" height="100%">
+                             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                               <XAxis 
+                                 dataKey="name" 
+                                 stroke="hsl(var(--muted-foreground))"
+                                 fontSize={12}
+                                 tickLine={false}
+                                 axisLine={false}
+                                 interval={Math.floor(chartData.length / 20)}
+                               />
+                               <YAxis 
+                                 stroke="hsl(var(--muted-foreground))" 
+                                 fontSize={12}
+                                 tickLine={false}
+                                 axisLine={false}
+                                 tickFormatter={(value) => `$${value/1000}k`}
+                                />
+                               <Tooltip content={<CustomTooltip />} />
+                               <Legend />
+                               <Line type="monotone" dataKey="1%" stroke={lineColors['1%']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="2%" stroke={lineColors['2%']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="3%" stroke={lineColors['3%']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="4%" stroke={lineColors['4%']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="5%" stroke={lineColors['5%']} dot={false} strokeWidth={2} />
+                             </LineChart>
+                           </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                   </div>
                 </TabsContent>
                 <TabsContent value="bitcoin">
                      <p>Gráfico do Bitcoin em desenvolvimento.</p>

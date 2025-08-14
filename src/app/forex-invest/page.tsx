@@ -64,8 +64,14 @@ function ForexInvestDashboard() {
     }, 1000);
   };
 
+  const handleNewProjection = () => {
+    setProjectionConfig(null);
+    form.reset();
+  };
+
+
   if (projectionConfig) {
-      return <ProjectionView config={projectionConfig} />;
+      return <ProjectionView config={projectionConfig} onNewProjection={handleNewProjection} />;
   }
 
   return (
@@ -105,7 +111,7 @@ function ForexInvestDashboard() {
                     <FormItem>
                       <FormLabel>Capital Inicial (USD)</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="Ex: 100" {...field} />
+                        <Input type="text" placeholder="Ex: 100" {...field} onChange={e => field.onChange(e.target.value.replace(',', '.'))} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -118,7 +124,7 @@ function ForexInvestDashboard() {
                     <FormItem>
                       <FormLabel>Cotação USD/BRL</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="Ex: 5.25" {...field} />
+                        <Input type="text" placeholder="Ex: 5.25" {...field} onChange={e => field.onChange(e.target.value.replace(',', '.'))} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
