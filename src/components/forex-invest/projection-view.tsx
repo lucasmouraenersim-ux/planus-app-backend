@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { useMemo, useState } from 'react';
-import { addDays, differenceInDays, format, endOfYear } from 'date-fns';
+import { addDays, differenceInDays, format, endOfYear, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -14,12 +14,10 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { TradingViewWidget } from "./trading-view-widget";
+import type { ForexBancaConfig } from '@/types/forex';
 
-export interface ProjectionConfig {
-  name: string;
-  initialCapital: number;
+export interface ProjectionConfig extends Omit<ForexBancaConfig, 'startDate' | 'id' | 'userId'>{
   startDate: Date;
-  usdToBrlRate: number;
 }
 
 interface ProjectionDay {
@@ -37,7 +35,10 @@ interface ProjectionDay {
   };
 }
 
-const formatCurrency = (value: number, currency: 'USD' | 'BRL' = 'USD') => {
+const formatCurrency = (value: number | undefined | null, currency: 'USD' | 'BRL' = 'USD') => {
+    if (value === null || value === undefined || isNaN(value)) {
+        return currency === 'USD' ? '$0.00' : 'R$ 0,00';
+    }
     return value.toLocaleString('pt-BR', {
       style: 'currency',
       currency: currency,
@@ -59,11 +60,11 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         goals.forEach(goalPercent => {
             const key = String(goalPercent);
             lastProjections[key] = {
-                capitalUSD: config.initialCapital,
-                capitalBRL: config.initialCapital * config.usdToBrlRate,
-                drawdownUSD: config.initialCapital * 0.15,
-                loteRiscoBaixo: (config.initialCapital * 0.10) / 1000,
-                loteRiscoAlto: (config.initialCapital * 0.20) / 1000,
+                capitalUSD: config.initialCapitalUSD,
+                capitalBRL: config.initialCapitalUSD * config.usdToBrlRate,
+                drawdownUSD: config.initialCapitalUSD * 0.15,
+                loteRiscoBaixo: (config.initialCapitalUSD * 0.10) / 1000,
+                loteRiscoAlto: (config.initialCapitalUSD * 0.20) / 1000,
             };
         });
 
@@ -71,7 +72,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
             const dayEntry: ProjectionDay = {
                 day: i,
                 date: format(currentDate, 'dd/MM/yyyy', { locale: ptBR }),
-                capitalAtualUSD: config.initialCapital, // This will be dynamic later
+                capitalAtualUSD: config.initialCapitalUSD, // This will be dynamic later
                 projections: {},
             };
 
@@ -138,7 +139,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">{config.name}</h1>
                     <p className="text-muted-foreground">
-                        Iniciado em {format(config.startDate, 'dd/MM/yyyy')} com {formatCurrency(config.initialCapital, 'USD')}
+                        Iniciado em {format(config.startDate, 'dd/MM/yyyy')} com {formatCurrency(config.initialCapitalUSD, 'USD')}
                     </p>
                 </div>
                 <Button variant="outline" onClick={onNewProjection}>
