@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { useMemo, useState } from 'react';
-import { addDays, differenceInDays, format, endOfYear, parseISO } from 'date-fns';
+import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -14,7 +14,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { TradingViewWidget } from "./trading-view-widget";
-import type { ForexBancaConfig } from '@/types/forex';
+import type { ForexBancaConfig, ForexOperation } from '@/types/forex';
+import { useForex } from '@/contexts/ForexProvider';
 
 export interface ProjectionConfig extends Omit<ForexBancaConfig, 'startDate' | 'id' | 'userId'>{
   startDate: Date;
@@ -48,73 +49,67 @@ const formatCurrency = (value: number | undefined | null, currency: 'USD' | 'BRL
 };
 
 export const ProjectionView = ({ config, onNewProjection }: { config: ProjectionConfig, onNewProjection: () => void }) => {
+    const { operations } = useForex();
+
     const projectionData = useMemo(() => {
+        const dailyResults = new Map<string, number>();
+        operations.forEach(op => {
+            if (op.closedAt && op.status === 'Fechada' && op.resultUSD !== undefined) {
+                const closeDateStr = format(startOfDay(parseISO(op.closedAt as string)), 'yyyy-MM-dd');
+                const currentDailyResult = dailyResults.get(closeDateStr) || 0;
+                dailyResults.set(closeDateStr, currentDailyResult + op.resultUSD);
+            }
+        });
+
         const data: ProjectionDay[] = [];
         const endDate = endOfYear(config.startDate);
         const totalDays = differenceInDays(endDate, config.startDate) + 1;
         let currentDate = config.startDate;
-
-        let lastProjections: ProjectionDay['projections'] = {};
-        const goals = [1, 2, 3, 4, 5];
-
-        goals.forEach(goalPercent => {
-            const key = String(goalPercent);
-            lastProjections[key] = {
-                capitalUSD: config.initialCapitalUSD,
-                capitalBRL: config.initialCapitalUSD * config.usdToBrlRate,
-                drawdownUSD: config.initialCapitalUSD * 0.15,
-                loteRiscoBaixo: (config.initialCapitalUSD * 0.10) / 1000,
-                loteRiscoAlto: (config.initialCapitalUSD * 0.20) / 1000,
-            };
-        });
+        let runningCapital = config.initialCapitalUSD;
 
         for (let i = 1; i <= totalDays; i++) {
+            const dateKey = format(startOfDay(currentDate), 'yyyy-MM-dd');
+            if (dailyResults.has(dateKey)) {
+                runningCapital += dailyResults.get(dateKey)!;
+            }
+
             const dayEntry: ProjectionDay = {
                 day: i,
                 date: format(currentDate, 'dd/MM/yyyy', { locale: ptBR }),
-                capitalAtualUSD: config.initialCapitalUSD, // This will be dynamic later
+                capitalAtualUSD: runningCapital,
                 projections: {},
             };
-
-            goals.forEach(goalPercent => {
+            
+            [1, 2, 3, 4, 5].forEach(goalPercent => {
                 const key = String(goalPercent);
-                const prevCapital = lastProjections[key].capitalUSD;
-                const newCapital = prevCapital * (1 + goalPercent / 100);
-                
+                const projectedCapital = runningCapital * (1 + goalPercent / 100);
                 dayEntry.projections[key] = {
-                    capitalUSD: newCapital,
-                    capitalBRL: newCapital * config.usdToBrlRate,
-                    drawdownUSD: newCapital * 0.15,
-                    loteRiscoBaixo: (newCapital * 0.10) / 1000,
-                    loteRiscoAlto: (newCapital * 0.20) / 1000,
+                    capitalUSD: projectedCapital,
+                    capitalBRL: projectedCapital * config.usdToBrlRate,
+                    drawdownUSD: projectedCapital * 0.15,
+                    loteRiscoBaixo: (projectedCapital * 0.10) / 1000,
+                    loteRiscoAlto: (projectedCapital * 0.20) / 1000,
                 };
             });
             
-            lastProjections = dayEntry.projections;
             data.push(dayEntry);
             currentDate = addDays(currentDate, 1);
         }
 
         return data;
-    }, [config]);
+    }, [config, operations]);
 
     const chartData = useMemo(() => {
       return projectionData.map(day => ({
         name: `Dia ${day.day}`,
-        '1%': day.projections['1'].capitalUSD,
-        '2%': day.projections['2'].capitalUSD,
-        '3%': day.projections['3'].capitalUSD,
-        '4%': day.projections['4'].capitalUSD,
-        '5%': day.projections['5'].capitalUSD,
+        'Capital Atual': day.capitalAtualUSD,
+        'Meta 1%': day.capitalAtualUSD * 1.01,
       }));
     }, [projectionData]);
 
     const lineColors = {
-      '1%': 'hsl(var(--chart-1))',
-      '2%': 'hsl(var(--chart-2))',
-      '3%': 'hsl(var(--chart-3))',
-      '4%': 'hsl(var(--chart-4))',
-      '5%': 'hsl(var(--chart-5))',
+      'Capital Atual': 'hsl(var(--chart-1))',
+      'Meta 1%': 'hsl(var(--chart-2))',
     };
 
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -148,7 +143,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                 </Button>
             </header>
 
-            <Tabs defaultValue="dashboard">
+            <Tabs defaultValue="projection">
                 <TabsList className="mb-4">
                     <TabsTrigger value="projection"><AreaChart className="w-4 h-4 mr-2" />Projeção</TabsTrigger>
                     <TabsTrigger value="dashboard"><BarChart className="w-4 h-4 mr-2" />Dashboard</TabsTrigger>
@@ -263,11 +258,8 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                 />
                                <Tooltip content={<CustomTooltip />} />
                                <Legend />
-                               <Line type="monotone" dataKey="1%" stroke={lineColors['1%']} dot={false} strokeWidth={2} />
-                               <Line type="monotone" dataKey="2%" stroke={lineColors['2%']} dot={false} strokeWidth={2} />
-                               <Line type="monotone" dataKey="3%" stroke={lineColors['3%']} dot={false} strokeWidth={2} />
-                               <Line type="monotone" dataKey="4%" stroke={lineColors['4%']} dot={false} strokeWidth={2} />
-                               <Line type="monotone" dataKey="5%" stroke={lineColors['5%']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} dot={false} strokeWidth={2} />
+                               <Line type="monotone" dataKey="Meta 1%" stroke={lineColors['Meta 1%']} dot={false} strokeWidth={2} />
                              </LineChart>
                            </ResponsiveContainer>
                         </CardContent>
