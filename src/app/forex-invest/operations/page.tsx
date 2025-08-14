@@ -8,13 +8,19 @@ import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Loader2, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Loader2, Edit, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { ptBR } from 'date-fns/locale';
+
 
 interface Operation {
   id: string;
@@ -38,6 +44,10 @@ const operationSchema = z.object({
     },
     z.number().optional()
   ),
+  createdAt: z.date({
+    required_error: "A data de abertura é obrigatória.",
+  }),
+  closedAt: z.date().optional(),
 });
 
 type OperationFormData = z.infer<typeof operationSchema>;
@@ -49,17 +59,30 @@ function ForexOperationsPage() {
   const [editingOperation, setEditingOperation] = useState<Operation | null>(null);
   const [operationToDelete, setOperationToDelete] = useState<Operation | null>(null);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<OperationFormData>({
-    resolver: zodResolver(operationSchema)
+  const form = useForm<OperationFormData>({
+    resolver: zodResolver(operationSchema),
+    defaultValues: {
+        loteSize: 0.01
+    }
   });
+  const { handleSubmit, control, reset, setValue } = form;
 
   const handleOpenModal = (operation: Operation | null = null) => {
     setEditingOperation(operation);
     if (operation) {
-        setValue("loteSize", operation.loteSize);
-        setValue("resultUSD", operation.resultUSD);
+        reset({
+            loteSize: operation.loteSize,
+            resultUSD: operation.resultUSD,
+            createdAt: operation.createdAt,
+            closedAt: operation.closedAt,
+        });
     } else {
-        reset({ loteSize: 0.01, resultUSD: undefined });
+        reset({
+            loteSize: 0.01,
+            resultUSD: undefined,
+            createdAt: new Date(),
+            closedAt: undefined,
+        });
     }
     setIsModalOpen(true);
   };
@@ -74,31 +97,26 @@ function ForexOperationsPage() {
     const status = data.resultUSD !== undefined ? 'Fechada' : 'Aberta';
     
     if (editingOperation) {
-        // Update operation
         setOperations(prevOps => prevOps.map(op => 
             op.id === editingOperation.id ? { 
                 ...op, 
                 ...data, 
                 status,
-                // Set close date if result is added, or clear it if result is removed
-                closedAt: data.resultUSD !== undefined ? (op.closedAt || new Date()) : undefined
+                closedAt: data.resultUSD !== undefined ? (data.closedAt || new Date()) : undefined
             } : op
         ));
         toast({ title: "Sucesso!", description: "Operação atualizada." });
     } else {
-        // Add new operation
         const newOperation: Operation = {
             id: new Date().toISOString(),
-            createdAt: new Date(),
-            closedAt: data.resultUSD !== undefined ? new Date() : undefined,
             ...data,
             status,
+            closedAt: data.resultUSD !== undefined ? (data.closedAt || new Date()) : undefined
         };
         setOperations(prevOps => [newOperation, ...prevOps]);
         toast({ title: "Sucesso!", description: "Nova operação adicionada." });
     }
 
-    // TODO: Trigger recalculation of the main projection dashboard
     handleCloseModal();
   };
 
@@ -189,26 +207,43 @@ function ForexOperationsPage() {
             <DialogHeader>
                 <DialogTitle>{editingOperation ? "Editar Operação" : "Nova Operação"}</DialogTitle>
                 <DialogDescription>
-                    {editingOperation ? "Atualize os detalhes da sua operação." : "Registre uma nova operação. O resultado pode ser adicionado depois."}
+                    {editingOperation ? "Atualize os detalhes da sua operação." : "Registre uma nova operação."}
                 </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-                <div>
-                    <Label htmlFor="loteSize">Tamanho do Lote</Label>
-                    <Input id="loteSize" type="number" step="0.01" {...register("loteSize")} />
-                    {errors.loteSize && <p className="text-red-500 text-xs mt-1">{errors.loteSize.message}</p>}
-                </div>
-                <div>
-                    <Label htmlFor="resultUSD">Resultado (USD)</Label>
-                    <Input id="resultUSD" type="number" step="0.01" placeholder="Deixe em branco se aberta" {...register("resultUSD")} />
-                    {errors.resultUSD && <p className="text-red-500 text-xs mt-1">{errors.resultUSD.message}</p>}
-                    <p className="text-xs text-muted-foreground mt-1">Preencher este campo marcará a operação como "Fechada".</p>
-                </div>
-                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={handleCloseModal}>Cancelar</Button>
-                    <Button type="submit">Salvar Operação</Button>
-                </DialogFooter>
-            </form>
+            <Form {...form}>
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField control={control} name="loteSize" render={({ field }) => (
+                            <FormItem><Label htmlFor="loteSize">Tamanho do Lote</Label><FormControl><Input id="loteSize" type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                         <FormField control={control} name="resultUSD" render={({ field }) => (
+                            <FormItem><Label htmlFor="resultUSD">Resultado (USD)</Label><FormControl><Input id="resultUSD" type="number" step="0.01" placeholder="Deixe em branco se aberta" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <FormField control={control} name="createdAt" render={({ field }) => (
+                            <FormItem className="flex flex-col"><Label>Aberta em</Label>
+                                <Popover>
+                                <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4 opacity-50" />{field.value ? format(field.value, "dd/MM/yy HH:mm") : <span>Escolha data</span>}</Button></FormControl></PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                                </Popover><FormMessage />
+                            </FormItem>
+                        )} />
+                        <FormField control={control} name="closedAt" render={({ field }) => (
+                             <FormItem className="flex flex-col"><Label>Fechada em (Opcional)</Label>
+                                <Popover>
+                                <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4 opacity-50" />{field.value ? format(field.value, "dd/MM/yy HH:mm") : <span>Escolha data</span>}</Button></FormControl></PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
+                                </Popover><FormMessage />
+                            </FormItem>
+                        )} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={handleCloseModal}>Cancelar</Button>
+                        <Button type="submit">Salvar Operação</Button>
+                    </DialogFooter>
+                </form>
+            </Form>
         </DialogContent>
       </Dialog>
     </div>
