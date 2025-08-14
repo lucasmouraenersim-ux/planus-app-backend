@@ -8,18 +8,14 @@ import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Loader2, Edit, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import { PlusCircle, Loader2, Edit, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { ptBR } from 'date-fns/locale';
 
 
 interface Operation {
@@ -44,11 +40,20 @@ const operationSchema = z.object({
     },
     z.number().optional()
   ),
-  createdAt: z.date({
+  createdAt: z.preprocess((arg) => {
+    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
+  }, z.date({
     required_error: "A data de abertura é obrigatória.",
-  }),
-  closedAt: z.date().optional(),
+  })),
+  closedAt: z.preprocess((arg) => {
+    if (typeof arg === "string" || arg instanceof Date) {
+        if (arg === "") return undefined;
+        return new Date(arg);
+    }
+    return undefined;
+  }, z.date().optional()),
 });
+
 
 type OperationFormData = z.infer<typeof operationSchema>;
 
@@ -62,10 +67,17 @@ function ForexOperationsPage() {
   const form = useForm<OperationFormData>({
     resolver: zodResolver(operationSchema),
     defaultValues: {
-        loteSize: 0.01
+        loteSize: 0.01,
+        createdAt: new Date(),
     }
   });
-  const { handleSubmit, control, reset, setValue } = form;
+  const { handleSubmit, control, reset } = form;
+
+  const formatDateForInput = (date: Date | undefined) => {
+    if (!date) return "";
+    // Format to "yyyy-MM-ddTHH:mm"
+    return format(date, "yyyy-MM-dd'T'HH:mm");
+  };
 
   const handleOpenModal = (operation: Operation | null = null) => {
     setEditingOperation(operation);
@@ -94,7 +106,7 @@ function ForexOperationsPage() {
   };
 
   const onSubmit: SubmitHandler<OperationFormData> = (data) => {
-    const status = data.resultUSD !== undefined ? 'Fechada' : 'Aberta';
+    const status = data.resultUSD !== undefined && data.resultUSD !== null ? 'Fechada' : 'Aberta';
     
     if (editingOperation) {
         setOperations(prevOps => prevOps.map(op => 
@@ -102,7 +114,7 @@ function ForexOperationsPage() {
                 ...op, 
                 ...data, 
                 status,
-                closedAt: data.resultUSD !== undefined ? (data.closedAt || new Date()) : undefined
+                closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined
             } : op
         ));
         toast({ title: "Sucesso!", description: "Operação atualizada." });
@@ -111,7 +123,8 @@ function ForexOperationsPage() {
             id: new Date().toISOString(),
             ...data,
             status,
-            closedAt: data.resultUSD !== undefined ? (data.closedAt || new Date()) : undefined
+            closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined,
+            createdAt: data.createdAt || new Date(),
         };
         setOperations(prevOps => [newOperation, ...prevOps]);
         toast({ title: "Sucesso!", description: "Nova operação adicionada." });
@@ -221,22 +234,40 @@ function ForexOperationsPage() {
                         )} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         <FormField control={control} name="createdAt" render={({ field }) => (
-                            <FormItem className="flex flex-col"><Label>Aberta em</Label>
-                                <Popover>
-                                <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4 opacity-50" />{field.value ? format(field.value, "dd/MM/yy HH:mm") : <span>Escolha data</span>}</Button></FormControl></PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-                                </Popover><FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={control} name="closedAt" render={({ field }) => (
-                             <FormItem className="flex flex-col"><Label>Fechada em (Opcional)</Label>
-                                <Popover>
-                                <PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4 opacity-50" />{field.value ? format(field.value, "dd/MM/yy HH:mm") : <span>Escolha data</span>}</Button></FormControl></PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus /></PopoverContent>
-                                </Popover><FormMessage />
-                            </FormItem>
-                        )} />
+                        <FormField
+                            control={control}
+                            name="createdAt"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <Label>Aberta em</Label>
+                                    <FormControl>
+                                        <Input
+                                            type="datetime-local"
+                                            value={formatDateForInput(field.value)}
+                                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={control}
+                            name="closedAt"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <Label>Fechada em (Opcional)</Label>
+                                     <FormControl>
+                                        <Input
+                                            type="datetime-local"
+                                            value={formatDateForInput(field.value)}
+                                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={handleCloseModal}>Cancelar</Button>
@@ -262,3 +293,5 @@ export default function ForexInvestOperationsPage() {
     </Suspense>
   )
 }
+
+    
