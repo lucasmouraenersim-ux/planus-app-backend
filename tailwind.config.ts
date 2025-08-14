@@ -11,9 +11,10 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['PT Sans', 'sans-serif'], // PT Sans as default body font
-        headline: ['PT Sans', 'sans-serif'], // PT Sans for headlines
+        body: ['Inter', 'sans-serif'], 
+        headline: ['Space Grotesk', 'sans-serif'], 
         code: ['monospace'],
+        sans: ['Inter', 'sans-serif'],
       },
       colors: {
         background: 'hsl(var(--background))',

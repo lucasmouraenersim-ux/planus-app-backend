@@ -9,96 +9,93 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 88%; /* Light Gray #E0E0E0 from PRD */
-    --foreground: 0 0% 10%; /* Dark Gray for text on light background */
+    --background: 220 20% 95%; /* Light Gray #F0F2F5 from Forex Vision PRD */
+    --foreground: 220 10% 20%; /* Dark Gray for text */
 
-    --card: 0 0% 100%; /* White */
+    --card: 220 20% 100%; /* White */
     --card-foreground: hsl(var(--foreground));
 
     --popover: hsl(var(--card));
     --popover-foreground: hsl(var(--card-foreground));
 
-    --primary: 120 25% 65%; /* Subdued Green #8FBC8F from PRD */
-    --primary-foreground: 120 25% 10%; /* Dark text on primary green */
+    --primary: 231 39% 49%; /* Deep Blue #3F51B5 from Forex Vision PRD */
+    --primary-foreground: 0 0% 98%; /* White text on primary blue */
 
-    --secondary: 0 0% 80%; /* Lighter gray for secondary elements */
-    --secondary-foreground: 0 0% 10%; /* Dark text on secondary */
+    --secondary: 220 15% 90%;
+    --secondary-foreground: 220 10% 20%;
 
-    --muted: 0 0% 85%;
-    --muted-foreground: 0 0% 40%;
+    --muted: 220 15% 85%;
+    --muted-foreground: 220 10% 40%;
 
-    --accent: 210 33% 84%; /* Soft Blue #B0C4DE from PRD */
-    --accent-foreground: 210 33% 15%; /* Dark text on accent blue */
+    --accent: 231 48% 90%; /* Soft Lavender #C5CAE9 from Forex Vision PRD */
+    --accent-foreground: 231 39% 30%; /* Darker blue text on accent */
 
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 75%;
-    --input: 0 0% 100%; /* White input background */
-    --ring: hsl(var(--primary)); /* Ring color related to primary */
+    --border: 220 15% 88%;
+    --input: hsl(var(--card));
+    --ring: hsl(var(--primary));
 
-    --chart-1: hsl(var(--primary)); /* Use primary for chart bar */
+    --chart-1: hsl(var(--primary));
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
     --radius: 0.5rem;
 
-    /* Sidebar specific colors (Dark sidebar from user image, PRD Accent for active items) */
-    --sidebar-background: 220 10% 23%; /* Dark Gray for sidebar panel */
-    --sidebar-foreground: 220 10% 85%; /* Light text for items in sidebar */
-    --sidebar-primary: hsl(var(--primary)); /* PRD Green for text if needed on sidebar */
-    --sidebar-primary-foreground: hsl(var(--primary-foreground)); /* Text on a primary bg button on sidebar */
-    --sidebar-accent: hsl(var(--accent)); /* PRD Soft Blue for active/hovered sidebar item */
-    --sidebar-accent-foreground: hsl(var(--accent-foreground)); /* Dark text for active/hovered sidebar item on soft blue */
-    --sidebar-border: 220 10% 30%;
+    --sidebar-background: 231 39% 49%; /* Sidebar with primary color */
+    --sidebar-foreground: 0 0% 98%; /* White text */
+    --sidebar-primary: hsl(var(--primary));
+    --sidebar-primary-foreground: hsl(var(--primary-foreground));
+    --sidebar-accent: 231 48% 90%; /* Soft Lavender for active/hover */
+    --sidebar-accent-foreground: 231 39% 30%; /* Darker blue on hover */
+    --sidebar-border: 231 39% 40%;
     --sidebar-ring: hsl(var(--ring));
   }
 
-  /* Dark theme variables */
   .dark {
-    --background: 0 0% 7%; /* Very dark gray, near black */
-    --foreground: 0 0% 93%; /* Light gray for text on dark background */
+    --background: 220 10% 15%; 
+    --foreground: 220 20% 95%;
 
-    --card: 0 0% 12%; /* Darker card background */
+    --card: 220 10% 20%;
     --card-foreground: hsl(var(--foreground));
 
-    --popover: 0 0% 10%; /* Darker popover background */
+    --popover: 220 10% 18%;
     --popover-foreground: hsl(var(--card-foreground));
 
-    --primary: 120 25% 65%; /* PRD Green - unchanged */
-    --primary-foreground: 120 25% 10%; /* Dark text on primary green - unchanged */
+    --primary: 231 48% 90%; /* Soft Lavender as primary in dark mode */
+    --primary-foreground: 231 39% 30%;
 
-    --secondary: 0 0% 18%; /* Darker secondary elements */
+    --secondary: 220 10% 25%;
     --secondary-foreground: hsl(var(--foreground));
 
-    --muted: 0 0% 15%; /* Darker muted background */
-    --muted-foreground: 0 0% 60%; /* Adjusted for new muted background */
+    --muted: 220 10% 22%;
+    --muted-foreground: 220 10% 60%;
 
-    --accent: 210 33% 84%; /* PRD Soft Blue - unchanged */
-    --accent-foreground: 210 33% 15%; /* Dark text on accent blue - unchanged */
+    --accent: 231 39% 49%; /* Deep Blue as accent in dark mode */
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 70% 50%; /* Unchanged */
-    --destructive-foreground: 0 0% 98%; /* Unchanged */
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 20%; /* Darker border */
-    --input: 0 0% 15%; /* Darker input background */
-    --ring: hsl(var(--primary)); /* Ring based on PRD primary - unchanged */
+    --border: 220 10% 30%;
+    --input: 220 10% 22%;
+    --ring: hsl(var(--primary));
     
-    --chart-1: hsl(var(--primary)); /* Unchanged */
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-1: hsl(var(--primary));
+    --chart-2: 160 60% 55%;
+    --chart-3: 30 80% 65%;
+    --chart-4: 280 65% 70%;
+    --chart-5: 340 75% 65%;
 
-    /* Sidebar specific colors for .dark explicit class (these are already dark, so they are fine) */
-    --sidebar-background: 220 10% 23%;
-    --sidebar-foreground: 220 10% 85%;
+    --sidebar-background: hsl(var(--primary));
+    --sidebar-foreground: hsl(var(--primary-foreground));
     --sidebar-primary: hsl(var(--primary)); 
     --sidebar-primary-foreground: hsl(var(--primary-foreground));
     --sidebar-accent: hsl(var(--accent)); 
     --sidebar-accent-foreground: hsl(var(--accent-foreground));
-    --sidebar-border: 220 10% 30%;
+    --sidebar-border: 231 39% 40%;
     --sidebar-ring: hsl(var(--ring));
   }
 }
@@ -109,13 +106,13 @@ body {
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-body); /* Apply PT Sans from Tailwind config */
+    font-family: var(--font-body); 
   }
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-headline); /* Apply PT Sans for headlines */
+    font-family: var(--font-headline);
   }
   input, textarea {
-    font-family: var(--font-body); /* Ensure inputs also use PT Sans */
+    font-family: var(--font-body);
     border: 1px solid hsl(var(--border)); 
     background: hsl(var(--input)); 
     padding: 0.5rem; 

@@ -23,7 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -40,9 +40,13 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         if (!isLoadingAuth) {
             const isAuthPage = pathname === '/login';
             const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade';
+            const isForexPage = pathname.startsWith('/forex-invest');
 
             if (appUser) { // User is logged in
                 if (isAuthPage || pathname === '/') {
+                    router.replace('/dashboard');
+                }
+                if (isForexPage && appUser.type !== 'superadmin') {
                     router.replace('/dashboard');
                 }
             } else { // User is not logged in
@@ -52,6 +56,11 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             }
         }
     }, [isLoadingAuth, appUser, pathname, router]);
+    
+    if (pathname.startsWith('/forex-invest')) {
+        return <>{children}</>;
+    }
+
 
     if (isLoadingAuth) {
         return (
@@ -151,6 +160,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {userAppRole === 'superadmin' && (<SidebarMenuItem><Link href="/forex-invest"><SidebarMenuButton tooltip="Forex Invest" isActive={currentPathname.startsWith('/forex-invest')}><Banknote />Forex Invest</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
@@ -207,7 +217,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
         <title>Planus Energia App</title>
       </head>
