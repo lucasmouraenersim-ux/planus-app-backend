@@ -212,7 +212,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                     <Button
                         variant="default"
                         size="icon"
-                        className="absolute bottom-4 right-4 h-14 w-14 rounded-full shadow-lg"
+                        className="absolute bottom-4 right-4 h-14 w-14 rounded-full shadow-lg z-20"
                         aria-label="Adicionar Operação"
                     >
                         <Plus className="h-6 w-6" />
