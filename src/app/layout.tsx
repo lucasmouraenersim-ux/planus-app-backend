@@ -41,13 +41,9 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         if (!isLoadingAuth) {
             const isAuthPage = pathname === '/login';
             const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade';
-            const isForexPage = pathname.startsWith('/forex-invest');
-
+            
             if (appUser) { // User is logged in
                 if (isAuthPage || pathname === '/') {
-                    router.replace('/dashboard');
-                }
-                if (isForexPage && appUser.type !== 'superadmin') {
                     router.replace('/dashboard');
                 }
             } else { // User is not logged in
@@ -58,11 +54,6 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         }
     }, [isLoadingAuth, appUser, pathname, router]);
     
-    if (pathname.startsWith('/forex-invest')) {
-        return <>{children}</>;
-    }
-
-
     if (isLoadingAuth) {
         return (
             <div className="flex flex-col justify-center items-center h-screen bg-background text-primary">
@@ -161,7 +152,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {userAppRole === 'superadmin' && (<SidebarMenuItem><Link href="/forex-invest"><SidebarMenuButton tooltip="Forex Invest" isActive={currentPathname.startsWith('/forex-invest')}><Banknote />Forex Invest</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (

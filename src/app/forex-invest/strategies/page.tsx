@@ -1,7 +1,4 @@
-
-"use client";
-import Strategies from "@/components/forex-invest/strategies";
-
-export default function ForexStrategiesPage() {
-    return <Strategies />;
+// This file is intentionally left empty as part of the feature removal.
+export default function DeletedPage() {
+  return null;
 }

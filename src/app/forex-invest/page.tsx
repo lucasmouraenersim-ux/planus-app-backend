@@ -1,7 +1,4 @@
-
-"use client"
-import Dashboard from "@/components/forex-invest/dashboard";
-
-export default function ForexInvestPage() {
-    return <Dashboard />;
+// This file is intentionally left empty as part of the feature removal.
+export default function DeletedPage() {
+  return null;
 }
