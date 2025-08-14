@@ -5,7 +5,7 @@ import * as React from "react"
 import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw } from 'lucide-react';
+import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -153,7 +153,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                     <TabsTrigger value="dashboard"><BarChart className="w-4 h-4 mr-2" />Dashboard</TabsTrigger>
                     <TabsTrigger value="bitcoin"><Bitcoin className="w-4 h-4 mr-2" />Bitcoin Gráfico</TabsTrigger>
                 </TabsList>
-                <TabsContent value="projection">
+                <TabsContent value="projection" className="relative">
                     <Card className="bg-card/70">
                         <CardHeader>
                             <CardTitle>Tabela de Projeção e Gerenciamento</CardTitle>
@@ -209,6 +209,14 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                             </ScrollArea>
                         </CardContent>
                     </Card>
+                    <Button
+                        variant="default"
+                        size="icon"
+                        className="absolute bottom-4 right-4 h-14 w-14 rounded-full shadow-lg"
+                        aria-label="Adicionar Operação"
+                    >
+                        <Plus className="h-6 w-6" />
+                    </Button>
                 </TabsContent>
                 <TabsContent value="dashboard">
                    <div className="space-y-4">
