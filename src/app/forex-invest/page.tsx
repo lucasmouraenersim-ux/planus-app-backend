@@ -22,11 +22,11 @@ import { cn } from '@/lib/utils';
 const setupSchema = z.object({
   name: z.string().min(1, "O nome da banca é obrigatório."),
   initialCapitalUSD: z.preprocess(
-    (a) => parseFloat(z.string().parse(a).replace(",", ".")),
+    (a) => parseFloat(String(a).replace(",", ".")),
     z.number().positive("O capital deve ser um número positivo.")
   ),
   usdToBrlRate: z.preprocess(
-    (a) => parseFloat(z.string().parse(a).replace(",", ".")),
+    (a) => parseFloat(String(a).replace(",", ".")),
     z.number().positive("A cotação deve ser um número positivo.")
   ),
   startDate: z.date({
