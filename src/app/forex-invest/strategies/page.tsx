@@ -1,3 +1,4 @@
+
 "use client";
 import Strategies from "@/components/forex-invest/strategies";
 

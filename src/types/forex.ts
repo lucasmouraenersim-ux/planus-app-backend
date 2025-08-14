@@ -1,3 +1,4 @@
+
 export interface Bankroll {
     name: string;
     initialCapital: number;
@@ -8,14 +9,15 @@ export interface Bankroll {
 
 export interface Operation {
     id: string;
-    date: string;
+    date: string; // ISO string
     lotSize: number;
-    result: number; // in USD, can be positive or negative
+    result?: number; // in USD, can be positive or negative
     status: 'Aberta' | 'Fechada';
 }
 
 export interface ProjectionDay {
-    date: string;
+    day: number;
+    date: string; // ISO string
     actualCapital: number;
     proj1: number;
     proj2: number;

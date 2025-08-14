@@ -1,3 +1,4 @@
+
 "use client";
 
 // import type { Metadata } from 'next'; // Metadata can be an issue with "use client"

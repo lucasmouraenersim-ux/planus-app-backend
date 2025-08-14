@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Bankroll, Operation, ProjectionDay } from '@/types/forex';
@@ -81,7 +82,7 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         const operationsByDate: { [key: string]: number } = {};
         operations.forEach(op => {
-            if (op.status === 'Fechada') {
+            if (op.status === 'Fechada' && op.result !== undefined) {
                 const dateKey = format(parseISO(op.date), 'yyyy-MM-dd');
                 operationsByDate[dateKey] = (operationsByDate[dateKey] || 0) + op.result;
             }
@@ -100,6 +101,7 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const totalProfitLoss = dailyPerformanceData.reduce((acc, day) => acc + day.profit, 0);
         const avgEvolution = dailyPerformanceData.length > 0 ? (dailyPerformanceData.reduce((acc, day, i) => {
             const prevCapital = i > 0 ? dailyPerformanceData[i-1].capital : bankroll.initialCapital;
+            if (prevCapital === 0) return acc;
             return acc + (day.profit / prevCapital * 100);
         }, 0) / dailyPerformanceData.length) : 0;
         const bestDay = Math.max(0, ...dailyPerformanceData.map(d => d.profit));
@@ -110,23 +112,31 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const projectionDays = eachDayOfInterval({ start: startDate, end: endOfYear(today) });
         const projResult: ProjectionDay[] = [];
         let projCapitals = [bankroll.initialCapital, bankroll.initialCapital, bankroll.initialCapital, bankroll.initialCapital, bankroll.initialCapital];
+        
+        let runningActualCapital = bankroll.initialCapital;
 
-        projectionDays.forEach(day => {
+        projectionDays.forEach((day, index) => {
             const dateKey = format(day, 'yyyy-MM-dd');
-            const actualCapital = dailyPerformanceData.find(d => d.date === dateKey)?.capital || (projResult.length > 0 ? projResult[projResult.length - 1].actualCapital : bankroll.initialCapital);
-
-            projResult.push({
+            const dailyProfit = operationsByDate[dateKey] || 0;
+            if (parseISO(dateKey) <= today) {
+              runningActualCapital += dailyProfit;
+            }
+            
+            const dayProjection: ProjectionDay = {
+                day: index + 1,
                 date: day.toISOString(),
-                actualCapital,
+                actualCapital: runningActualCapital,
                 proj1: projCapitals[0],
                 proj2: projCapitals[1],
                 proj3: projCapitals[2],
                 proj4: projCapitals[3],
                 proj5: projCapitals[4],
-                drawdown: actualCapital * 0.15,
-                lowRiskLots: actualCapital * 0.10 / 1000,
-                highRiskLots: actualCapital * 0.20 / 1000
-            });
+                drawdown: runningActualCapital * 0.15,
+                lowRiskLots: runningActualCapital * 0.10 / 1000,
+                highRiskLots: runningActualCapital * 0.20 / 1000
+            };
+            
+            projResult.push(dayProjection);
             projCapitals = projCapitals.map((cap, i) => cap * (1 + (i + 1) / 100));
         });
 

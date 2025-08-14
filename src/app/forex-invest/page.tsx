@@ -1,3 +1,4 @@
+
 "use client"
 import Dashboard from "@/components/forex-invest/dashboard";
 

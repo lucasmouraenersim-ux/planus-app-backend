@@ -1,3 +1,4 @@
+
 "use client";
 import Operations from "@/components/forex-invest/operations";
 
