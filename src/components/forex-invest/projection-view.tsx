@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { TradingViewWidget } from "./trading-view-widget";
 
 export interface ProjectionConfig {
   name: string;
@@ -265,7 +266,15 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                    </div>
                 </TabsContent>
                 <TabsContent value="bitcoin">
-                     <p>Gráfico do Bitcoin em desenvolvimento.</p>
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Gráfico de Mercado: BTC/USD</CardTitle>
+                            <CardDescription>Análise em tempo real do par Bitcoin/Dólar Americano via TradingView.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <TradingViewWidget symbol="BITSTAMP:BTCUSD" />
+                        </CardContent>
+                     </Card>
                 </TabsContent>
             </Tabs>
         </div>
