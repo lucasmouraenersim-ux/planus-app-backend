@@ -1,4 +1,5 @@
 
+
 "use client";
 
 // import type { Metadata } from 'next'; // Metadata can be an issue with "use client"
@@ -24,7 +25,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -159,6 +160,16 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                                 <Link href="/team">
                                     <SidebarMenuButton isActive={currentPathname === '/team'} tooltip="Minha Equipe">
                                         <Network />Minha Equipe
+                                    </SidebarMenuButton>
+                                </Link>
+                            </SidebarMenuItem>
+                         )}
+                         
+                         {userAppRole === 'superadmin' && (
+                            <SidebarMenuItem>
+                                <Link href="/forex-invest">
+                                    <SidebarMenuButton isActive={currentPathname === '/forex-invest'} tooltip="Forex Invest">
+                                        <BrainCircuit />Forex Invest
                                     </SidebarMenuButton>
                                 </Link>
                             </SidebarMenuItem>
