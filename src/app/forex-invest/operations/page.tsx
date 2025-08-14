@@ -18,7 +18,8 @@ import { format } from 'date-fns';
 
 interface Operation {
   id: string;
-  date: Date;
+  createdAt: Date;
+  closedAt?: Date;
   loteSize: number;
   resultUSD?: number;
   status: 'Aberta' | 'Fechada';
@@ -75,14 +76,21 @@ function ForexOperationsPage() {
     if (editingOperation) {
         // Update operation
         setOperations(prevOps => prevOps.map(op => 
-            op.id === editingOperation.id ? { ...op, ...data, status } : op
+            op.id === editingOperation.id ? { 
+                ...op, 
+                ...data, 
+                status,
+                // Set close date if result is added, or clear it if result is removed
+                closedAt: data.resultUSD !== undefined ? (op.closedAt || new Date()) : undefined
+            } : op
         ));
         toast({ title: "Sucesso!", description: "Operação atualizada." });
     } else {
         // Add new operation
         const newOperation: Operation = {
             id: new Date().toISOString(),
-            date: new Date(),
+            createdAt: new Date(),
+            closedAt: data.resultUSD !== undefined ? new Date() : undefined,
             ...data,
             status,
         };
@@ -128,7 +136,8 @@ function ForexOperationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
+                <TableHead>Aberta em</TableHead>
+                <TableHead>Fechada em</TableHead>
                 <TableHead>Lote</TableHead>
                 <TableHead>Lucro/Prejuízo (USD)</TableHead>
                 <TableHead>Status</TableHead>
@@ -139,7 +148,8 @@ function ForexOperationsPage() {
               {operations.length > 0 ? (
                 operations.map((op) => (
                   <TableRow key={op.id}>
-                    <TableCell>{format(op.date, 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{format(op.createdAt, 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{op.closedAt ? format(op.closedAt, 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>{op.loteSize.toFixed(2)}</TableCell>
                     <TableCell>{formatCurrency(op.resultUSD)}</TableCell>
                     <TableCell>{op.status}</TableCell>
@@ -166,7 +176,7 @@ function ForexOperationsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">Nenhuma operação registrada ainda.</TableCell>
+                  <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Nenhuma operação registrada ainda.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -217,5 +227,3 @@ export default function ForexInvestOperationsPage() {
     </Suspense>
   )
 }
-
-    
