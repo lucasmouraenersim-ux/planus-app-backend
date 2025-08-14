@@ -65,7 +65,7 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center h-full">
         <Dialog open={true}>
-          <DialogContent>
+          <DialogContent className="bg-card/80 backdrop-blur-xl">
             <DialogHeader>
               <DialogTitle>Configurar Banca Forex</DialogTitle>
             </DialogHeader>
@@ -147,7 +147,7 @@ export default function Dashboard() {
                           <YAxis tickFormatter={(value) => `$${value}`} />
                           <Tooltip formatter={(value: number) => value.toFixed(2)} />
                           <Legend />
-                          <Line type="monotone" dataKey="actualCapital" name="Minha Evolução" stroke="#3F51B5" strokeWidth={2} />
+                          <Line type="monotone" dataKey="actualCapital" name="Minha Evolução" stroke="hsl(var(--primary))" strokeWidth={2} />
                           <Line type="monotone" dataKey="proj1" name="Meta 1%" stroke="#82ca9d" strokeDasharray="5 5" />
                           <Line type="monotone" dataKey="proj2" name="Meta 2%" stroke="#ffc658" strokeDasharray="5 5" />
                           <Line type="monotone" dataKey="proj3" name="Meta 3%" stroke="#ff8042" strokeDasharray="5 5" />
@@ -195,5 +195,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-    

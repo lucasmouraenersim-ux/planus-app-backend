@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForex } from '@/contexts/ForexProvider';
@@ -15,6 +16,7 @@ import { z } from 'zod';
 import type { Operation } from '@/types/forex';
 import { format, parseISO } from 'date-fns';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 const operationSchema = z.object({
     id: z.string().optional(),
@@ -67,13 +69,13 @@ export default function Operations() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold font-serif text-[#3F51B5]">Minhas Operações</h1>
+                <h1 className="text-3xl font-bold font-serif text-primary">Minhas Operações</h1>
                 <Button onClick={() => handleOpenModal()}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Nova Operação
                 </Button>
             </div>
 
-            <Card>
+            <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
                 <CardHeader><CardTitle>Diário de Operações</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
@@ -91,7 +93,7 @@ export default function Operations() {
                                 <TableRow key={op.id}>
                                     <TableCell>{format(parseISO(op.date), "dd/MM/yyyy HH:mm")}</TableCell>
                                     <TableCell>{op.lotSize}</TableCell>
-                                    <TableCell className={op.result >= 0 ? 'text-green-500' : 'text-red-500'}>
+                                    <TableCell className={op.result !== undefined ? (op.result >= 0 ? 'text-green-500' : 'text-red-500') : ''}>
                                         {op.result !== undefined ? `$${op.result.toFixed(2)}` : '-'}
                                     </TableCell>
                                     <TableCell>{op.status}</TableCell>
@@ -101,7 +103,7 @@ export default function Operations() {
                                             <AlertDialogTrigger asChild>
                                                 <Button variant="destructive" size="icon"><Trash2 className="h-4 w-4" /></Button>
                                             </AlertDialogTrigger>
-                                            <AlertDialogContent>
+                                            <AlertDialogContent className="bg-card/80 backdrop-blur-xl">
                                                 <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir esta operação? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -118,8 +120,9 @@ export default function Operations() {
             </Card>
 
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent>
+                <DialogContent className="bg-card/80 backdrop-blur-xl">
                     <DialogHeader><DialogTitle>{editingOperation ? 'Editar' : 'Nova'} Operação</DialogTitle></DialogHeader>
+                    <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <FormField control={form.control} name="date" render={({ field }) => (
                             <FormItem><FormLabel>Data</FormLabel><FormControl><Input type="datetime-local" {...field} /></FormControl><FormMessage /></FormItem>
@@ -135,6 +138,7 @@ export default function Operations() {
                             <Button type="submit">Salvar</Button>
                         </DialogFooter>
                     </form>
+                    </Form>
                 </DialogContent>
             </Dialog>
         </div>

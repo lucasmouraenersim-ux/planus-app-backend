@@ -1,3 +1,4 @@
+
 "use client";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -23,20 +24,26 @@ const strategies = [
 export default function Strategies() {
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold font-serif text-[#3F51B5]">Estratégias de Trading</h1>
+            <h1 className="text-3xl font-bold font-serif text-primary">Estratégias de Trading</h1>
             <p className="text-muted-foreground">Aprenda sobre algumas estratégias populares de trading com exemplos visuais.</p>
-            <Accordion type="single" collapsible className="w-full">
-                {strategies.map((strategy, index) => (
-                    <AccordionItem value={`item-${index}`} key={index}>
-                        <AccordionTrigger className="text-xl font-semibold">{strategy.title}</AccordionTrigger>
-                        <AccordionContent className="space-y-4">
-                            <p className="text-muted-foreground">{strategy.description}</p>
-                            <p>{strategy.content}</p>
-                            <Image src={strategy.imageUrl} alt={strategy.title} width={600} height={300} className="rounded-lg shadow-md mx-auto" data-ai-hint={strategy.imageHint} />
-                        </AccordionContent>
-                    </AccordionItem>
-                ))}
-            </Accordion>
+             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
+                <CardContent className="p-4 md:p-6">
+                    <Accordion type="single" collapsible className="w-full">
+                        {strategies.map((strategy, index) => (
+                            <AccordionItem value={`item-${index}`} key={index}>
+                                <AccordionTrigger className="text-xl font-semibold text-primary hover:no-underline">{strategy.title}</AccordionTrigger>
+                                <AccordionContent className="space-y-4 pt-2">
+                                    <p className="text-muted-foreground">{strategy.description}</p>
+                                    <p>{strategy.content}</p>
+                                    <div className="flex justify-center p-4 bg-muted/50 rounded-lg">
+                                        <Image src={strategy.imageUrl} alt={strategy.title} width={600} height={300} className="rounded-lg shadow-md mx-auto" data-ai-hint={strategy.imageHint} />
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
+                </CardContent>
+            </Card>
         </div>
     );
 }
