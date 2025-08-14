@@ -11,10 +11,10 @@ import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { ProjectionView, type ProjectionConfig } from '@/components/forex-invest/projection-view';
 
 import { Calendar as CalendarIcon, LineChart, Loader2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,11 +22,11 @@ import { cn } from '@/lib/utils';
 const setupSchema = z.object({
   name: z.string().min(1, "O nome da banca é obrigatório."),
   initialCapitalUSD: z.preprocess(
-    (a) => parseFloat(z.string().parse(a)),
+    (a) => parseFloat(z.string().parse(a).replace(",", ".")),
     z.number().positive("O capital deve ser um número positivo.")
   ),
   usdToBrlRate: z.preprocess(
-    (a) => parseFloat(z.string().parse(a)),
+    (a) => parseFloat(z.string().parse(a).replace(",", ".")),
     z.number().positive("A cotação deve ser um número positivo.")
   ),
   startDate: z.date({
@@ -38,6 +38,7 @@ type SetupFormData = z.infer<typeof setupSchema>;
 
 function ForexInvestDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [projectionConfig, setProjectionConfig] = useState<ProjectionConfig | null>(null);
   
   const form = useForm<SetupFormData>({
     resolver: zodResolver(setupSchema),
@@ -51,13 +52,21 @@ function ForexInvestDashboard() {
 
   const onSubmit = (data: SetupFormData) => {
     setIsSubmitting(true);
-    console.log("Form submitted:", data);
-    // Here you would call a function to create the projection
-    // For now, just simulate a delay
+    // Simulate data processing
     setTimeout(() => {
+      setProjectionConfig({
+          name: data.name,
+          initialCapital: data.initialCapitalUSD,
+          startDate: data.startDate,
+          usdToBrlRate: data.usdToBrlRate,
+      });
       setIsSubmitting(false);
-    }, 2000);
+    }, 1000);
   };
+
+  if (projectionConfig) {
+      return <ProjectionView config={projectionConfig} />;
+  }
 
   return (
     <div className="flex items-center justify-center min-h-full p-4 md:p-6">
