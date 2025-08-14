@@ -5,7 +5,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, ShieldAlert, LayoutDashboard, History, Lightbulb, Settings } from 'lucide-react';
+import { Loader2, ShieldAlert, LayoutDashboard, History, Lightbulb, Settings, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -44,13 +44,11 @@ export default function ForexInvestLayout({
   }
   
   return (
-    <div className="flex h-full">
-        <aside className="w-64 flex-shrink-0 bg-card/50 backdrop-blur-sm border-r p-4">
+    <div className="flex h-full bg-background/70 backdrop-blur-sm">
+        <aside className="w-64 flex-shrink-0 bg-card/50 p-4">
             <h2 className="text-2xl font-bold text-primary mb-6 flex items-center">
-                <svg className="w-8 h-8 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 4h4v16H4V4zm8 8h4v8h-4v-8zm0-8h4v4h-4V4z" fill="currentColor"/>
-                </svg>
-                Forex Vision
+                <LineChart className="w-8 h-8 mr-2" />
+                Forex Invest
             </h2>
             <nav className="flex flex-col gap-2">
                 {navItems.map((item) => {

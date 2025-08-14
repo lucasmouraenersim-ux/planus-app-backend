@@ -1,91 +1,174 @@
 
 "use client";
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { format } from "date-fns";
+import { ptBR } from 'date-fns/locale';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BarChart, LineChart, PlusCircle, Settings, Download, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+
+import { Calendar as CalendarIcon, LineChart, Loader2, ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const setupSchema = z.object({
+  name: z.string().min(1, "O nome da banca é obrigatório."),
+  initialCapitalUSD: z.preprocess(
+    (a) => parseFloat(z.string().parse(a)),
+    z.number().positive("O capital deve ser um número positivo.")
+  ),
+  usdToBrlRate: z.preprocess(
+    (a) => parseFloat(z.string().parse(a)),
+    z.number().positive("A cotação deve ser um número positivo.")
+  ),
+  startDate: z.date({
+    required_error: "A data de início é obrigatória.",
+  }),
+});
+
+type SetupFormData = z.infer<typeof setupSchema>;
 
 function ForexInvestDashboard() {
-
-  // Placeholder data - this will be replaced with real data from Firestore
-  const metrics = {
-    totalProfitLoss: 1250.75,
-    avgDailyEvolution: 0.85,
-    bestDailyGain: 350.20,
-    worstDailyLoss: -150.50,
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
-  const formatPercentage = (value: number) => `${value.toFixed(2)}%`;
+  const form = useForm<SetupFormData>({
+    resolver: zodResolver(setupSchema),
+    defaultValues: {
+      name: "Minha Banca",
+      initialCapitalUSD: 30,
+      usdToBrlRate: 5,
+      startDate: new Date(),
+    },
+  });
+
+  const onSubmit = (data: SetupFormData) => {
+    setIsSubmitting(true);
+    console.log("Form submitted:", data);
+    // Here you would call a function to create the projection
+    // For now, just simulate a delay
+    setTimeout(() => {
+      setIsSubmitting(false);
+    }, 2000);
+  };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-       <header className="flex flex-col md:flex-row justify-between items-start md:items-center">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-foreground">
-            Forex Invest Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-1">Sua visão geral de performance e projeções.</p>
-        </div>
-        <div className="flex items-center gap-2 mt-4 md:mt-0">
-          <Button variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar Dados</Button>
-          <Button><PlusCircle className="mr-2 h-4 w-4" /> Nova Operação</Button>
-        </div>
-      </header>
+    <div className="flex items-center justify-center min-h-full p-4 md:p-6">
+      <Card className="w-full max-w-lg bg-card/80">
+        <CardHeader className="text-center">
+          <div className="flex justify-center items-center mb-4">
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+               <LineChart className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl">Bem-vindo ao Forex Invest</CardTitle>
+          <CardDescription>Insira os dados iniciais para criar sua projeção de banca.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome da Banca</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Minha Banca" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-            <CardHeader><CardTitle>Balanço Total</CardTitle></CardHeader>
-            <CardContent><p className="text-2xl font-bold text-green-500">{formatCurrency(metrics.totalProfitLoss)}</p></CardContent>
-        </Card>
-         <Card>
-            <CardHeader><CardTitle>Evolução Média Diária</CardTitle></CardHeader>
-            <CardContent><p className="text-2xl font-bold">{formatPercentage(metrics.avgDailyEvolution)}</p></CardContent>
-        </Card>
-         <Card>
-            <CardHeader><CardTitle>Maior Lucro Diário</CardTitle></CardHeader>
-            <CardContent><p className="text-2xl font-bold text-green-500">{formatCurrency(metrics.bestDailyGain)}</p></CardContent>
-        </Card>
-         <Card>
-            <CardHeader><CardTitle>Pior Perda Diária</CardTitle></CardHeader>
-            <CardContent><p className="text-2xl font-bold text-red-500">{formatCurrency(metrics.worstDailyLoss)}</p></CardContent>
-        </Card>
-      </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="initialCapitalUSD"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Capital Inicial (USD)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="Ex: 100" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="usdToBrlRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cotação USD/BRL</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="Ex: 5.25" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Evolução do Capital</CardTitle>
-                    <CardDescription>Capital Real vs. Projeções de Crescimento</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[300px] flex items-center justify-center">
-                    <LineChart className="text-muted-foreground h-20 w-20" />
-                    <p className="ml-4 text-muted-foreground">Gráfico de Linhas (em breve)</p>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>TradingView: BTC/USD</CardTitle>
-                    <CardDescription>Análise de mercado em tempo real.</CardDescription>
-                </CardHeader>
-                <CardContent className="h-[300px] flex items-center justify-center">
-                   <p className="text-muted-foreground">Widget do TradingView (em breve)</p>
-                </CardContent>
-            </Card>
-       </div>
-       
-        <Card>
-            <CardHeader>
-                <CardTitle>Tabela de Projeção e Gerenciamento</CardTitle>
-                <CardDescription>Acompanhe seu progresso diário e metas.</CardDescription>
-            </CardHeader>
-            <CardContent className="h-[300px] flex items-center justify-center">
-                <BarChart className="text-muted-foreground h-20 w-20" />
-                <p className="ml-4 text-muted-foreground">Tabela de Projeções (em breve)</p>
-            </CardContent>
-        </Card>
-
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data de Início</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP", { locale: ptBR })
+                            ) : (
+                              <span>Escolha uma data</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                     <FormDescription className="text-xs text-muted-foreground mt-2">A projeção será calculada até o final do ano.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Criando..." : "Criar Projeção"}
+                {!isSubmitting && <ArrowRight className="ml-2 h-4 w-4" />}
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
