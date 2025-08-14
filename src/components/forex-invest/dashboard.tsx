@@ -17,6 +17,15 @@ import { CalendarIcon, DollarSign, TrendingDown, TrendingUp } from 'lucide-react
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import type { DateRange } from 'react-day-picker';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
 const bankrollSchema = z.object({
   name: z.string().min(1, "Nome da banca é obrigatório."),
