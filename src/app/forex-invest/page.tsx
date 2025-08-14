@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,10 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { ProjectionView, type ProjectionConfig } from '@/components/forex-invest/projection-view';
+import { ProjectionView } from '@/components/forex-invest/projection-view';
+import { useForex } from '@/contexts/ForexProvider';
 
 import { Calendar as CalendarIcon, LineChart, Loader2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ForexBancaConfig } from '@/types/forex';
 
 const setupSchema = z.object({
   name: z.string().min(1, "O nome da banca é obrigatório."),
@@ -37,8 +39,8 @@ const setupSchema = z.object({
 type SetupFormData = z.infer<typeof setupSchema>;
 
 function ForexInvestDashboard() {
+  const { config, setConfig, isLoading } = useForex();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [projectionConfig, setProjectionConfig] = useState<ProjectionConfig | null>(null);
   
   const form = useForm<SetupFormData>({
     resolver: zodResolver(setupSchema),
@@ -50,27 +52,31 @@ function ForexInvestDashboard() {
     },
   });
 
-  const onSubmit = (data: SetupFormData) => {
+  const onSubmit = async (data: SetupFormData) => {
     setIsSubmitting(true);
-    // Simulate data processing
-    setTimeout(() => {
-      setProjectionConfig({
-          name: data.name,
-          initialCapital: data.initialCapitalUSD,
-          startDate: data.startDate,
-          usdToBrlRate: data.usdToBrlRate,
-      });
-      setIsSubmitting(false);
-    }, 1000);
+    await setConfig(data);
+    setIsSubmitting(false);
   };
 
   const handleNewProjection = () => {
-    setProjectionConfig(null);
+    setConfig(null); // This will cause the form to show again
     form.reset();
   };
 
+  if (isLoading) {
+    return (
+        <div className="flex flex-col justify-center items-center h-[calc(100vh-10rem)]">
+            <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
+            <p className="text-lg font-medium">Carregando projeção...</p>
+        </div>
+    );
+  }
 
-  if (projectionConfig) {
+  if (config) {
+      const projectionConfig = {
+          ...config,
+          startDate: new Date(config.startDate as string) // Ensure date is a Date object
+      };
       return <ProjectionView config={projectionConfig} onNewProjection={handleNewProjection} />;
   }
 

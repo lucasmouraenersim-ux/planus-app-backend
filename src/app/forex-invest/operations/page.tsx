@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,18 +14,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-
-
-interface Operation {
-  id: string;
-  createdAt: Date;
-  closedAt?: Date;
-  loteSize: number;
-  resultUSD?: number;
-  status: 'Aberta' | 'Fechada';
-}
+import { useForex } from '@/contexts/ForexProvider';
+import type { ForexOperation } from '@/types/forex';
 
 const operationSchema = z.object({
   loteSize: z.preprocess(
@@ -59,10 +51,10 @@ type OperationFormData = z.infer<typeof operationSchema>;
 
 function ForexOperationsPage() {
   const { toast } = useToast();
-  const [operations, setOperations] = useState<Operation[]>([]);
+  const { operations, addOperation, updateOperation, deleteOperation, isLoading } = useForex();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingOperation, setEditingOperation] = useState<Operation | null>(null);
-  const [operationToDelete, setOperationToDelete] = useState<Operation | null>(null);
+  const [editingOperation, setEditingOperation] = useState<ForexOperation | null>(null);
+  const [operationToDelete, setOperationToDelete] = useState<ForexOperation | null>(null);
 
   const form = useForm<OperationFormData>({
     resolver: zodResolver(operationSchema),
@@ -73,20 +65,20 @@ function ForexOperationsPage() {
   });
   const { handleSubmit, control, reset } = form;
 
-  const formatDateForInput = (date: Date | undefined) => {
+  const formatDateForInput = (date: Date | string | undefined) => {
     if (!date) return "";
-    // Format to "yyyy-MM-ddTHH:mm"
-    return format(date, "yyyy-MM-dd'T'HH:mm");
+    const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    return format(dateObj, "yyyy-MM-dd'T'HH:mm");
   };
 
-  const handleOpenModal = (operation: Operation | null = null) => {
+  const handleOpenModal = (operation: ForexOperation | null = null) => {
     setEditingOperation(operation);
     if (operation) {
         reset({
             loteSize: operation.loteSize,
             resultUSD: operation.resultUSD,
-            createdAt: operation.createdAt,
-            closedAt: operation.closedAt,
+            createdAt: operation.createdAt ? new Date(operation.createdAt as string) : new Date(),
+            closedAt: operation.closedAt ? new Date(operation.closedAt as string) : undefined,
         });
     } else {
         reset({
@@ -105,36 +97,31 @@ function ForexOperationsPage() {
     reset();
   };
 
-  const onSubmit: SubmitHandler<OperationFormData> = (data) => {
+  const onSubmit: SubmitHandler<OperationFormData> = async (data) => {
     const status = data.resultUSD !== undefined && data.resultUSD !== null ? 'Fechada' : 'Aberta';
     
-    if (editingOperation) {
-        setOperations(prevOps => prevOps.map(op => 
-            op.id === editingOperation.id ? { 
-                ...op, 
-                ...data, 
-                status,
-                closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined
-            } : op
-        ));
+    if (editingOperation && editingOperation.id) {
+        await updateOperation(editingOperation.id, {
+            ...data,
+            status,
+            closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined
+        });
         toast({ title: "Sucesso!", description: "Operação atualizada." });
     } else {
-        const newOperation: Operation = {
-            id: new Date().toISOString(),
+        await addOperation({
             ...data,
             status,
             closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined,
             createdAt: data.createdAt || new Date(),
-        };
-        setOperations(prevOps => [newOperation, ...prevOps]);
+        });
         toast({ title: "Sucesso!", description: "Nova operação adicionada." });
     }
 
     handleCloseModal();
   };
 
-  const handleDelete = (operationId: string) => {
-    setOperations(prevOps => prevOps.filter(op => op.id !== operationId));
+  const handleDelete = async (operationId: string) => {
+    await deleteOperation(operationId);
     toast({ title: "Operação Excluída", description: "A operação foi removida do seu histórico." });
     setOperationToDelete(null);
   };
@@ -176,11 +163,13 @@ function ForexOperationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {operations.length > 0 ? (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+              ) : operations.length > 0 ? (
                 operations.map((op) => (
                   <TableRow key={op.id}>
-                    <TableCell>{format(op.createdAt, 'dd/MM/yyyy HH:mm')}</TableCell>
-                    <TableCell>{op.closedAt ? format(op.closedAt, 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
+                    <TableCell>{format(parseISO(op.createdAt as string), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{op.closedAt ? format(parseISO(op.closedAt as string), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>{op.loteSize.toFixed(2)}</TableCell>
                     <TableCell>{formatCurrency(op.resultUSD)}</TableCell>
                     <TableCell>{op.status}</TableCell>
@@ -198,7 +187,7 @@ function ForexOperationsPage() {
                              <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Tem certeza que deseja excluir esta operação? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
                              <AlertDialogFooter>
                                 <AlertDialogCancel onClick={() => setOperationToDelete(null)}>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => operationToDelete && handleDelete(operationToDelete.id)}>Confirmar</AlertDialogAction>
+                                <AlertDialogAction onClick={() => operationToDelete && operationToDelete.id && handleDelete(operationToDelete.id)}>Confirmar</AlertDialogAction>
                              </AlertDialogFooter>
                           </AlertDialogContent>
                        </AlertDialog>
@@ -215,7 +204,7 @@ function ForexOperationsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>{editingOperation ? "Editar Operação" : "Nova Operação"}</DialogTitle>
@@ -293,5 +282,3 @@ export default function ForexInvestOperationsPage() {
     </Suspense>
   )
 }
-
-    
