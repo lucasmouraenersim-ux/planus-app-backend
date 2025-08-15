@@ -5,7 +5,7 @@ import * as React from "react"
 import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity } from 'lucide-react';
+import { AreaChart, Area, LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -209,8 +209,9 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
       'Capital Atual': 'hsl(var(--chart-1))',
       'Meta 1%': 'hsl(var(--chart-2))',
       'Meta 2%': 'hsl(var(--chart-3))',
-      'Meta 4%': 'hsl(var(--chart-4))',
-      'Meta 5%': '#FF8042',
+      'Meta 3%': 'hsl(var(--chart-4))',
+      'Meta 4%': '#FF8042',
+      'Meta 5%': '#FFBB28',
     };
 
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -247,7 +248,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
             <Tabs defaultValue="dashboard">
                 <TabsList className="mb-4">
                     <TabsTrigger value="dashboard"><BarChart className="w-4 h-4 mr-2" />Dashboard</TabsTrigger>
-                    <TabsTrigger value="projection"><AreaChart className="w-4 h-4 mr-2" />Projeção</TabsTrigger>
+                    <TabsTrigger value="projection"><LineChartIcon className="w-4 h-4 mr-2" />Projeção</TabsTrigger>
                     <TabsTrigger value="bitcoin"><Bitcoin className="w-4 h-4 mr-2" />Bitcoin Gráfico</TabsTrigger>
                 </TabsList>
                 <TabsContent value="projection" className="relative">
@@ -388,8 +389,14 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                         </CardHeader>
                         <CardContent className="h-[400px] w-full">
                            <ResponsiveContainer width="100%" height="100%">
-                             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                             <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                               <defs>
+                                <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={lineColors['Capital Atual']} stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor={lineColors['Capital Atual']} stopOpacity={0}/>
+                                </linearGradient>
+                               </defs>
+                               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                                <XAxis 
                                  dataKey="name" 
                                  stroke="hsl(var(--muted-foreground))"
@@ -405,15 +412,15 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                  axisLine={false}
                                  tickFormatter={(value) => `$${value/1000}k`}
                                 />
-                               <Tooltip content={<CustomTooltip />} />
-                               <Legend />
-                               <Line type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} dot={false} strokeWidth={3} />
+                               <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                               <Legend wrapperStyle={{ paddingTop: '20px' }}/>
+                               <Area type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} fillOpacity={1} fill="url(#colorCapital)" strokeWidth={2} />
                                <Line type="monotone" dataKey="Meta 1%" stroke={lineColors['Meta 1%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
                                <Line type="monotone" dataKey="Meta 2%" stroke={lineColors['Meta 2%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
                                <Line type="monotone" dataKey="Meta 3%" stroke={lineColors['Meta 3%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
                                <Line type="monotone" dataKey="Meta 4%" stroke={lineColors['Meta 4%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
                                <Line type="monotone" dataKey="Meta 5%" stroke={lineColors['Meta 5%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
-                             </LineChart>
+                             </AreaChart>
                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
@@ -443,3 +450,4 @@ function endOfDay(date: Date) {
 }
 
     
+
