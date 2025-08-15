@@ -27,10 +27,10 @@ const operationSchema = z.object({
   resultUSD: z.preprocess(
     (a) => {
         const str = String(a).trim();
-        if (str === "") return undefined;
+        if (str === "") return undefined; // Handle empty string for optional field
         return parseFloat(str.replace(",", "."));
     },
-    z.number().optional()
+    z.number().optional() // Make the number itself optional
   ),
   createdAt: z.preprocess((arg) => {
     if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
@@ -68,7 +68,12 @@ function ForexOperationsPage() {
   const formatDateForInput = (date: Date | string | undefined) => {
     if (!date) return "";
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
-    return format(dateObj, "yyyy-MM-dd'T'HH:mm");
+    try {
+        return format(dateObj, "yyyy-MM-dd'T'HH:mm");
+    } catch (error) {
+        console.warn("Invalid date for formatting:", date);
+        return "";
+    }
   };
 
   const handleOpenModal = (operation: ForexOperation | null = null) => {
@@ -168,7 +173,7 @@ function ForexOperationsPage() {
               ) : operations.length > 0 ? (
                 operations.map((op) => (
                   <TableRow key={op.id}>
-                    <TableCell>{format(parseISO(op.createdAt as string), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{op.createdAt ? format(parseISO(op.createdAt as string), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>{op.closedAt ? format(parseISO(op.closedAt as string), 'dd/MM/yyyy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>{op.loteSize.toFixed(2)}</TableCell>
                     <TableCell>{formatCurrency(op.resultUSD)}</TableCell>
@@ -219,7 +224,7 @@ function ForexOperationsPage() {
                             <FormItem><Label htmlFor="loteSize">Tamanho do Lote</Label><FormControl><Input id="loteSize" type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
                         )} />
                          <FormField control={control} name="resultUSD" render={({ field }) => (
-                            <FormItem><Label htmlFor="resultUSD">Resultado (USD)</Label><FormControl><Input id="resultUSD" type="number" step="0.01" placeholder="Deixe em branco se aberta" {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><Label htmlFor="resultUSD">Resultado (USD)</Label><FormControl><Input id="resultUSD" type="number" step="0.01" placeholder="Deixe em branco se aberta" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                         )} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
