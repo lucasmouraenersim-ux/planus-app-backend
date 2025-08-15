@@ -206,12 +206,12 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     }, [projectionData, config.initialCapitalUSD]);
 
     const lineColors = {
-      'Capital Atual': 'hsl(var(--chart-1))',
-      'Meta 1%': 'hsl(var(--chart-2))',
-      'Meta 2%': 'hsl(var(--chart-3))',
-      'Meta 3%': 'hsl(var(--chart-4))',
-      'Meta 4%': '#FF8042',
-      'Meta 5%': '#FFBB28',
+      'Capital Atual': '#8884d8',    // Bright Purple
+      'Meta 1%': '#82ca9d',          // Soft Green
+      'Meta 2%': '#ffc658',          // Amber
+      'Meta 3%': '#ff8042',          // Orange
+      'Meta 4%': '#00C49F',          // Teal
+      'Meta 5%': '#FFBB28',          // Gold
     };
 
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -415,11 +415,11 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                <Legend wrapperStyle={{ paddingTop: '20px' }}/>
                                <Area type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} fillOpacity={1} fill="url(#colorCapital)" strokeWidth={2} />
-                               <Line type="monotone" dataKey="Meta 1%" stroke={lineColors['Meta 1%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
-                               <Line type="monotone" dataKey="Meta 2%" stroke={lineColors['Meta 2%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
-                               <Line type="monotone" dataKey="Meta 3%" stroke={lineColors['Meta 3%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
-                               <Line type="monotone" dataKey="Meta 4%" stroke={lineColors['Meta 4%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
-                               <Line type="monotone" dataKey="Meta 5%" stroke={lineColors['Meta 5%']} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
+                               {Object.entries(lineColors)
+                                 .filter(([key]) => key !== 'Capital Atual')
+                                 .map(([key, color]) => (
+                                    <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
+                               ))}
                              </AreaChart>
                            </ResponsiveContainer>
                         </CardContent>
@@ -450,6 +450,7 @@ function endOfDay(date: Date) {
 }
 
     
+
 
 
 
