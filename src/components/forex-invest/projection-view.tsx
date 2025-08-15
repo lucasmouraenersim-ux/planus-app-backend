@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon } from 'lucide-react';
-import { AreaChart, Area, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -187,31 +187,31 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     }, [filteredOperations, config.initialCapitalUSD, operations]);
 
     const chartData = useMemo(() => {
-      let dailyProjectedCapital = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
-      return projectionData.map(day => {
-        
-        const newProjections: any = {};
-        [1, 2, 3, 4, 5].forEach(p => {
-          const key = String(p);
-          dailyProjectedCapital[key as '1'|'2'|'3'|'4'|'5'] *= (1 + p/100);
-          newProjections[`Meta ${p}%`] = dailyProjectedCapital[key as '1'|'2'|'3'|'4'|'5'];
-        });
+        let dailyProjectedCapital = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
+        return projectionData.map(day => {
+            
+            const newProjections: any = {};
+            [1, 2, 3, 4, 5].forEach(p => {
+                const key = String(p);
+                dailyProjectedCapital[key as '1' | '2' | '3' | '4' | '5'] *= (1 + p / 100);
+                newProjections[`Meta ${p}%`] = dailyProjectedCapital[key as '1' | '2' | '3' | '4' | '5'];
+            });
 
-        return {
-            name: `Dia ${day.day}`,
-            'Capital Atual': day.capitalAtualUSD,
-            ...newProjections,
-        };
-      });
+            return {
+                name: `Dia ${day.day}`,
+                'Capital Atual': day.capitalAtualUSD,
+                ...newProjections,
+            };
+        });
     }, [projectionData, config.initialCapitalUSD]);
 
-    const lineColors = {
-      'Capital Atual': '#8884d8',    // Bright Purple
-      'Meta 1%': '#82ca9d',          // Soft Green
-      'Meta 2%': '#ffc658',          // Amber
-      'Meta 3%': '#ff8042',          // Orange
-      'Meta 4%': '#00C49F',          // Teal
-      'Meta 5%': '#FFBB28',          // Gold
+    const lineColors: { [key: string]: string } = {
+        'Capital Atual': '#8884d8', // Roxo vibrante
+        'Meta 1%': '#82ca9d',       // Verde suave
+        'Meta 2%': '#ffc658',       // Amarelo âmbar
+        'Meta 3%': '#ff8042',       // Laranja
+        'Meta 4%': '#00C49F',       // Verde azulado (Teal)
+        'Meta 5%': '#FFBB28',       // Dourado
     };
 
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -389,13 +389,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                         </CardHeader>
                         <CardContent className="h-[400px] w-full">
                            <ResponsiveContainer width="100%" height="100%">
-                             <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                               <defs>
-                                <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={lineColors['Capital Atual']} stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor={lineColors['Capital Atual']} stopOpacity={0}/>
-                                </linearGradient>
-                               </defs>
+                             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                                <XAxis 
                                  dataKey="name" 
@@ -410,17 +404,17 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                  fontSize={12}
                                  tickLine={false}
                                  axisLine={false}
-                                 tickFormatter={(value) => `$${value/1000}k`}
+                                 tickFormatter={(value) => `$${Number(value)/1000}k`}
                                 />
                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                <Legend wrapperStyle={{ paddingTop: '20px' }}/>
-                               <Area type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} fillOpacity={1} fill="url(#colorCapital)" strokeWidth={2} />
+                               <Line type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} strokeWidth={2} dot={false} />
                                {Object.entries(lineColors)
                                  .filter(([key]) => key !== 'Capital Atual')
                                  .map(([key, color]) => (
                                     <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
                                ))}
-                             </AreaChart>
+                             </LineChart>
                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
@@ -450,6 +444,7 @@ function endOfDay(date: Date) {
 }
 
     
+
 
 
 
