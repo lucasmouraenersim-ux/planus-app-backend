@@ -12,7 +12,7 @@ interface ForexContextType {
     config: ForexBancaConfig | null;
     operations: ForexOperation[];
     isLoading: boolean;
-    setConfig: (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'>) => Promise<void>;
+    setConfig: (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'> | null) => Promise<void>;
     addOperation: (operationData: Omit<ForexOperation, 'id' | 'userId'>) => Promise<void>;
     updateOperation: (operationId: string, updates: Partial<ForexOperation>) => Promise<void>;
     deleteOperation: (operationId: string) => Promise<void>;
@@ -27,8 +27,18 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [operations, setOperations] = useState<ForexOperation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const setConfig = async (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'>) => {
+    const setConfig = async (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'> | null) => {
         if (!firebaseUser) return;
+        
+        // If newConfig is null, it means we are clearing the projection.
+        if (newConfig === null) {
+            const configRef = doc(db, 'forex_config', firebaseUser.uid);
+            await deleteDoc(configRef); // Also delete from Firestore
+            setConfigState(null);
+            setOperations([]); // Clear operations as well
+            return;
+        }
+
         const configToSave: ForexBancaConfig = {
             ...newConfig,
             userId: firebaseUser.uid,
@@ -85,6 +95,8 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             if (docSnap.exists()) {
                 const data = docSnap.data() as ForexBancaConfig;
                 setConfigState({ ...data, id: docSnap.id, startDate: (data.startDate as Timestamp).toDate().toISOString() });
+            } else {
+                setConfigState(null); // Explicitly set to null if not found
             }
         };
 
