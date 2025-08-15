@@ -3,9 +3,9 @@
 
 import * as React from "react"
 import { useMemo, useState } from 'react';
-import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, differenceInHours, differenceInMinutes } from 'date-fns';
+import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent } from 'lucide-react';
+import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, Scalpel, CalendarIcon, Activity } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,6 +16,10 @@ import { Button } from '@/components/ui/button';
 import { TradingViewWidget } from "./trading-view-widget";
 import type { ForexBancaConfig, ForexOperation } from '@/types/forex';
 import { useForex } from '@/contexts/ForexProvider';
+import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
+import { cn } from "@/lib/utils";
+import { Calendar } from "../ui/calendar";
+import type { DateRange } from "react-day-picker";
 
 export interface ProjectionConfig extends Omit<ForexBancaConfig, 'startDate' | 'id' | 'userId'>{
   startDate: Date;
@@ -58,6 +62,33 @@ const formatDuration = (totalMinutes: number): string => {
 
 export const ProjectionView = ({ config, onNewProjection }: { config: ProjectionConfig, onNewProjection: () => void }) => {
     const { operations } = useForex();
+    const [timeRange, setTimeRange] = useState('all_time');
+    const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
+
+    const filteredOperations = useMemo(() => {
+      if (timeRange === 'all_time') return operations;
+
+      const now = new Date();
+      let startDate: Date;
+
+      if (timeRange === 'last_30_days') {
+          startDate = subDays(now, 30);
+      } else if (timeRange === 'last_7_days') {
+          startDate = subDays(now, 7);
+      } else if (timeRange === 'custom' && customDateRange?.from) {
+          startDate = customDateRange.from;
+          const endDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from);
+          return operations.filter(op => {
+              const opDate = parseISO(op.createdAt as string);
+              return opDate >= startDate && opDate <= endDate;
+          });
+      } else {
+          return operations;
+      }
+      
+      return operations.filter(op => parseISO(op.createdAt as string) >= startDate);
+    }, [operations, timeRange, customDateRange]);
+
 
     const projectionData = useMemo(() => {
         const dailyResults = new Map<string, number>();
@@ -108,33 +139,52 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     }, [config, operations]);
 
     const dashboardMetrics = useMemo(() => {
-        const closedOps = operations.filter(op => op.status === 'Fechada' && op.resultUSD !== undefined && op.closedAt);
-        if (closedOps.length === 0) {
-            return {
-                totalOps: 0,
-                profitableOps: 0,
-                winRate: 0,
-                avgProfit: 0,
-                avgOperationTime: 0,
-            };
-        }
+        const closedOps = filteredOperations.filter(op => op.status === 'Fechada' && op.resultUSD !== undefined && op.closedAt);
+        if (closedOps.length === 0) return { totalOps: 0, profitableOps: 0, winRate: 0, avgProfit: 0, avgLoss: 0, avgOperationTime: 0, riskRewardRatio: 0, maxDrawdown: 0, profitFactor: 0 };
 
-        const profitableOps = closedOps.filter(op => op.resultUSD! > 0);
-        const totalProfit = profitableOps.reduce((sum, op) => sum + op.resultUSD!, 0);
+        const profits = closedOps.filter(op => op.resultUSD! > 0).map(op => op.resultUSD!);
+        const losses = closedOps.filter(op => op.resultUSD! < 0).map(op => op.resultUSD!);
         
-        const totalDurationMinutes = closedOps.reduce((sum, op) => {
-            const duration = differenceInMinutes(parseISO(op.closedAt as string), parseISO(op.createdAt as string));
-            return sum + duration;
-        }, 0);
+        const totalProfit = profits.reduce((sum, p) => sum + p, 0);
+        const totalLoss = losses.reduce((sum, l) => sum + l, 0);
+        
+        const avgProfit = profits.length > 0 ? totalProfit / profits.length : 0;
+        const avgLoss = losses.length > 0 ? Math.abs(totalLoss / losses.length) : 0;
+        
+        const totalDurationMinutes = closedOps.reduce((sum, op) => sum + differenceInMinutes(parseISO(op.closedAt as string), parseISO(op.createdAt as string)), 0);
+
+        // Max Drawdown Calculation
+        let peak = config.initialCapitalUSD;
+        let maxDrawdown = 0;
+        let currentCapital = config.initialCapitalUSD;
+        
+        const sortedOps = [...operations].sort((a, b) => parseISO(a.createdAt as string).getTime() - parseISO(b.createdAt as string).getTime());
+        sortedOps.forEach(op => {
+            if (op.status === 'Fechada' && op.resultUSD !== undefined) {
+                currentCapital += op.resultUSD;
+                if (currentCapital > peak) {
+                    peak = currentCapital;
+                }
+                const drawdown = ((peak - currentCapital) / peak) * 100;
+                if (drawdown > maxDrawdown) {
+                    maxDrawdown = drawdown;
+                }
+            }
+        });
+
 
         return {
             totalOps: closedOps.length,
-            profitableOps: profitableOps.length,
-            winRate: (profitableOps.length / closedOps.length) * 100,
-            avgProfit: totalProfit / profitableOps.length,
+            profitableOps: profits.length,
+            winRate: (profits.length / closedOps.length) * 100,
+            avgProfit,
+            avgLoss,
             avgOperationTime: totalDurationMinutes / closedOps.length,
+            riskRewardRatio: avgLoss > 0 ? avgProfit / avgLoss : Infinity,
+            maxDrawdown,
+            profitFactor: totalLoss !== 0 ? totalProfit / Math.abs(totalLoss) : Infinity,
         };
-    }, [operations]);
+    }, [filteredOperations, config.initialCapitalUSD, operations]);
 
     const chartData = useMemo(() => {
       let dailyProjectedCapital = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
@@ -159,8 +209,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
       'Capital Atual': 'hsl(var(--chart-1))',
       'Meta 1%': 'hsl(var(--chart-2))',
       'Meta 2%': 'hsl(var(--chart-3))',
-      'Meta 3%': 'hsl(var(--chart-4))',
-      'Meta 4%': 'hsl(var(--chart-5))',
+      'Meta 4%': 'hsl(var(--chart-4))',
       'Meta 5%': '#FF8042',
     };
 
@@ -268,16 +317,74 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                 </TabsContent>
                 <TabsContent value="dashboard">
                    <div className="space-y-4">
-                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Operações (Fechadas)</CardTitle><Target className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardMetrics.totalOps}</div><p className="text-xs text-muted-foreground">{dashboardMetrics.profitableOps} lucrativas</p></CardContent></Card>
+                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Operações</CardTitle><Target className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardMetrics.totalOps}</div><p className="text-xs text-muted-foreground">{dashboardMetrics.profitableOps} lucrativas</p></CardContent></Card>
                         <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Taxa de Acerto</CardTitle><Percent className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardMetrics.winRate.toFixed(1)}%</div><p className="text-xs text-muted-foreground">de operações com lucro</p></CardContent></Card>
-                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Lucro Médio / Op.</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(dashboardMetrics.avgProfit, 'USD')}</div><p className="text-xs text-muted-foreground">Média de lucro por operação</p></CardContent></Card>
-                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Tempo Médio / Op.</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatDuration(dashboardMetrics.avgOperationTime)}</div><p className="text-xs text-muted-foreground">Duração média de cada trade</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Risco/Retorno</CardTitle><ArrowDownUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardMetrics.riskRewardRatio.toFixed(2)}</div><p className="text-xs text-muted-foreground">Lucro médio / Perda média</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Fator de Lucro</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{dashboardMetrics.profitFactor.toFixed(2)}</div><p className="text-xs text-muted-foreground">Lucro bruto / Prejuízo bruto</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Drawdown Máximo</CardTitle><ChevronsDown className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-500">{dashboardMetrics.maxDrawdown.toFixed(2)}%</div><p className="text-xs text-muted-foreground">Maior queda do capital</p></CardContent></Card>
+                        
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Lucro Médio</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-500">{formatCurrency(dashboardMetrics.avgProfit, 'USD')}</div><p className="text-xs text-muted-foreground">por operação lucrativa</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Perda Média</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-500">{formatCurrency(dashboardMetrics.avgLoss, 'USD')}</div><p className="text-xs text-muted-foreground">por operação com prejuízo</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Expectativa</CardTitle><Scalpel className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{(dashboardMetrics.winRate/100 * dashboardMetrics.avgProfit - (1 - dashboardMetrics.winRate/100) * dashboardMetrics.avgLoss).toFixed(2)}</div><p className="text-xs text-muted-foreground">Ganho esperado por trade</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Tempo Médio</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatDuration(dashboardMetrics.avgOperationTime)}</div><p className="text-xs text-muted-foreground">Duração média de cada trade</p></CardContent></Card>
                      </div>
-                    <Card className="bg-card/70">
+                    <Card className="bg-card/70 mt-4">
                         <CardHeader>
-                            <CardTitle>Gráfico de Evolução de Capital</CardTitle>
-                            <CardDescription>Comparativo entre o capital atual e as projeções de lucro.</CardDescription>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle>Gráfico de Evolução de Capital</CardTitle>
+                                    <CardDescription>Comparativo entre o capital atual e as projeções de lucro.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     <Select value={timeRange} onValueChange={setTimeRange}>
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue placeholder="Selecione o período" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all_time">Todo o Período</SelectItem>
+                                            <SelectItem value="last_30_days">Últimos 30 dias</SelectItem>
+                                            <SelectItem value="last_7_days">Últimos 7 dias</SelectItem>
+                                            <SelectItem value="custom">Personalizado</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {timeRange === 'custom' && (
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    id="date"
+                                                    variant={"outline"}
+                                                    className={cn("w-[240px] justify-start text-left font-normal", !customDateRange && "text-muted-foreground")}
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {customDateRange?.from ? (
+                                                        customDateRange.to ? (
+                                                            <>
+                                                                {format(customDateRange.from, "LLL dd, y")} -{" "}
+                                                                {format(customDateRange.to, "LLL dd, y")}
+                                                            </>
+                                                        ) : (
+                                                            format(customDateRange.from, "LLL dd, y")
+                                                        )
+                                                    ) : (
+                                                        <span>Escolha o intervalo</span>
+                                                    )}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar
+                                                    initialFocus
+                                                    mode="range"
+                                                    defaultMonth={customDateRange?.from}
+                                                    selected={customDateRange}
+                                                    onSelect={setCustomDateRange}
+                                                    numberOfMonths={2}
+                                                />
+                                            </PopoverContent>
+                                        </Popover>
+                                    )}
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent className="h-[400px] w-full">
                            <ResponsiveContainer width="100%" height="100%">
@@ -327,3 +434,12 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         </div>
     );
 };
+
+// Helper function to get the end of the day for a date
+function endOfDay(date: Date) {
+  const newDate = new Date(date);
+  newDate.setHours(23, 59, 59, 999);
+  return newDate;
+}
+
+    
