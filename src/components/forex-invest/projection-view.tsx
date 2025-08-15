@@ -3,9 +3,9 @@
 
 import * as React from "react"
 import { useMemo, useState } from 'react';
-import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, Scalpel, CalendarIcon, Activity } from 'lucide-react';
+import { LineChart as LineChartIcon, Bitcoin, AreaChart, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -326,7 +326,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                         
                         <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Lucro Médio</CardTitle><TrendingUp className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-500">{formatCurrency(dashboardMetrics.avgProfit, 'USD')}</div><p className="text-xs text-muted-foreground">por operação lucrativa</p></CardContent></Card>
                         <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Perda Média</CardTitle><TrendingDown className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-500">{formatCurrency(dashboardMetrics.avgLoss, 'USD')}</div><p className="text-xs text-muted-foreground">por operação com prejuízo</p></CardContent></Card>
-                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Expectativa</CardTitle><Scalpel className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{(dashboardMetrics.winRate/100 * dashboardMetrics.avgProfit - (1 - dashboardMetrics.winRate/100) * dashboardMetrics.avgLoss).toFixed(2)}</div><p className="text-xs text-muted-foreground">Ganho esperado por trade</p></CardContent></Card>
+                        <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Expectativa</CardTitle><BrainCircuit className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{(dashboardMetrics.winRate/100 * dashboardMetrics.avgProfit - (1 - dashboardMetrics.winRate/100) * dashboardMetrics.avgLoss).toFixed(2)}</div><p className="text-xs text-muted-foreground">Ganho esperado por trade</p></CardContent></Card>
                         <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Tempo Médio</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatDuration(dashboardMetrics.avgOperationTime)}</div><p className="text-xs text-muted-foreground">Duração média de cada trade</p></CardContent></Card>
                      </div>
                     <Card className="bg-card/70 mt-4">
