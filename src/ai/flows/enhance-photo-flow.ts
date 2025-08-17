@@ -43,7 +43,7 @@ export async function enhancePhoto(input: EnhancePhotoInput): Promise<EnhancePho
 const getPromptForEnhancement = (type: z.infer<typeof EnhancementTypeSchema>) => {
   switch (type) {
     case 'canon_r5':
-      return 'De um upscale nesta imagem, como se ela fosse tirada por uma Canon r5, a imagem deve ter Real, ultra nitida, e sem ruídos, Cada pixel de detalhe da foto deve ser preservado, nao alterando na que existe no cenário, nem criando, nem apagando, apenas usando o que existe e transformando em uma imagem de altissima qualidade. Nao altere o angulo da foto, nem seu aspecto, a foto deve ser melhorada a partir da seguinte premissa: Se essa mesma foto fosse tirada por um camera profissional.';
+      return 'Recrie esta imagem de forma realista, como se ela fosse tirada por uma câmera Canon R5 com uma lente profissional. O resultado deve ser ultra nítido, sem ruídos, com iluminação e cores aprimoradas. Mantenha a essência e o enquadramento da cena original, mas eleve a qualidade geral para um nível fotorrealista e profissional.';
     case 'night':
       return 'Ilumine esta foto noturna, revelando detalhes nas sombras, mas mantendo a atmosfera da noite. Reduza o ruído e melhore a clareza geral, sem alterar o conteúdo original da imagem.';
     case 'professional':
