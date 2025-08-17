@@ -18,7 +18,7 @@ const EnhancePhotoInputSchema = z.object({
   photoDataUri: z
     .string()
     .describe(
-      "A photo to be enhanced, provided as a data URI. It must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "A photo to be enhanced, provided as a data URI. It must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'"
     ),
   enhancementType: EnhancementTypeSchema.optional().default('enhance'),
 });
@@ -43,7 +43,7 @@ export async function enhancePhoto(input: EnhancePhotoInput): Promise<EnhancePho
 const getPromptForEnhancement = (type: z.infer<typeof EnhancementTypeSchema>) => {
   switch (type) {
     case 'canon_r5':
-      return 'Recrie esta imagem de forma realista, como se ela fosse tirada por uma câmera Canon R5 com uma lente profissional. O resultado deve ser ultra nítido, sem ruídos, com iluminação e cores aprimoradas. Mantenha a essência e o enquadramento da cena original, mas eleve a qualidade geral para um nível fotorrealista e profissional.';
+      return 'Sua tarefa é remasterizar a imagem fornecida. Use a mesma imagem, mas aprimore sua qualidade para um nível hiper-realista, como se fosse uma foto de alta resolução tirada por uma câmera Canon R5. Melhore drasticamente a nitidez, os detalhes e as cores, mas é absolutamente crucial que você não altere, adicione ou remova nenhum elemento do conteúdo original. O resultado deve ser fotorrealista e livre de ruídos.';
     case 'night':
       return 'Ilumine esta foto noturna, revelando detalhes nas sombras, mas mantendo a atmosfera da noite. Reduza o ruído e melhore a clareza geral, sem alterar o conteúdo original da imagem.';
     case 'professional':
