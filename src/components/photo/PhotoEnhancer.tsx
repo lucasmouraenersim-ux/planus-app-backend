@@ -37,6 +37,7 @@ export function PhotoEnhancer() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [enhancedImage, setEnhancedImage] = useState<string | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState('16 / 9');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadClick = () => {
@@ -47,7 +48,15 @@ export function PhotoEnhancer() {
     const file = event.target.files?.[0];
     if (file) {
       setEnhancedImage(null); // Reset enhanced image on new upload
-      setOriginalImage(URL.createObjectURL(file));
+      const imageUrl = URL.createObjectURL(file);
+      setOriginalImage(imageUrl);
+
+      // Get image dimensions to set aspect ratio
+      const img = new window.Image();
+      img.onload = () => {
+        setAspectRatio(`${img.width} / ${img.height}`);
+      };
+      img.src = imageUrl;
     }
   };
 
@@ -132,13 +141,18 @@ export function PhotoEnhancer() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col">
-          <div className="flex-1 mb-8 relative">
-            <ImageComparer 
-              original={originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
-              enhanced={enhancedImage || originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
-              originalHint="uploaded image"
-              enhancedHint="enhanced image"
-            />
+          <div className="flex-1 mb-8 relative flex items-center justify-center">
+            <div 
+              className="relative w-full max-w-full max-h-full"
+              style={{ aspectRatio: aspectRatio }}
+            >
+              <ImageComparer 
+                original={originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
+                enhanced={enhancedImage || originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
+                originalHint="uploaded image"
+                enhancedHint="enhanced image"
+              />
+            </div>
             {isEnhancing && (
               <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-10">
                 <Loader2 className="h-12 w-12 text-[#a855f7] animate-spin mb-4" />

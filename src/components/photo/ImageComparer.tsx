@@ -21,13 +21,13 @@ export function ImageComparer({ original, enhanced, originalHint, enhancedHint }
   };
 
   return (
-    <div className="relative w-full aspect-video rounded-lg overflow-hidden border-2 border-slate-700 shadow-2xl">
+    <div className="relative w-full h-full rounded-lg overflow-hidden border-2 border-slate-700 shadow-2xl">
       <div className="absolute inset-0">
         <Image 
           src={original} 
           alt="Original Image" 
           layout="fill" 
-          objectFit="cover"
+          objectFit="contain"
           data-ai-hint={originalHint}
         />
       </div>
@@ -39,7 +39,7 @@ export function ImageComparer({ original, enhanced, originalHint, enhancedHint }
           src={enhanced} 
           alt="Enhanced Image" 
           layout="fill" 
-          objectFit="cover" 
+          objectFit="contain" 
           data-ai-hint={enhancedHint}
         />
       </div>
