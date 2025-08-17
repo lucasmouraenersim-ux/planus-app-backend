@@ -13,6 +13,9 @@ import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
 import { cn } from '@/lib/utils';
+import { FakeLogin } from '@/components/auth/FakeLogin';
+import { PhotoEnhancer } from '@/components/photo/PhotoEnhancer';
+
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -270,15 +273,15 @@ const EnergySection = () => {
     );
 }
 
-const PhotoSection = () => (
-  <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
-    <Camera className="w-24 h-24 text-primary mb-6 opacity-30" />
-    <h2 className="text-4xl font-bold text-primary">Melhore suas Fotos com IA</h2>
-    <p className="text-lg text-muted-foreground mt-2 max-w-2xl">
-      Nossa nova ferramenta de inteligência artificial para edição de fotos está chegando em breve. Prepare-se para transformar suas imagens!
-    </p>
-  </div>
-);
+const PhotoSection = () => {
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+    if (!isLoggedIn) {
+      return <FakeLogin onLogin={() => setIsLoggedIn(true)} />;
+    }
+  
+    return <PhotoEnhancer />;
+};
 
 const ForexSection = () => (
   <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
@@ -295,9 +298,9 @@ const LandingPage = () => {
   const [selectedApp, setSelectedApp] = useState<'energia' | 'foto' | 'forex'>('energia');
 
   return (
-    <div className="bg-background text-foreground">
+    <div className={cn("text-foreground", selectedApp === 'foto' ? 'bg-[#171821]' : 'bg-background' )}>
       {/* Top Menu */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b">
+      <header className={cn("sticky top-0 z-50  border-b", selectedApp === 'foto' ? 'bg-[#171821]/80 border-slate-800' : 'bg-background/80 border-border')}>
         <nav className="container mx-auto px-4 py-2 flex justify-center items-center gap-4">
             <Button 
                 variant={selectedApp === 'energia' ? 'default' : 'ghost'} 
@@ -334,7 +337,7 @@ const LandingPage = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-background text-center py-6 border-t">
+      <footer className={cn("text-center py-6 border-t", selectedApp === 'foto' ? 'bg-[#171821] border-slate-800' : 'bg-background border-border')}>
         <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Planus Energia. Todos os direitos reservados.</p>
         <Link href="/politica-de-privacidade" className="text-sm text-primary hover:underline mt-1 inline-block">Política de Privacidade</Link>
       </footer>
