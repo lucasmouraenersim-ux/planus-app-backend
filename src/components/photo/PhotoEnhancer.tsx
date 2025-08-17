@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Sparkles, Wand2, Upload, Moon, ZapOff, Award, Edit } from 'lucide-react';
 import { ImageComparer } from './ImageComparer';
@@ -18,7 +18,19 @@ const enhancementOptions = [
 
 export function PhotoEnhancer() {
   const [isEnhancing, setIsEnhancing] = useState(false);
-  // Add state for images, comparison value, etc.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Placeholder for file handling logic
+      console.log("File selected:", file.name);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#171821] text-white flex flex-col p-4 md:p-6 lg:p-8">
@@ -30,7 +42,14 @@ export function PhotoEnhancer() {
       <div className="flex-1 flex gap-8">
         {/* Sidebar */}
         <aside className="w-64 flex-shrink-0 space-y-6">
-          <Button size="lg" className="w-full bg-[#a855f7] hover:bg-[#a855f7]/90 text-white">
+           <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*"
+          />
+          <Button size="lg" className="w-full bg-[#a855f7] hover:bg-[#a855f7]/90 text-white" onClick={handleUploadClick}>
             <Upload className="mr-2 h-5 w-5" />
             Fazer Upload
           </Button>
