@@ -54,7 +54,7 @@ const enhancePhotoFlow = ai.defineFlow(
       // Provide a prompt that includes the original image and instructions for enhancement
       prompt: [
         { media: { url: input.photoDataUri } },
-        { text: 'Aprimore a imagem fornecida para que ela pareça ter sido capturada por uma câmera profissional de alta qualidade, como uma Sony A7IV com uma lente G Master. A imagem resultante deve ser ultra nítida, com detalhes finos, cores ricas e vibrantes, e completamente livre de ruído digital ou artefatos de compressão. Mantenha a composição e o assunto originais, mas eleve a qualidade técnica e estética para um padrão de fotografia profissional.' },
+        { text: 'Aprimore a imagem fornecida para que ela pareça ter sido capturada por uma câmera profissional de alta qualidade, como uma Sony A7IV com uma lente G Master. A imagem resultante deve ser fotorrealista, ultra nítida, com detalhes finos, cores ricas e vibrantes, e completamente livre de ruído digital ou artefatos de compressão. Mantenha a composição e o assunto originais, mas eleve a qualidade técnica e estética para um padrão de fotografia profissional.' },
       ],
 
       // Configuration to specify that we expect an IMAGE in the response.
