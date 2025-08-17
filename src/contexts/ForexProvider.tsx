@@ -52,12 +52,21 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const addOperation = async (operationData: Omit<ForexOperation, 'id' | 'userId'>) => {
         if (!firebaseUser) return;
         const opRef = collection(db, `forex_config/${firebaseUser.uid}/operations`);
-        const dataToSave = {
+        
+        const dataToSave: { [key: string]: any } = {
             ...operationData,
             userId: firebaseUser.uid,
             createdAt: Timestamp.fromDate(operationData.createdAt as Date),
             closedAt: operationData.closedAt ? Timestamp.fromDate(operationData.closedAt as Date) : undefined,
         };
+
+        // Firestore does not allow `undefined` values. We must remove them.
+        Object.keys(dataToSave).forEach(key => {
+            if (dataToSave[key] === undefined) {
+                delete dataToSave[key];
+            }
+        });
+
         await addDoc(opRef, dataToSave);
     };
 
@@ -70,7 +79,17 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
         if (updates.closedAt && typeof updates.closedAt !== 'string') {
             updatesToSave.closedAt = Timestamp.fromDate(updates.closedAt as Date);
+        } else if (updates.closedAt === undefined) {
+            updatesToSave.closedAt = undefined;
         }
+        
+        // Remove undefined fields before updating
+         Object.keys(updatesToSave).forEach(key => {
+            if ((updatesToSave as any)[key] === undefined) {
+                delete (updatesToSave as any)[key];
+            }
+        });
+
         await updateDoc(opRef, updatesToSave);
     };
 
