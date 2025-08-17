@@ -1,4 +1,3 @@
-
 // src/types/forex.ts
 import type { Timestamp } from 'firebase/firestore';
 
