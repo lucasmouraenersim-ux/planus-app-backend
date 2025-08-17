@@ -7,6 +7,8 @@ import { Download, Sparkles, Wand2, Upload, Moon, ZapOff, Award, Edit, Loader2 }
 import { ImageComparer } from './ImageComparer';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { enhancePhoto } from '@/ai/flows/enhance-photo-flow'; // Import the new AI flow
 
 const enhancementOptions = [
   { label: 'Clarear fotos noturnas', icon: Moon },
@@ -15,8 +17,23 @@ const enhancementOptions = [
   { label: 'Edição profissional', icon: Edit },
 ];
 
+function toDataURL(url: string, callback: (dataUrl: string) => void) {
+  const xhr = new XMLHttpRequest();
+  xhr.onload = function () {
+    const reader = new FileReader();
+    reader.onloadend = function () {
+      callback(reader.result as string);
+    };
+    reader.readAsDataURL(xhr.response);
+  };
+  xhr.open('GET', url);
+  xhr.responseType = 'blob';
+  xhr.send();
+}
+
 
 export function PhotoEnhancer() {
+  const { toast } = useToast();
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [enhancedImage, setEnhancedImage] = useState<string | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -36,13 +53,36 @@ export function PhotoEnhancer() {
 
   const handleEnhanceClick = () => {
     if (!originalImage) return;
+
     setIsEnhancing(true);
-    // Simulate AI enhancement
-    setTimeout(() => {
-      // In a real app, this would be the URL returned from the AI service
-      setEnhancedImage("https://placehold.co/800x500/171821/FFFFFF?text=Aprimorada");
-      setIsEnhancing(false);
-    }, 2000);
+    toast({
+      title: 'Aprimorando imagem...',
+      description: 'Aguarde, a mágica da IA está acontecendo.',
+    });
+
+    toDataURL(originalImage, async (dataUrl) => {
+        try {
+            const result = await enhancePhoto({ photoDataUri: dataUrl });
+            if (result.imageUrl) {
+                setEnhancedImage(result.imageUrl);
+                toast({
+                    title: 'Sucesso!',
+                    description: 'Sua imagem foi aprimorada.',
+                });
+            } else {
+                 throw new Error("A IA não retornou uma imagem.");
+            }
+        } catch (error) {
+            console.error("Enhancement failed:", error);
+            toast({
+                title: 'Erro no Aprimoramento',
+                description: 'Não foi possível aprimorar a imagem. Tente novamente.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsEnhancing(false);
+        }
+    });
   };
   
   const handleDownload = () => {
