@@ -92,13 +92,20 @@ export function PhotoEnhancer() {
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col">
-          <div className="flex-1 mb-8">
+          <div className="flex-1 mb-8 relative">
             <ImageComparer 
               original={originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
               enhanced={enhancedImage || originalImage || "https://placehold.co/800x500/333/ccc.png?text=Original"}
               originalHint="uploaded image"
               enhancedHint="enhanced image"
             />
+            {isEnhancing && (
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-10">
+                <Loader2 className="h-12 w-12 text-[#a855f7] animate-spin mb-4" />
+                <p className="text-lg font-semibold">Aprimorando sua imagem...</p>
+                <p className="text-sm text-slate-400">Aguarde, a mágica da IA está acontecendo.</p>
+              </div>
+            )}
           </div>
 
           <footer className="w-full">
