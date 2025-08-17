@@ -3,18 +3,19 @@
 
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Download, Sparkles, Wand2, Upload, Moon, ZapOff, Award, Edit, Loader2 } from 'lucide-react';
+import { Download, Sparkles, Wand2, Upload, Moon, ZapOff, Award, Edit, Loader2, Camera } from 'lucide-react';
 import { ImageComparer } from './ImageComparer';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { enhancePhoto } from '@/ai/flows/enhance-photo-flow'; // Import the new AI flow
+import { enhancePhoto, type EnhancePhotoInput } from '@/ai/flows/enhance-photo-flow'; // Import the new AI flow
 
 const enhancementOptions = [
-  { label: 'Clarear fotos noturnas', icon: Moon },
-  { label: 'Remover Boom de raios', icon: ZapOff },
-  { label: 'Aprimorar qualidade', icon: Award },
-  { label: 'Edição profissional', icon: Edit },
+  { id: 'enhance', label: 'Aprimorar Qualidade', icon: Award },
+  { id: 'canon_r5', label: '8k Canon r5', icon: Camera },
+  { id: 'night', label: 'Clarear fotos noturnas', icon: Moon },
+  { id: 'professional', label: 'Edição profissional', icon: Edit },
+  { id: 'boom_remove', label: 'Remover Boom de raios', icon: ZapOff, disabled: true },
 ];
 
 function toDataURL(url: string, callback: (dataUrl: string) => void) {
@@ -38,6 +39,7 @@ export function PhotoEnhancer() {
   const [enhancedImage, setEnhancedImage] = useState<string | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [aspectRatio, setAspectRatio] = useState('16 / 9');
+  const [selectedEnhancement, setSelectedEnhancement] = useState<EnhancePhotoInput['enhancementType']>('enhance');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadClick = () => {
@@ -71,7 +73,10 @@ export function PhotoEnhancer() {
 
     toDataURL(originalImage, async (dataUrl) => {
         try {
-            const result = await enhancePhoto({ photoDataUri: dataUrl });
+            const result = await enhancePhoto({ 
+              photoDataUri: dataUrl,
+              enhancementType: selectedEnhancement,
+            });
             if (result.imageUrl) {
                 setEnhancedImage(result.imageUrl);
                 toast({
@@ -129,8 +134,14 @@ export function PhotoEnhancer() {
           <Card className="bg-[#252630]/70 border-slate-700 text-slate-200">
             <nav className="p-4 space-y-2">
               <h3 className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Ferramentas de IA</h3>
-               {enhancementOptions.map((option, index) => (
-                <Button key={index} variant="ghost" className="w-full justify-start text-sm">
+               {enhancementOptions.map((option) => (
+                <Button 
+                  key={option.id}
+                  variant={selectedEnhancement === option.id ? "secondary" : "ghost"}
+                  className="w-full justify-start text-sm"
+                  onClick={() => setSelectedEnhancement(option.id as EnhancePhotoInput['enhancementType'])}
+                  disabled={option.disabled}
+                >
                   <option.icon className="mr-3 h-5 w-5 text-slate-400" />
                   {option.label}
                 </Button>

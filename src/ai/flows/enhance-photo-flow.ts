@@ -11,6 +11,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
+const EnhancementTypeSchema = z.enum(['enhance', 'night', 'professional', 'canon_r5']);
+
 // Define the input schema for the flow
 const EnhancePhotoInputSchema = z.object({
   photoDataUri: z
@@ -18,6 +20,7 @@ const EnhancePhotoInputSchema = z.object({
     .describe(
       "A photo to be enhanced, provided as a data URI. It must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
+  enhancementType: EnhancementTypeSchema.optional().default('enhance'),
 });
 export type EnhancePhotoInput = z.infer<typeof EnhancePhotoInputSchema>;
 
@@ -30,12 +33,26 @@ export type EnhancePhotoOutput = z.infer<typeof EnhancePhotoOutputSchema>;
 /**
  * Main exported function to be called from the frontend.
  * It takes the input, calls the Genkit flow, and returns the output.
- * @param input The input object containing the photo data URI.
+ * @param input The input object containing the photo data URI and enhancement type.
  * @returns A promise that resolves to the output object with the enhanced image URL.
  */
 export async function enhancePhoto(input: EnhancePhotoInput): Promise<EnhancePhotoOutput> {
   return enhancePhotoFlow(input);
 }
+
+const getPromptForEnhancement = (type: z.infer<typeof EnhancementTypeSchema>) => {
+  switch (type) {
+    case 'canon_r5':
+      return 'De um upscale nesta imagem, como se ela fosse tirada por uma Canon r5, a imagem deve ter Real, ultra nitida, e sem ruídos, Cada pixel de detalhe da foto deve ser preservado, nao alterando na que existe no cenário, nem criando, nem apagando, apenas usando o que existe e transformando em uma imagem de altissima qualidade. Nao altere o angulo da foto, nem seu aspecto, a foto deve ser melhorada a partir da seguinte premissa: Se essa mesma foto fosse tirada por um camera profissional.';
+    case 'night':
+      return 'Ilumine esta foto noturna, revelando detalhes nas sombras, mas mantendo a atmosfera da noite. Reduza o ruído e melhore a clareza geral, sem alterar o conteúdo original da imagem.';
+    case 'professional':
+      return 'Faça uma edição profissional nesta imagem. Ajuste o balanço de cores, contraste e exposição para um resultado profissional e atraente. Preserve o conteúdo original.';
+    case 'enhance':
+    default:
+      return 'Sua tarefa é remasterizar a imagem fornecida. Use a mesma imagem, mas aprimore sua qualidade para um nível hiper-realista, como se fosse uma foto de alta resolução. Melhore a nitidez, os detalhes e as cores, mas é absolutamente crucial que você não altere, adicione ou remova nenhum elemento do conteúdo original.';
+  }
+};
 
 
 // Define the main Genkit flow for enhancing the photo
@@ -46,6 +63,9 @@ const enhancePhotoFlow = ai.defineFlow(
     outputSchema: EnhancePhotoOutputSchema,
   },
   async (input) => {
+    
+    const promptText = getPromptForEnhancement(input.enhancementType);
+
     // Call the Gemini model for image generation
     const { media } = await ai.generate({
       // Use a model capable of image generation.
@@ -54,7 +74,7 @@ const enhancePhotoFlow = ai.defineFlow(
       // Provide a prompt that includes the original image and instructions for enhancement
       prompt: [
         { media: { url: input.photoDataUri } },
-        { text: 'Sua tarefa é remasterizar a imagem fornecida. Use a mesma imagem, mas aprimore sua qualidade para um nível hiper-realista, como se fosse uma foto de alta resolução. Melhore a nitidez, os detalhes e as cores, mas é absolutamente crucial que você não altere, adicione ou remova nenhum elemento do conteúdo original.' },
+        { text: promptText },
       ],
 
       // Configuration to specify that we expect an IMAGE in the response.
