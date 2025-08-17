@@ -54,7 +54,7 @@ const enhancePhotoFlow = ai.defineFlow(
       // Provide a prompt that includes the original image and instructions for enhancement
       prompt: [
         { media: { url: input.photoDataUri } },
-        { text: 'Aprimore a qualidade desta imagem. Melhore a iluminação, a nitidez e as cores para um resultado profissional, mantendo o conteúdo original.' },
+        { text: 'Gere uma imagem ultra nítida, fotorrealista, sem ruído e com qualidade aprimorada a partir da imagem fornecida, mantendo o conteúdo e a composição originais.' },
       ],
 
       // Configuration to specify that we expect an IMAGE in the response.
