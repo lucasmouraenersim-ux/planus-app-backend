@@ -27,7 +27,8 @@ export function ImageComparer({ original, enhanced, originalHint, enhancedHint }
           src={original} 
           alt="Original Image" 
           layout="fill" 
-          objectFit="contain"
+          objectFit="cover" // Alterado de 'contain' para 'cover'
+          objectPosition="center"
           data-ai-hint={originalHint}
         />
       </div>
@@ -39,7 +40,8 @@ export function ImageComparer({ original, enhanced, originalHint, enhancedHint }
           src={enhanced} 
           alt="Enhanced Image" 
           layout="fill" 
-          objectFit="contain" 
+          objectFit="cover" // Alterado de 'contain' para 'cover'
+          objectPosition="center"
           data-ai-hint={enhancedHint}
         />
       </div>
