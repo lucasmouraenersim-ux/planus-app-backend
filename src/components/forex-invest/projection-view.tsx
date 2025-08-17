@@ -5,8 +5,8 @@ import * as React from "react"
 import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon } from 'lucide-react';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -29,6 +29,9 @@ interface ProjectionDay {
   day: number;
   date: string;
   capitalAtualUSD: number;
+  drawdownAtualUSD: number;
+  loteRiscoBaixoAtual: number;
+  loteRiscoAltoAtual: number;
   projections: {
     [key: string]: { // key is "1", "2", "3", "4", "5"
       capitalUSD: number;
@@ -103,36 +106,41 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         const data: ProjectionDay[] = [];
         const endDate = endOfYear(config.startDate);
         const totalDays = differenceInDays(endDate, config.startDate) + 1;
-        let currentDate = config.startDate;
+        
         let runningCapital = config.initialCapitalUSD;
+        let compoundingProjectionCapitals: {[key: string]: number} = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
 
-        for (let i = 1; i <= totalDays; i++) {
+        for (let i = 0; i < totalDays; i++) {
+            const currentDate = addDays(config.startDate, i);
             const dateKey = format(startOfDay(currentDate), 'yyyy-MM-dd');
+
             if (dailyResults.has(dateKey)) {
                 runningCapital += dailyResults.get(dateKey)!;
             }
 
             const dayEntry: ProjectionDay = {
-                day: i,
+                day: i + 1,
                 date: format(currentDate, 'dd/MM/yyyy', { locale: ptBR }),
                 capitalAtualUSD: runningCapital,
+                drawdownAtualUSD: runningCapital * 0.15,
+                loteRiscoBaixoAtual: (runningCapital * 0.10) / 1000,
+                loteRiscoAltoAtual: (runningCapital * 0.20) / 1000,
                 projections: {},
             };
             
             [1, 2, 3, 4, 5].forEach(goalPercent => {
                 const key = String(goalPercent);
-                const projectedCapital = runningCapital * (1 + goalPercent / 100);
+                compoundingProjectionCapitals[key] *= (1 + goalPercent / 100);
                 dayEntry.projections[key] = {
-                    capitalUSD: projectedCapital,
-                    capitalBRL: projectedCapital * config.usdToBrlRate,
-                    drawdownUSD: projectedCapital * 0.15,
-                    loteRiscoBaixo: (projectedCapital * 0.10) / 1000,
-                    loteRiscoAlto: (projectedCapital * 0.20) / 1000,
+                    capitalUSD: compoundingProjectionCapitals[key],
+                    capitalBRL: compoundingProjectionCapitals[key] * config.usdToBrlRate,
+                    drawdownUSD: compoundingProjectionCapitals[key] * 0.15,
+                    loteRiscoBaixo: (compoundingProjectionCapitals[key] * 0.10) / 1000,
+                    loteRiscoAlto: (compoundingProjectionCapitals[key] * 0.20) / 1000,
                 };
             });
             
             data.push(dayEntry);
-            currentDate = addDays(currentDate, 1);
         }
 
         return data;
@@ -187,23 +195,19 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     }, [filteredOperations, config.initialCapitalUSD, operations]);
 
     const chartData = useMemo(() => {
-        let dailyProjectedCapital = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
-        return projectionData.map(day => {
-            
-            const newProjections: any = {};
-            [1, 2, 3, 4, 5].forEach(p => {
-                const key = String(p);
-                dailyProjectedCapital[key as '1' | '2' | '3' | '4' | '5'] *= (1 + p / 100);
-                newProjections[`Meta ${p}%`] = dailyProjectedCapital[key as '1' | '2' | '3' | '4' | '5'];
-            });
+      return projectionData.map(day => {
+          return {
+              name: `Dia ${day.day}`,
+              'Capital Atual': day.capitalAtualUSD,
+              'Meta 1%': day.projections['1'].capitalUSD,
+              'Meta 2%': day.projections['2'].capitalUSD,
+              'Meta 3%': day.projections['3'].capitalUSD,
+              'Meta 4%': day.projections['4'].capitalUSD,
+              'Meta 5%': day.projections['5'].capitalUSD,
+          };
+      });
+  }, [projectionData]);
 
-            return {
-                name: `Dia ${day.day}`,
-                'Capital Atual': day.capitalAtualUSD,
-                ...newProjections,
-            };
-        });
-    }, [projectionData, config.initialCapitalUSD]);
 
     const lineColors: { [key: string]: string } = {
         'Capital Atual': '#8884d8', // Roxo vibrante
@@ -264,16 +268,19 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                         <TableRow>
                                             <TableHead className="sticky left-0 bg-card z-10 w-[50px]">Dia</TableHead>
                                             <TableHead className="sticky left-[50px] bg-card z-10 w-[100px]">Data</TableHead>
-                                            <TableHead className="sticky left-[150px] bg-card z-10 w-[110px] text-blue-400">Capital Atual (USD)</TableHead>
+                                            <TableHead className="sticky left-[150px] bg-card z-10 w-[120px] text-blue-400 border-r">Capital Atual (USD)</TableHead>
+                                            <TableHead className="w-[120px] text-blue-400">Drawdown Atual</TableHead>
+                                            <TableHead className="w-[120px] text-blue-400">Lote Baixo Atual</TableHead>
+                                            <TableHead className="w-[120px] text-blue-400 border-r">Lote Alto Atual</TableHead>
                                             {/* Projections */}
                                             {[1, 2, 3, 4, 5].map(goal => (
                                                 <React.Fragment key={goal}>
                                                     <TableHead className="text-center text-green-400">Capital {goal}% (USD)</TableHead>
                                                     <TableHead className="text-center text-green-400">Capital {goal}% (BRL)</TableHead>
-                                                    <TableHead className="text-center text-red-400">Drawdown Aceitável (USD)</TableHead>
-                                                    <TableHead className="text-center">Lotes (Risco Baixo)</TableHead>
-                                                    <TableHead className="text-center">Lotes (Risco Alto)</TableHead>
-                                                    <TableHead className="text-center">Operações/Dia</TableHead>
+                                                    <TableHead className="text-center text-red-400">Drawdown</TableHead>
+                                                    <TableHead className="text-center">Lotes (R. Baixo)</TableHead>
+                                                    <TableHead className="text-center">Lotes (R. Alto)</TableHead>
+                                                    <TableHead className="text-center">Ops/Dia</TableHead>
                                                 </React.Fragment>
                                             ))}
                                         </TableRow>
@@ -283,7 +290,10 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                             <TableRow key={row.day}>
                                                 <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.day}</TableCell>
                                                 <TableCell className="sticky left-[50px] bg-card z-10">{row.date}</TableCell>
-                                                <TableCell className="sticky left-[150px] bg-card z-10 font-semibold text-blue-400">{formatCurrency(row.capitalAtualUSD, 'USD')}</TableCell>
+                                                <TableCell className="sticky left-[150px] bg-card z-10 font-semibold text-blue-400 border-r">{formatCurrency(row.capitalAtualUSD, 'USD')}</TableCell>
+                                                <TableCell className="text-center text-blue-400">{formatCurrency(row.drawdownAtualUSD, 'USD')}</TableCell>
+                                                <TableCell className="text-center text-blue-400">{row.loteRiscoBaixoAtual.toFixed(2)}</TableCell>
+                                                <TableCell className="text-center text-blue-400 border-r">{row.loteRiscoAltoAtual.toFixed(2)}</TableCell>
                                                 
                                                 {[1, 2, 3, 4, 5].map(goal => {
                                                     const key = String(goal);
@@ -408,11 +418,16 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                                 />
                                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                <Legend wrapperStyle={{ paddingTop: '20px' }}/>
-                               <Line type="monotone" dataKey="Capital Atual" stroke={lineColors['Capital Atual']} strokeWidth={2} dot={false} />
-                               {Object.entries(lineColors)
-                                 .filter(([key]) => key !== 'Capital Atual')
-                                 .map(([key, color]) => (
-                                    <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={1.5} strokeDasharray="5 5" />
+                               {Object.entries(lineColors).map(([key, color]) => (
+                                  <Line 
+                                    key={key}
+                                    type="monotone" 
+                                    dataKey={key} 
+                                    stroke={color} 
+                                    strokeWidth={key === 'Capital Atual' ? 2 : 1.5} 
+                                    dot={false}
+                                    strokeDasharray={key === 'Capital Atual' ? '1' : '5 5'}
+                                  />
                                ))}
                              </LineChart>
                            </ResponsiveContainer>
@@ -444,8 +459,4 @@ function endOfDay(date: Date) {
 }
 
     
-
-
-
-
 
