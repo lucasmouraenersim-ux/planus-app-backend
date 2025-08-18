@@ -76,37 +76,52 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     const [timeRange, setTimeRange] = useState('all_time');
     const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
 
+    const getPeriodBounds = useCallback(() => {
+        const now = new Date();
+        switch (timeRange) {
+            case 'last_7_days':
+                return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
+            case 'last_30_days':
+                return { start: startOfDay(subDays(now, 29)), end: endOfDay(now) };
+            case 'custom':
+                if (customDateRange?.from) {
+                    return {
+                        start: startOfDay(customDateRange.from),
+                        end: customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from)
+                    };
+                }
+                return { start: null, end: null };
+            case 'all_time':
+            default:
+                return { start: startOfDay(config.startDate), end: endOfYear(config.startDate) };
+        }
+    }, [timeRange, customDateRange, config.startDate]);
+
     const filteredOperations = useMemo(() => {
-      if (timeRange === 'all_time') return operations;
-
-      const now = new Date();
-      let startDate: Date;
-      let endDate: Date | undefined;
-
-      if (timeRange === 'last_30_days') {
-          startDate = subDays(now, 30);
-      } else if (timeRange === 'last_7_days') {
-          startDate = subDays(now, 7);
-      } else if (timeRange === 'custom' && customDateRange?.from) {
-          startDate = customDateRange.from;
-          endDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from);
-      } else {
-          return operations;
-      }
-      
-      return operations.filter(op => {
-          const opDate = parseISO(op.createdAt as string);
-          if (endDate) {
-            return opDate >= startDate && opDate <= endDate;
-          }
-          return opDate >= startDate;
-      });
-    }, [operations, timeRange, customDateRange]);
+        const { start, end } = getPeriodBounds();
+        if (!start || !end) return [];
+        return operations.filter(op => {
+            const opDate = parseISO(op.createdAt as string);
+            return opDate >= start && opDate <= end;
+        });
+    }, [operations, getPeriodBounds]);
 
 
     const projectionData = useMemo(() => {
+        const { start: periodStart, end: periodEnd } = getPeriodBounds();
+        if (!periodStart || !periodEnd) return [];
+
+        // 1. Calculate the starting capital for the selected period
+        const operationsBeforePeriod = operations.filter(op => 
+            op.status === 'Fechada' && op.resultUSD !== undefined && parseISO(op.closedAt as string) < periodStart
+        );
+        const startingCapitalForPeriod = operationsBeforePeriod.reduce(
+            (capital, op) => capital + (op.resultUSD ?? 0),
+            config.initialCapitalUSD
+        );
+
+        // 2. Map daily results for the selected period
         const dailyResults = new Map<string, number>();
-        // Use filteredOperations for calculating actual capital evolution
         filteredOperations.forEach(op => {
             if (op.closedAt && op.status === 'Fechada' && op.resultUSD !== undefined) {
                 const closeDateStr = format(startOfDay(parseISO(op.closedAt as string)), 'yyyy-MM-dd');
@@ -116,15 +131,14 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         });
 
         const data: ProjectionDay[] = [];
-        const endDate = endOfYear(config.startDate);
-        const totalDays = differenceInDays(endDate, config.startDate) + 1;
+        const totalDays = differenceInDays(periodEnd, periodStart) + 1;
         
-        let runningCapital = config.initialCapitalUSD;
-        let compoundingProjectionCapitals: {[key: string]: number} = { '1': config.initialCapitalUSD, '2': config.initialCapitalUSD, '3': config.initialCapitalUSD, '4': config.initialCapitalUSD, '5': config.initialCapitalUSD };
+        let runningCapital = startingCapitalForPeriod;
+        let compoundingProjectionCapitals: {[key: string]: number} = { '1': startingCapitalForPeriod, '2': startingCapitalForPeriod, '3': startingCapitalForPeriod, '4': startingCapitalForPeriod, '5': startingCapitalForPeriod };
 
         for (let i = 0; i < totalDays; i++) {
-            const currentDate = addDays(config.startDate, i);
-            const dateKey = format(startOfDay(currentDate), 'yyyy-MM-dd');
+            const currentDate = addDays(periodStart, i);
+            const dateKey = format(currentDate, 'yyyy-MM-dd');
 
             if (dailyResults.has(dateKey)) {
                 runningCapital += dailyResults.get(dateKey)!;
@@ -132,7 +146,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
 
             const dayEntry: ProjectionDay = {
                 day: i + 1,
-                date: format(currentDate, 'dd/MM/yyyy', { locale: ptBR }),
+                date: format(currentDate, 'dd/MM/yy', { locale: ptBR }),
                 capitalAtualUSD: runningCapital,
                 drawdownAtualUSD: runningCapital * 0.15,
                 loteRiscoBaixoAtual: (runningCapital * 0.10) / 1000,
@@ -156,7 +170,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         }
 
         return data;
-    }, [config, filteredOperations]); // Depend on filteredOperations now
+    }, [config, filteredOperations, getPeriodBounds, operations]);
 
     const dashboardMetrics = useMemo(() => {
         const closedOps = filteredOperations.filter(op => op.status === 'Fechada' && op.resultUSD !== undefined && op.closedAt);
@@ -173,12 +187,15 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         
         const totalDurationMinutes = closedOps.reduce((sum, op) => sum + differenceInMinutes(parseISO(op.closedAt as string), parseISO(op.createdAt as string)), 0);
 
-        // Max Drawdown Calculation
+        // Max Drawdown Calculation based on all operations up to the end of the filtered period.
         let peak = config.initialCapitalUSD;
         let maxDrawdown = 0;
         let currentCapital = config.initialCapitalUSD;
         
-        const sortedOps = [...operations].sort((a, b) => parseISO(a.createdAt as string).getTime() - parseISO(b.createdAt as string).getTime());
+        const sortedOps = [...operations]
+          .sort((a, b) => parseISO(a.createdAt as string).getTime() - parseISO(b.createdAt as string).getTime())
+          .filter(op => parseISO(op.createdAt as string) <= (getPeriodBounds().end || new Date()));
+
         sortedOps.forEach(op => {
             if (op.status === 'Fechada' && op.resultUSD !== undefined) {
                 currentCapital += op.resultUSD;
@@ -204,7 +221,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
             maxDrawdown,
             profitFactor: totalLoss !== 0 ? totalProfit / Math.abs(totalLoss) : Infinity,
         };
-    }, [filteredOperations, config.initialCapitalUSD, operations]);
+    }, [filteredOperations, config.initialCapitalUSD, operations, getPeriodBounds]);
 
     const chartData = useMemo(() => {
       return projectionData.map(day => {
