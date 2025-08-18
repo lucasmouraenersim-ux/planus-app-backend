@@ -26,8 +26,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 const operationSchema = z.object({
   side: z.enum(['Long', 'Short'], { required_error: "O lado da operação é obrigatório."}),
   entryPriceUSD: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
-    z.number().positive("O preço de entrada deve ser um número positivo.")
+    (a) => {
+        const s = String(a).replace(",", ".");
+        if (s.trim() === "") return NaN; // Let the required validation handle it
+        return parseFloat(s);
+    },
+    z.number({invalid_type_error: "Preço de entrada é obrigatório."}).positive("O preço de entrada deve ser um número positivo.")
   ),
   loteSize: z.preprocess(
     (a) => parseFloat(String(a).replace(",", ".")),
@@ -68,9 +72,10 @@ const operationSchema = z.object({
     z.number().optional()
   ),
   closedAt: z.preprocess((arg) => {
-    if (typeof arg === "string" || arg instanceof Date) {
-        if (arg === "") return undefined;
-        return new Date(arg);
+    const dateArg = arg as any;
+    if ((typeof dateArg === "string" || dateArg instanceof Date) && dateArg !== "") {
+      const date = new Date(dateArg);
+      return isNaN(date.getTime()) ? undefined : date;
     }
     return undefined;
   }, z.date().optional()),
@@ -81,7 +86,7 @@ const operationSchema = z.object({
     return true;
 }, {
     message: "Preço de saída e PnL são obrigatórios para operações finalizadas.",
-    path: ["exitPriceUSD"], // You can point the error to a specific field
+    path: ["exitPriceUSD"], 
 });
 
 
@@ -97,7 +102,7 @@ function ForexOperationsPage() {
   const form = useForm<OperationFormData>({
     resolver: zodResolver(operationSchema),
     defaultValues: {
-        entryPriceUSD: '' as any, // Initialize as empty string to avoid controlled/uncontrolled error
+        entryPriceUSD: '' as any,
         loteSize: 0.01,
         createdAt: new Date(),
         side: 'Long',
@@ -116,6 +121,8 @@ function ForexOperationsPage() {
     if (!date) return "";
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     try {
+        // Check if date is valid before formatting
+        if (isNaN(dateObj.getTime())) return "";
         return format(dateObj, "yyyy-MM-dd'T'HH:mm");
     } catch (error) {
         console.warn("Invalid date for formatting:", date);
@@ -133,7 +140,6 @@ function ForexOperationsPage() {
             loteSize: operation.loteSize,
             createdAt: operation.createdAt ? new Date(operation.createdAt as string) : new Date(),
             isFinished: isOpFinished,
-            // Only set these if the operation is finished
             exitPriceUSD: isOpFinished ? operation.exitPriceUSD : undefined,
             resultUSD: isOpFinished ? operation.resultUSD : undefined,
             runUpUSD: isOpFinished ? operation.runUpUSD : undefined,
