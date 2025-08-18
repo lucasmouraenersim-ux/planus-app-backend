@@ -28,7 +28,10 @@ const operationSchema = z.object({
     z.number().positive("O preço de entrada deve ser um número positivo.")
   ),
   exitPriceUSD: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
+    (a) => {
+        const s = String(a).replace(",", ".");
+        return s === "" ? undefined : parseFloat(s);
+    },
     z.number().optional()
   ),
   loteSize: z.preprocess(
@@ -36,15 +39,24 @@ const operationSchema = z.object({
     z.number().positive("O tamanho do lote deve ser um número positivo.")
   ),
   resultUSD: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
+    (a) => {
+        const s = String(a).replace(",", ".");
+        return s === "" ? undefined : parseFloat(s);
+    },
     z.number().optional()
   ),
   runUpUSD: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
+    (a) => {
+        const s = String(a).replace(",", ".");
+        return s === "" ? undefined : parseFloat(s);
+    },
     z.number().optional()
   ),
   drawdownUSD: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
+    (a) => {
+        const s = String(a).replace(",", ".");
+        return s === "" ? undefined : parseFloat(s);
+    },
     z.number().optional()
   ),
   createdAt: z.preprocess((arg) => {
