@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { useMemo, useState } from 'react';
-import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
+import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon, Edit, Trash2 } from 'lucide-react';
@@ -81,6 +81,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
 
       const now = new Date();
       let startDate: Date;
+      let endDate: Date | undefined;
 
       if (timeRange === 'last_30_days') {
           startDate = subDays(now, 30);
@@ -88,22 +89,25 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
           startDate = subDays(now, 7);
       } else if (timeRange === 'custom' && customDateRange?.from) {
           startDate = customDateRange.from;
-          const endDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from);
-          return operations.filter(op => {
-              const opDate = parseISO(op.createdAt as string);
-              return opDate >= startDate && opDate <= endDate;
-          });
+          endDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from);
       } else {
           return operations;
       }
       
-      return operations.filter(op => parseISO(op.createdAt as string) >= startDate);
+      return operations.filter(op => {
+          const opDate = parseISO(op.createdAt as string);
+          if (endDate) {
+            return opDate >= startDate && opDate <= endDate;
+          }
+          return opDate >= startDate;
+      });
     }, [operations, timeRange, customDateRange]);
 
 
     const projectionData = useMemo(() => {
         const dailyResults = new Map<string, number>();
-        operations.forEach(op => {
+        // Use filteredOperations for calculating actual capital evolution
+        filteredOperations.forEach(op => {
             if (op.closedAt && op.status === 'Fechada' && op.resultUSD !== undefined) {
                 const closeDateStr = format(startOfDay(parseISO(op.closedAt as string)), 'yyyy-MM-dd');
                 const currentDailyResult = dailyResults.get(closeDateStr) || 0;
@@ -152,7 +156,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         }
 
         return data;
-    }, [config, operations]);
+    }, [config, filteredOperations]); // Depend on filteredOperations now
 
     const dashboardMetrics = useMemo(() => {
         const closedOps = filteredOperations.filter(op => op.status === 'Fechada' && op.resultUSD !== undefined && op.closedAt);
@@ -506,12 +510,5 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
         </div>
     );
 };
-
-// Helper function to get the end of the day for a date
-function endOfDay(date: Date) {
-  const newDate = new Date(date);
-  newDate.setHours(23, 59, 59, 999);
-  return newDate;
-}
-
+    
     
