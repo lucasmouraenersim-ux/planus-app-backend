@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react"
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -528,4 +528,6 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
     );
 };
     
+    
+
     
