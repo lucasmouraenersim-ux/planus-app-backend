@@ -131,21 +131,20 @@ function ForexOperationsPage() {
   const onSubmit: SubmitHandler<OperationFormData> = async (data) => {
     const status = data.resultUSD !== undefined && data.resultUSD !== null ? 'Fechada' : 'Aberta';
     
+    const operationData = {
+      ...data,
+      status,
+      closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined,
+    };
+    
     if (editingOperation && editingOperation.id) {
-        await updateOperation(editingOperation.id, {
-            ...data,
-            status,
-            closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined
-        });
+        await updateOperation(editingOperation.id, operationData);
         toast({ title: "Sucesso!", description: "Operação atualizada." });
     } else {
-        const newOperationData = {
-          ...data,
-          status,
-          closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined,
-          createdAt: data.createdAt || new Date(),
-        };
-        await addOperation(newOperationData);
+        await addOperation({
+            ...operationData,
+            createdAt: data.createdAt || new Date(),
+        });
         toast({ title: "Sucesso!", description: "Nova operação adicionada." });
     }
 
@@ -186,6 +185,7 @@ function ForexOperationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Trade #</TableHead>
                 <TableHead>Lado</TableHead>
                 <TableHead>Aberta em</TableHead>
                 <TableHead>Preço Entrada</TableHead>
@@ -201,10 +201,11 @@ function ForexOperationsPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={11} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={12} className="text-center h-24"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : operations.length > 0 ? (
                 operations.map((op) => (
                   <TableRow key={op.id}>
+                    <TableCell className="font-mono text-muted-foreground">{op.tradeNumber || '-'}</TableCell>
                     <TableCell><Badge variant={op.side === 'Long' ? 'default' : 'destructive'} className={op.side === 'Long' ? 'bg-green-500/80' : 'bg-red-500/80'}>{op.side}</Badge></TableCell>
                     <TableCell>{op.createdAt ? format(parseISO(op.createdAt as string), 'dd/MM/yy HH:mm') : 'N/A'}</TableCell>
                     <TableCell>{formatCurrency(op.entryPriceUSD)}</TableCell>
@@ -238,7 +239,7 @@ function ForexOperationsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center h-24 text-muted-foreground">Nenhuma operação registrada ainda.</TableCell>
+                  <TableCell colSpan={12} className="text-center h-24 text-muted-foreground">Nenhuma operação registrada ainda.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -249,7 +250,7 @@ function ForexOperationsPage() {
       <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
         <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
-                <DialogTitle>{editingOperation ? "Editar Operação" : "Nova Operação"}</DialogTitle>
+                <DialogTitle>{editingOperation ? `Editar Operação #${editingOperation.tradeNumber}` : "Nova Operação"}</DialogTitle>
                 <DialogDescription>
                     {editingOperation ? "Atualize os detalhes da sua operação." : "Registre uma nova operação."}
                 </DialogDescription>

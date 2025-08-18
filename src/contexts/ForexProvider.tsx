@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, deleteDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import type { ForexBancaConfig, ForexOperation } from '@/types/forex';
 import { useToast } from '@/hooks/use-toast';
 
@@ -12,7 +12,7 @@ interface ForexContextType {
     operations: ForexOperation[];
     isLoading: boolean;
     setConfig: (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'> | null) => Promise<void>;
-    addOperation: (operationData: Omit<ForexOperation, 'id' | 'userId'>) => Promise<void>;
+    addOperation: (operationData: Omit<ForexOperation, 'id' | 'userId' | 'tradeNumber'>) => Promise<void>;
     updateOperation: (operationId: string, updates: Partial<ForexOperation>) => Promise<void>;
     deleteOperation: (operationId: string) => Promise<void>;
 }
@@ -29,12 +29,12 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const setConfig = async (newConfig: Omit<ForexBancaConfig, 'userId' | 'id'> | null) => {
         if (!firebaseUser) return;
         
-        // If newConfig is null, it means we are clearing the projection.
+        const configRef = doc(db, 'forex_config', firebaseUser.uid);
+        
         if (newConfig === null) {
-            const configRef = doc(db, 'forex_config', firebaseUser.uid);
-            await deleteDoc(configRef); // Also delete from Firestore
+            await deleteDoc(configRef); 
             setConfigState(null);
-            setOperations([]); // Clear operations as well
+            setOperations([]);
             return;
         }
 
@@ -43,30 +43,40 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             userId: firebaseUser.uid,
             startDate: Timestamp.fromDate(newConfig.startDate as Date),
         };
-        const configRef = doc(db, 'forex_config', firebaseUser.uid);
+        
         await setDoc(configRef, configToSave);
         setConfigState({ ...configToSave, id: firebaseUser.uid, startDate: (configToSave.startDate as Timestamp).toDate().toISOString() });
     };
     
-    const addOperation = async (operationData: Omit<ForexOperation, 'id' | 'userId'>) => {
+    const addOperation = async (operationData: Omit<ForexOperation, 'id' | 'userId' | 'tradeNumber'>) => {
         if (!firebaseUser) return;
-        const opRef = collection(db, `forex_config/${firebaseUser.uid}/operations`);
-        
+
+        const operationsRef = collection(db, `forex_config/${firebaseUser.uid}/operations`);
+        const counterRef = doc(db, `forex_config/${firebaseUser.uid}/counters/operations_counter`);
+
+        // Use a transaction to safely increment the trade number
+        const newTradeNumber = await runTransaction(db, async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            const newCount = (counterDoc.data()?.count || 0) + 1;
+            transaction.set(counterRef, { count: newCount });
+            return newCount;
+        });
+
         const dataToSave: { [key: string]: any } = {
             ...operationData,
+            tradeNumber: newTradeNumber,
             userId: firebaseUser.uid,
             createdAt: Timestamp.fromDate(operationData.createdAt as Date),
             closedAt: operationData.closedAt ? Timestamp.fromDate(operationData.closedAt as Date) : undefined,
         };
 
-        // Firestore does not allow `undefined` values. We must remove them.
         Object.keys(dataToSave).forEach(key => {
             if (dataToSave[key] === undefined) {
                 delete dataToSave[key];
             }
         });
 
-        await addDoc(opRef, dataToSave);
+        await addDoc(operationsRef, dataToSave);
     };
 
     const updateOperation = async (operationId: string, updates: Partial<ForexOperation>) => {
@@ -81,7 +91,6 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             updatesToSave.closedAt = Timestamp.fromDate(updates.closedAt as Date);
         }
         
-        // Remove undefined fields before updating
          Object.keys(updatesToSave).forEach(key => {
             if (updatesToSave[key] === undefined) {
                 delete updatesToSave[key];
@@ -113,14 +122,14 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 const data = docSnap.data() as ForexBancaConfig;
                 setConfigState({ ...data, id: docSnap.id, startDate: (data.startDate as Timestamp).toDate().toISOString() });
             } else {
-                setConfigState(null); // Explicitly set to null if not found
+                setConfigState(null);
             }
         };
 
         fetchConfig().finally(() => setIsLoading(false));
         
         const operationsRef = collection(db, `forex_config/${firebaseUser.uid}/operations`);
-        const q = query(operationsRef, orderBy('createdAt', 'desc'));
+        const q = query(operationsRef, orderBy('tradeNumber', 'desc'));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const opsData = snapshot.docs.map(doc => ({
