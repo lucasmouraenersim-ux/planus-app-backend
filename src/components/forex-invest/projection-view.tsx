@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react"
@@ -5,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { addDays, differenceInDays, format, endOfYear, parseISO, startOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon } from 'lucide-react';
+import { LineChart as LineChartIcon, Bitcoin, BarChart, RefreshCw, Plus, TrendingUp, Target, Clock, CheckCircle, Percent, ArrowDownUp, TrendingDown, ChevronsDown, BrainCircuit, CalendarIcon, Activity, AreaChart as AreaChartIcon, Edit, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +20,9 @@ import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { cn } from "@/lib/utils";
 import { Calendar } from "../ui/calendar";
 import type { DateRange } from "react-day-picker";
+import { Badge } from "../ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
+
 
 export interface ProjectionConfig extends Omit<ForexBancaConfig, 'startDate' | 'id' | 'userId'>{
   startDate: Date;
@@ -53,6 +57,11 @@ const formatCurrency = (value: number | undefined | null, currency: 'USD' | 'BRL
       maximumFractionDigits: 2,
     });
 };
+
+const formatCurrencyForTable = (value: number | undefined | null) => {
+    if (value === undefined || value === null || isNaN(value)) return <span className="text-muted-foreground">N/A</span>;
+    return <span className={value >= 0 ? 'text-green-500' : 'text-red-500'}>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' })}</span>;
+}
 
 const formatDuration = (totalMinutes: number): string => {
     if (isNaN(totalMinutes) || totalMinutes < 0) return "N/A";
@@ -233,6 +242,48 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
       return null;
     };
     
+    // Component for rendering the operations table
+    const OperationsTable = ({ operationsToShow }: { operationsToShow: ForexOperation[] }) => (
+        <Card>
+            <CardHeader>
+                <CardTitle>Histórico de Operações Recentes</CardTitle>
+                <CardDescription>Suas últimas operações registradas.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Lado</TableHead>
+                            <TableHead>Aberta em</TableHead>
+                            <TableHead>Preço Entrada</TableHead>
+                            <TableHead>Lote</TableHead>
+                            <TableHead>PnL (USD)</TableHead>
+                            <TableHead>Status</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {operationsToShow.length > 0 ? (
+                            operationsToShow.map((op) => (
+                                <TableRow key={op.id}>
+                                    <TableCell><Badge variant={op.side === 'Long' ? 'default' : 'destructive'} className={op.side === 'Long' ? 'bg-green-500/80' : 'bg-red-500/80'}>{op.side}</Badge></TableCell>
+                                    <TableCell>{op.createdAt ? format(parseISO(op.createdAt as string), 'dd/MM/yy HH:mm') : 'N/A'}</TableCell>
+                                    <TableCell>{formatCurrency(op.entryPriceUSD)}</TableCell>
+                                    <TableCell>{op.loteSize.toFixed(2)}</TableCell>
+                                    <TableCell>{formatCurrencyForTable(op.resultUSD)}</TableCell>
+                                    <TableCell>{op.status}</TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">Nenhuma operação registrada ainda.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+
     return (
         <div className="p-4 md:p-6 w-full">
             <header className="mb-6 flex justify-between items-center">
@@ -254,7 +305,7 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                     <TabsTrigger value="projection"><LineChartIcon className="w-4 h-4 mr-2" />Projeção</TabsTrigger>
                     <TabsTrigger value="bitcoin"><Bitcoin className="w-4 h-4 mr-2" />Bitcoin Gráfico</TabsTrigger>
                 </TabsList>
-                <TabsContent value="projection" className="relative">
+                <TabsContent value="projection" className="relative space-y-4">
                     <Card className="bg-card/70">
                         <CardHeader>
                             <CardTitle>Tabela de Projeção e Gerenciamento</CardTitle>
@@ -316,6 +367,9 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                             </ScrollArea>
                         </CardContent>
                     </Card>
+                    <div className="pt-4">
+                        <OperationsTable operationsToShow={operations} />
+                    </div>
                     <Button
                         variant="default"
                         size="icon"
@@ -432,6 +486,9 @@ export const ProjectionView = ({ config, onNewProjection }: { config: Projection
                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
+                    <div className="pt-4">
+                        <OperationsTable operationsToShow={filteredOperations} />
+                    </div>
                    </div>
                 </TabsContent>
                 <TabsContent value="bitcoin">
