@@ -30,7 +30,7 @@ const operationSchema = z.object({
   exitPriceUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
-        return s === "" ? undefined : parseFloat(s);
+        return s.trim() === "" ? undefined : parseFloat(s);
     },
     z.number().optional()
   ),
@@ -41,21 +41,21 @@ const operationSchema = z.object({
   resultUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
-        return s === "" ? undefined : parseFloat(s);
+        return s.trim() === "" ? undefined : parseFloat(s);
     },
     z.number().optional()
   ),
   runUpUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
-        return s === "" ? undefined : parseFloat(s);
+        return s.trim() === "" ? undefined : parseFloat(s);
     },
     z.number().optional()
   ),
   drawdownUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
-        return s === "" ? undefined : parseFloat(s);
+        return s.trim() === "" ? undefined : parseFloat(s);
     },
     z.number().optional()
   ),
