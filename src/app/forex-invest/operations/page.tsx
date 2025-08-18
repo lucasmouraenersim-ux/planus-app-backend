@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useState, useEffect } from 'react';
@@ -19,6 +20,7 @@ import { useForex } from '@/contexts/ForexProvider';
 import type { ForexOperation } from '@/types/forex';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 const operationSchema = z.object({
@@ -27,16 +29,22 @@ const operationSchema = z.object({
     (a) => parseFloat(String(a).replace(",", ".")),
     z.number().positive("O preço de entrada deve ser um número positivo.")
   ),
+  loteSize: z.preprocess(
+    (a) => parseFloat(String(a).replace(",", ".")),
+    z.number().positive("O tamanho do lote deve ser um número positivo.")
+  ),
+  createdAt: z.preprocess((arg) => {
+    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
+  }, z.date({
+    required_error: "A data de abertura é obrigatória.",
+  })),
+  isFinished: z.boolean().optional().default(false),
   exitPriceUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
         return s.trim() === "" ? undefined : parseFloat(s);
     },
     z.number().optional()
-  ),
-  loteSize: z.preprocess(
-    (a) => parseFloat(String(a).replace(",", ".")),
-    z.number().positive("O tamanho do lote deve ser um número positivo.")
   ),
   resultUSD: z.preprocess(
     (a) => {
@@ -59,11 +67,6 @@ const operationSchema = z.object({
     },
     z.number().optional()
   ),
-  createdAt: z.preprocess((arg) => {
-    if (typeof arg === "string" || arg instanceof Date) return new Date(arg);
-  }, z.date({
-    required_error: "A data de abertura é obrigatória.",
-  })),
   closedAt: z.preprocess((arg) => {
     if (typeof arg === "string" || arg instanceof Date) {
         if (arg === "") return undefined;
@@ -71,6 +74,14 @@ const operationSchema = z.object({
     }
     return undefined;
   }, z.date().optional()),
+}).refine(data => {
+    if (data.isFinished) {
+        return data.exitPriceUSD !== undefined && data.resultUSD !== undefined;
+    }
+    return true;
+}, {
+    message: "Preço de saída e PnL são obrigatórios para operações finalizadas.",
+    path: ["exitPriceUSD"], // You can point the error to a specific field
 });
 
 
@@ -89,9 +100,11 @@ function ForexOperationsPage() {
         loteSize: 0.01,
         createdAt: new Date(),
         side: 'Long',
+        isFinished: false,
     }
   });
-  const { handleSubmit, control, reset } = form;
+  const { handleSubmit, control, reset, watch } = form;
+  const isFinished = watch("isFinished");
 
   const formatDateForInput = (date: Date | string | undefined) => {
     if (!date) return "";
@@ -107,16 +120,19 @@ function ForexOperationsPage() {
   const handleOpenModal = (operation: ForexOperation | null = null) => {
     setEditingOperation(operation);
     if (operation) {
+        const isOpFinished = operation.status === 'Fechada';
         reset({
             side: operation.side,
             entryPriceUSD: operation.entryPriceUSD,
-            exitPriceUSD: operation.exitPriceUSD,
             loteSize: operation.loteSize,
-            resultUSD: operation.resultUSD,
-            runUpUSD: operation.runUpUSD,
-            drawdownUSD: operation.drawdownUSD,
             createdAt: operation.createdAt ? new Date(operation.createdAt as string) : new Date(),
-            closedAt: operation.closedAt ? new Date(operation.closedAt as string) : undefined,
+            isFinished: isOpFinished,
+            // Only set these if the operation is finished
+            exitPriceUSD: isOpFinished ? operation.exitPriceUSD : undefined,
+            resultUSD: isOpFinished ? operation.resultUSD : undefined,
+            runUpUSD: isOpFinished ? operation.runUpUSD : undefined,
+            drawdownUSD: isOpFinished ? operation.drawdownUSD : undefined,
+            closedAt: isOpFinished && operation.closedAt ? new Date(operation.closedAt as string) : undefined,
         });
     } else {
         reset({
@@ -129,6 +145,7 @@ function ForexOperationsPage() {
             createdAt: new Date(),
             closedAt: undefined,
             side: 'Long',
+            isFinished: false,
         });
     }
     setIsModalOpen(true);
@@ -141,22 +158,35 @@ function ForexOperationsPage() {
   };
 
   const onSubmit: SubmitHandler<OperationFormData> = async (data) => {
-    const status = data.resultUSD !== undefined && data.resultUSD !== null ? 'Fechada' : 'Aberta';
+    const status = data.isFinished ? 'Fechada' : 'Aberta';
     
-    const operationData = {
-      ...data,
-      status,
-      closedAt: status === 'Fechada' ? (data.closedAt || new Date()) : undefined,
+    const operationData: Partial<ForexOperation> = {
+      side: data.side,
+      entryPriceUSD: data.entryPriceUSD,
+      loteSize: data.loteSize,
+      createdAt: data.createdAt,
+      status: status,
     };
+
+    if (status === 'Fechada') {
+        operationData.exitPriceUSD = data.exitPriceUSD;
+        operationData.resultUSD = data.resultUSD;
+        operationData.runUpUSD = data.runUpUSD;
+        operationData.drawdownUSD = data.drawdownUSD;
+        operationData.closedAt = data.closedAt || new Date();
+    } else {
+        operationData.exitPriceUSD = undefined;
+        operationData.resultUSD = undefined;
+        operationData.runUpUSD = undefined;
+        operationData.drawdownUSD = undefined;
+        operationData.closedAt = undefined;
+    }
     
     if (editingOperation && editingOperation.id) {
         await updateOperation(editingOperation.id, operationData);
         toast({ title: "Sucesso!", description: "Operação atualizada." });
     } else {
-        await addOperation({
-            ...operationData,
-            createdAt: data.createdAt || new Date(),
-        });
+        await addOperation(operationData as Omit<ForexOperation, 'id' | 'userId' | 'tradeNumber'>);
         toast({ title: "Sucesso!", description: "Nova operação adicionada." });
     }
 
@@ -277,20 +307,44 @@ function ForexOperationsPage() {
                             </RadioGroup>
                         </FormControl><FormMessage /></FormItem>
                     )} />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <FormField control={control} name="entryPriceUSD" render={({ field }) => (<FormItem><Label>Preço de Entrada (USD)</Label><FormControl><Input type="number" step="any" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="exitPriceUSD" render={({ field }) => (<FormItem><Label>Preço de Saída (USD)</Label><FormControl><Input type="number" step="any" placeholder="Deixe em branco se aberta" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField control={control} name="createdAt" render={({ field }) => (<FormItem><Label>Data de Abertura</Label><FormControl><Input type="datetime-local" value={formatDateForInput(field.value)} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}/></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="closedAt" render={({ field }) => (<FormItem><Label>Data de Fechamento</Label><FormControl><Input type="datetime-local" value={formatDateForInput(field.value)} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}/></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <FormField control={control} name="loteSize" render={({ field }) => (<FormItem><Label>Tamanho do Lote</Label><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="resultUSD" render={({ field }) => (<FormItem><Label>PnL (USD)</Label><FormControl><Input type="number" step="any" placeholder="Deixe em branco se aberta" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="runUpUSD" render={({ field }) => (<FormItem><Label>Run-up (USD)</Label><FormControl><Input type="number" step="any" placeholder="Opcional" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="drawdownUSD" render={({ field }) => (<FormItem><Label>Drawdown (USD)</Label><FormControl><Input type="number" step="any" placeholder="Opcional" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={control} name="createdAt" render={({ field }) => (<FormItem><Label>Data de Abertura</Label><FormControl><Input type="datetime-local" value={formatDateForInput(field.value)} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}/></FormControl><FormMessage /></FormItem>)} />
                     </div>
+
+                    <FormField
+                      control={control}
+                      name="isFinished"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <Label>Operação Finalizada?</Label>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    {isFinished && (
+                        <div className="space-y-4 p-4 border rounded-md bg-muted/20">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <FormField control={control} name="exitPriceUSD" render={({ field }) => (<FormItem><Label>Preço de Saída (USD)</Label><FormControl><Input type="number" step="any" placeholder="Preço de fechamento" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={control} name="closedAt" render={({ field }) => (<FormItem><Label>Data de Fechamento</Label><FormControl><Input type="datetime-local" value={formatDateForInput(field.value)} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}/></FormControl><FormMessage /></FormItem>)} />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <FormField control={control} name="resultUSD" render={({ field }) => (<FormItem><Label>PnL (USD)</Label><FormControl><Input type="number" step="any" placeholder="Resultado em $" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={control} name="runUpUSD" render={({ field }) => (<FormItem><Label>Run-up (USD)</Label><FormControl><Input type="number" step="any" placeholder="Opcional" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={control} name="drawdownUSD" render={({ field }) => (<FormItem><Label>Drawdown (USD)</Label><FormControl><Input type="number" step="any" placeholder="Opcional" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                            </div>
+                        </div>
+                    )}
+                    
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={handleCloseModal}>Cancelar</Button>
                         <Button type="submit">Salvar Operação</Button>
