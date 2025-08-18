@@ -28,7 +28,7 @@ const operationSchema = z.object({
   entryPriceUSD: z.preprocess(
     (a) => {
         const s = String(a).replace(",", ".");
-        if (s.trim() === "") return NaN; // Let the required validation handle it
+        if (s.trim() === "") return NaN;
         return parseFloat(s);
     },
     z.number({invalid_type_error: "Preço de entrada é obrigatório."}).positive("O preço de entrada deve ser um número positivo.")
@@ -44,31 +44,19 @@ const operationSchema = z.object({
   })),
   isFinished: z.boolean().optional().default(false),
   exitPriceUSD: z.preprocess(
-    (a) => {
-        const s = String(a).replace(",", ".");
-        return s.trim() === "" ? undefined : parseFloat(s);
-    },
+    (a) => (String(a).trim() === "" ? undefined : parseFloat(String(a).replace(",", "."))),
     z.number().optional()
   ),
   resultUSD: z.preprocess(
-    (a) => {
-        const s = String(a).replace(",", ".");
-        return s.trim() === "" ? undefined : parseFloat(s);
-    },
+    (a) => (String(a).trim() === "" ? undefined : parseFloat(String(a).replace(",", "."))),
     z.number().optional()
   ),
   runUpUSD: z.preprocess(
-    (a) => {
-        const s = String(a).replace(",", ".");
-        return s.trim() === "" ? undefined : parseFloat(s);
-    },
+    (a) => (String(a).trim() === "" ? undefined : parseFloat(String(a).replace(",", "."))),
     z.number().optional()
   ),
   drawdownUSD: z.preprocess(
-    (a) => {
-        const s = String(a).replace(",", ".");
-        return s.trim() === "" ? undefined : parseFloat(s);
-    },
+    (a) => (String(a).trim() === "" ? undefined : parseFloat(String(a).replace(",", "."))),
     z.number().optional()
   ),
   closedAt: z.preprocess((arg) => {
@@ -81,11 +69,11 @@ const operationSchema = z.object({
   }, z.date().optional()),
 }).refine(data => {
     if (data.isFinished) {
-        return data.exitPriceUSD !== undefined && data.resultUSD !== undefined;
+        return data.exitPriceUSD !== undefined && data.resultUSD !== undefined && data.exitPriceUSD > 0;
     }
     return true;
 }, {
-    message: "Preço de saída e PnL são obrigatórios para operações finalizadas.",
+    message: "Preço de saída e PnL são obrigatórios e devem ser positivos para operações finalizadas.",
     path: ["exitPriceUSD"], 
 });
 
@@ -121,7 +109,6 @@ function ForexOperationsPage() {
     if (!date) return "";
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     try {
-        // Check if date is valid before formatting
         if (isNaN(dateObj.getTime())) return "";
         return format(dateObj, "yyyy-MM-dd'T'HH:mm");
     } catch (error) {
