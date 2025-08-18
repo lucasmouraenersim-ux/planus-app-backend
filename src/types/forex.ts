@@ -20,9 +20,15 @@ export interface ForexBancaConfig {
 export interface ForexOperation {
     id?: string;
     userId: string;
+    tradeNumber?: number; // Sequential number for the trade
+    side: 'Long' | 'Short';
     createdAt: Timestamp | string;
+    entryPriceUSD: number;
     closedAt?: Timestamp | string;
+    exitPriceUSD?: number;
     loteSize: number;
     resultUSD?: number; // Profit or Loss in USD
+    runUpUSD?: number; // Maximum potential profit during the trade
+    drawdownUSD?: number; // Maximum potential loss during the trade
     status: 'Aberta' | 'Fechada';
 }

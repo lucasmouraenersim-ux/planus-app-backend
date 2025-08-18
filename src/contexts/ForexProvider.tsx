@@ -72,20 +72,19 @@ export const ForexProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const updateOperation = async (operationId: string, updates: Partial<ForexOperation>) => {
         if (!firebaseUser) return;
         const opRef = doc(db, `forex_config/${firebaseUser.uid}/operations`, operationId);
-        const updatesToSave = { ...updates };
+        
+        const updatesToSave: { [key: string]: any } = { ...updates };
         if (updates.createdAt && typeof updates.createdAt !== 'string') {
             updatesToSave.createdAt = Timestamp.fromDate(updates.createdAt as Date);
         }
-        if (updates.closedAt && typeof updates.closedAt !== 'string') {
+        if (updates.closedAt && typeof updates.closedAt !== 'string' && updates.closedAt !== null) {
             updatesToSave.closedAt = Timestamp.fromDate(updates.closedAt as Date);
-        } else if (updates.closedAt === undefined) {
-            updatesToSave.closedAt = undefined;
         }
         
         // Remove undefined fields before updating
          Object.keys(updatesToSave).forEach(key => {
-            if ((updatesToSave as any)[key] === undefined) {
-                delete (updatesToSave as any)[key];
+            if (updatesToSave[key] === undefined) {
+                delete updatesToSave[key];
             }
         });
 
