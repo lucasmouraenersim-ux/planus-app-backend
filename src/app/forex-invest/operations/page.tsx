@@ -308,8 +308,8 @@ function ForexOperationsPage() {
                         </FormControl><FormMessage /></FormItem>
                     )} />
                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <FormField control={control} name="entryPriceUSD" render={({ field }) => (<FormItem><Label>Preço de Entrada (USD)</Label><FormControl><Input type="number" step="any" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={control} name="loteSize" render={({ field }) => (<FormItem><Label>Tamanho do Lote</Label><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={control} name="entryPriceUSD" render={({ field }) => (<FormItem><Label>Preço de Entrada (USD)</Label><FormControl><Input type="number" step="any" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={control} name="loteSize" render={({ field }) => (<FormItem><Label>Tamanho do Lote</Label><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={control} name="createdAt" render={({ field }) => (<FormItem><Label>Data de Abertura</Label><FormControl><Input type="datetime-local" value={formatDateForInput(field.value)} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}/></FormControl><FormMessage /></FormItem>)} />
                     </div>
 
