@@ -97,10 +97,16 @@ function ForexOperationsPage() {
   const form = useForm<OperationFormData>({
     resolver: zodResolver(operationSchema),
     defaultValues: {
+        entryPriceUSD: '' as any, // Initialize as empty string to avoid controlled/uncontrolled error
         loteSize: 0.01,
         createdAt: new Date(),
         side: 'Long',
         isFinished: false,
+        exitPriceUSD: undefined,
+        resultUSD: undefined,
+        runUpUSD: undefined,
+        drawdownUSD: undefined,
+        closedAt: undefined,
     }
   });
   const { handleSubmit, control, reset, watch } = form;
@@ -136,16 +142,16 @@ function ForexOperationsPage() {
         });
     } else {
         reset({
+            entryPriceUSD: '' as any,
             loteSize: 0.01,
-            entryPriceUSD: undefined,
+            createdAt: new Date(),
+            side: 'Long',
+            isFinished: false,
             exitPriceUSD: undefined,
             resultUSD: undefined,
             runUpUSD: undefined,
             drawdownUSD: undefined,
-            createdAt: new Date(),
             closedAt: undefined,
-            side: 'Long',
-            isFinished: false,
         });
     }
     setIsModalOpen(true);
