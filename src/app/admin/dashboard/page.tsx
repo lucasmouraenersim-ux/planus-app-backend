@@ -1,21 +1,21 @@
 
 "use client";
 
-import { Suspense, useEffect } from 'react'; // Added useEffect
+import { Suspense, useEffect } from 'react';
 import AdminCommissionDashboard from '@/components/admin/AdminCommissionDashboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import type { AppUser } from '@/types/user';
 
 export default function AdminDashboardPage() {
-  const { appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, fetchAllAppUsers } = useAuth();
+  const { appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, refreshUsers } = useAuth();
 
   // Effect to fetch users if admin is already logged in but allFirestoreUsers might not be populated initially
   useEffect(() => {
     if ((userAppRole === 'admin' || userAppRole === 'superadmin') && !isLoadingAllUsers && allFirestoreUsers.length === 0) {
-      fetchAllAppUsers();
+      refreshUsers();
     }
-  }, [userAppRole, isLoadingAllUsers, allFirestoreUsers.length, fetchAllAppUsers]);
+  }, [userAppRole, isLoadingAllUsers, allFirestoreUsers.length, refreshUsers]);
 
   if (isLoadingAuth || ((userAppRole === 'admin' || userAppRole === 'superadmin') && isLoadingAllUsers)) {
     return (
@@ -47,7 +47,7 @@ export default function AdminDashboardPage() {
         loggedInUser={appUser as AppUser}
         initialUsers={allFirestoreUsers}
         isLoadingUsersProp={isLoadingAllUsers}
-        refreshUsers={fetchAllAppUsers}
+        onUsersChange={refreshUsers}
       />
     </Suspense>
   );

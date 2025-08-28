@@ -1,3 +1,4 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -118,10 +119,10 @@ interface AdminCommissionDashboardProps {
   loggedInUser: AppUser;
   initialUsers: FirestoreUser[];
   isLoadingUsersProp: boolean;
-  refreshUsers: () => Promise<void>;
+  onUsersChange: () => Promise<void>;
 }
 
-export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, refreshUsers }: AdminCommissionDashboardProps) {
+export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, onUsersChange }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
   const { userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
@@ -203,7 +204,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         canViewCareerPlan: data.canViewCareerPlan,
         assignmentLimit: data.assignmentLimit,
       });
-      await refreshUsers();
+      await onUsersChange();
       toast({ title: "Sucesso", description: `Usuário ${data.displayName} atualizado.` });
       setIsEditUserModalOpen(false);
     } catch (error) {
@@ -246,7 +247,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         const result = await deleteUser(userToDelete.uid);
         if (result.success) {
             toast({ title: "Usuário Excluído", description: result.message });
-            await refreshUsers();
+            await onUsersChange();
         } else {
             toast({ title: "Erro ao Excluir", description: result.message, variant: "destructive" });
         }
@@ -278,7 +279,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       const result = await createUser(data);
 
       if (result.success) {
-        await refreshUsers();
+        await onUsersChange();
         toast({ title: "Usuário Criado", description: result.message });
         setIsAddUserModalOpen(false);
         addUserForm.reset({ type: 'vendedor', cpf: '', displayName: '', email: '', password: '', phone: '' });
@@ -344,7 +345,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           duration: 9000,
       });
       if (result.success) {
-          await refreshUsers();
+          await onUsersChange();
       }
       setIsSyncing(false);
   };
@@ -482,7 +483,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <PopoverContent className="w-auto p-0" align="end"><Calendar mode="range" selected={dateRange} onSelect={setDateRange} initialFocus locale={ptBR} /></PopoverContent>
           </Popover>
           <Button variant="outline" size="icon" disabled><Filter className="w-4 h-4" /></Button>
-          <Button variant="outline" size="icon" onClick={refreshUsers} disabled={isLoadingUsersProp}><RefreshCw className={cn("w-4 h-4", isLoadingUsersProp && "animate-spin")} /></Button>
+          <Button variant="outline" size="icon" onClick={onUsersChange} disabled={isLoadingUsersProp}><RefreshCw className={cn("w-4 h-4", isLoadingUsersProp && "animate-spin")} /></Button>
         </div>
       </header>
 
