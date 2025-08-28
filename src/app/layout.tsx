@@ -24,7 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -35,14 +35,20 @@ import { useToast } from '@/hooks/use-toast';
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const pathname = usePathname();
     const router = useRouter();
-    const { appUser, isLoadingAuth } = useAuth();
+    const { appUser, isLoadingAuth, userAppRole } = useAuth();
 
     useEffect(() => {
         if (!isLoadingAuth) {
             const isAuthPage = pathname === '/login';
             const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade';
-            
+            const isTrainingPage = pathname === '/training';
+
             if (appUser) { // User is logged in
+                if (userAppRole === 'prospector' && !isTrainingPage) {
+                    router.replace('/training');
+                    return;
+                }
+                
                 if (isAuthPage || pathname === '/') {
                     router.replace('/dashboard');
                 }
@@ -52,7 +58,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
                 }
             }
         }
-    }, [isLoadingAuth, appUser, pathname, router]);
+    }, [isLoadingAuth, appUser, userAppRole, pathname, router]);
     
     if (isLoadingAuth) {
         return (
@@ -68,8 +74,12 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     }
 
     // Authenticated users or users on other pages get the full shell
-    // The useEffect above will handle redirection if they aren't authenticated
     if (appUser) {
+        // Special case for prospectors on the training page, show minimal shell
+        if (userAppRole === 'prospector' && pathname === '/training') {
+            return <MinimalShell>{children}</MinimalShell>;
+        }
+
         return (
             <SidebarProvider defaultOpen={true}>
                 <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
@@ -78,17 +88,45 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     }
     
     // Fallback for non-logged-in users on public pages that might not have appUser yet
-    // This allows public pages to render while auth is still finalizing.
     if (!appUser && (pathname === '/' || pathname === '/politica-de-privacidade')) {
       return <>{children}</>;
     }
-
 
     // Fallback loader for any other edge cases
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-background text-primary">
           <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
       </div>
+    );
+};
+
+
+// Minimal shell for users in training
+const MinimalShell = ({ children }: { children: React.ReactNode }) => {
+    const { appUser } = useAuth();
+    const router = useRouter();
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            router.replace('/login');
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-screen">
+             <header className="sticky top-0 z-10 flex h-14 items-center gap-x-4 border-b bg-background/70 backdrop-blur-md px-4 sm:px-6 py-2">
+                <h1 className="text-lg font-semibold text-primary truncate flex-grow">Planus Energia - Treinamento</h1>
+                 <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground hidden sm:inline">{appUser?.displayName || appUser?.email}</span>
+                    <Button variant="outline" size="sm" onClick={handleLogout}>
+                        <LogOut className="mr-2 h-4 w-4"/>Sair
+                    </Button>
+                </div>
+            </header>
+            <main className="flex-1 overflow-auto bg-muted/30">{children}</main>
+        </div>
     );
 };
 
@@ -152,6 +190,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training-progress"><SidebarMenuButton isActive={currentPathname === '/admin/training-progress'} tooltip="Progresso de Treinamento"><GraduationCap />Acompanhamento</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (

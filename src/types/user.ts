@@ -1,3 +1,4 @@
+
 // src/types/user.ts
 import type { Timestamp } from 'firebase/firestore';
 
@@ -29,6 +30,16 @@ export type FirestoreUser = {
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
   assignmentLimit?: number; // Max number of active leads a seller can have
+
+  // Training Progress
+  trainingProgress?: {
+    [moduleId: string]: {
+      [videoId: string]: {
+        watchedSeconds: number;
+        completed: boolean;
+      };
+    };
+  };
 };
 
 // User object available in the auth context or passed as props
@@ -57,4 +68,14 @@ export type AppUser = {
   canViewCareerPlan?: boolean;
   canViewCrm?: boolean;
   assignmentLimit?: number;
+
+  // Training Progress
+  trainingProgress?: {
+    [moduleId: string]: {
+      [videoId: string]: {
+        watchedSeconds: number;
+        completed: boolean;
+      };
+    };
+  };
 };
