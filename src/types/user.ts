@@ -1,4 +1,3 @@
-
 // src/types/user.ts
 import type { Timestamp } from 'firebase/firestore';
 
@@ -20,10 +19,10 @@ export type FirestoreUser = {
   termsAcceptedAt?: Timestamp | string; // New field
   
   // New Commission Fields
-  commissionRate?: 40 | 50 | 60 | 80; // Direct commission percentage
+  commissionRate?: number; // Direct commission percentage
   mlmEnabled?: boolean; // Is this user eligible for MLM overrides?
   uplineUid?: string; // UID of the user this person reports to for MLM
-  recurrenceRate?: 0.5 | 1; // Recurrence percentage
+  recurrenceRate?: number; // Recurrence percentage
 
   // Permissions
   canViewLeadPhoneNumber?: boolean;
@@ -58,10 +57,10 @@ export type AppUser = {
   termsAcceptedAt?: string; 
 
   // New Commission Fields
-  commissionRate?: 40 | 50 | 60 | 80;
+  commissionRate?: number;
   mlmEnabled?: boolean;
   uplineUid?: string;
-  recurrenceRate?: 0.5 | 1;
+  recurrenceRate?: number;
   
   // Permissions
   canViewLeadPhoneNumber?: boolean;
