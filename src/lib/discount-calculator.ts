@@ -1,13 +1,56 @@
 
 // /src/lib/discount-calculator.ts
-import type { SavingsResult } from "@/types";
+import type { SavingsResult, StateInfo } from "@/types";
+import { statesData } from "@/data/state-data";
 
 // Constants
 const MIN_BILL_AMOUNT_VALID = 50; 
 const MAX_BILL_AMOUNT_VALID = 100000; 
 const FIXED_DISCOUNT_NO_FIDELITY = 0.15; // 15%
+const KWH_TO_R_FACTOR = 1.0907;
 
-export function calculateSavings(billAmountInReais: number, isFidelityEnabled: boolean): SavingsResult {
+const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolean): SavingsResult => {
+    const kwh = billAmountInReais / KWH_TO_R_FACTOR;
+    let baseDiscountRate: number;
+    let savingsRange: { min: number; max: number };
+    let description: string;
+
+    if (kwh <= 20000) {
+        baseDiscountRate = isFidelityEnabled ? 0.15 : 0.10; // Base de 15% (com fidelidade) ou 10% (sem)
+        savingsRange = { min: 0.10, max: 0.18 };
+        description = `Para o DF, com consumo até 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
+    } else { // acima de 20000 kWh
+        baseDiscountRate = 0.20;
+        savingsRange = { min: 0.20, max: 0.28 };
+        description = `Para o DF, com consumo acima de 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
+    }
+
+    // A média representa um cenário anual ponderado.
+    const averageDiscountRate = (savingsRange.min + savingsRange.max) / 2;
+
+    const totalSavingsYear = billAmountInReais * 12 * averageDiscountRate;
+    const averageMonthlySaving = totalSavingsYear / 12;
+    const effectiveAnnualDiscountPercentage = averageDiscountRate * 100;
+    const newMonthlyBillWithPlanus = billAmountInReais - averageMonthlySaving;
+
+    return {
+        effectiveAnnualDiscountPercentage: parseFloat(effectiveAnnualDiscountPercentage.toFixed(2)),
+        monthlySaving: parseFloat(averageMonthlySaving.toFixed(2)),
+        annualSaving: parseFloat(totalSavingsYear.toFixed(2)),
+        discountDescription: description,
+        originalMonthlyBill: parseFloat(billAmountInReais.toFixed(2)),
+        newMonthlyBillWithPlanus: parseFloat(newMonthlyBillWithPlanus.toFixed(2)),
+    };
+};
+
+
+export function calculateSavings(billAmountInReais: number, isFidelityEnabled: boolean, stateCode?: string | null): SavingsResult {
+  
+  if (stateCode === 'DF') {
+    return calculateDFSavings(billAmountInReais, isFidelityEnabled);
+  }
+
+  // --- Lógica original para os outros estados ---
   let effectiveAnnualDiscountPercentage: number;
   let discountDescription: string;
   let totalSavingsYear: number;

@@ -193,7 +193,7 @@ function CalculatorPageContent() {
       newPlanusInvoiceData.companyInscEst = "";
 
       const valorEnergiaOriginalNum = parseLocaleNumberString(newOriginalInvoiceData.item1Valor);
-      const currentSavingsResult = calculateSavings(valorEnergiaOriginalNum, fidelityParam);
+      const currentSavingsResult = calculateSavings(valorEnergiaOriginalNum, fidelityParam, uf);
       setSavings(currentSavingsResult);
       
       const ligacaoParam = params.get("ligacao") || "NAO_INFORMADO";
@@ -325,7 +325,7 @@ function CalculatorPageContent() {
 
     if (selectedState && selectedState.available && !showMap && !shouldShowInvoiceEditor) {
       const billAmountInReais = currentKwh * KWH_TO_R_FACTOR;
-      setSavings(calculateSavings(billAmountInReais, isFidelityEnabled));
+      setSavings(calculateSavings(billAmountInReais, isFidelityEnabled, selectedState.abbreviation));
     } else if (!shouldShowInvoiceEditor) { 
       setSavings(null); 
     }
