@@ -17,6 +17,13 @@ export interface StateInfo {
   available: boolean;
 }
 
+export interface SavingsByFlag {
+  green: { rate: number };
+  yellow: { rate: number };
+  red1: { rate: number };
+  red2: { rate: number };
+}
+
 export interface SavingsResult {
   effectiveAnnualDiscountPercentage: number;
   monthlySaving: number;
@@ -24,6 +31,7 @@ export interface SavingsResult {
   discountDescription: string;
   originalMonthlyBill: number;
   newMonthlyBillWithPlanus: number;
+  savingsByFlag?: SavingsByFlag; // Optional property for DF-specific breakdown
 }
 
 // Manter tipos existentes
@@ -91,4 +99,5 @@ export interface FieldConfig {
   className?: string;
   isTextarea?: boolean;
 }
+
 

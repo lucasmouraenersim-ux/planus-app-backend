@@ -1,6 +1,6 @@
 
 // /src/lib/discount-calculator.ts
-import type { SavingsResult, StateInfo } from "@/types";
+import type { SavingsResult, StateInfo, SavingsByFlag } from "@/types";
 import { statesData } from "@/data/state-data";
 
 // Constants
@@ -11,17 +11,27 @@ const KWH_TO_R_FACTOR = 1.0907;
 
 const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolean): SavingsResult => {
     const kwh = billAmountInReais / KWH_TO_R_FACTOR;
-    let baseDiscountRate: number;
-    let savingsRange: { min: number; max: number };
+    let savingsByFlag: SavingsByFlag;
     let description: string;
+    let savingsRange: { min: number; max: number };
 
     if (kwh <= 20000) {
-        baseDiscountRate = isFidelityEnabled ? 0.15 : 0.10; // Base de 15% (com fidelidade) ou 10% (sem)
-        savingsRange = { min: 0.10, max: 0.18 };
+        savingsByFlag = {
+            green: { rate: isFidelityEnabled ? 0.10 : 0.08 }, // 10% (com) ou 8% (sem)
+            yellow: { rate: isFidelityEnabled ? 0.13 : 0.11 },
+            red1: { rate: isFidelityEnabled ? 0.15 : 0.13 },
+            red2: { rate: isFidelityEnabled ? 0.18 : 0.15 }
+        };
+        savingsRange = { min: savingsByFlag.green.rate, max: savingsByFlag.red2.rate };
         description = `Para o DF, com consumo até 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
     } else { // acima de 20000 kWh
-        baseDiscountRate = 0.20;
-        savingsRange = { min: 0.20, max: 0.28 };
+        savingsByFlag = {
+            green: { rate: 0.20 },
+            yellow: { rate: 0.23 },
+            red1: { rate: 0.25 },
+            red2: { rate: 0.28 }
+        };
+        savingsRange = { min: savingsByFlag.green.rate, max: savingsByFlag.red2.rate };
         description = `Para o DF, com consumo acima de 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
     }
 
@@ -40,6 +50,7 @@ const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolea
         discountDescription: description,
         originalMonthlyBill: parseFloat(billAmountInReais.toFixed(2)),
         newMonthlyBillWithPlanus: parseFloat(newMonthlyBillWithPlanus.toFixed(2)),
+        savingsByFlag, // Include the detailed breakdown
     };
 };
 

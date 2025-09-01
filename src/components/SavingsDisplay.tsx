@@ -5,7 +5,7 @@
 import type { SavingsResult } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, AlertTriangle } from "lucide-react";
+import { FileText, AlertTriangle, Droplets } from "lucide-react";
 import Link from "next/link";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
@@ -72,6 +72,14 @@ export function SavingsDisplay({ savings, currentKwh, selectedStateCode }: Savin
       </Card>
     );
   }
+  
+  const FlagIndicator = ({ color, label, rate }: { color: string, label: string, rate: number }) => (
+    <div className="flex items-center space-x-2">
+      <div className={`w-3 h-3 rounded-full ${color}`} />
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <span className="text-xs font-bold text-foreground">{rate.toFixed(0)}%</span>
+    </div>
+  );
 
   return (
     <Card className="w-full shadow-lg animate-in fade-in-50 bg-card/70 backdrop-blur-lg border text-card-foreground rounded-lg">
@@ -109,6 +117,18 @@ export function SavingsDisplay({ savings, currentKwh, selectedStateCode }: Savin
             </ChartContainer>
           </div>
         </div>
+
+        {savings.savingsByFlag && (
+          <div className="pt-4 border-t border-border">
+            <h4 className="text-sm font-semibold text-center mb-3">Desconto Efetivo por Bandeira Tarifária</h4>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-2 gap-y-2 justify-items-center">
+              <FlagIndicator color="bg-green-500" label="Verde" rate={savings.savingsByFlag.green.rate * 100} />
+              <FlagIndicator color="bg-yellow-400" label="Amarela" rate={savings.savingsByFlag.yellow.rate * 100} />
+              <FlagIndicator color="bg-red-500" label="Vermelha 1" rate={savings.savingsByFlag.red1.rate * 100} />
+              <FlagIndicator color="bg-red-700" label="Vermelha 2" rate={savings.savingsByFlag.red2.rate * 100} />
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
           <div>
