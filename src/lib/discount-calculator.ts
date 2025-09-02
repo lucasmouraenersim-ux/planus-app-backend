@@ -1,4 +1,3 @@
-
 // /src/lib/discount-calculator.ts
 import type { SavingsResult, StateInfo, SavingsByFlag } from "@/types";
 import { statesData } from "@/data/state-data";
@@ -15,15 +14,24 @@ const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolea
     let description: string;
     let savingsRange: { min: number; max: number };
 
-    if (kwh <= 20000) {
+    if (kwh <= 5000) {
         savingsByFlag = {
-            green: { rate: isFidelityEnabled ? 0.10 : 0.08 }, // 10% (com) ou 8% (sem)
+            green: { rate: isFidelityEnabled ? 0.10 : 0.08 },
             yellow: { rate: isFidelityEnabled ? 0.13 : 0.11 },
             red1: { rate: isFidelityEnabled ? 0.15 : 0.13 },
             red2: { rate: isFidelityEnabled ? 0.18 : 0.15 }
         };
         savingsRange = { min: savingsByFlag.green.rate, max: savingsByFlag.red2.rate };
-        description = `Para o DF, com consumo até 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
+        description = `Para o DF, com consumo até 5.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
+    } else if (kwh > 5000 && kwh <= 20000) {
+        savingsByFlag = {
+            green: { rate: 0.15 },
+            yellow: { rate: 0.18 },
+            red1: { rate: 0.21 },
+            red2: { rate: 0.23 }
+        };
+        savingsRange = { min: savingsByFlag.green.rate, max: savingsByFlag.red2.rate };
+        description = `Para o DF, com consumo de 5.000 a 20.000 kWh, o desconto varia de ${savingsRange.min*100}% a ${savingsRange.max*100}% de acordo com a bandeira tarifária.`;
     } else { // acima de 20000 kWh
         savingsByFlag = {
             green: { rate: 0.20 },
@@ -36,7 +44,7 @@ const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolea
     }
 
     // A média representa um cenário anual ponderado.
-    const averageDiscountRate = (savingsRange.min + savingsRange.max) / 2;
+    const averageDiscountRate = (savingsByFlag.green.rate + savingsByFlag.red1.rate) / 2;
 
     const totalSavingsYear = billAmountInReais * 12 * averageDiscountRate;
     const averageMonthlySaving = totalSavingsYear / 12;
