@@ -13,6 +13,7 @@ import { auth, db } from '@/lib/firebase';
 import { cn } from "@/lib/utils";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { STAGES_CONFIG } from '@/config/crm-stages';
+import CompanyCommissionsTable from './CompanyCommissionsTable';
 
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -67,6 +68,7 @@ import {
     Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
   { id: 'wd1', userId: 'user1', userEmail: 'vendedor1@example.com', userName: 'Vendedor Um', amount: 500, pixKeyType: 'CPF/CNPJ', pixKey: '111.111.111-11', status: 'pendente', requestedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'personal' },
@@ -486,180 +488,201 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Comissões Pagas</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.paidCommissions)}</div></CardContent></Card>
-        <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Saques Pendentes</CardTitle><WalletCards className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.pendingCommissions)}</div></CardContent></Card>
-        <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Leads Finalizados (Período)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.finalizedLeadsValue)}</div><p className="text-xs text-muted-foreground">{filteredLeads.filter(l=>l.stageId === 'finalizado').length} leads</p></CardContent></Card>
-        <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Total de Usuários</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{initialUsers.length}</div></CardContent></Card>
-      </div>
+      <Tabs defaultValue="dashboard">
+        <TabsList className="mb-4">
+          <TabsTrigger value="dashboard"><Activity className="mr-2 h-4 w-4"/>Dashboard</TabsTrigger>
+          <TabsTrigger value="users"><Users className="mr-2 h-4 w-4"/>Usuários</TabsTrigger>
+          <TabsTrigger value="commissions"><ClipboardList className="mr-2 h-4 w-4"/>Comissões por Empresas</TabsTrigger>
+          <TabsTrigger value="withdrawals"><WalletCards className="mr-2 h-4 w-4"/>Saques</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="dashboard" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Comissões Pagas</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.paidCommissions)}</div></CardContent></Card>
+            <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Saques Pendentes</CardTitle><WalletCards className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.pendingCommissions)}</div></CardContent></Card>
+            <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Leads Finalizados (Período)</CardTitle><DollarSign className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(aggregatedMetrics.finalizedLeadsValue)}</div><p className="text-xs text-muted-foreground">{filteredLeads.filter(l=>l.stageId === 'finalizado').length} leads</p></CardContent></Card>
+            <Card className="bg-card/70 backdrop-blur-lg border"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium text-primary">Total de Usuários</CardTitle><Users className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold">{initialUsers.length}</div></CardContent></Card>
+          </div>
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-          <Card className="bg-card/70 backdrop-blur-lg border">
-              <CardHeader>
-                  <CardTitle className="text-primary flex items-center"><TrendingUp className="mr-2 h-5 w-5"/>Funil de Vendas</CardTitle>
-                  <CardDescription>Conversão de leads entre estágios no período selecionado.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                  {funnelMetrics.length > 0 ? (
-                      funnelMetrics.map((stage, index) => (
-                          <div key={stage.name} className="flex items-center">
-                              <div className="flex-1 space-y-1">
-                                  <div className="flex justify-between">
-                                      <p className="font-medium">{stage.name}</p>
-                                      <p className="font-semibold text-foreground">{stage.value} Leads</p>
+          <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+              <Card className="bg-card/70 backdrop-blur-lg border">
+                  <CardHeader>
+                      <CardTitle className="text-primary flex items-center"><TrendingUp className="mr-2 h-5 w-5"/>Funil de Vendas</CardTitle>
+                      <CardDescription>Conversão de leads entre estágios no período selecionado.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                      {funnelMetrics.length > 0 ? (
+                          funnelMetrics.map((stage, index) => (
+                              <div key={stage.name} className="flex items-center">
+                                  <div className="flex-1 space-y-1">
+                                      <div className="flex justify-between">
+                                          <p className="font-medium">{stage.name}</p>
+                                          <p className="font-semibold text-foreground">{stage.value} Leads</p>
+                                      </div>
+                                      <div className="h-2 w-full bg-muted rounded-full">
+                                          <div className="h-2 bg-primary rounded-full" style={{ width: `${(stage.value / funnelMetrics[0].value) * 100}%` }}></div>
+                                      </div>
                                   </div>
-                                  <div className="h-2 w-full bg-muted rounded-full">
-                                      <div className="h-2 bg-primary rounded-full" style={{ width: `${(stage.value / funnelMetrics[0].value) * 100}%` }}></div>
-                                  </div>
+                                  {index > 0 && (
+                                      <div className="text-center w-24 flex-shrink-0">
+                                          <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground" />
+                                          <p className="text-xs font-semibold text-green-500">{stage.conversion}</p>
+                                      </div>
+                                  )}
                               </div>
-                              {index > 0 && (
-                                  <div className="text-center w-24 flex-shrink-0">
-                                      <ArrowRight className="h-4 w-4 mx-auto text-muted-foreground" />
-                                      <p className="text-xs font-semibold text-green-500">{stage.conversion}</p>
-                                  </div>
-                              )}
-                          </div>
-                      ))
-                  ) : (
-                      <p className="text-center text-muted-foreground py-10">Nenhum dado para o funil neste período.</p>
-                  )}
-              </CardContent>
-          </Card>
+                          ))
+                      ) : (
+                          <p className="text-center text-muted-foreground py-10">Nenhum dado para o funil neste período.</p>
+                      )}
+                  </CardContent>
+              </Card>
+              <Card className="bg-card/70 backdrop-blur-lg border">
+                  <CardHeader>
+                      <CardTitle className="text-primary flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Origem dos Leads Convertidos</CardTitle>
+                      <CardDescription>Distribuição de fontes para leads finalizados no período.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="h-[300px]">
+                      {leadSourceMetrics.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                  <Pie data={leadSourceMetrics} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => { const radius = innerRadius + (outerRadius - innerRadius) * 1.2; const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180)); const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180)); return (<text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs fill-muted-foreground">{`${(percent * 100).toFixed(0)}%`}</text>);}}>
+                                      {leadSourceMetrics.map((entry, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}
+                                  </Pie>
+                                  <RechartsTooltip formatter={(value: number) => `${value} leads`} />
+                                  <Legend />
+                              </PieChart>
+                          </ResponsiveContainer>
+                      ) : (
+                          <p className="text-center text-muted-foreground pt-10">Nenhum lead convertido no período para exibir.</p>
+                      )}
+                  </CardContent>
+              </Card>
+          </div>
+
           <Card className="bg-card/70 backdrop-blur-lg border">
               <CardHeader>
-                  <CardTitle className="text-primary flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Origem dos Leads Convertidos</CardTitle>
-                  <CardDescription>Distribuição de fontes para leads finalizados no período.</CardDescription>
+                  <CardTitle className="text-primary flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5"/>Relatório de Performance por Vendedor</CardTitle>
+                  <CardDescription>Análise detalhada do desempenho da equipe no período.</CardDescription>
               </CardHeader>
-              <CardContent className="h-[300px]">
-                  {leadSourceMetrics.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                              <Pie data={leadSourceMetrics} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => { const radius = innerRadius + (outerRadius - innerRadius) * 1.2; const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180)); const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180)); return (<text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs fill-muted-foreground">{`${(percent * 100).toFixed(0)}%`}</text>);}}>
-                                  {leadSourceMetrics.map((entry, index) => <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}
-                              </Pie>
-                              <RechartsTooltip formatter={(value: number) => `${value} leads`} />
-                              <Legend />
-                          </PieChart>
-                      </ResponsiveContainer>
+              <CardContent>
+                  {sellerPerformanceMetrics.length > 0 ? (
+                      <Table>
+                          <TableHeader><TableRow><TableHead>Vendedor</TableHead><TableHead>Leads Trabalhados</TableHead><TableHead>Leads Finalizados</TableHead><TableHead>Taxa de Conversão</TableHead><TableHead>Tempo Médio de Fechamento</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                              {sellerPerformanceMetrics.map(seller => (
+                                  <TableRow key={seller.uid}>
+                                      <TableCell className="font-medium">{seller.name}</TableCell>
+                                      <TableCell>{seller.totalLeads}</TableCell>
+                                      <TableCell className="font-semibold text-primary">{seller.finalizedLeads}</TableCell>
+                                      <TableCell>{seller.conversionRate}</TableCell>
+                                      <TableCell>{seller.avgTimeToClose}</TableCell>
+                                  </TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
                   ) : (
-                      <p className="text-center text-muted-foreground pt-10">Nenhum lead convertido no período para exibir.</p>
+                      <p className="text-center text-muted-foreground py-10">Nenhum dado de performance para exibir no período selecionado.</p>
                   )}
               </CardContent>
           </Card>
-      </div>
+        </TabsContent>
+        
+        <TabsContent value="users">
+            <Card className="bg-card/70 backdrop-blur-lg border">
+                <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários e suas comissões.</CardDescription></div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
+                    {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
+                </div>
+                </CardHeader>
+                <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                    <div className="relative flex-1"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nome, email ou CPF..." className="pl-8" value={userSearchTerm} onChange={(e) => setUserSearchTerm(e.target.value)} /></div>
+                    <Select value={userTypeFilter} onValueChange={(value) => setUserTypeFilter(value as UserType | 'all')}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filtrar por tipo" /></SelectTrigger><SelectContent>{USER_TYPE_FILTER_OPTIONS.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select>
+                </div>
+                {isLoadingUsersProp ? (<div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : filteredUsers.length === 0 ? (<p className="text-center text-muted-foreground py-4">Nenhum usuário encontrado com os filtros atuais.</p>) : (
+                    <Table>
+                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>CPF</TableHead><TableHead>Telefone</TableHead><TableHead>Tipo</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {filteredUsers.map(user => (
+                        <TableRow key={user.uid}>
+                            <TableCell className="font-medium"><div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /><AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar>{user.displayName || user.email?.split('@')[0] || 'N/A'}</div></TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>{user.cpf ? `${user.cpf.slice(0,3)}.${user.cpf.slice(3,6)}.${user.cpf.slice(6,9)}-${user.cpf.slice(9,11)}` : 'N/A'}</TableCell>
+                            <TableCell>{user.phone || 'N/A'}</TableCell>
+                            <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
+                            <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
+                            <TableCell className="text-right">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
+                                    <Edit2 className="h-4 w-4 mr-2" />
+                                    Ver / Editar Detalhes
+                                </DropdownMenuItem>
+                                {canEdit && <DropdownMenuSeparator />}
+                                {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
+                                    <ShieldAlert className="mr-2 h-4 w-4" />
+                                    Redefinir Senha
+                                </DropdownMenuItem>)}
+                                {canEdit && (
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}>
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Excluir Usuário
+                                    </DropdownMenuItem>
+                                )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                    </Table>
+                )}
+                </CardContent>
+            </Card>
+        </TabsContent>
 
-      <Card className="bg-card/70 backdrop-blur-lg border">
-          <CardHeader>
-              <CardTitle className="text-primary flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5"/>Relatório de Performance por Vendedor</CardTitle>
-              <CardDescription>Análise detalhada do desempenho da equipe no período.</CardDescription>
-          </CardHeader>
-          <CardContent>
-              {sellerPerformanceMetrics.length > 0 ? (
-                  <Table>
-                      <TableHeader><TableRow><TableHead>Vendedor</TableHead><TableHead>Leads Trabalhados</TableHead><TableHead>Leads Finalizados</TableHead><TableHead>Taxa de Conversão</TableHead><TableHead>Tempo Médio de Fechamento</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                          {sellerPerformanceMetrics.map(seller => (
-                              <TableRow key={seller.uid}>
-                                  <TableCell className="font-medium">{seller.name}</TableCell>
-                                  <TableCell>{seller.totalLeads}</TableCell>
-                                  <TableCell className="font-semibold text-primary">{seller.finalizedLeads}</TableCell>
-                                  <TableCell>{seller.conversionRate}</TableCell>
-                                  <TableCell>{seller.avgTimeToClose}</TableCell>
-                              </TableRow>
-                          ))}
-                      </TableBody>
-                  </Table>
-              ) : (
-                  <p className="text-center text-muted-foreground py-10">Nenhum dado de performance para exibir no período selecionado.</p>
-              )}
-          </CardContent>
-      </Card>
+        <TabsContent value="commissions">
+            <CompanyCommissionsTable leads={filteredLeads} />
+        </TabsContent>
 
-      <Card className="bg-card/70 backdrop-blur-lg border">
-        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários e suas comissões.</CardDescription></div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button onClick={handleProcessOldWithdrawals} size="sm" variant="outline" disabled={isProcessingWithdrawals}>
-              {isProcessingWithdrawals ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />}
-              Processar Saques Antigos
-            </Button>
-            <Button onClick={handleSyncSellers} size="sm" variant="outline" disabled={isSyncing}>
-              {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shuffle className="mr-2 h-4 w-4" />}
-                Sincronizar Vendedores
-            </Button>
-            <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
-            {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <div className="relative flex-1"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por nome, email ou CPF..." className="pl-8" value={userSearchTerm} onChange={(e) => setUserSearchTerm(e.target.value)} /></div>
-            <Select value={userTypeFilter} onValueChange={(value) => setUserTypeFilter(value as UserType | 'all')}><SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filtrar por tipo" /></SelectTrigger><SelectContent>{USER_TYPE_FILTER_OPTIONS.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select>
-          </div>
-          {isLoadingUsersProp ? (<div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : filteredUsers.length === 0 ? (<p className="text-center text-muted-foreground py-4">Nenhum usuário encontrado com os filtros atuais.</p>) : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>CPF</TableHead><TableHead>Telefone</TableHead><TableHead>Tipo</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {filteredUsers.map(user => (
-                  <TableRow key={user.uid}>
-                    <TableCell className="font-medium"><div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /><AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar>{user.displayName || user.email?.split('@')[0] || 'N/A'}</div></TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.cpf ? `${user.cpf.slice(0,3)}.${user.cpf.slice(3,6)}.${user.cpf.slice(6,9)}-${user.cpf.slice(9,11)}` : 'N/A'}</TableCell>
-                    <TableCell>{user.phone || 'N/A'}</TableCell>
-                    <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
-                    <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
-                            <Edit2 className="h-4 w-4 mr-2" />
-                            Ver / Editar Detalhes
-                          </DropdownMenuItem>
-                          {canEdit && <DropdownMenuSeparator />}
-                          {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
-                            <ShieldAlert className="mr-2 h-4 w-4" />
-                            Redefinir Senha
-                          </DropdownMenuItem>)}
-                          {canEdit && (
-                            <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Excluir Usuário
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="withdrawals">
+            <Card className="bg-card/70 backdrop-blur-lg border">
+                <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <CardTitle className="text-primary">Solicitações de Saque</CardTitle>
+                        <CardDescription>Gerencie as solicitações de saque dos usuários.</CardDescription>
+                    </div>
+                     <Button onClick={handleProcessOldWithdrawals} size="sm" variant="outline" disabled={isProcessingWithdrawals}>
+                        {isProcessingWithdrawals ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />}
+                        Processar Saques Antigos
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                <Input placeholder="Buscar por usuário ou chave PIX..." className="mb-4" />
+                <Table>
+                    <TableHeader><TableRow><TableHead>Usuário</TableHead><TableHead>Valor</TableHead><TableHead>Tipo</TableHead><TableHead>Chave PIX</TableHead><TableHead>Solicitado em</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                    {withdrawalRequests.map(req => (
+                        <TableRow key={req.id}>
+                        <TableCell>{req.userName || req.userEmail}</TableCell><TableCell>{formatCurrency(req.amount)}</TableCell>
+                        <TableCell>{req.withdrawalType === 'personal' ? 'Pessoal' : 'Rede MLM'}</TableCell><TableCell title={req.pixKey} className="truncate max-w-[150px]">{req.pixKeyType}: {req.pixKey}</TableCell>
+                        <TableCell>{req.requestedAt ? format(parseISO(req.requestedAt as string), "dd/MM/yy HH:mm") : 'N/A'}</TableCell>
+                        <TableCell><span className={`px-2 py-1 text-xs rounded-full ${req.status === 'concluido' ? 'bg-green-500/20 text-green-400' : req.status === 'pendente' ? 'bg-yellow-500/20 text-yellow-400' : req.status === 'falhou' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>{req.status}</span></TableCell>
+                        <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => handleOpenUpdateWithdrawalModal(req)}><ExternalLink className="h-3 w-3 mr-1"/>Detalhes</Button></TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
 
-      <Card className="bg-card/70 backdrop-blur-lg border">
-        <CardHeader><CardTitle className="text-primary">Solicitações de Saque</CardTitle></CardHeader>
-        <CardContent>
-          <Input placeholder="Buscar por usuário ou chave PIX..." className="mb-4" />
-          <Table>
-            <TableHeader><TableRow><TableHead>Usuário</TableHead><TableHead>Valor</TableHead><TableHead>Tipo</TableHead><TableHead>Chave PIX</TableHead><TableHead>Solicitado em</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {withdrawalRequests.map(req => (
-                <TableRow key={req.id}>
-                  <TableCell>{req.userName || req.userEmail}</TableCell><TableCell>{formatCurrency(req.amount)}</TableCell>
-                  <TableCell>{req.withdrawalType === 'personal' ? 'Pessoal' : 'Rede MLM'}</TableCell><TableCell title={req.pixKey} className="truncate max-w-[150px]">{req.pixKeyType}: {req.pixKey}</TableCell>
-                  <TableCell>{req.requestedAt ? format(parseISO(req.requestedAt as string), "dd/MM/yy HH:mm") : 'N/A'}</TableCell>
-                  <TableCell><span className={`px-2 py-1 text-xs rounded-full ${req.status === 'concluido' ? 'bg-green-500/20 text-green-400' : req.status === 'pendente' ? 'bg-yellow-500/20 text-yellow-400' : req.status === 'falhou' ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>{req.status}</span></TableCell>
-                  <TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => handleOpenUpdateWithdrawalModal(req)}><ExternalLink className="h-3 w-3 mr-1"/>Detalhes</Button></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
 
       {/* Modals */}
       <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></DialogFooter></form></Form></DialogContent></Dialog>
