@@ -97,11 +97,11 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
                 <TableHead>Comissão Imediata (R$)</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>2ª Comissão (R$)</TableHead>
-                <TableHead>Data</TableHead>
+                <TableHead>Data.1</TableHead>
                 <TableHead>3ª Comissão (R$)</TableHead>
-                <TableHead>Data</TableHead>
+                <TableHead>Data.2</TableHead>
                 <TableHead>4ª Comissão (R$)</TableHead>
-                <TableHead>Data</TableHead>
+                <TableHead>Data.3</TableHead>
                 <TableHead>Comissão Total (R$)</TableHead>
                 <TableHead>Comissão Promotor (R$)</TableHead>
 
@@ -113,6 +113,7 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
                 <TableHead>Garantia Churn (R$)</TableHead>
                 <TableHead>Comercializador (R$)</TableHead>
                 <TableHead>Nota</TableHead>
+                <TableHead>Data.4</TableHead>
 
                 {/* Recorrência */}
                 <TableHead>Recorrência Comissão (R$)</TableHead>
@@ -146,6 +147,7 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
                     <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
                     <TableCell>{formatCurrency(row.comercializador)}</TableCell>
                     <TableCell>{row.nota}</TableCell>
+                    <TableCell></TableCell> {/* Data.4 is empty */}
                     <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
                     <TableCell>{formatCurrency(row.recorrenciaCaixa)}</TableCell>
                 </TableRow>
