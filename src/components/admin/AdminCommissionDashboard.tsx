@@ -91,7 +91,7 @@ const editUserFormSchema = z.object({
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
   commissionRate: z.preprocess(
     (val) => (val === '' || val === null || val === undefined ? undefined : Number(val)),
-    z.number({ invalid_type_error: "Deve ser um número" }).min(0, "Deve ser no mínimo 0").max(220, "Não pode exceder 220").optional()
+    z.number({ invalid_type_error: "Deve ser um número" }).min(0, "Deve ser no mínimo 0").max(100, "Não pode exceder 100").optional()
   ),
   mlmEnabled: z.boolean().default(false),
   uplineUid: z.string().optional(),
@@ -647,7 +647,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="commissions">
-            <CompanyCommissionsTable leads={allLeads} />
+            <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
         </TabsContent>
 
         <TabsContent value="withdrawals">

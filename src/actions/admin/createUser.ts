@@ -72,7 +72,7 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       phone: input.phone ? input.phone.replace(/\D/g, '') : '',
       personalBalance: 0,
       mlmBalance: 0,
-      commissionRate: 80,
+      commissionRate: 40,
       canViewLeadPhoneNumber: false,
       canViewCrm: false,
       canViewCareerPlan: false,
