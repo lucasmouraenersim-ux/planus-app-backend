@@ -26,9 +26,16 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
   };
 
   const tableData = useMemo(() => {
-    return leads.map(lead => {
-        const comissaoTotal = (lead.valueAfterDiscount || 0) * 0.40; // Exemplo de cálculo
+    // Filtra apenas os leads com status 'finalizado'
+    const finalizedLeads = leads.filter(lead => lead.stageId === 'finalizado');
+
+    return finalizedLeads.map(lead => {
+        // Exemplo de cálculo: Comissão total de 40% sobre o valor da proposta.
+        // Este cálculo pode ser ajustado conforme as regras de negócio reais.
+        const comissaoTotal = (lead.valueAfterDiscount || 0) * 0.40; 
+        
         return {
+            // Dados reais do Lead
             promotor: lead.sellerName || 'N/A',
             cliente: lead.name,
             status: lead.stageId,
@@ -36,25 +43,29 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
             kwh: lead.kwh || 0,
             proposta: lead.valueAfterDiscount || 0,
             desagil: `${(lead.discountPercentage || 0).toFixed(1)}%`,
-            comissaoImediata: comissaoTotal * 0.5, // Exemplo
+            
+            // Dados de placeholder para preenchimento manual futuro
+            comissaoImediata: comissaoTotal * 0.5, // Exemplo: 50% da comissão total
             dataComissaoImediata: "3 dias depois",
-            segundaComissao: comissaoTotal * 0.25, // Exemplo
+            segundaComissao: comissaoTotal * 0.25, // Exemplo: 25% da comissão total
             dataSegundaComissao: "45 dias depois",
-            terceiraComissao: comissaoTotal * 0.25, // Exemplo
+            terceiraComissao: comissaoTotal * 0.25, // Exemplo: 25% da comissão total
             dataTerceiraComissao: "4 meses depois",
-            quartaComissao: 0,
+            quartaComissao: 0, // Placeholder
             dataQuartaComissao: "6 meses depois",
             comissaoTotal: comissaoTotal,
-            comissaoPromotor: comissaoTotal,
-            lucroBruto: (lead.value || 0) - (lead.valueAfterDiscount || 0), // Exemplo
-            lucroLiq: ((lead.value || 0) - (lead.valueAfterDiscount || 0)) * 0.7, // Exemplo
-            jurosPerc: "12%",
+            comissaoPromotor: comissaoTotal, // Assumindo que a comissão total vai para o promotor
+
+            // Detalhes financeiros (placeholders)
+            lucroBruto: (lead.value || 0) - (lead.valueAfterDiscount || 0), // Exemplo simples de lucro
+            lucroLiq: ((lead.value || 0) - (lead.valueAfterDiscount || 0)) * 0.7, // Exemplo com impostos
+            jurosPerc: "12%", // Placeholder
             jurosRS: ((lead.value || 0) - (lead.valueAfterDiscount || 0)) * 0.12, // Exemplo
-            garantiaChurn: 0,
-            comercializador: 0,
-            nota: 0,
-            recorrenciaComissao: 0,
-            recorrenciaCaixa: 0,
+            garantiaChurn: 0, // Placeholder
+            comercializador: 0, // Placeholder
+            nota: 0, // Placeholder
+            recorrenciaComissao: 0, // Placeholder
+            recorrenciaCaixa: 0, // Placeholder
         }
     });
   }, [leads]);
@@ -64,7 +75,7 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
       <CardHeader>
         <CardTitle>Comissões por Empresas</CardTitle>
         <CardDescription>
-          Visão detalhada das propostas de energia e pagamentos de comissões associados.
+          Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads finalizados).
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -109,11 +120,11 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {tableData.map((row, index) => (
+                {tableData.length > 0 ? tableData.map((row, index) => (
                 <TableRow key={index}>
                     <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.promotor}</TableCell>
                     <TableCell>{row.cliente}</TableCell>
-                    <TableCell><Badge className={getStageBadgeStyle(row.status)}>{STAGES_CONFIG.find(s => s.id === row.status)?.title || row.status}</Badge></TableCell>
+                    <TableCell><Badge className={getStageBadgeStyle(row.status as any)}>{STAGES_CONFIG.find(s => s.id === row.status)?.title || row.status}</Badge></TableCell>
                     <TableCell>{row.empresa}</TableCell>
                     <TableCell>{row.kwh.toLocaleString('pt-BR')}</TableCell>
                     <TableCell>{formatCurrency(row.proposta)}</TableCell>
@@ -138,7 +149,11 @@ export default function CompanyCommissionsTable({ leads }: CompanyCommissionsTab
                     <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
                     <TableCell>{formatCurrency(row.recorrenciaCaixa)}</TableCell>
                 </TableRow>
-                ))}
+                )) : (
+                    <TableRow>
+                        <TableCell colSpan={26} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                    </TableRow>
+                )}
             </TableBody>
             </Table>
             <ScrollBar orientation="horizontal" />
