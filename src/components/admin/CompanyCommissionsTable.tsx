@@ -214,7 +214,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                             type="number"
                             value={row.desagil}
                             onChange={(e) => handleDesagilChange(row.id, e.target.value)}
-                            className="h-8 text-right"
+                            className="h-8 text-right bg-yellow-100 dark:bg-yellow-900/50"
                         />
                     </TableCell>
                     <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
