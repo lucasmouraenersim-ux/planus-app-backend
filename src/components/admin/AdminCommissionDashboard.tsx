@@ -647,7 +647,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="commissions">
-            <CompanyCommissionsTable leads={filteredLeads} />
+            <CompanyCommissionsTable leads={allLeads} />
         </TabsContent>
 
         <TabsContent value="withdrawals">
