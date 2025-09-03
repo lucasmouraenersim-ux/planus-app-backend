@@ -76,6 +76,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, lead.userId);
+        const comissaoImediataInitial = proposta * 0.5;
 
         return {
             id: lead.id,
@@ -87,7 +88,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             kwh: lead.kwh || 0,
             proposta: proposta,
             desagil: desagilInitial,
-            comissaoImediata: 0, // Placeholder
+            comissaoImediata: comissaoImediataInitial,
             dataComissaoImediata: "3 dias depois",
             segundaComissao: 0, // Placeholder
             dataSegundaComissao: "45 dias depois",
