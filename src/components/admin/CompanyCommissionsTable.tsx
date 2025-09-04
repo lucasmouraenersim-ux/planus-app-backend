@@ -202,7 +202,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         if (empresa === 'BC') {
             segundaComissao = proposta * 0.45;
         } else if (empresa === 'Origo') {
-            segundaComissaoPerc = 120; // Defaulting to 120% for Origo
+            segundaComissaoPerc = 100; // Defaulting to 100% for Origo
             segundaComissao = proposta * (segundaComissaoPerc / 100);
         } else if (empresa === 'Fit Energia') {
             segundaComissao = proposta * 0.60;
@@ -498,11 +498,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
-                                    <SelectItem value="80">80% ({formatCurrency(row.proposta * 0.8)})</SelectItem>
-                                    <SelectItem value="90">90% ({formatCurrency(row.proposta * 0.9)})</SelectItem>
                                     <SelectItem value="100">100% ({formatCurrency(row.proposta * 1.0)})</SelectItem>
-                                    <SelectItem value="120">120% ({formatCurrency(row.proposta * 1.2)})</SelectItem>
-                                    <SelectItem value="150">150% ({formatCurrency(row.proposta * 1.5)})</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
