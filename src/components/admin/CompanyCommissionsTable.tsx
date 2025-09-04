@@ -1,3 +1,4 @@
+
 // src/components/admin/CompanyCommissionsTable.tsx
 "use client";
 
@@ -126,7 +127,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const initialData = finalizedLeads.map(lead => {
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
-        const empresa = lead.concessionaria && EMPRESA_OPTIONS.includes(lead.concessionaria) ? lead.concessionaria : '';
+        const empresa = 'Bowe'; // Default all existing leads to Bowe
         const promotorId = lead.userId;
 
         // Comissão do Promotor
