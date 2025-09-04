@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, differenceInDays } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -191,6 +191,18 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             }
             terceiraComissao = proposta * (terceiraComissaoPerc / 100);
         }
+
+        // Check if the lead was finalized more than 120 days ago
+        let recorrenciaPagaInitial = false;
+        let financialStatusInitial: TableRowData['financialStatus'] = 'none';
+        if (lead.completedAt) {
+            const completedDate = parseISO(lead.completedAt);
+            const daysSinceCompletion = differenceInDays(new Date(), completedDate);
+            if (daysSinceCompletion > 120) {
+                recorrenciaPagaInitial = true;
+                financialStatusInitial = 'Adimplente';
+            }
+        }
         
         const partialRow = {
             id: lead.id,
@@ -216,8 +228,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             recorrenciaPerc: recorrenciaPercInitial,
             segundaComissaoPerc: segundaComissaoPerc,
             terceiraComissaoPerc: terceiraComissaoPerc,
-            recorrenciaPaga: false,
-            financialStatus: 'none' as TableRowData['financialStatus'],
+            recorrenciaPaga: recorrenciaPagaInitial,
+            financialStatus: financialStatusInitial,
         };
         
         const financials = calculateFinancials(partialRow as any);
