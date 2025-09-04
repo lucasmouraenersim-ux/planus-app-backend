@@ -12,6 +12,7 @@ import { STAGES_CONFIG } from '@/config/crm-stages';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
 interface CompanyCommissionsTableProps {
@@ -53,8 +54,12 @@ interface TableRowData {
   garantiaChurn: number;
   comercializador: number;
   nota: number;
+  
+  recorrenciaAtiva: boolean;
+  recorrenciaPerc: number;
   recorrenciaComissao: number;
   recorrenciaCaixa: number;
+
   // For dynamic calculation
   segundaComissaoPerc: number;
   terceiraComissaoPerc: number;
@@ -77,7 +82,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     return baseCalculo * (baseCommissionRate / 100);
   };
     
-  // Calculate total kWh finalized in the current month once
   const totalKwhFinalizadoNoMes = useMemo(() => {
     const now = new Date();
     const start = startOfMonth(now);
@@ -91,7 +95,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' >) => {
+  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'recorrenciaComissao' | 'recorrenciaCaixa'>) => {
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
     const garantiaChurn = comissaoTotal * 0.10;
@@ -100,7 +104,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
 
     const jurosValue = (rowData.proposta - comissaoTotal) * 0.12;
-
+    const recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
+    const recorrenciaCaixa = recorrenciaComissao; // For now, it mirrors the commission value
 
     return {
       comissaoTotal,
@@ -109,7 +114,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       garantiaChurn,
       comercializador,
       nota,
-      jurosRS: jurosValue
+      jurosRS: jurosValue,
+      recorrenciaComissao,
+      recorrenciaCaixa,
     };
   }
 
@@ -139,7 +146,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         if (empresa === 'BC') {
             segundaComissao = proposta * 0.45;
         } else if (empresa === 'Origo') {
-            // Placeholder logic, you mentioned it's dynamic
             segundaComissaoPerc = 120; // Defaulting to 120% for Origo
             segundaComissao = proposta * (segundaComissaoPerc / 100);
         }
@@ -180,8 +186,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             dataQuartaComissao: "6 meses depois",
             comissaoPromotor: comissaoPromotorInitial,
             jurosPerc: "12%",
-            recorrenciaComissao: 0,
-            recorrenciaCaixa: 0,
+            recorrenciaAtiva: false,
+            recorrenciaPerc: 0,
             segundaComissaoPerc: segundaComissaoPerc,
             terceiraComissaoPerc: terceiraComissaoPerc,
         };
@@ -199,7 +205,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         if (row.id === leadId) {
           let updatedRow: TableRowData = { ...row, ...updates };
 
-          // Recalculate commissions and financials if relevant fields changed
           const comissaoPromotor = calculateCommission(updatedRow.proposta, updatedRow.desagil, updatedRow.promotorId);
           updatedRow.comissaoPromotor = comissaoPromotor;
           
@@ -244,7 +249,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     return stageConfig ? `${stageConfig.colorClass} text-white` : 'bg-gray-500 text-white';
   };
 
-  // Pagination Logic
   const totalPages = Math.ceil(tableData.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
@@ -273,7 +277,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 <TableHead>Kwh</TableHead>
                 <TableHead>Proposta (R$)</TableHead>
                 <TableHead>Deságio (%)</TableHead>
-                
                 <TableHead>Comissão Imediata (R$)</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>2ª Comissão</TableHead>
@@ -284,7 +287,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 <TableHead>Data.3</TableHead>
                 <TableHead>Comissão Total (R$)</TableHead>
                 <TableHead>Comissão Promotor (R$)</TableHead>
-
                 <TableHead>Lucro Bruto (R$)</TableHead>
                 <TableHead>Lucro Líquido (R$)</TableHead>
                 <TableHead>Juros (%)</TableHead>
@@ -293,7 +295,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 <TableHead>Comercializador (R$)</TableHead>
                 <TableHead>Nota</TableHead>
                 <TableHead>Data.4</TableHead>
-
                 <TableHead>Recorrência Comissão (R$)</TableHead>
                 <TableHead>Recorrência Caixa (R$)</TableHead>
                 </TableRow>
@@ -331,7 +332,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     </TableCell>
                     <TableCell className="font-semibold">{formatCurrency(row.comissaoImediata)}</TableCell>
                     <TableCell>{row.dataComissaoImediata}</TableCell>
-                    
                     <TableCell className="w-[150px]">
                         {row.empresa === 'BC' && formatCurrency(row.segundaComissao)}
                         {row.empresa === 'Origo' && (
@@ -350,9 +350,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                         )}
                          {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.segundaComissao)}
                     </TableCell>
-
                     <TableCell>{row.dataSegundaComissao}</TableCell>
-
                      <TableCell className="w-[150px]">
                         {row.empresa === 'BC' && formatCurrency(row.terceiraComissao)}
                         {row.empresa === 'Origo' && (
@@ -372,7 +370,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                         )}
                         {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.terceiraComissao)}
                     </TableCell>
-                    
                     <TableCell>{row.dataTerceiraComissao}</TableCell>
                     <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
                     <TableCell>{row.dataQuartaComissao}</TableCell>
@@ -386,7 +383,25 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>{formatCurrency(row.comercializador)}</TableCell>
                     <TableCell>{formatCurrency(row.nota)}</TableCell>
                     <TableCell></TableCell>
-                    <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`recorrencia-${row.id}`}
+                          checked={row.recorrenciaAtiva}
+                          onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
+                        />
+                        {row.recorrenciaAtiva && (
+                           <Input
+                              type="number"
+                              value={row.recorrenciaPerc}
+                              onChange={(e) => updateRowData(row.id, { recorrenciaPerc: parseFloat(e.target.value) || 0 })}
+                              className="h-8 w-20 text-right"
+                              placeholder="%"
+                            />
+                        )}
+                        <span>{formatCurrency(row.recorrenciaComissao)}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>{formatCurrency(row.recorrenciaCaixa)}</TableCell>
                 </TableRow>
                 )) : (
