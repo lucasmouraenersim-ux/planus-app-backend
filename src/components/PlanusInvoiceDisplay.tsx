@@ -82,7 +82,7 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
   const semPlanusTotal = formatCurrency(invoiceData.boweAntesValor); 
 
   const pixCode = invoiceData.bowePixCodigo || `00190.00009 03730.402009 00007.813173 1 1031000${parseFloat(invoiceData.valorTotalFatura || "0").toFixed(2).replace('.', '').padStart(10, '0')}`;
-  const beneficiario = invoiceData.bowePixBeneficiario || `Beneficiário: PLANUS ENERGIA SIMULAÇÃO - CNPJ: XX.XXX.XXX/0001-XX`;
+  const beneficiario = invoiceData.bowePixBeneficiario || `Beneficiário: Empresa Vendedora simulacao - CNPJ: XX.XXX.XXX/0001-XX`;
 
 
   return (
