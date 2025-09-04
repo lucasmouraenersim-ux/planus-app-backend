@@ -15,8 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, differenceInDays } from 'date-fns';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { DateRange } from 'react-day-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { format } from 'date-fns';
 
 
 interface CompanyCommissionsTableProps {
@@ -87,6 +91,7 @@ interface TableRowData {
   segundaComissaoPerc: number;
   terceiraComissaoPerc: number;
   financialStatus: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
+  completedAt: string | undefined;
 }
 
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
@@ -94,6 +99,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const userMap = useMemo(() => new Map(allUsers.map(u => [u.uid, u])), [allUsers]);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  
+  const [recurrenceCompanyFilter, setRecurrenceCompanyFilter] = useState('all');
+  const [recurrencePromoterFilter, setRecurrencePromoterFilter] = useState('all');
+  const [recurrenceDateFilter, setRecurrenceDateFilter] = useState<DateRange | undefined>();
 
   const calculateCommission = (
     proposta: number, 
@@ -248,6 +257,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             terceiraComissaoPerc: terceiraComissaoPerc,
             recorrenciaPaga: recorrenciaPagaInitial,
             financialStatus: financialStatusInitial,
+            completedAt: lead.completedAt
         };
         
         const financials = calculateFinancials(partialRow as any);
@@ -321,15 +331,32 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const endIndex = startIndex + rowsPerPage;
   const paginatedData = tableData.slice(startIndex, endIndex);
 
+  const promotersWithLeads = useMemo(() => {
+    const promoters = new Set<string>();
+    tableData.forEach(row => promoters.add(row.promotor));
+    return Array.from(promoters).sort();
+  }, [tableData]);
+
   const totalRecorrenciaEmCaixa = useMemo(() => {
     return tableData
       .filter(row => {
           const sellerNameLower = (row.promotor || '').toLowerCase();
           const isExcluded = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
-          return row.recorrenciaPaga && row.financialStatus === 'Adimplente' && !isExcluded;
+          const companyMatch = recurrenceCompanyFilter === 'all' || row.empresa === recurrenceCompanyFilter;
+          const promoterMatch = recurrencePromoterFilter === 'all' || row.promotor === recurrencePromoterFilter;
+          let dateMatch = true;
+          if (recurrenceDateFilter?.from && row.completedAt) {
+              const completedDate = parseISO(row.completedAt);
+              dateMatch = isWithinInterval(completedDate, {
+                  start: recurrenceDateFilter.from,
+                  end: recurrenceDateFilter.to || recurrenceDateFilter.from
+              });
+          }
+          
+          return row.recorrenciaPaga && row.financialStatus === 'Adimplente' && !isExcluded && companyMatch && promoterMatch && dateMatch;
       })
       .reduce((sum, row) => sum + row.recorrenciaComissao, 0);
-  }, [tableData]);
+  }, [tableData, recurrenceCompanyFilter, recurrencePromoterFilter, recurrenceDateFilter]);
 
   return (
     <Card>
@@ -342,8 +369,44 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             <span className="font-semibold text-primary">KWh Finalizados no Mês: {totalKwhFinalizadoNoMes.toLocaleString('pt-BR')} kWh</span>
             </CardDescription>
             <Card className="p-3 bg-green-500/10 border-green-500/50">
-                <p className="text-sm font-medium text-green-600">Total de Recorrência em Caixa</p>
-                <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+                <div className="flex justify-between items-center mb-2">
+                    <div>
+                        <p className="text-sm font-medium text-green-600">Total de Recorrência em Caixa</p>
+                        <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+                    </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <Select value={recurrenceCompanyFilter} onValueChange={setRecurrenceCompanyFilter}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{EMPRESA_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={recurrencePromoterFilter} onValueChange={setRecurrencePromoterFilter}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                     <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                id="date"
+                                variant={"outline"}
+                                className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {recurrenceDateFilter?.from ? (
+                                    recurrenceDateFilter.to ? (
+                                        <>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>
+                                    ) : (format(recurrenceDateFilter.from, "LLL dd, y"))
+                                ) : ( <span>Filtrar por Data</span> )}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar initialFocus mode="range" defaultMonth={recurrenceDateFilter?.from} selected={recurrenceDateFilter} onSelect={setRecurrenceDateFilter} numberOfMonths={2}/>
+                        </PopoverContent>
+                    </Popover>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setRecurrenceCompanyFilter('all'); setRecurrencePromoterFilter('all'); setRecurrenceDateFilter(undefined); }}>
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
             </Card>
         </div>
       </CardHeader>
