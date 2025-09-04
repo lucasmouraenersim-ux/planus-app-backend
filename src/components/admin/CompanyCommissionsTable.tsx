@@ -14,6 +14,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 
 interface CompanyCommissionsTableProps {
   leads: LeadWithId[];
@@ -26,6 +29,25 @@ const formatCurrency = (value: number | undefined | null) => {
 };
 
 const EMPRESA_OPTIONS = ['Bowe', 'Origo', 'BC', 'Matrix'];
+const FINANCIAL_STATUS_OPTIONS = [
+    { value: 'none', label: 'Não Definido' },
+    { value: 'Adimplente', label: 'Adimplente' },
+    { value: 'Inadimplente', label: 'Inadimplente' },
+    { value: 'Em atraso', label: 'Em atraso' },
+    { value: 'Nunca pagou', label: 'Nunca pagou' },
+    { value: 'Cancelou', label: 'Cancelou' },
+];
+
+const getFinancialStatusBadgeStyle = (status?: string) => {
+    switch (status) {
+        case 'Adimplente': return 'bg-green-500/20 text-green-400 border-green-500/50';
+        case 'Inadimplente': return 'bg-red-500/20 text-red-400 border-red-500/50';
+        case 'Em atraso': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
+        case 'Nunca pagou': return 'bg-red-600/30 text-red-300 border-red-600/50';
+        case 'Cancelou': return 'bg-red-500/20 text-red-400 border-red-500/50 line-through';
+        default: return 'bg-muted/50';
+    }
+};
 
 interface TableRowData {
   id: string;
@@ -58,11 +80,12 @@ interface TableRowData {
   recorrenciaAtiva: boolean;
   recorrenciaPerc: number;
   recorrenciaComissao: number;
-  recorrenciaCaixa: number;
+  recorrenciaPaga: boolean;
 
   // For dynamic calculation
   segundaComissaoPerc: number;
   terceiraComissaoPerc: number;
+  financialStatus: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
 }
 
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
@@ -95,7 +118,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'recorrenciaComissao' | 'recorrenciaCaixa'>) => {
+  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' >) => {
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
     const garantiaChurn = comissaoTotal * 0.10;
@@ -105,7 +128,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
     const jurosValue = (rowData.proposta - comissaoTotal) * 0.12;
     const recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
-    const recorrenciaCaixa = recorrenciaComissao; // For now, it mirrors the commission value
 
     return {
       comissaoTotal,
@@ -116,7 +138,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       nota,
       jurosRS: jurosValue,
       recorrenciaComissao,
-      recorrenciaCaixa,
     };
   }
 
@@ -195,6 +216,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             recorrenciaPerc: recorrenciaPercInitial,
             segundaComissaoPerc: segundaComissaoPerc,
             terceiraComissaoPerc: terceiraComissaoPerc,
+            recorrenciaPaga: false,
+            financialStatus: 'none' as TableRowData['financialStatus'],
         };
         
         const financials = calculateFinancials(partialRow as any);
@@ -259,15 +282,27 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const endIndex = startIndex + rowsPerPage;
   const paginatedData = tableData.slice(startIndex, endIndex);
 
+  const totalRecorrenciaEmCaixa = useMemo(() => {
+    return tableData
+      .filter(row => row.recorrenciaPaga && row.financialStatus === 'Adimplente')
+      .reduce((sum, row) => sum + row.recorrenciaComissao, 0);
+  }, [tableData]);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Comissões por Empresas</CardTitle>
-        <CardDescription>
-          Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads finalizados).
-          <br />
-          <span className="font-semibold text-primary">KWh Finalizados no Mês: {totalKwhFinalizadoNoMes.toLocaleString('pt-BR')} kWh</span>
-        </CardDescription>
+        <div className="flex flex-col md:flex-row gap-4 justify-between">
+            <CardDescription>
+            Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads finalizados).
+            <br />
+            <span className="font-semibold text-primary">KWh Finalizados no Mês: {totalKwhFinalizadoNoMes.toLocaleString('pt-BR')} kWh</span>
+            </CardDescription>
+            <Card className="p-3 bg-green-500/10 border-green-500/50">
+                <p className="text-sm font-medium text-green-600">Total de Recorrência em Caixa</p>
+                <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+            </Card>
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="w-full whitespace-nowrap rounded-md border">
@@ -301,7 +336,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 <TableHead>Nota</TableHead>
                 <TableHead>Data.4</TableHead>
                 <TableHead>Recorrência Comissão (R$)</TableHead>
-                <TableHead>Recorrência Caixa (R$)</TableHead>
+                <TableHead>Recorrência Paga?</TableHead>
+                <TableHead>Status Financeiro</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -409,11 +445,37 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                         <span>{formatCurrency(row.recorrenciaComissao)}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{formatCurrency(row.recorrenciaCaixa)}</TableCell>
+                    <TableCell>
+                        <Checkbox
+                          id={`recorrencia-paga-${row.id}`}
+                          checked={row.recorrenciaPaga}
+                          onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaPaga: !!checked })}
+                        />
+                    </TableCell>
+                    <TableCell>
+                        <Select
+                            value={row.financialStatus}
+                            onValueChange={(value) => updateRowData(row.id, { financialStatus: value as TableRowData['financialStatus'] })}
+                        >
+                            <SelectTrigger className={cn("w-[150px] h-8", getFinancialStatusBadgeStyle(row.financialStatus))}>
+                                <SelectValue placeholder="Definir" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {FINANCIAL_STATUS_OPTIONS.map(option => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        <div className="flex items-center">
+                                            {option.value === 'Nunca pagou' && <AlertTriangle className="h-4 w-4 mr-2 text-red-500" />}
+                                            {option.label}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </TableCell>
                 </TableRow>
                 )) : (
                     <TableRow>
-                        <TableCell colSpan={27} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                        <TableCell colSpan={28} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                     </TableRow>
                 )}
             </TableBody>
