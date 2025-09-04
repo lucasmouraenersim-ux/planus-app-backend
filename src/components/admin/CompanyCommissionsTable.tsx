@@ -29,7 +29,7 @@ const formatCurrency = (value: number | undefined | null) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-const EMPRESA_OPTIONS = ['Bowe', 'Origo', 'BC', 'Matrix'];
+const EMPRESA_OPTIONS = ['Bowe', 'Origo', 'BC', 'Matrix', 'Fit Energia'];
 const FINANCIAL_STATUS_OPTIONS = [
     { value: 'none', label: 'Não Definido' },
     { value: 'Adimplente', label: 'Adimplente' },
@@ -125,7 +125,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const garantiaChurn = comissaoTotal * 0.10;
     
     // Updated Comercializador logic
-    const comercializador = (rowData.empresa === 'Bowe' || rowData.empresa === 'Matrix') ? 0 : comissaoTotal * 0.10;
+    const comercializador = (rowData.empresa === 'Bowe' || rowData.empresa === 'Matrix' || rowData.empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
     
     const nota = comissaoTotal * 0.12;
     const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
@@ -179,6 +179,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             comissaoImediata = proposta * 0.60;
         } else if (empresa === 'Origo' || empresa === 'BC') {
             comissaoImediata = proposta * 0.50;
+        } else if (empresa === 'Fit Energia') {
+            comissaoImediata = proposta * 0.40;
         }
 
         // Segunda Comissão
@@ -189,6 +191,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         } else if (empresa === 'Origo') {
             segundaComissaoPerc = 120; // Defaulting to 120% for Origo
             segundaComissao = proposta * (segundaComissaoPerc / 100);
+        } else if (empresa === 'Fit Energia') {
+            segundaComissao = proposta * 0.60;
         }
 
         // Terceira Comissão
@@ -267,6 +271,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
               comissaoImediata = updatedRow.proposta * 0.60;
           } else if (updatedRow.empresa === 'Origo' || updatedRow.empresa === 'BC') {
               comissaoImediata = updatedRow.proposta * 0.50;
+          } else if (updatedRow.empresa === 'Fit Energia') {
+              comissaoImediata = updatedRow.proposta * 0.40;
           }
           updatedRow.comissaoImediata = comissaoImediata;
 
@@ -277,6 +283,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
               updatedRow.segundaComissaoPerc = 45;
           } else if (updatedRow.empresa === 'Origo') {
               segundaComissao = updatedRow.proposta * (updatedRow.segundaComissaoPerc / 100);
+          } else if (updatedRow.empresa === 'Fit Energia') {
+              segundaComissao = updatedRow.proposta * 0.60;
+              updatedRow.segundaComissaoPerc = 0;
+          } else {
+              updatedRow.segundaComissaoPerc = 0;
           }
           updatedRow.segundaComissao = segundaComissao;
 
@@ -287,6 +298,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
               updatedRow.terceiraComissaoPerc = 60;
           } else if (updatedRow.empresa === 'Origo') {
              terceiraComissao = updatedRow.proposta * (updatedRow.terceiraComissaoPerc / 100);
+          } else {
+              updatedRow.terceiraComissaoPerc = 0;
           }
           updatedRow.terceiraComissao = terceiraComissao;
 
@@ -405,6 +418,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>{row.dataComissaoImediata}</TableCell>
                     <TableCell className="w-[150px]">
                         {row.empresa === 'BC' && formatCurrency(row.segundaComissao)}
+                        {row.empresa === 'Fit Energia' && formatCurrency(row.segundaComissao)}
                         {row.empresa === 'Origo' && (
                             <Select
                                 value={String(row.segundaComissaoPerc)}
@@ -419,7 +433,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 </SelectContent>
                             </Select>
                         )}
-                         {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.segundaComissao)}
+                         {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.segundaComissao)}
                     </TableCell>
                     <TableCell>{row.dataSegundaComissao}</TableCell>
                      <TableCell className="w-[150px]">
