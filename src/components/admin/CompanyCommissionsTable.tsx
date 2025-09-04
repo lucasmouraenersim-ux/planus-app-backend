@@ -91,6 +91,28 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
+  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' >) => {
+    const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
+    const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
+    const garantiaChurn = comissaoTotal * 0.10;
+    const comercializador = comissaoTotal * 0.10;
+    const nota = comissaoTotal * 0.12;
+    const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
+
+    const jurosValue = (rowData.proposta - comissaoTotal) * 0.12;
+
+
+    return {
+      comissaoTotal,
+      lucroBruto,
+      lucroLiq,
+      garantiaChurn,
+      comercializador,
+      nota,
+      jurosRS: jurosValue
+    };
+  }
+
   // Initialize table data
   useEffect(() => {
     const finalizedLeads = leads.filter(lead => lead.stageId === 'finalizado');
@@ -137,9 +159,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             }
             terceiraComissao = proposta * (terceiraComissaoPerc / 100);
         }
-
-
-        return {
+        
+        const partialRow = {
             id: lead.id,
             promotor: lead.sellerName || 'N/A',
             promotorId: promotorId,
@@ -157,20 +178,17 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             dataTerceiraComissao: "4 meses depois",
             quartaComissao: 0,
             dataQuartaComissao: "6 meses depois",
-            comissaoTotal: comissaoPromotorInitial,
             comissaoPromotor: comissaoPromotorInitial,
-            lucroBruto: (lead.value || 0) - proposta,
-            lucroLiq: ((lead.value || 0) - proposta) * 0.7,
             jurosPerc: "12%",
-            jurosRS: ((lead.value || 0) - proposta) * 0.12,
-            garantiaChurn: 0,
-            comercializador: 0,
-            nota: 0,
             recorrenciaComissao: 0,
             recorrenciaCaixa: 0,
             segundaComissaoPerc: segundaComissaoPerc,
             terceiraComissaoPerc: terceiraComissaoPerc,
         };
+        
+        const financials = calculateFinancials(partialRow as any);
+
+        return { ...partialRow, ...financials };
     });
     setTableData(initialData);
   }, [leads, userMap, totalKwhFinalizadoNoMes]);
@@ -179,10 +197,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     setTableData(currentData =>
       currentData.map(row => {
         if (row.id === leadId) {
-          const updatedRow = { ...row, ...updates };
+          let updatedRow: TableRowData = { ...row, ...updates };
 
-          // Recalculate commissions if relevant fields changed
+          // Recalculate commissions and financials if relevant fields changed
           const comissaoPromotor = calculateCommission(updatedRow.proposta, updatedRow.desagil, updatedRow.promotorId);
+          updatedRow.comissaoPromotor = comissaoPromotor;
           
           let comissaoImediata = 0;
           if (updatedRow.empresa === 'Bowe' || updatedRow.empresa === 'Matrix') {
@@ -190,6 +209,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           } else if (updatedRow.empresa === 'Origo' || updatedRow.empresa === 'BC') {
               comissaoImediata = updatedRow.proposta * 0.50;
           }
+          updatedRow.comissaoImediata = comissaoImediata;
+
 
           let segundaComissao = 0;
           if (updatedRow.empresa === 'BC') {
@@ -198,6 +219,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           } else if (updatedRow.empresa === 'Origo') {
               segundaComissao = updatedRow.proposta * (updatedRow.segundaComissaoPerc / 100);
           }
+          updatedRow.segundaComissao = segundaComissao;
+
 
           let terceiraComissao = 0;
           if (updatedRow.empresa === 'BC') {
@@ -206,15 +229,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           } else if (updatedRow.empresa === 'Origo') {
              terceiraComissao = updatedRow.proposta * (updatedRow.terceiraComissaoPerc / 100);
           }
+          updatedRow.terceiraComissao = terceiraComissao;
 
-          return { 
-            ...updatedRow,
-            comissaoImediata,
-            segundaComissao,
-            terceiraComissao,
-            comissaoPromotor: comissaoPromotor,
-            comissaoTotal: comissaoPromotor, // Assuming total is same as promotor for now
-          };
+          const financials = calculateFinancials(updatedRow);
+          return { ...updatedRow, ...financials };
         }
         return row;
       })
@@ -358,15 +376,15 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>{row.dataTerceiraComissao}</TableCell>
                     <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
                     <TableCell>{row.dataQuartaComissao}</TableCell>
-                    <TableCell>{formatCurrency(row.comissaoTotal)}</TableCell>
+                    <TableCell className="font-bold">{formatCurrency(row.comissaoTotal)}</TableCell>
                     <TableCell className="font-semibold text-primary">{formatCurrency(row.comissaoPromotor)}</TableCell>
-                    <TableCell>{formatCurrency(row.lucroBruto)}</TableCell>
-                    <TableCell>{formatCurrency(row.lucroLiq)}</TableCell>
+                    <TableCell className="font-semibold text-green-600">{formatCurrency(row.lucroBruto)}</TableCell>
+                    <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
                     <TableCell>{row.jurosPerc}</TableCell>
                     <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
                     <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
                     <TableCell>{formatCurrency(row.comercializador)}</TableCell>
-                    <TableCell>{row.nota}</TableCell>
+                    <TableCell>{formatCurrency(row.nota)}</TableCell>
                     <TableCell></TableCell>
                     <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
                     <TableCell>{formatCurrency(row.recorrenciaCaixa)}</TableCell>
