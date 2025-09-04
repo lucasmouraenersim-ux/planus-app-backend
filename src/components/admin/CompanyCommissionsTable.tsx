@@ -3,7 +3,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
-import type { LeadWithId } from '@/types/crm';
+import type { LeadWithId, StageId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
@@ -166,8 +166,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
   // Initialize table data
   useEffect(() => {
-    const finalizedLeads = leads.filter(lead => lead.stageId === 'finalizado');
-    const initialData = finalizedLeads.map(lead => {
+    const stagesToInclude: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
+    const leadsForCommission = leads.filter(lead => stagesToInclude.includes(lead.stageId));
+
+    const initialData = leadsForCommission.map(lead => {
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
         const empresa = 'Bowe'; // Default all existing leads to Bowe
@@ -364,7 +366,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         <CardTitle>Comissões por Empresas</CardTitle>
         <div className="flex flex-col md:flex-row gap-4 justify-between">
             <CardDescription>
-            Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads finalizados).
+            Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads a partir do estágio 'Contrato').
             <br />
             <span className="font-semibold text-primary">KWh Finalizados no Mês: {totalKwhFinalizadoNoMes.toLocaleString('pt-BR')} kWh</span>
             </CardDescription>
@@ -592,7 +594,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       </CardContent>
        <CardFooter className="flex items-center justify-between py-4">
         <div className="text-sm text-muted-foreground">
-          {tableData.length} propostas finalizadas encontradas.
+          {tableData.length} propostas encontradas.
         </div>
         <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
