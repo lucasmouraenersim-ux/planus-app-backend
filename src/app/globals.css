@@ -89,13 +89,13 @@ body {
     --chart-4: 280 65% 70%;
     --chart-5: 340 75% 65%;
 
-    --sidebar-background: hsl(var(--primary));
-    --sidebar-foreground: hsl(var(--primary-foreground));
+    --sidebar-background: 220 10% 15%;
+    --sidebar-foreground: 220 20% 95%;
     --sidebar-primary: hsl(var(--primary)); 
     --sidebar-primary-foreground: hsl(var(--primary-foreground));
     --sidebar-accent: hsl(var(--accent)); 
     --sidebar-accent-foreground: hsl(var(--accent-foreground));
-    --sidebar-border: 231 39% 40%;
+    --sidebar-border: 220 10% 30%;
     --sidebar-ring: hsl(var(--ring));
   }
 }
