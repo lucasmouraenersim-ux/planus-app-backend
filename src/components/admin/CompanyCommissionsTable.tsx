@@ -123,7 +123,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
     const garantiaChurn = comissaoTotal * 0.10;
-    const comercializador = comissaoTotal * 0.10;
+    
+    // Updated Comercializador logic
+    const comercializador = (rowData.empresa === 'Bowe' || rowData.empresa === 'Matrix') ? 0 : comissaoTotal * 0.10;
+    
     const nota = comissaoTotal * 0.12;
     const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
 
@@ -557,4 +560,3 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     </Card>
   );
 }
-
