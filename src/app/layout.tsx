@@ -232,10 +232,10 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                 </SidebarFooter>
             </Sidebar>
             <SidebarInset onClick={() => { if (isMobile && openMobile) setOpenMobile(false); }}>
-                <div className="absolute inset-0 z-[-1]">
-                    <Image src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/refs/heads/main/Whisk_7171a56086%20(2).svg" alt="Blurred Background" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "center" }} className="filter blur-lg" data-ai-hint="abstract background" priority />
+                <div className="absolute inset-0 z-[-1] bg-background">
+                    <Image src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/refs/heads/main/Whisk_7171a56086%20(2).svg" alt="Blurred Background" fill sizes="100vw" style={{ objectFit: "cover", objectPosition: "center" }} className="filter blur-lg opacity-30" data-ai-hint="abstract background" priority />
                 </div>
-                <header className="sticky top-0 z-30 flex h-14 items-center gap-x-4 border-b bg-background/70 backdrop-blur-md px-4 sm:px-6 py-2">
+                <header className="sticky top-0 z-30 flex h-14 items-center gap-x-4 border-b bg-card/70 backdrop-blur-lg px-4 sm:px-6 py-2">
                     <Button variant="ghost" size="icon" onClick={toggleSidebar} className="rounded-full h-9 w-9 p-0 text-foreground hover:bg-accent hover:text-accent-foreground -ml-1" aria-label="Toggle sidebar">
                         <Avatar className="h-8 w-8"><AvatarImage src={appUser.photoURL || undefined} alt={appUser.displayName || "Usuário"} data-ai-hint="user avatar small" /><AvatarFallback className="text-xs bg-muted text-muted-foreground">{appUser.displayName ? appUser.displayName.substring(0, 2).toUpperCase() : (appUser.email ? appUser.email.substring(0, 2).toUpperCase() : "U")}</AvatarFallback></Avatar>
                     </Button>

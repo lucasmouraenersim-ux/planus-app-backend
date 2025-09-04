@@ -44,7 +44,7 @@ body {
     --chart-5: 340 75% 55%;
     --radius: 0.5rem;
 
-    --sidebar-background: 231 39% 49%; /* Sidebar with primary color */
+    --sidebar-background: hsl(var(--primary));
     --sidebar-foreground: 0 0% 98%; /* White text */
     --sidebar-primary: hsl(var(--primary));
     --sidebar-primary-foreground: hsl(var(--primary-foreground));
