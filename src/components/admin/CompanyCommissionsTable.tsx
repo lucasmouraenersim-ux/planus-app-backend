@@ -1,4 +1,3 @@
-
 // src/components/admin/CompanyCommissionsTable.tsx
 "use client";
 
@@ -130,6 +129,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         const empresa = 'Bowe'; // Default all existing leads to Bowe
         const promotorId = lead.userId;
 
+        // Recorrência
+        const isEduardo = (lead.sellerName || '').toLowerCase().includes('eduardo');
+        const recorrenciaAtivaInitial = !isEduardo;
+        const recorrenciaPercInitial = !isEduardo ? 1 : 0;
+
         // Comissão do Promotor
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
 
@@ -187,8 +191,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             dataQuartaComissao: "6 meses depois",
             comissaoPromotor: comissaoPromotorInitial,
             jurosPerc: "12%",
-            recorrenciaAtiva: false,
-            recorrenciaPerc: 0,
+            recorrenciaAtiva: recorrenciaAtivaInitial,
+            recorrenciaPerc: recorrenciaPercInitial,
             segundaComissaoPerc: segundaComissaoPerc,
             terceiraComissaoPerc: terceiraComissaoPerc,
         };
