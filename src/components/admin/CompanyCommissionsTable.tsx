@@ -188,7 +188,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         let comissaoImediata = 0;
         if (empresa === 'Bowe' || empresa === 'Matrix') {
             comissaoImediata = proposta * 0.60;
-        } else if (empresa === 'Origo' || empresa === 'BC') {
+        } else if (empresa === 'Origo') {
+            comissaoImediata = proposta * 0.50;
+        } else if (empresa === 'BC') {
             comissaoImediata = proposta * 0.50;
         } else if (empresa === 'Fit Energia') {
             comissaoImediata = proposta * 0.40;
@@ -281,7 +283,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           let comissaoImediata = 0;
           if (updatedRow.empresa === 'Bowe' || updatedRow.empresa === 'Matrix') {
               comissaoImediata = updatedRow.proposta * 0.60;
-          } else if (updatedRow.empresa === 'Origo' || updatedRow.empresa === 'BC') {
+          } else if (updatedRow.empresa === 'Origo') {
+              comissaoImediata = updatedRow.proposta * 0.50;
+          } else if (updatedRow.empresa === 'BC') {
               comissaoImediata = updatedRow.proposta * 0.50;
           } else if (updatedRow.empresa === 'Fit Energia') {
               comissaoImediata = updatedRow.proposta * 0.40;
@@ -493,6 +497,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
+                                    <SelectItem value="80">80% ({formatCurrency(row.proposta * 0.8)})</SelectItem>
+                                    <SelectItem value="90">90% ({formatCurrency(row.proposta * 0.9)})</SelectItem>
+                                    <SelectItem value="100">100% ({formatCurrency(row.proposta * 1.0)})</SelectItem>
                                     <SelectItem value="120">120% ({formatCurrency(row.proposta * 1.2)})</SelectItem>
                                     <SelectItem value="150">150% ({formatCurrency(row.proposta * 1.5)})</SelectItem>
                                 </SelectContent>
