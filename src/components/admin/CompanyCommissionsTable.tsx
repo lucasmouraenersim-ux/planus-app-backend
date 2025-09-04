@@ -165,9 +165,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         const promotorId = lead.userId;
 
         // Recorrência
-        const isEduardo = (lead.sellerName || '').toLowerCase().includes('eduardo');
-        const recorrenciaAtivaInitial = !isEduardo;
-        const recorrenciaPercInitial = !isEduardo ? 1 : 0;
+        const sellerNameLower = (lead.sellerName || '').toLowerCase();
+        const isExcludedFromRecurrence = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
+        const recorrenciaAtivaInitial = !isExcludedFromRecurrence;
+        const recorrenciaPercInitial = !isExcludedFromRecurrence ? 1 : 0;
 
         // Comissão do Promotor
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
@@ -309,7 +310,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
   const totalRecorrenciaEmCaixa = useMemo(() => {
     return tableData
-      .filter(row => row.recorrenciaPaga && row.financialStatus === 'Adimplente')
+      .filter(row => {
+          const sellerNameLower = (row.promotor || '').toLowerCase();
+          const isExcluded = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
+          return row.recorrenciaPaga && row.financialStatus === 'Adimplente' && !isExcluded;
+      })
       .reduce((sum, row) => sum + row.recorrenciaComissao, 0);
   }, [tableData]);
 
