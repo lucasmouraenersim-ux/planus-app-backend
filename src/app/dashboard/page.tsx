@@ -2,7 +2,7 @@
 // /src/app/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, addDays, subDays, getDaysInMonth } from 'date-fns';
@@ -15,6 +15,8 @@ import { SavingsDisplay } from '@/components/SavingsDisplay';
 import InvoiceEditor from '@/components/invoice-editor';
 import { PlanusInvoiceDisplay } from '@/components/PlanusInvoiceDisplay'; 
 import CompetitorComparisonDisplay from '@/components/CompetitorComparisonDisplay';
+import { DiscountConfigurator, type DiscountConfig } from '@/components/DiscountConfigurator';
+
 
 import { statesData } from '@/data/state-data';
 import type { StateInfo, SavingsResult, InvoiceData } from '@/types';
@@ -27,7 +29,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Button } from '@/components/ui/button';
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { MapPin, ChevronLeft, FileText, Loader2 } from 'lucide-react';
 
@@ -88,18 +89,34 @@ function CalculatorPageContent() {
   const [hoveredStateCode, setHoveredStateCode] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<StateInfo | null>(null);
   const [currentKwh, setCurrentKwh] = useState<number>(DEFAULT_KWH);
-  const [isFidelityEnabled, setIsFidelityEnabled] = useState(true);
   const [savings, setSavings] = useState<SavingsResult | null>(null);
   
   const [shouldShowInvoiceEditor, setShouldShowInvoiceEditor] = useState(false);
   const [originalInvoiceData, setOriginalInvoiceData] = useState<InvoiceData | null>(null);
   const [planusInvoiceData, setPlanusInvoiceData] = useState<InvoiceData | null>(null);
   
+  const [discountConfig, setDiscountConfig] = useState<DiscountConfig>({
+    type: 'promotional',
+    promotional: { rate: 25, durationMonths: 2, subsequentRate: 15 },
+    fixed: { rate: 20 },
+  });
+  
   useEffect(() => {
     if (!isLoadingAuth && !firebaseUser) {
         router.replace('/login');
     }
   }, [isLoadingAuth, firebaseUser, router]);
+
+  const proposalGeneratorLink = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('item1Quantidade', String(currentKwh));
+    if (selectedState) {
+        params.set('clienteUF', selectedState.code);
+    }
+    // TODO: Add discount config to params
+    return `/proposal-generator?${params.toString()}`;
+  }, [currentKwh, selectedState]);
+
 
   useEffect(() => {
     if (isLoadingAuth || !firebaseUser) return;
@@ -149,9 +166,9 @@ function CalculatorPageContent() {
       const cipValorInput = parseLocaleNumberString(params.get("item3Valor") || newOriginalInvoiceData.item3Valor);
       const valorProdPropriaInput = parseLocaleNumberString(params.get("valorProducaoPropria") || newOriginalInvoiceData.valorProducaoPropria);
       const isencaoIcmsEnergiaGeradaParam = params.get("isencaoIcmsEnergiaGerada") || "nao";
-      const fidelityParam = params.get("comFidelidade") === 'true';
-      setIsFidelityEnabled(fidelityParam);
-
+      
+      // We don't use the fidelity param from URL anymore, instead we'll use a local state for discount config
+      // const fidelityParam = params.get("comFidelidade") === 'true';
 
       const valorConsumoPrincipalOriginal = consumoKwhInput * TARIFA_ENERGIA;
       newOriginalInvoiceData.valorTotalFatura = formatNumberToCurrencyString(valorConsumoPrincipalOriginal + cipValorInput - valorProdPropriaInput); 
@@ -194,7 +211,7 @@ function CalculatorPageContent() {
       newPlanusInvoiceData.companyInscEst = "";
 
       const valorEnergiaOriginalNum = parseLocaleNumberString(newOriginalInvoiceData.item1Valor);
-      const currentSavingsResult = calculateSavings(valorEnergiaOriginalNum, fidelityParam, uf);
+      const currentSavingsResult = calculateSavings(valorEnergiaOriginalNum, discountConfig, uf);
       setSavings(currentSavingsResult);
       
       const ligacaoParam = params.get("ligacao") || "NAO_INFORMADO";
@@ -295,7 +312,7 @@ function CalculatorPageContent() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, isLoadingAuth, firebaseUser, toast]); 
+  }, [searchParams, isLoadingAuth, firebaseUser, toast, discountConfig]); 
 
   useEffect(() => {
     if (isLoadingAuth || !firebaseUser || shouldShowInvoiceEditor) return; 
@@ -324,13 +341,13 @@ function CalculatorPageContent() {
   useEffect(() => {
     if (isLoadingAuth || !firebaseUser) return;
 
-    if (selectedState && selectedState.available && !showMap && !shouldShowInvoiceEditor) {
+    if ((selectedState && selectedState.available && !showMap) || shouldShowInvoiceEditor) {
       const billAmountInReais = currentKwh * KWH_TO_R_FACTOR;
-      setSavings(calculateSavings(billAmountInReais, isFidelityEnabled, selectedState.abbreviation));
+      setSavings(calculateSavings(billAmountInReais, discountConfig, selectedState?.code));
     } else if (!shouldShowInvoiceEditor) { 
       setSavings(null); 
     }
-  }, [currentKwh, selectedState, isLoadingAuth, firebaseUser, showMap, shouldShowInvoiceEditor, isFidelityEnabled]);
+  }, [currentKwh, selectedState, isLoadingAuth, firebaseUser, showMap, shouldShowInvoiceEditor, discountConfig]);
 
   const handleStateClick = (stateCode: string) => {
     const stateDetails = statesData.find(s => s.code === stateCode);
@@ -411,7 +428,6 @@ function CalculatorPageContent() {
             {!showMap && selectedState && (
                 <p className="text-muted-foreground mt-2 text-sm md:text-base max-w-2xl mx-auto">
                     Ajuste o consumo para o estado de <strong className="text-primary">{selectedState.name}</strong> e veja o quanto você pode economizar.
-                    Depois, clique em "Iniciar Nova Proposta" para personalizar sua fatura.
                 </p>
             )}
           </header>
@@ -444,23 +460,10 @@ function CalculatorPageContent() {
                 <StateInfoCard state={selectedState} />
                 <Card className="w-full shadow-xl bg-card/70 backdrop-blur-lg border">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
                       <CardTitle className="text-xl font-bold text-primary flex items-center">
                           <FileText className="mr-2 h-5 w-5" /> 
                           Simulador de Consumo
                       </CardTitle>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="fidelity-switch"
-                          checked={isFidelityEnabled}
-                          onCheckedChange={setIsFidelityEnabled}
-                          aria-label="Com fidelidade?"
-                        />
-                        <Label htmlFor="fidelity-switch" className="text-sm font-medium text-muted-foreground">
-                          Com fidelidade?
-                        </Label>
-                      </div>
-                    </div>
                     <CardDescription className="mt-1">
                         Ajuste seu consumo mensal em kWh para ver a estimativa para {selectedState.name}.
                     </CardDescription>
@@ -495,6 +498,7 @@ function CalculatorPageContent() {
                     </div>
                   </CardContent>
                 </Card>
+                <DiscountConfigurator config={discountConfig} onConfigChange={setDiscountConfig} />
               </div>
 
               <div className="flex flex-col space-y-6">
@@ -502,6 +506,7 @@ function CalculatorPageContent() {
                   savings={savings} 
                   currentKwh={currentKwh} 
                   selectedStateCode={selectedState?.code}
+                  proposalLink={proposalGeneratorLink}
                 />
               </div>
             </div>

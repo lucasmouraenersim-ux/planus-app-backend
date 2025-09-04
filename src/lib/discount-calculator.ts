@@ -1,12 +1,23 @@
-// /src/lib/discount-calculator.ts
+// src/lib/discount-calculator.ts
 import type { SavingsResult, StateInfo, SavingsByFlag } from "@/types";
 import { statesData } from "@/data/state-data";
 
 // Constants
-const MIN_BILL_AMOUNT_VALID = 50; 
-const MAX_BILL_AMOUNT_VALID = 100000; 
-const FIXED_DISCOUNT_NO_FIDELITY = 0.15; // 15%
+const MIN_BILL_AMOUNT_VALID = 50;
+const MAX_BILL_AMOUNT_VALID = 100000;
 const KWH_TO_R_FACTOR = 1.0907;
+
+interface DiscountConfig {
+  type: 'promotional' | 'fixed';
+  promotional?: {
+    rate: number; // e.g., 25 for 25%
+    durationMonths: number;
+    subsequentRate: number; // e.g., 15 for 15%
+  };
+  fixed?: {
+    rate: number; // e.g., 20 for 20%
+  };
+}
 
 const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolean): SavingsResult => {
     const kwh = billAmountInReais / KWH_TO_R_FACTOR;
@@ -62,18 +73,18 @@ const calculateDFSavings = (billAmountInReais: number, isFidelityEnabled: boolea
     };
 };
 
-
-export function calculateSavings(billAmountInReais: number, isFidelityEnabled: boolean, stateCode?: string | null): SavingsResult {
+export function calculateSavings(
+  billAmountInReais: number,
+  config: DiscountConfig,
+  stateCode?: string | null
+): SavingsResult {
   
   if (stateCode === 'DF') {
-    return calculateDFSavings(billAmountInReais, isFidelityEnabled);
+    // A lógica de fidelidade original para DF precisa ser adaptada ou mantida.
+    // Por simplicidade, vamos usar a configuração de fidelidade para decidir.
+    const isFidelityEnabledForDF = config.type === 'promotional' || (config.type === 'fixed' && (config.fixed?.rate || 0) > 15);
+    return calculateDFSavings(billAmountInReais, isFidelityEnabledForDF);
   }
-
-  // --- Lógica original para os outros estados ---
-  let effectiveAnnualDiscountPercentage: number;
-  let discountDescription: string;
-  let totalSavingsYear: number;
-  let averageMonthlySaving: number;
 
   if (billAmountInReais < MIN_BILL_AMOUNT_VALID || billAmountInReais > MAX_BILL_AMOUNT_VALID) {
     return {
@@ -86,54 +97,45 @@ export function calculateSavings(billAmountInReais: number, isFidelityEnabled: b
     };
   }
 
-  if (!isFidelityEnabled) {
-    // Fixed 15% discount if fidelity is not enabled
-    totalSavingsYear = billAmountInReais * 12 * FIXED_DISCOUNT_NO_FIDELITY;
-    averageMonthlySaving = totalSavingsYear / 12;
-    effectiveAnnualDiscountPercentage = FIXED_DISCOUNT_NO_FIDELITY * 100;
-    discountDescription = "15% de desconto fixo (sem fidelidade).";
-  } else {
-    // Existing tiered logic for when fidelity is enabled
-    let firstTwoMonthsDiscountRate: number;
-    let nextTenMonthsDiscountRate: number;
-    let fixedAnnualDiscountRate: number | null = null;
+  let totalSavingsYear: number;
+  let effectiveAnnualDiscountPercentage: number;
+  let discountDescription: string;
 
-    if (billAmountInReais <= 1000) {
-      firstTwoMonthsDiscountRate = 0.25; // 25%
-      nextTenMonthsDiscountRate = 0.15; // 15%
-      discountDescription = "Com fidelidade: 25% nos 2 primeiros meses, 15% nos 10 meses seguintes.";
-    } else if (billAmountInReais <= 3000) {
-      firstTwoMonthsDiscountRate = 0.25; // 25%
-      nextTenMonthsDiscountRate = 0.18; // 18%
-      discountDescription = "Com fidelidade: 25% nos 2 primeiros meses, 18% nos 10 meses seguintes.";
-    } else if (billAmountInReais <= 5000) {
-      firstTwoMonthsDiscountRate = 0.25; // 25%
-      nextTenMonthsDiscountRate = 0.22; // 22%
-      discountDescription = "Com fidelidade: 25% nos 2 primeiros meses, 22% nos 10 meses seguintes.";
-    } else if (billAmountInReais <= 10000) {
-      fixedAnnualDiscountRate = 0.25; // 25%
-      discountDescription = "Com fidelidade: 25% de desconto fixo anual.";
-    } else if (billAmountInReais <= 20000) {
-      fixedAnnualDiscountRate = 0.28; // 28%
-      discountDescription = "Com fidelidade: 28% de desconto fixo anual.";
-    } else { // billAmountInReais > 20000
-      fixedAnnualDiscountRate = 0.30; // 30%
-      discountDescription = "Com fidelidade: 30% de desconto fixo anual.";
-    }
+  if (config.type === 'fixed' && config.fixed) {
+    const fixedRate = config.fixed.rate / 100;
+    totalSavingsYear = billAmountInReais * 12 * fixedRate;
+    effectiveAnnualDiscountPercentage = config.fixed.rate;
+    discountDescription = `${config.fixed.rate}% de desconto fixo durante todo o período.`;
+  } else if (config.type === 'promotional' && config.promotional) {
+    const promoRate = config.promotional.rate / 100;
+    const promoMonths = config.promotional.durationMonths;
+    const subsequentRate = config.promotional.subsequentRate / 100;
+    const subsequentMonths = 12 - promoMonths;
 
-    if (fixedAnnualDiscountRate !== null) {
-      totalSavingsYear = billAmountInReais * 12 * fixedAnnualDiscountRate;
-      averageMonthlySaving = totalSavingsYear / 12;
-      effectiveAnnualDiscountPercentage = fixedAnnualDiscountRate * 100;
+    if (promoMonths >= 12) {
+      // If promo duration is 12 months or more, it's effectively a fixed discount
+      totalSavingsYear = billAmountInReais * 12 * promoRate;
     } else {
-      const savingsFirstTwoMonths = billAmountInReais * firstTwoMonthsDiscountRate * 2;
-      const savingsNextTenMonths = billAmountInReais * nextTenMonthsDiscountRate * 10;
-      totalSavingsYear = savingsFirstTwoMonths + savingsNextTenMonths;
-      averageMonthlySaving = totalSavingsYear / 12;
-      effectiveAnnualDiscountPercentage = (totalSavingsYear / (billAmountInReais * 12)) * 100;
+      const savingsPromoPeriod = billAmountInReais * promoMonths * promoRate;
+      const savingsSubsequentPeriod = billAmountInReais * subsequentMonths * subsequentRate;
+      totalSavingsYear = savingsPromoPeriod + savingsSubsequentPeriod;
     }
+    
+    effectiveAnnualDiscountPercentage = (totalSavingsYear / (billAmountInReais * 12)) * 100;
+    discountDescription = `Desconto promocional de ${config.promotional.rate}% por ${promoMonths} meses, seguido por ${config.promotional.subsequentRate}% nos meses restantes.`;
+  } else {
+    // Fallback case, though it shouldn't be reached with proper config
+    return {
+      effectiveAnnualDiscountPercentage: 0,
+      monthlySaving: 0,
+      annualSaving: 0,
+      discountDescription: "Configuração de desconto inválida.",
+      originalMonthlyBill: billAmountInReais,
+      newMonthlyBillWithPlanus: billAmountInReais,
+    };
   }
-  
+
+  const averageMonthlySaving = totalSavingsYear / 12;
   const newMonthlyBillWithPlanus = billAmountInReais - averageMonthlySaving;
 
   return {

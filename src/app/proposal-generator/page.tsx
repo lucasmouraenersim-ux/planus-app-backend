@@ -49,7 +49,9 @@ const formSchema = z.object({
   item3Valor: z.string().optional().refine(val => val === "" || !isNaN(parseFloat(val.replace('.', '').replace(',', '.'))), { message: "CIP/COSIP deve ser um número válido ou vazio." }),
   valorProducaoPropria: z.string().optional().refine(val => val === "" || !isNaN(parseFloat(val.replace('.', '').replace(',', '.'))), { message: "Valor da produção própria deve ser um número válido ou vazio." }),
   isencaoIcmsEnergiaGerada: z.enum(['sim', 'nao']).default('nao').describe("Há isenção de ICMS na Energia Gerada?"),
-  comFidelidade: z.boolean().default(true).describe("A proposta inclui fidelidade?"),
+  
+  // Discount fields - these will be passed to the dashboard page but are not directly editable here anymore
+  // They are driven by the new DiscountConfigurator component on the dashboard
 });
 
 type ProposalFormData = z.infer<typeof formSchema>;
@@ -81,7 +83,6 @@ function ProposalGeneratorPageContent() {
       item3Valor: "13,75", 
       valorProducaoPropria: "0",
       isencaoIcmsEnergiaGerada: "nao",
-      comFidelidade: true, 
     },
   });
 
@@ -163,14 +164,9 @@ function ProposalGeneratorPageContent() {
     (Object.keys(values) as Array<keyof ProposalFormData>).forEach((key) => {
       const value = values[key];
       if (value !== undefined && value !== null && String(value).trim() !== "") {
-        if (typeof value === 'boolean') {
           queryParams.set(key, String(value));
-        } else {
-          queryParams.set(key, String(value));
-        }
       }
     });
-    queryParams.set("comFidelidade", String(form.getValues("comFidelidade")));
 
     router.push(`/dashboard?${queryParams.toString()}`);
   }
@@ -436,26 +432,7 @@ function ProposalGeneratorPageContent() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="comFidelidade"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm bg-background/50">
-                    <div className="space-y-0.5">
-                      <FormLabel>Incluir Fidelidade na Proposta?</FormLabel>
-                      <FormDescription>
-                        Afeta as regras de desconto aplicadas na simulação.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 Gerar Simulação na Fatura
               </Button>

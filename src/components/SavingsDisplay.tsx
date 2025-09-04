@@ -1,4 +1,3 @@
-
 // /src/components/SavingsDisplay.tsx
 "use client";
 
@@ -14,6 +13,7 @@ interface SavingsDisplayProps {
   savings: SavingsResult | null;
   currentKwh: number;
   selectedStateCode?: string | null;
+  proposalLink: string;
 }
 
 const formatCurrency = (value: number) => {
@@ -45,9 +45,7 @@ const renderDiscountDescription = (description: string) => {
   });
 };
 
-export function SavingsDisplay({ savings, currentKwh, selectedStateCode }: SavingsDisplayProps) {
-
-  const proposalGeneratorLink = `/proposal-generator?item1Quantidade=${currentKwh}${selectedStateCode ? `&clienteUF=${selectedStateCode}` : ''}`;
+export function SavingsDisplay({ savings, proposalLink }: SavingsDisplayProps) {
 
   if (!savings || savings.monthlySaving === 0) {
     return (
@@ -62,7 +60,7 @@ export function SavingsDisplay({ savings, currentKwh, selectedStateCode }: Savin
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4 flex flex-col items-center">
-           <Link href={proposalGeneratorLink}>
+           <Link href={proposalLink}>
             <Button variant="default" size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
               <FileText className="mr-2 h-5 w-5" />
               INICIAR NOVA PROPOSTA
@@ -142,7 +140,7 @@ export function SavingsDisplay({ savings, currentKwh, selectedStateCode }: Savin
         </div>
         
         <div className="pt-4">
-          <Link href={proposalGeneratorLink}>
+          <Link href={proposalLink}>
             <Button variant="default" size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
               <FileText className="mr-2 h-5 w-5" />
               INICIAR NOVA PROPOSTA
