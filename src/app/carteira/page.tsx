@@ -244,7 +244,7 @@ function WalletPageContent() {
             valueAfterDiscount: lead.valueAfterDiscount || 0,
             commission,
             recurrence,
-            isPaid: lead.commissionPaid || false,
+            isPaid: true, // Always consider commissions as paid
         };
     }).filter((c): c is NonNullable<typeof c> => c !== null);
 
@@ -301,24 +301,6 @@ function WalletPageContent() {
     return { mlmCommissionsToReceive: commissions, totalMlmCommissionToReceive: total };
   
   }, [allLeads, allFirestoreUsers, appUser]);
-
-  const handleToggleCommissionPaid = async (leadId: string, currentStatus: boolean) => {
-    try {
-        await updateLeadCommissionStatus(leadId, !currentStatus);
-        setAllLeads(prevLeads => prevLeads.map(l => l.id === leadId ? {...l, commissionPaid: !currentStatus} : l));
-        toast({
-            title: "Status de Pagamento Atualizado",
-            description: `A comissão do contrato foi marcada como ${!currentStatus ? 'paga' : 'não paga'}.`,
-        });
-    } catch (error) {
-        toast({
-            title: "Erro ao Atualizar",
-            description: "Não foi possível alterar o status de pagamento.",
-            variant: "destructive"
-        });
-    }
-  };
-
 
   const onSubmitWithdrawal = async (data: WithdrawalFormData) => {
     if (!appUser) {
@@ -474,7 +456,7 @@ function WalletPageContent() {
             <FileSignature className="w-6 h-6 mr-2" />
             Comissões de Vendas Diretas a Receber
           </CardTitle>
-          <CardDescription>Comissões geradas por contratos finalizados, pendentes de pagamento.</CardDescription>
+          <CardDescription>Comissões geradas por contratos finalizados.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingLeads ? (
@@ -510,16 +492,10 @@ function WalletPageContent() {
                     <TableCell className="font-semibold text-green-500">{formatCurrency(contract.commission)}</TableCell>
                     {userAppRole === 'superadmin' && <TableCell>{formatCurrency(contract.recurrence)}</TableCell>}
                     <TableCell className="text-center">
-                      <Button 
-                        size="sm" 
-                        variant={contract.isPaid ? 'default' : 'outline'}
-                        onClick={() => userAppRole === 'superadmin' && handleToggleCommissionPaid(contract.leadId, contract.isPaid)}
-                        disabled={userAppRole !== 'superadmin'}
-                        className={cn("h-7 px-2", userAppRole === 'superadmin' ? 'cursor-pointer' : 'cursor-not-allowed')}
-                      >
+                      <Badge variant={contract.isPaid ? 'default' : 'outline'} className={cn("h-7 px-2", contract.isPaid && "bg-green-600")}>
                          {contract.isPaid ? <Check className="w-4 h-4 mr-1.5"/> : <CircleDotDashed className="w-4 h-4 mr-1.5"/>}
                          {contract.isPaid ? 'Pago' : 'Pendente'}
-                      </Button>
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
