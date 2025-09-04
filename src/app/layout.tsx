@@ -202,16 +202,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                                 </Link>
                             </SidebarMenuItem>
                          )}
-                         
-                         {userAppRole === 'superadmin' && (
-                            <SidebarMenuItem>
-                                <Link href="/forex-invest">
-                                    <SidebarMenuButton isActive={currentPathname.startsWith('/forex-invest')} tooltip="Forex Invest">
-                                        <LineChart />Forex Invest
-                                    </SidebarMenuButton>
-                                </Link>
-                            </SidebarMenuItem>
-                         )}
 
                          {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/profile"><SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}><CircleUserRound />Perfil</SidebarMenuButton></Link></SidebarMenuItem>
