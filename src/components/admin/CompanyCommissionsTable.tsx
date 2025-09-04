@@ -1,3 +1,4 @@
+
 // src/components/admin/CompanyCommissionsTable.tsx
 "use client";
 
@@ -118,7 +119,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' >) => {
+  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' >) => {
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
     const garantiaChurn = comissaoTotal * 0.10;
@@ -126,7 +127,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const nota = comissaoTotal * 0.12;
     const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
 
-    const jurosValue = (rowData.proposta - comissaoTotal) * 0.12;
+    let jurosRS = 0;
+    let jurosPerc = "0%";
+    if (rowData.empresa === 'BC') {
+        jurosRS = rowData.comissaoImediata * 0.12;
+        jurosPerc = "12%";
+    } else if (rowData.empresa === 'Origo') {
+        jurosRS = rowData.comissaoImediata * 0.17;
+        jurosPerc = "17%";
+    }
+    
     const recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
 
     return {
@@ -136,7 +146,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       garantiaChurn,
       comercializador,
       nota,
-      jurosRS: jurosValue,
+      jurosRS: jurosRS,
+      jurosPerc: jurosPerc,
       recorrenciaComissao,
     };
   }
@@ -223,7 +234,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             quartaComissao: 0,
             dataQuartaComissao: "6 meses depois",
             comissaoPromotor: comissaoPromotorInitial,
-            jurosPerc: "12%",
             recorrenciaAtiva: recorrenciaAtivaInitial,
             recorrenciaPerc: recorrenciaPercInitial,
             segundaComissaoPerc: segundaComissaoPerc,
@@ -547,3 +557,4 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     </Card>
   );
 }
+
