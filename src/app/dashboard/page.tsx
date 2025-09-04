@@ -1,3 +1,4 @@
+
 // /src/app/dashboard/page.tsx
 "use client";
 
@@ -536,7 +537,7 @@ function CalculatorPageContent() {
              <>
                 <CardHeader className="bg-primary/10 p-4 md:p-6 mt-10 rounded-t-lg">
                   <CardTitle className="text-xl md:text-2xl font-bold text-primary text-center">
-                      Simulação da Fatura com Desconto Planus
+                      Simulacao de desconto
                   </CardTitle>
                   <CardDescription className="text-center text-muted-foreground mt-1 text-xs md:text-sm">
                       Veja como ficaria sua fatura com os descontos aplicados, em um layout inspirado na fatura "bowe".
