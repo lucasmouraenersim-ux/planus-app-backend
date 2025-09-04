@@ -4,13 +4,14 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface CompanyCommissionsTableProps {
   leads: LeadWithId[];
@@ -58,6 +59,8 @@ interface TableRowData {
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
   const [tableData, setTableData] = useState<TableRowData[]>([]);
   const userMap = useMemo(() => new Map(allUsers.map(u => [u.uid, u])), [allUsers]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const calculateCommission = (
     proposta: number, 
@@ -122,7 +125,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             ...row, 
             desagil: newDesagilPercent,
             comissaoPromotor: newCommission,
-            // You might want to update comissaoTotal and its installments here as well
             comissaoTotal: newCommission,
           };
         }
@@ -138,8 +140,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
   const handleCompanyChange = async (leadId: string, newCompany: string) => {
     console.log(`Updating lead ${leadId} company to ${newCompany}`);
-    // Example: await updateCrmLeadDetails(leadId, { concessionaria: newCompany });
   };
+
+  // Pagination Logic
+  const totalPages = Math.ceil(tableData.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedData = tableData.slice(startIndex, endIndex);
 
   return (
     <Card>
@@ -188,7 +195,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {tableData.length > 0 ? tableData.map((row) => (
+                {paginatedData.length > 0 ? paginatedData.map((row) => (
                 <TableRow key={row.id}>
                     <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.promotor}</TableCell>
                     <TableCell>{row.cliente}</TableCell>
@@ -249,6 +256,55 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </CardContent>
+       <CardFooter className="flex items-center justify-between py-4">
+        <div className="text-sm text-muted-foreground">
+          {tableData.length} propostas finalizadas encontradas.
+        </div>
+        <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium">Linhas por página</p>
+                <Select
+                    value={`${rowsPerPage}`}
+                    onValueChange={(value) => {
+                    setRowsPerPage(Number(value));
+                    setCurrentPage(1);
+                    }}
+                >
+                    <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={rowsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent side="top">
+                    {[10, 25, 50, 100].map((pageSize) => (
+                        <SelectItem key={pageSize} value={`${pageSize}`}>
+                        {pageSize}
+                        </SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+            </div>
+          <div className="text-sm font-medium">
+            Página {currentPage} de {totalPages}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Próximo
+            </Button>
+          </div>
+        </div>
+      </CardFooter>
     </Card>
   );
 }
