@@ -90,15 +90,13 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
       {/* Header */}
       <div className="bg-[#004460] text-white p-6 md:p-8 rounded-t-lg flex flex-col md:flex-row justify-between items-start mb-0">
         <div className="mb-4 md:mb-0 flex items-center">
-          <Sun className="h-10 w-10 mr-2 text-[#FDB813]" />
-          <div>
-            <h1 className="text-4xl font-bold leading-none">
-              <span className="text-white">plan</span>
-              <span className="text-[#FDB813]">u</span>
-              <span className="text-white">s</span>
-            </h1>
-            <p className="text-lg text-[#FDB813] font-semibold tracking-wider leading-none">ENERGIA</p>
-          </div>
+          <Image 
+            src="https://placehold.co/150x50/004460/FDB813?text=Empresa%0AVencedora" 
+            alt="Logo Empresa Vencedora"
+            width={150}
+            height={50}
+            data-ai-hint="company logo"
+          />
         </div>
         <div className="text-xs space-y-1 md:text-right flex-shrink-0 md:pl-4">
           <p><strong className="font-medium text-gray-300">Nº de Instalação:</strong> {uc}</p>
@@ -269,5 +267,3 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
     </div>
   );
 };
-
-    
