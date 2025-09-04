@@ -12,6 +12,7 @@ import { STAGES_CONFIG } from '@/config/crm-stages';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
 interface CompanyCommissionsTableProps {
   leads: LeadWithId[];
@@ -54,6 +55,9 @@ interface TableRowData {
   nota: number;
   recorrenciaComissao: number;
   recorrenciaCaixa: number;
+  // For dynamic calculation
+  segundaComissaoPerc: number;
+  terceiraComissaoPerc: number;
 }
 
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
@@ -73,59 +77,143 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     return baseCalculo * (baseCommissionRate / 100);
   };
     
+  // Calculate total kWh finalized in the current month once
+  const totalKwhFinalizadoNoMes = useMemo(() => {
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+    return leads
+      .filter(lead => 
+        lead.stageId === 'finalizado' && 
+        lead.completedAt &&
+        isWithinInterval(parseISO(lead.completedAt), { start, end })
+      )
+      .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
+  }, [leads]);
+  
+  // Initialize table data
   useEffect(() => {
     const finalizedLeads = leads.filter(lead => lead.stageId === 'finalizado');
     const initialData = finalizedLeads.map(lead => {
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
-        const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, lead.userId);
-        const comissaoImediataInitial = proposta * 0.5;
+        const empresa = lead.concessionaria && EMPRESA_OPTIONS.includes(lead.concessionaria) ? lead.concessionaria : '';
+        const promotorId = lead.userId;
+
+        // Comissão do Promotor
+        const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
+
+        // Comissão Imediata
+        let comissaoImediata = 0;
+        if (empresa === 'Bowe' || empresa === 'Matrix') {
+            comissaoImediata = proposta * 0.60;
+        } else if (empresa === 'Origo' || empresa === 'BC') {
+            comissaoImediata = proposta * 0.50;
+        }
+
+        // Segunda Comissão
+        let segundaComissao = 0;
+        let segundaComissaoPerc = 45; // Default for BC
+        if (empresa === 'BC') {
+            segundaComissao = proposta * 0.45;
+        } else if (empresa === 'Origo') {
+            // Placeholder logic, you mentioned it's dynamic
+            segundaComissaoPerc = 120; // Defaulting to 120% for Origo
+            segundaComissao = proposta * (segundaComissaoPerc / 100);
+        }
+
+        // Terceira Comissão
+        let terceiraComissao = 0;
+        let terceiraComissaoPerc = 60; // Default for BC
+        if (empresa === 'BC') {
+            terceiraComissao = proposta * 0.60;
+        } else if (empresa === 'Origo') {
+            if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) {
+                terceiraComissaoPerc = 30;
+            } else if (totalKwhFinalizadoNoMes > 40000) {
+                terceiraComissaoPerc = 50; // Default to 50, user can select 70
+            } else {
+                terceiraComissaoPerc = 0;
+            }
+            terceiraComissao = proposta * (terceiraComissaoPerc / 100);
+        }
+
 
         return {
             id: lead.id,
             promotor: lead.sellerName || 'N/A',
-            promotorId: lead.userId,
+            promotorId: promotorId,
             cliente: lead.name,
             status: lead.stageId,
-            empresa: lead.concessionaria || 'N/A',
+            empresa: empresa,
             kwh: lead.kwh || 0,
             proposta: proposta,
             desagil: desagilInitial,
-            comissaoImediata: comissaoImediataInitial,
+            comissaoImediata: comissaoImediata,
             dataComissaoImediata: "3 dias depois",
-            segundaComissao: 0, // Placeholder
+            segundaComissao: segundaComissao,
             dataSegundaComissao: "45 dias depois",
-            terceiraComissao: 0, // Placeholder
+            terceiraComissao: terceiraComissao,
             dataTerceiraComissao: "4 meses depois",
-            quartaComissao: 0, // Placeholder
+            quartaComissao: 0,
             dataQuartaComissao: "6 meses depois",
             comissaoTotal: comissaoPromotorInitial,
             comissaoPromotor: comissaoPromotorInitial,
             lucroBruto: (lead.value || 0) - proposta,
             lucroLiq: ((lead.value || 0) - proposta) * 0.7,
-            jurosPerc: "12%", // Placeholder
+            jurosPerc: "12%",
             jurosRS: ((lead.value || 0) - proposta) * 0.12,
-            garantiaChurn: 0, // Placeholder
-            comercializador: 0, // Placeholder
-            nota: 0, // Placeholder
-            recorrenciaComissao: 0, // Placeholder
-            recorrenciaCaixa: 0, // Placeholder
+            garantiaChurn: 0,
+            comercializador: 0,
+            nota: 0,
+            recorrenciaComissao: 0,
+            recorrenciaCaixa: 0,
+            segundaComissaoPerc: segundaComissaoPerc,
+            terceiraComissaoPerc: terceiraComissaoPerc,
         };
     });
     setTableData(initialData);
-  }, [leads, userMap]);
+  }, [leads, userMap, totalKwhFinalizadoNoMes]);
 
-  const handleDesagilChange = (leadId: string, newDesagilValue: string) => {
-    const newDesagilPercent = parseFloat(newDesagilValue) || 0;
+  const updateRowData = (leadId: string, updates: Partial<TableRowData>) => {
     setTableData(currentData =>
       currentData.map(row => {
         if (row.id === leadId) {
-          const newCommission = calculateCommission(row.proposta, newDesagilPercent, row.promotorId);
+          const updatedRow = { ...row, ...updates };
+
+          // Recalculate commissions if relevant fields changed
+          const comissaoPromotor = calculateCommission(updatedRow.proposta, updatedRow.desagil, updatedRow.promotorId);
+          
+          let comissaoImediata = 0;
+          if (updatedRow.empresa === 'Bowe' || updatedRow.empresa === 'Matrix') {
+              comissaoImediata = updatedRow.proposta * 0.60;
+          } else if (updatedRow.empresa === 'Origo' || updatedRow.empresa === 'BC') {
+              comissaoImediata = updatedRow.proposta * 0.50;
+          }
+
+          let segundaComissao = 0;
+          if (updatedRow.empresa === 'BC') {
+              segundaComissao = updatedRow.proposta * 0.45;
+              updatedRow.segundaComissaoPerc = 45;
+          } else if (updatedRow.empresa === 'Origo') {
+              segundaComissao = updatedRow.proposta * (updatedRow.segundaComissaoPerc / 100);
+          }
+
+          let terceiraComissao = 0;
+          if (updatedRow.empresa === 'BC') {
+              terceiraComissao = updatedRow.proposta * 0.60;
+              updatedRow.terceiraComissaoPerc = 60;
+          } else if (updatedRow.empresa === 'Origo') {
+             terceiraComissao = updatedRow.proposta * (updatedRow.terceiraComissaoPerc / 100);
+          }
+
           return { 
-            ...row, 
-            desagil: newDesagilPercent,
-            comissaoPromotor: newCommission,
-            comissaoTotal: newCommission,
+            ...updatedRow,
+            comissaoImediata,
+            segundaComissao,
+            terceiraComissao,
+            comissaoPromotor: comissaoPromotor,
+            comissaoTotal: comissaoPromotor, // Assuming total is same as promotor for now
           };
         }
         return row;
@@ -136,10 +224,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const getStageBadgeStyle = (stageId: string) => {
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
     return stageConfig ? `${stageConfig.colorClass} text-white` : 'bg-gray-500 text-white';
-  };
-
-  const handleCompanyChange = async (leadId: string, newCompany: string) => {
-    console.log(`Updating lead ${leadId} company to ${newCompany}`);
   };
 
   // Pagination Logic
@@ -154,6 +238,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         <CardTitle>Comissões por Empresas</CardTitle>
         <CardDescription>
           Visão detalhada das propostas de energia e pagamentos de comissões associados (baseado em leads finalizados).
+          <br />
+          <span className="font-semibold text-primary">KWh Finalizados no Mês: {totalKwhFinalizadoNoMes.toLocaleString('pt-BR')} kWh</span>
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -172,9 +258,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 
                 <TableHead>Comissão Imediata (R$)</TableHead>
                 <TableHead>Data</TableHead>
-                <TableHead>2ª Comissão (R$)</TableHead>
+                <TableHead>2ª Comissão</TableHead>
                 <TableHead>Data.1</TableHead>
-                <TableHead>3ª Comissão (R$)</TableHead>
+                <TableHead>3ª Comissão</TableHead>
                 <TableHead>Data.2</TableHead>
                 <TableHead>4ª Comissão (R$)</TableHead>
                 <TableHead>Data.3</TableHead>
@@ -203,7 +289,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>
                         <Select
                             defaultValue={EMPRESA_OPTIONS.includes(row.empresa) ? row.empresa : undefined}
-                            onValueChange={(value) => handleCompanyChange(row.id, value)}
+                            onValueChange={(value) => updateRowData(row.id, { empresa: value })}
                         >
                             <SelectTrigger className="w-[120px] h-8">
                                 <SelectValue placeholder="Selecione..." />
@@ -221,15 +307,54 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                         <Input 
                             type="number"
                             value={row.desagil}
-                            onChange={(e) => handleDesagilChange(row.id, e.target.value)}
+                            onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
                             className="h-8 text-right bg-yellow-100 dark:bg-yellow-900/50"
                         />
                     </TableCell>
-                    <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(row.comissaoImediata)}</TableCell>
                     <TableCell>{row.dataComissaoImediata}</TableCell>
-                    <TableCell>{formatCurrency(row.segundaComissao)}</TableCell>
+                    
+                    <TableCell className="w-[150px]">
+                        {row.empresa === 'BC' && formatCurrency(row.segundaComissao)}
+                        {row.empresa === 'Origo' && (
+                            <Select
+                                value={String(row.segundaComissaoPerc)}
+                                onValueChange={(value) => updateRowData(row.id, { segundaComissaoPerc: parseInt(value, 10) })}
+                            >
+                                <SelectTrigger className="w-full h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="120">120% ({formatCurrency(row.proposta * 1.2)})</SelectItem>
+                                    <SelectItem value="150">150% ({formatCurrency(row.proposta * 1.5)})</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                         {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.segundaComissao)}
+                    </TableCell>
+
                     <TableCell>{row.dataSegundaComissao}</TableCell>
-                    <TableCell>{formatCurrency(row.terceiraComissao)}</TableCell>
+
+                     <TableCell className="w-[150px]">
+                        {row.empresa === 'BC' && formatCurrency(row.terceiraComissao)}
+                        {row.empresa === 'Origo' && (
+                            <Select
+                                value={String(row.terceiraComissaoPerc)}
+                                onValueChange={(value) => updateRowData(row.id, { terceiraComissaoPerc: parseInt(value, 10) })}
+                            >
+                                <SelectTrigger className="w-full h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="30">30% ({formatCurrency(row.proposta * 0.3)})</SelectItem>
+                                    <SelectItem value="50">50% ({formatCurrency(row.proposta * 0.5)})</SelectItem>
+                                    <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.terceiraComissao)}
+                    </TableCell>
+                    
                     <TableCell>{row.dataTerceiraComissao}</TableCell>
                     <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
                     <TableCell>{row.dataQuartaComissao}</TableCell>
@@ -271,7 +396,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     }}
                 >
                     <SelectTrigger className="h-8 w-[70px]">
-                    <SelectValue placeholder={rowsPerPage} />
+                    <SelectValue placeholder={String(rowsPerPage)} />
                     </SelectTrigger>
                     <SelectContent side="top">
                     {[10, 25, 50, 100].map((pageSize) => (
