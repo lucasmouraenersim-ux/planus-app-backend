@@ -384,13 +384,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>{formatCurrency(row.nota)}</TableCell>
                     <TableCell></TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 w-[200px]">
                         <Checkbox
                           id={`recorrencia-${row.id}`}
                           checked={row.recorrenciaAtiva}
                           onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
                         />
-                        {row.recorrenciaAtiva && (
+                        {row.recorrenciaAtiva ? (
                            <Input
                               type="number"
                               value={row.recorrenciaPerc}
@@ -398,6 +398,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                               className="h-8 w-20 text-right"
                               placeholder="%"
                             />
+                        ) : (
+                          <div className="w-20"></div>
                         )}
                         <span>{formatCurrency(row.recorrenciaComissao)}</span>
                       </div>
@@ -406,7 +408,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 </TableRow>
                 )) : (
                     <TableRow>
-                        <TableCell colSpan={26} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                        <TableCell colSpan={27} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                     </TableRow>
                 )}
             </TableBody>
