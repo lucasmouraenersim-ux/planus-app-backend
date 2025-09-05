@@ -201,7 +201,7 @@ export async function assignLeadToSeller(leadId: string, seller: { uid: string; 
     leadsRef,
     where("userId", "==", seller.uid),
     where("stageId", "in", activeStages),
-    where("hasFeedbackAttachment", "==", false)
+    where("hasFeedbackAttachment", "!=", true)
   );
 
   const snapshot = await getCountFromServer(q);
