@@ -77,10 +77,10 @@ export default function LoginPage() {
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
             <Image
-              src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/6fcd1f5f2911ab2dce68546d03c967214790d0ba/LOGO_LOGO_BRANCA.png"
-              alt="Planus Logo"
-              width={180} 
-              height={60} 
+              src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/LOGO_SENT_ENERGIA_HORIZONTAL_BRANCA.png"
+              alt="Sent Energia Logo"
+              width={200} 
+              height={50} 
               priority
               data-ai-hint="company logo white"
             />
