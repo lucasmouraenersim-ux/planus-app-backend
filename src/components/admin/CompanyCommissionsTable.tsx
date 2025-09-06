@@ -1,4 +1,3 @@
-
 // src/components/admin/CompanyCommissionsTable.tsx
 "use client";
 
@@ -21,6 +20,7 @@ import type { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
+import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 
 
 interface CompanyCommissionsTableProps {
@@ -172,7 +172,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const initialData = leadsForCommission.map(lead => {
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
-        const empresa = 'Bowe'; // Default all existing leads to Bowe
+        const empresa = lead.empresa || 'Bowe'; // Use saved company or default to Bowe
         const promotorId = lead.userId;
 
         // Recorrência
@@ -272,6 +272,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   }, [leads, userMap, totalKwhFinalizadoNoMes]);
 
   const updateRowData = (leadId: string, updates: Partial<TableRowData>) => {
+    // Also save to firestore
+    if (updates.empresa) {
+        updateCrmLeadDetails(leadId, { empresa: updates.empresa });
+    }
+
     setTableData(currentData =>
       currentData.map(row => {
         if (row.id === leadId) {

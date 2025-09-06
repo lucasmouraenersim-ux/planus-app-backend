@@ -1,4 +1,3 @@
-
 import type { Timestamp } from 'firebase/firestore';
 
 export type StageId =
@@ -97,6 +96,7 @@ export interface LeadDocumentData {
   discountPercentage?: number; // Percentual de desconto negociado
   valueAfterDiscount?: number; // Valor da conta após o desconto
   commissionPaid?: boolean; // Se a comissão deste contrato já foi paga
+  empresa?: string; // New field to store the selected company for commissions
   
   // New Feedback Fields
   sellerNotes?: string;
