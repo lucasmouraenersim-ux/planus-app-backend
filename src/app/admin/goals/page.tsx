@@ -59,7 +59,6 @@ export default function GoalsPage() {
   const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
   const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
   
-  // State to manage assignments: { companyId: { placeholderIndex: leadId } }
   const [assignments, setAssignments] = useState<Record<string, Record<number, string>>>({});
 
   useEffect(() => {
@@ -85,16 +84,19 @@ export default function GoalsPage() {
   
   const companyProgress = useMemo(() => {
     const progress: { [key in CompanyGoal['id']]: number } = { bc: 0, origo: 0, fit_energia: 0 };
-    currentMonthLeads.forEach(lead => {
-      const value = lead.valueAfterDiscount || 0;
-      const leadCompany = (lead.empresa || '').toLowerCase();
-
-      if (leadCompany.includes('bc')) progress.bc += value;
-      else if (leadCompany.includes('origo')) progress.origo += value;
-      else if (leadCompany.includes('fit')) progress.fit_energia += value;
+    Object.keys(assignments).forEach(companyId => {
+      const companyAssignments = assignments[companyId as CompanyGoal['id']];
+      if (companyAssignments) {
+        Object.values(companyAssignments).forEach(leadId => {
+          const lead = currentMonthLeads.find(l => l.id === leadId);
+          if (lead && lead.valueAfterDiscount) {
+            progress[companyId as CompanyGoal['id']] += lead.valueAfterDiscount;
+          }
+        });
+      }
     });
     return progress;
-  }, [currentMonthLeads]);
+  }, [currentMonthLeads, assignments]);
 
   const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia;
 
@@ -110,7 +112,6 @@ export default function GoalsPage() {
             newAssignments[companyId] = {};
         }
 
-        // Check if the lead is already assigned somewhere else and remove it
         Object.keys(newAssignments).forEach(compId => {
             Object.keys(newAssignments[compId]).forEach(index => {
                 if (newAssignments[compId][Number(index)] === leadId) {
@@ -128,11 +129,20 @@ export default function GoalsPage() {
         return newAssignments;
     });
   };
+  
+  const allAssignedLeadIds = useMemo(() => 
+    new Set(Object.values(assignments).flatMap(compAssignments => Object.values(compAssignments))),
+    [assignments]
+  );
+  
+  const unassignedLeads = useMemo(() =>
+    currentMonthLeads.filter(lead => !allAssignedLeadIds.has(lead.id)),
+    [currentMonthLeads, allAssignedLeadIds]
+  );
 
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
     
-    // Corrected: Progress should be calculated from assigned leads in the UI
     const companyAssignments = assignments[company.id] || {};
     const assignedLeadsForCompany = useMemo(() => 
         Object.values(companyAssignments)
@@ -212,17 +222,6 @@ export default function GoalsPage() {
   
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    
-    // Corrected: All assigned leads from ALL companies
-    const allAssignedLeadIds = useMemo(() => 
-        new Set(Object.values(assignments).flatMap(compAssignments => Object.values(compAssignments))),
-    [assignments]);
-
-    // Corrected: Unassigned leads are those from the current month not in the `allAssignedLeadIds` set
-    const unassignedLeads = useMemo(() =>
-        currentMonthLeads.filter(lead => !allAssignedLeadIds.has(lead.id)),
-    [currentMonthLeads, allAssignedLeadIds]);
-    
     const companyAssignments = assignments[company.id] || {};
 
     const tableData = useMemo((): ClientDataRow[] => {
