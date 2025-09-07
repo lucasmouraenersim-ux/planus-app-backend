@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -217,14 +217,14 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
   // Calculate Receivables and Monthly Revenue
   useEffect(() => {
-    const relevantStages: StageId[] = ['finalizado', 'assinado', 'conformidade'];
-    const receivableLeads = leads.filter(l => 
-        relevantStages.includes(l.stageId) && 
-        (l.completedAt || l.signedAt)
-    );
+    const relevantStages: StageId[] = ['finalizado', 'assinado', 'conformidade', 'contrato'];
+    const receivableLeads = leads.filter(l => relevantStages.includes(l.stageId));
     
     const calculatedReceivables: Receivable[] = receivableLeads.map(lead => {
-      const finalizationDate = parseISO(lead.completedAt || lead.signedAt!);
+      // Use completedAt, signedAt, or createdAt as the base date for calculation.
+      const baseDateStr = lead.completedAt || lead.signedAt || lead.createdAt;
+      const finalizationDate = parseISO(baseDateStr);
+
       const proposta = lead.valueAfterDiscount || 0;
       const empresa = lead.empresa || 'Bowe';
 
@@ -1236,7 +1236,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                               <SelectItem value="9999">Ilimitado</SelectItem>
                             </SelectContent>
                           </Select>
-                          <FormDescription className="text-xs">Máximo de leads sem feedback que o vendedor pode ter.</FormDescription>
+                          <p className="text-xs text-muted-foreground">Máximo de leads sem feedback que o vendedor pode ter.</p>
                         </FormItem>
                       )}
                     />
@@ -1248,7 +1248,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <FormItem>
                           <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta (%)</FormLabel>
                           <FormControl><Input type="number" step="1" placeholder="Padrão do Nível" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <FormDescription className="text-xs">Deixe em branco para usar o padrão do nível (40% ou 50%).</FormDescription>
+                          <p className="text-xs text-muted-foreground">Deixe em branco para usar o padrão do nível (40% ou 50%).</p>
                           <FormMessage />
                       </FormItem>
                     )} />
@@ -1256,7 +1256,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <FormItem>
                           <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência (%)</FormLabel>
                           <FormControl><Input type="number" step="0.1" placeholder="Sem Recorrência" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <FormDescription className="text-xs">Deixe em branco para sem recorrência.</FormDescription>
+                          <p className="text-xs text-muted-foreground">Deixe em branco para sem recorrência.</p>
                           <FormMessage />
                         </FormItem>
                     )} />
