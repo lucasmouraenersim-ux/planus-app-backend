@@ -251,13 +251,29 @@ export default function GoalsPage() {
         const assignedLead = assignedLeadId ? allLeads.find(l => l.id === assignedLeadId) : undefined;
         
         if (assignedLead) {
+          const proposta = assignedLead.valueAfterDiscount || 0;
+          const desagil = assignedLead.discountPercentage || 0;
+          let commission = 0;
+          let recurrence = 0;
+          
+          if (company.id === 'fit_energia') {
+              commission = proposta; // 100%
+              if (desagil < 25) {
+                  recurrence = proposta * ((25 - desagil) / 100);
+              }
+          } else if (company.id === 'bc') {
+              commission = proposta * 1.6; // 160%
+          } else if (company.id === 'origo') {
+              commission = proposta * 1.5; // 150%
+          }
+
           rows.push({
             leadId: assignedLead.id,
             name: assignedLead.name,
             consumption: assignedLead.kwh || 0,
-            discount: assignedLead.discountPercentage || 0,
-            commission: (assignedLead.valueAfterDiscount || 0) * 0.4, // Example commission
-            recurrence: 0,
+            discount: desagil,
+            commission: commission,
+            recurrence: recurrence,
             isPlaceholder: false,
           });
         } else {
@@ -393,4 +409,3 @@ export default function GoalsPage() {
     </div>
   );
 }
-
