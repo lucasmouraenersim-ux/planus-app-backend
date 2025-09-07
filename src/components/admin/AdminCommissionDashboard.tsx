@@ -126,12 +126,10 @@ interface AdminCommissionDashboardProps {
 }
 
 // New component for Company Management
-function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
+function CompanyManagementTab() {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const STORAGE_KEY = 'companyManagementSettings';
-  const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance';
 
-  // State for company management
   const [proLabore, setProLabore] = useState(25);
   const [tax, setTax] = useState(6);
   const [reinvest, setReinvest] = useState(15);
@@ -139,17 +137,6 @@ function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
   const [riskFund, setRiskFund] = useState(10000);
   const [monthlyRevenue, setMonthlyRevenue] = useState(120000);
 
-  // State for personal finance management
-  const [personalCapital, setPersonalCapital] = useState(500000);
-  const [monthlyExpenses, setMonthlyExpenses] = useState(8000);
-  const [investmentAllocation, setInvestmentAllocation] = useState({
-    stocks: 40,
-    fixedIncome: 30,
-    crypto: 15,
-    realEstate: 15,
-  });
-
-  // Load from localStorage on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem(STORAGE_KEY);
     if (savedSettings) {
@@ -161,30 +148,12 @@ function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
       setRiskFund(riskFund || 10000);
       setMonthlyRevenue(monthlyRevenue || 120000);
     }
-    if (userRole === 'superadmin') {
-      const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
-      if (savedPersonal) {
-          const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
-          setPersonalCapital(personalCapital || 500000);
-          setMonthlyExpenses(monthlyExpenses || 8000);
-          setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
-      }
-    }
-  }, [userRole]);
+  }, []);
 
-  // Save to localStorage on change
   useEffect(() => {
     const settings = { proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue]);
-
-  useEffect(() => {
-      if (userRole === 'superadmin') {
-        const personalData = { personalCapital, monthlyExpenses, investmentAllocation };
-        localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
-      }
-  }, [personalCapital, monthlyExpenses, investmentAllocation, userRole]);
-
 
   const proLaboreValue = monthlyRevenue * (proLabore / 100);
   const taxValue = monthlyRevenue * (tax / 100);
@@ -244,12 +213,43 @@ function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
               <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Lucro Líquido Estimado:</span><span className="font-bold text-primary">{formatCurrency(netProfit)}</span></div>
           </CardContent>
       </Card>
+    </div>
+  );
+}
 
-      {userRole === 'superadmin' && (
-        <>
-          <Card>
+function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) {
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance';
+  
+  const [personalCapital, setPersonalCapital] = useState(500000);
+  const [monthlyExpenses, setMonthlyExpenses] = useState(8000);
+  const [investmentAllocation, setInvestmentAllocation] = useState({
+    stocks: 40,
+    fixedIncome: 30,
+    crypto: 15,
+    realEstate: 15,
+  });
+
+  useEffect(() => {
+    const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
+    if (savedPersonal) {
+        const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
+        setPersonalCapital(personalCapital || 500000);
+        setMonthlyExpenses(monthlyExpenses || 8000);
+        setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+    }
+  }, []);
+
+  useEffect(() => {
+      const personalData = { personalCapital, monthlyExpenses, investmentAllocation };
+      localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
+  }, [personalCapital, monthlyExpenses, investmentAllocation]);
+
+  return (
+    <div className="space-y-6">
+        <Card>
             <CardHeader>
-              <CardTitle className="flex items-center"><PiggyBank className="mr-2 h-5 w-5" />Controle Financeiro Pessoal (Super Admin)</CardTitle>
+              <CardTitle className="flex items-center"><PiggyBank className="mr-2 h-5 w-5" />Controle Financeiro Pessoal</CardTitle>
               <CardDescription>Gerencie seu capital pessoal, despesas e investimentos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -285,22 +285,20 @@ function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
                     </div>
                 </div>
             </CardContent>
-          </Card>
-          <Card>
-              <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Patrimônio Total:</span><span className="font-semibold">{formatCurrency(personalCapital)}</span></div>
-                  <Separator/>
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Ações:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</span></div>
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Renda Fixa:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</span></div>
-                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Cripto:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</span></div>
-                   <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Imóveis:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</span></div>
-                  <Separator/>
-                  <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</span><span className="font-bold text-primary">{formatCurrency(proLaboreValue - monthlyExpenses)}</span></div>
-              </CardContent>
-          </Card>
-        </>
-      )}
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Patrimônio Total:</span><span className="font-semibold">{formatCurrency(personalCapital)}</span></div>
+                <Separator/>
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Ações:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</span></div>
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Renda Fixa:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</span></div>
+                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Cripto:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</span></div>
+                 <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Imóveis:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</span></div>
+                <Separator/>
+                <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</span><span className="font-bold text-primary">{formatCurrency(monthlyProLabore - monthlyExpenses)}</span></div>
+            </CardContent>
+        </Card>
     </div>
   );
 }
@@ -677,6 +675,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           <TabsTrigger value="users"><Users className="mr-2 h-4 w-4"/>Usuários</TabsTrigger>
           <TabsTrigger value="commissions"><ClipboardList className="mr-2 h-4 w-4"/>Comissões por Empresas</TabsTrigger>
           <TabsTrigger value="management"><Building className="mr-2 h-4 w-4"/>Gestão da Empresa</TabsTrigger>
+          {userAppRole === 'superadmin' && (
+            <TabsTrigger value="personal_finance"><PiggyBank className="mr-2 h-4 w-4"/>Finanças Pessoais</TabsTrigger>
+          )}
           <TabsTrigger value="withdrawals"><WalletCards className="mr-2 h-4 w-4"/>Saques</TabsTrigger>
         </TabsList>
         
@@ -835,8 +836,14 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="management">
-            <CompanyManagementTab userRole={userAppRole} />
+            <CompanyManagementTab />
         </TabsContent>
+        
+        {userAppRole === 'superadmin' && (
+          <TabsContent value="personal_finance">
+            <PersonalFinanceTab monthlyProLabore={0} />
+          </TabsContent>
+        )}
 
         <TabsContent value="withdrawals">
             <Card className="bg-card/70 backdrop-blur-lg border">
