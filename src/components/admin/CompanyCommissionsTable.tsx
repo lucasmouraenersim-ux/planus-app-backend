@@ -172,7 +172,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const initialData = leadsForCommission.map(lead => {
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
-        const empresa = lead.empresa || 'Bowe'; // Use saved company or default to Bowe
+        const empresa = EMPRESA_OPTIONS.includes(lead.empresa || '') ? lead.empresa : 'Bowe'; // Use saved company or default to Bowe
         const promotorId = lead.userId;
 
         // Recorrência
@@ -465,7 +465,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell><Badge className={getStageBadgeStyle(row.status as any)}>{STAGES_CONFIG.find(s => s.id === row.status)?.title || row.status}</Badge></TableCell>
                     <TableCell>
                         <Select
-                            defaultValue={EMPRESA_OPTIONS.includes(row.empresa) ? row.empresa : undefined}
+                            value={row.empresa}
                             onValueChange={(value) => updateRowData(row.id, { empresa: value })}
                         >
                             <SelectTrigger className="w-[120px] h-8">
