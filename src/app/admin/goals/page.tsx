@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth } from 'date-fns';
 import type { LeadWithId } from '@/types/crm';
@@ -33,6 +34,7 @@ interface ClientDataRow {
   commission: number;
   recurrence: number;
   isPlaceholder: boolean;
+  leadId?: string;
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -56,6 +58,9 @@ export default function GoalsPage() {
   const [mainGoal, setMainGoal] = useState(170000);
   const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
   const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
+  
+  // State to manage assignments: { companyId: { placeholderIndex: leadId } }
+  const [assignments, setAssignments] = useState<Record<string, Record<number, string>>>({});
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -82,10 +87,11 @@ export default function GoalsPage() {
     const progress: { [key in CompanyGoal['id']]: number } = { bc: 0, origo: 0, fit_energia: 0 };
     currentMonthLeads.forEach(lead => {
       const value = lead.valueAfterDiscount || 0;
-      const leadCompany = lead.empresa || '';
-      if (leadCompany.toLowerCase() === 'bc') progress.bc += value;
-      else if (leadCompany.toLowerCase() === 'origo') progress.origo += value;
-      else if (leadCompany.toLowerCase() === 'fit energia') progress.fit_energia += value;
+      const leadCompany = (lead.empresa || '').toLowerCase();
+
+      if (leadCompany.includes('bc')) progress.bc += value;
+      else if (leadCompany.includes('origo')) progress.origo += value;
+      else if (leadCompany.includes('fit')) progress.fit_energia += value;
     });
     return progress;
   }, [currentMonthLeads]);
@@ -97,9 +103,28 @@ export default function GoalsPage() {
     setIsEditingMainGoal(false);
   };
   
+  const handleAssignmentChange = (companyId: string, placeholderIndex: number, leadId: string) => {
+    setAssignments(prev => {
+        const newAssignments = { ...prev };
+        if (!newAssignments[companyId]) {
+            newAssignments[companyId] = {};
+        }
+
+        // Check if the lead is already assigned somewhere else for this company and remove it
+        Object.keys(newAssignments[companyId]).forEach(index => {
+            if (newAssignments[companyId][Number(index)] === leadId) {
+                delete newAssignments[companyId][Number(index)];
+            }
+        });
+        
+        newAssignments[companyId][placeholderIndex] = leadId;
+        return newAssignments;
+    });
+  };
+
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase() === company.name.toLowerCase()), [currentMonthLeads, company.name]);
+    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())), [currentMonthLeads, company.name]);
     const kwhProgress = useMemo(() => companyLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [companyLeads]);
     const clientCount = useMemo(() => companyLeads.length, [companyLeads]);
 
@@ -171,41 +196,58 @@ export default function GoalsPage() {
   
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase() === company.name.toLowerCase()), [currentMonthLeads, company.name]);
     
+    const leadsByCompany = useMemo(() => 
+        currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())),
+    [currentMonthLeads, company.name]);
+    
+    const companyAssignments = assignments[company.id] || {};
+    const assignedLeadIds = new Set(Object.values(companyAssignments));
+
+    const unassignedLeads = useMemo(() =>
+        currentMonthLeads.filter(lead => !assignedLeadIds.has(lead.id)),
+    [currentMonthLeads, assignedLeadIds]);
+
     const tableData = useMemo((): ClientDataRow[] => {
-      const realClientRows: ClientDataRow[] = companyLeads.map(lead => ({
-        name: lead.name,
-        consumption: lead.kwh || 0,
-        discount: lead.discountPercentage || 0,
-        commission: (lead.valueAfterDiscount || 0) * 0.4, // Simplified, adjust if needed
-        recurrence: 0,
-        isPlaceholder: false,
-      }));
+      const rows: ClientDataRow[] = [];
+      const usedLeadIds = new Set<string>();
 
-      const requiredClients = company.clientTarget;
-      const placeholderCount = Math.max(0, requiredClients - realClientRows.length);
-      
-      const placeholderRows: ClientDataRow[] = Array.from({ length: placeholderCount }, (_, i) => {
-        const clientIndex = realClientRows.length + i + 1;
-        return {
-          name: `Cliente ${String(clientIndex).padStart(2, '0')}/${format(new Date(), 'MM')}`,
-          consumption: company.avgKwhPerClient,
-          discount: 15,
-          commission: 0,
-          recurrence: 0,
-          isPlaceholder: true,
-        };
-      });
-
-      return [...realClientRows, ...placeholderRows];
-    }, [companyLeads, company]);
+      for (let i = 0; i < company.clientTarget; i++) {
+        const assignedLeadId = companyAssignments[i];
+        const assignedLead = assignedLeadId ? allLeads.find(l => l.id === assignedLeadId) : undefined;
+        
+        if (assignedLead && !usedLeadIds.has(assignedLead.id)) {
+            rows.push({
+                leadId: assignedLead.id,
+                name: assignedLead.name,
+                consumption: assignedLead.kwh || 0,
+                discount: assignedLead.discountPercentage || 0,
+                commission: (assignedLead.valueAfterDiscount || 0) * 0.4,
+                recurrence: 0,
+                isPlaceholder: false,
+            });
+            usedLeadIds.add(assignedLead.id);
+        } else {
+            rows.push({
+                name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(new Date(), 'MM')}`,
+                consumption: company.avgKwhPerClient,
+                discount: 15,
+                commission: 0,
+                recurrence: 0,
+                isPlaceholder: true,
+            });
+        }
+      }
+      return rows;
+    }, [company, companyAssignments, allLeads]);
 
     const avgDiscount = useMemo(() => {
-      if (companyLeads.length === 0) return 0;
-      const totalDiscount = companyLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
-      return totalDiscount / companyLeads.length;
-    }, [companyLeads]);
+      const assignedLeads = Object.values(companyAssignments).map(id => allLeads.find(l => l.id === id)).filter(Boolean) as LeadWithId[];
+      if (assignedLeads.length === 0) return 0;
+      const totalDiscount = assignedLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
+      return totalDiscount / assignedLeads.length;
+    }, [companyAssignments, allLeads]);
+
 
     return (
       <Card className="bg-card/70 backdrop-blur-lg border">
@@ -222,8 +264,24 @@ export default function GoalsPage() {
             <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Consumo (KWh)</TableHead><TableHead>Deságio (%)</TableHead><TableHead>Comissão Total</TableHead><TableHead>Recorrência</TableHead></TableRow></TableHeader>
             <TableBody>
               {tableData.map((row, index) => (
-                <TableRow key={index} className={row.isPlaceholder ? 'opacity-50' : 'font-semibold'}>
-                  <TableCell>{row.name}</TableCell>
+                <TableRow key={index} className={row.isPlaceholder ? 'opacity-60' : 'font-semibold'}>
+                  <TableCell>
+                    {row.isPlaceholder ? (
+                        <Select onValueChange={(leadId) => handleAssignmentChange(company.id, index, leadId)}>
+                            <SelectTrigger className="w-[200px] h-8 text-xs bg-muted/50">
+                                <SelectValue placeholder={row.name} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="remove" className="text-red-500">Remover Associação</SelectItem>
+                                {unassignedLeads.map(lead => (
+                                    <SelectItem key={lead.id} value={lead.id}>{lead.name} ({lead.kwh} kWh)</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        row.name
+                    )}
+                  </TableCell>
                   <TableCell>{formatKwh(row.consumption)}</TableCell>
                   <TableCell>{row.discount.toFixed(2)}%</TableCell>
                   <TableCell>{formatCurrency(row.commission)}</TableCell>
