@@ -150,6 +150,32 @@ interface Receivable {
   isThirdPaymentDateEditable: boolean;
 }
 
+const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number, prefix?: string, suffix?: string }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const duration = 800; // Animation duration in milliseconds
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const startValue = displayValue;
+
+    const animationFrame = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const nextValue = startValue + (value - startValue) * progress;
+      
+      setDisplayValue(nextValue);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animationFrame);
+      }
+    };
+    requestAnimationFrame(animationFrame);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return <>{prefix}{displayValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{suffix}</>;
+};
+
 
 // New component for Company Management
 function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
@@ -218,7 +244,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
   // Calculate Receivables and Monthly Revenue
   useEffect(() => {
-    const relevantStages: StageId[] = ['finalizado', 'assinado', 'conformidade', 'contrato'];
+    const relevantStages: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
     const receivableLeads = leads.filter(l => relevantStages.includes(l.stageId));
     
     const calculatedReceivables: Receivable[] = receivableLeads.map(lead => {
@@ -388,7 +414,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         <CardContent className="space-y-6">
           <div>
             <Label htmlFor="monthlyRevenue">Faturamento Previsto para o Mês (R$)</Label>
-            <Input id="monthlyRevenue" type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(Number(e.target.value))} readOnly className="font-bold text-lg" />
+            <div className="text-3xl font-bold text-primary mt-1">
+                <AnimatedNumber value={monthlyRevenue} prefix="R$ " />
+            </div>
             <p className="text-sm text-muted-foreground mt-1">Calculado com base nas datas de pagamento das comissões abaixo.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
