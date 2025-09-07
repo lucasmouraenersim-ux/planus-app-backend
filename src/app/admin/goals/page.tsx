@@ -301,12 +301,26 @@ export default function GoalsPage() {
 
       const placeholderCount = company.clientTarget - rows.length;
       for (let i = 0; i < placeholderCount; i++) {
+          const placeholderProposal = (company.avgKwhPerClient * KWH_TO_REAIS_FACTOR) * (1 - (15 / 100)); // Simula proposta para 15% deságio
+          let placeholderCommission = 0;
+          let placeholderRecurrence = 0;
+          if (company.id === 'fit_energia') {
+              placeholderCommission = placeholderProposal;
+              placeholderRecurrence = placeholderProposal * (10 / 100); // 25% - 15% = 10%
+          } else if (company.id === 'bc') {
+              placeholderCommission = placeholderProposal * 1.6;
+          } else if (company.id === 'origo') {
+              placeholderCommission = placeholderProposal * 1.5;
+          } else if (company.id === 'bowe') {
+              placeholderCommission = placeholderProposal * 0.6;
+          }
+          
           rows.push({
             name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(selectedMonth, 'MM')}`,
             consumption: company.avgKwhPerClient,
             discount: 15,
-            commission: 0,
-            recurrence: 0,
+            commission: placeholderCommission,
+            recurrence: placeholderRecurrence,
             isPlaceholder: true,
           });
       }
