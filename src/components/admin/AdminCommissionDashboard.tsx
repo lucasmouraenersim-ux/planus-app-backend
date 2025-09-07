@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, nextFriday, setDate as setDateFn } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -63,7 +63,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from '@/components/ui/separator';
+import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
@@ -134,24 +134,46 @@ interface Employee {
   monthlyRevenueGenerated: number;
 }
 
+interface Receivable {
+  leadId: string;
+  clientName: string;
+  company: string;
+  finalizationDate: Date;
+  immediateCommission: number;
+  immediatePaymentDate: Date;
+  secondCommission: number;
+  secondPaymentDate: Date;
+  isSecondPaymentDateEditable: boolean;
+  thirdCommission: number;
+  thirdPaymentDate: Date;
+  isThirdPaymentDateEditable: boolean;
+}
+
 
 // New component for Company Management
-function CompanyManagementTab() {
+function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const STORAGE_KEY = 'companyManagementSettings';
   const PAYROLL_STORAGE_KEY = 'companyPayroll';
+  const RECEIVABLE_DATES_KEY = 'receivableDates';
+
 
   const [proLabore, setProLabore] = useState(25);
   const [tax, setTax] = useState(6);
   const [reinvest, setReinvest] = useState(15);
   const [riskFund, setRiskFund] = useState(10000);
-  const [monthlyRevenue, setMonthlyRevenue] = useState(120000);
   
   const [payroll, setPayroll] = useState<Employee[]>([]);
   const [newEmployee, setNewEmployee] = useState({ name: '', regime: 'CLT' as 'CLT' | 'PJ', role: 'SDR' as 'SDR' | 'Marketing' | 'Outro', salary: 0, monthlyRevenueGenerated: 0 });
 
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [receivableDates, setReceivableDates] = useState<Record<string, { second?: string; third?: string }>>({});
+
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+
+  // Load from LocalStorage
   useEffect(() => {
-    const savedSettings = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+    const savedSettings = localStorage.getItem(STORAGE_KEY);
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
@@ -159,32 +181,143 @@ function CompanyManagementTab() {
         setTax(parsed.tax || 6);
         setReinvest(parsed.reinvest || 15);
         setRiskFund(parsed.riskFund || 10000);
-        setMonthlyRevenue(parsed.monthlyRevenue || 120000);
-      } catch (e) {
-        console.error("Failed to parse company settings from localStorage", e);
-      }
+      } catch (e) { console.error("Failed to parse company settings", e); }
     }
-    const savedPayroll = typeof window !== 'undefined' ? localStorage.getItem(PAYROLL_STORAGE_KEY) : null;
-    if(savedPayroll) {
-      try {
-        setPayroll(JSON.parse(savedPayroll));
-      } catch (e) {
-        console.error("Failed to parse payroll from localStorage", e);
-      }
+    const savedPayroll = localStorage.getItem(PAYROLL_STORAGE_KEY);
+    if (savedPayroll) {
+      try { setPayroll(JSON.parse(savedPayroll)); } 
+      catch (e) { console.error("Failed to parse payroll", e); }
+    }
+    const savedDates = localStorage.getItem(RECEIVABLE_DATES_KEY);
+    if (savedDates) {
+      try { setReceivableDates(JSON.parse(savedDates)); }
+      catch (e) { console.error("Failed to parse receivable dates", e); }
     }
   }, []);
 
+  // Save to LocalStorage
   useEffect(() => {
-    const settings = { proLabore, tax, reinvest, riskFund, monthlyRevenue };
+    const settings = { proLabore, tax, reinvest, riskFund };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [proLabore, tax, reinvest, riskFund, monthlyRevenue]);
+  }, [proLabore, tax, reinvest, riskFund]);
 
   useEffect(() => {
     localStorage.setItem(PAYROLL_STORAGE_KEY, JSON.stringify(payroll));
   }, [payroll]);
-  
-  const totalPayroll = useMemo(() => payroll.reduce((sum, emp) => sum + emp.salary, 0), [payroll]);
 
+  useEffect(() => {
+    localStorage.setItem(RECEIVABLE_DATES_KEY, JSON.stringify(receivableDates));
+  }, [receivableDates]);
+
+  // Calculate Receivables and Monthly Revenue
+  useEffect(() => {
+    const finalizedLeads = leads.filter(l => l.stageId === 'finalizado' && l.completedAt);
+    
+    const calculatedReceivables: Receivable[] = finalizedLeads.map(lead => {
+      const finalizationDate = parseISO(lead.completedAt!);
+      const proposta = lead.valueAfterDiscount || 0;
+      const empresa = lead.empresa || 'Bowe';
+
+      let immediateCommission = 0;
+      let immediatePaymentDate = nextFriday(finalizationDate);
+      
+      let secondCommission = 0;
+      let secondPaymentDate = new Date();
+      let isSecondPaymentDateEditable = false;
+
+      let thirdCommission = 0;
+      let thirdPaymentDate = new Date();
+      let isThirdPaymentDateEditable = false;
+
+      // Fit Energia
+      if (empresa === 'Fit Energia') {
+        immediateCommission = proposta * 0.40;
+        immediatePaymentDate = setDateFn(addMonths(finalizationDate, 1), 15);
+        secondCommission = proposta * 0.60;
+        secondPaymentDate = addMonths(finalizationDate, 4);
+        isSecondPaymentDateEditable = true;
+      }
+      // BC
+      else if (empresa === 'BC') {
+        immediateCommission = proposta * 0.50;
+        secondCommission = proposta * 0.45;
+        secondPaymentDate = setDateFn(addMonths(finalizationDate, 1), 20);
+        thirdCommission = proposta * 0.60;
+        thirdPaymentDate = addMonths(finalizationDate, 4);
+        isThirdPaymentDateEditable = true;
+      }
+      // Origo
+      else if (empresa === 'Origo') {
+        immediateCommission = proposta * 0.50;
+        secondCommission = proposta;
+        secondPaymentDate = setDateFn(addMonths(finalizationDate, 2), 15);
+        thirdCommission = proposta * 0.50; // Assuming 50% as a base
+        thirdPaymentDate = addMonths(finalizationDate, 4);
+        isThirdPaymentDateEditable = true;
+      }
+      // Bowe & Matrix
+      else { // Bowe or Matrix
+        immediateCommission = proposta * 0.60;
+      }
+
+      // Check for custom saved dates
+      const customDates = receivableDates[lead.id];
+      if (customDates?.second) secondPaymentDate = parseISO(customDates.second);
+      if (customDates?.third) thirdPaymentDate = parseISO(customDates.third);
+
+      return {
+        leadId: lead.id,
+        clientName: lead.name,
+        company: empresa,
+        finalizationDate,
+        immediateCommission,
+        immediatePaymentDate,
+        secondCommission,
+        secondPaymentDate,
+        isSecondPaymentDateEditable,
+        thirdCommission,
+        thirdPaymentDate,
+        isThirdPaymentDateEditable,
+      };
+    });
+
+    setReceivables(calculatedReceivables);
+
+    // Calculate this month's revenue
+    const now = new Date();
+    const startOfCurrentMonth = startOfMonth(now);
+    const endOfCurrentMonth = endOfMonth(now);
+
+    const revenue = calculatedReceivables.reduce((total, r) => {
+      let monthTotal = 0;
+      if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        monthTotal += r.immediateCommission;
+      }
+      if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        monthTotal += r.secondCommission;
+      }
+       if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        monthTotal += r.thirdCommission;
+      }
+      return total + monthTotal;
+    }, 0);
+
+    setMonthlyRevenue(revenue);
+
+  }, [leads, receivableDates]);
+  
+  const handleReceivableDateChange = (leadId: string, commissionType: 'second' | 'third', newDate?: Date) => {
+    if (!newDate) return;
+    setReceivableDates(prev => ({
+      ...prev,
+      [leadId]: {
+        ...prev[leadId],
+        [commissionType]: newDate.toISOString(),
+      }
+    }));
+  };
+
+  const totalPayroll = useMemo(() => payroll.reduce((sum, emp) => sum + emp.salary, 0), [payroll]);
   const proLaboreValue = monthlyRevenue * (proLabore / 100);
   const taxValue = monthlyRevenue * (tax / 100);
   const reinvestValue = monthlyRevenue * (reinvest / 100);
@@ -224,8 +357,9 @@ function CompanyManagementTab() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <Label htmlFor="monthlyRevenue">Faturamento Mensal (R$)</Label>
-            <Input id="monthlyRevenue" type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(Number(e.target.value))} />
+            <Label htmlFor="monthlyRevenue">Faturamento Previsto para o Mês (R$)</Label>
+            <Input id="monthlyRevenue" type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(Number(e.target.value))} readOnly className="font-bold text-lg" />
+            <FormDescription>Calculado com base nas datas de pagamento das comissões abaixo.</FormDescription>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             <div>
@@ -249,7 +383,43 @@ function CompanyManagementTab() {
            </div>
         </CardContent>
       </Card>
-      
+       
+      <Card>
+        <CardHeader><CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle></CardHeader>
+        <CardContent>
+            <Table>
+                <TableHeader><TableRow>
+                    <TableHead>Cliente</TableHead><TableHead>Empresa</TableHead>
+                    <TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
+                    <TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
+                    <TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                    {receivables.map(r => (
+                        <TableRow key={r.leadId}>
+                            <TableCell>{r.clientName}</TableCell>
+                            <TableCell>{r.company}</TableCell>
+                            <TableCell>{formatCurrency(r.immediateCommission)}</TableCell>
+                            <TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell>
+                            <TableCell>{formatCurrency(r.secondCommission)}</TableCell>
+                            <TableCell>
+                              {r.isSecondPaymentDateEditable ? (
+                                <Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>
+                              ) : format(r.secondPaymentDate, 'dd/MM/yy')}
+                            </TableCell>
+                            <TableCell>{formatCurrency(r.thirdCommission)}</TableCell>
+                             <TableCell>
+                              {r.isThirdPaymentDateEditable ? (
+                                <Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>
+                              ) : format(r.thirdPaymentDate, 'dd/MM/yy')}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </CardContent>
+      </Card>
+
        <Card>
         <CardHeader>
           <CardTitle className="flex items-center"><Users className="mr-2 h-5 w-5" />Folha de Pagamento</CardTitle>
@@ -926,7 +1096,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="management">
-            <CompanyManagementTab />
+            <CompanyManagementTab leads={allLeads} />
         </TabsContent>
         
         {userAppRole === 'superadmin' && (
