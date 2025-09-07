@@ -61,11 +61,12 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -122,6 +123,187 @@ interface AdminCommissionDashboardProps {
   isLoadingUsersProp: boolean;
   onUsersChange: () => Promise<void>;
 }
+
+// New component for Company Management
+function CompanyManagementTab({ userRole }: { userRole: UserType | null }) {
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const STORAGE_KEY = 'companyManagementSettings';
+  const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance';
+
+  // State for company management
+  const [proLabore, setProLabore] = useState(25);
+  const [tax, setTax] = useState(6);
+  const [reinvest, setReinvest] = useState(15);
+  const [payroll, setPayroll] = useState(15000);
+  const [riskFund, setRiskFund] = useState(10000);
+  const [monthlyRevenue, setMonthlyRevenue] = useState(120000);
+
+  // State for personal finance management
+  const [personalCapital, setPersonalCapital] = useState(500000);
+  const [monthlyExpenses, setMonthlyExpenses] = useState(8000);
+  const [investmentAllocation, setInvestmentAllocation] = useState({
+    stocks: 40,
+    fixedIncome: 30,
+    crypto: 15,
+    realEstate: 15,
+  });
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedSettings = localStorage.getItem(STORAGE_KEY);
+    if (savedSettings) {
+      const { proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue } = JSON.parse(savedSettings);
+      setProLabore(proLabore || 25);
+      setTax(tax || 6);
+      setReinvest(reinvest || 15);
+      setPayroll(payroll || 15000);
+      setRiskFund(riskFund || 10000);
+      setMonthlyRevenue(monthlyRevenue || 120000);
+    }
+    if (userRole === 'superadmin') {
+      const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
+      if (savedPersonal) {
+          const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
+          setPersonalCapital(personalCapital || 500000);
+          setMonthlyExpenses(monthlyExpenses || 8000);
+          setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+      }
+    }
+  }, [userRole]);
+
+  // Save to localStorage on change
+  useEffect(() => {
+    const settings = { proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  }, [proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue]);
+
+  useEffect(() => {
+      if (userRole === 'superadmin') {
+        const personalData = { personalCapital, monthlyExpenses, investmentAllocation };
+        localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
+      }
+  }, [personalCapital, monthlyExpenses, investmentAllocation, userRole]);
+
+
+  const proLaboreValue = monthlyRevenue * (proLabore / 100);
+  const taxValue = monthlyRevenue * (tax / 100);
+  const reinvestValue = monthlyRevenue * (reinvest / 100);
+  const fixedCosts = payroll + riskFund;
+  const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center"><Building className="mr-2 h-5 w-5" />Gestão Financeira da Empresa</CardTitle>
+          <CardDescription>Defina os percentuais e valores para a distribuição do faturamento mensal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label htmlFor="monthlyRevenue">Faturamento Mensal (R$)</Label>
+            <Input id="monthlyRevenue" type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(Number(e.target.value))} />
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div>
+              <Label>Pró-labore ({proLabore}%)</Label>
+              <Slider value={[proLabore]} onValueChange={(val) => setProLabore(val[0])} max={100} step={1} />
+            </div>
+            <div>
+              <Label>Impostos ({tax}%)</Label>
+              <Slider value={[tax]} onValueChange={(val) => setTax(val[0])} max={100} step={1} />
+            </div>
+            <div>
+              <Label>Reinvestimento ({reinvest}%)</Label>
+              <Slider value={[reinvest]} onValueChange={(val) => setReinvest(val[0])} max={100} step={1} />
+            </div>
+          </div>
+           <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="payroll">Folha de Pagamento (R$)</Label>
+                <Input id="payroll" type="number" value={payroll} onChange={(e) => setPayroll(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label htmlFor="riskFund">Caixa de Risco (R$)</Label>
+                <Input id="riskFund" type="number" value={riskFund} onChange={(e) => setRiskFund(Number(e.target.value))} />
+              </div>
+           </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+          <CardHeader><CardTitle className="flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Distribuição do Faturamento</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Faturamento Bruto:</span><span className="font-semibold">{formatCurrency(monthlyRevenue)}</span></div>
+              <Separator/>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Pró-labore ({proLabore}%):</span><span className="font-semibold">{formatCurrency(proLaboreValue)}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Impostos ({tax}%):</span><span className="font-semibold">{formatCurrency(taxValue)}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Reinvestimento ({reinvest}%):</span><span className="font-semibold">{formatCurrency(reinvestValue)}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">Custos Fixos (Folha + Risco):</span><span className="font-semibold">{formatCurrency(fixedCosts)}</span></div>
+              <Separator/>
+              <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Lucro Líquido Estimado:</span><span className="font-bold text-primary">{formatCurrency(netProfit)}</span></div>
+          </CardContent>
+      </Card>
+
+      {userRole === 'superadmin' && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center"><PiggyBank className="mr-2 h-5 w-5" />Controle Financeiro Pessoal (Super Admin)</CardTitle>
+              <CardDescription>Gerencie seu capital pessoal, despesas e investimentos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <Label htmlFor="personalCapital">Capital Pessoal Total (R$)</Label>
+                        <Input id="personalCapital" type="number" value={personalCapital} onChange={(e) => setPersonalCapital(Number(e.target.value))} />
+                    </div>
+                    <div>
+                        <Label htmlFor="monthlyExpenses">Despesas Mensais Fixas (R$)</Label>
+                        <Input id="monthlyExpenses" type="number" value={monthlyExpenses} onChange={(e) => setMonthlyExpenses(Number(e.target.value))} />
+                    </div>
+                </div>
+                <div>
+                    <Label>Alocação de Investimentos (%)</Label>
+                    <div className="space-y-3 pt-2">
+                        <div>
+                            <div className="flex justify-between text-sm mb-1"><Label>Ações</Label><span>{investmentAllocation.stocks}%</span></div>
+                            <Slider value={[investmentAllocation.stocks]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, stocks: v[0]}))} />
+                        </div>
+                         <div>
+                            <div className="flex justify-between text-sm mb-1"><Label>Renda Fixa</Label><span>{investmentAllocation.fixedIncome}%</span></div>
+                            <Slider value={[investmentAllocation.fixedIncome]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, fixedIncome: v[0]}))} />
+                        </div>
+                         <div>
+                            <div className="flex justify-between text-sm mb-1"><Label>Criptomoedas</Label><span>{investmentAllocation.crypto}%</span></div>
+                            <Slider value={[investmentAllocation.crypto]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, crypto: v[0]}))} />
+                        </div>
+                         <div>
+                            <div className="flex justify-between text-sm mb-1"><Label>Imóveis</Label><span>{investmentAllocation.realEstate}%</span></div>
+                            <Slider value={[investmentAllocation.realEstate]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, realEstate: v[0]}))} />
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+          </Card>
+          <Card>
+              <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Patrimônio Total:</span><span className="font-semibold">{formatCurrency(personalCapital)}</span></div>
+                  <Separator/>
+                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Ações:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Renda Fixa:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Cripto:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</span></div>
+                   <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Imóveis:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</span></div>
+                  <Separator/>
+                  <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</span><span className="font-bold text-primary">{formatCurrency(proLaboreValue - monthlyExpenses)}</span></div>
+              </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, onUsersChange }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
@@ -493,6 +675,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           <TabsTrigger value="dashboard"><Activity className="mr-2 h-4 w-4"/>Dashboard</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-2 h-4 w-4"/>Usuários</TabsTrigger>
           <TabsTrigger value="commissions"><ClipboardList className="mr-2 h-4 w-4"/>Comissões por Empresas</TabsTrigger>
+          <TabsTrigger value="management"><Building className="mr-2 h-4 w-4"/>Gestão da Empresa</TabsTrigger>
           <TabsTrigger value="withdrawals"><WalletCards className="mr-2 h-4 w-4"/>Saques</TabsTrigger>
         </TabsList>
         
@@ -648,6 +831,10 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
         <TabsContent value="commissions">
             <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
+        </TabsContent>
+
+        <TabsContent value="management">
+            <CompanyManagementTab userRole={userAppRole} />
         </TabsContent>
 
         <TabsContent value="withdrawals">
