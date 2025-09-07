@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth } from 'date-fns';
-import type { LeadWithId } from '@/types/crm';
+import type { LeadWithId, StageId } from '@/types/crm';
 
 const KWH_TO_REAIS_FACTOR = 1.093113;
 
@@ -74,15 +74,16 @@ export default function GoalsPage() {
     loadLeads();
   }, [fetchAllCrmLeadsGlobally]);
 
-  const currentMonthLeads = useMemo(() => {
+  const commissionBoardLeads = useMemo(() => {
     const now = new Date();
     const start = startOfMonth(now);
     const end = endOfMonth(now);
-    return allLeads.filter(lead => 
-      lead.stageId === 'finalizado' && 
-      lead.completedAt && 
-      isWithinInterval(parseISO(lead.completedAt), { start, end })
-    );
+    const stagesToInclude: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
+    return allLeads.filter(lead => {
+      const relevantDateStr = lead.completedAt || lead.signedAt || lead.lastContact;
+      const relevantDate = parseISO(relevantDateStr);
+      return stagesToInclude.includes(lead.stageId) && isWithinInterval(relevantDate, { start, end });
+    });
   }, [allLeads]);
 
   const allAssignedLeadIds = useMemo(() => {
@@ -93,9 +94,9 @@ export default function GoalsPage() {
     ]);
   }, [fitAssignments, bcAssignments, origoAssignments]);
 
-  const unassignedFinalizedLeads = useMemo(() => {
-    return currentMonthLeads.filter(lead => !allAssignedLeadIds.has(lead.id));
-  }, [currentMonthLeads, allAssignedLeadIds]);
+  const unassignedCommissionLeads = useMemo(() => {
+    return commissionBoardLeads.filter(lead => !allAssignedLeadIds.has(lead.id));
+  }, [commissionBoardLeads, allAssignedLeadIds]);
 
   
   const companyProgress = useMemo(() => {
@@ -304,7 +305,7 @@ export default function GoalsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="placeholder">-- Vazio --</SelectItem>
-                                {unassignedFinalizedLeads.map(lead => (
+                                {unassignedCommissionLeads.map(lead => (
                                     <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -392,3 +393,4 @@ export default function GoalsPage() {
     </div>
   );
 }
+
