@@ -10,39 +10,43 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth } from 'date-fns';
 import type { LeadWithId } from '@/types/crm';
 
+const KWH_TO_REAIS_FACTOR = 1.093113;
+
 interface CompanyGoal {
   id: 'bc' | 'origo' | 'fit_energia';
   name: string;
-  targetValue: number;
+  targetValue: number; // in Reais (R$)
+  kwhTarget: number;
+  clientTarget: number;
+  avgKwhPerClient: number;
 }
 
-interface PlaceholderClient {
+interface ClientDataRow {
   name: string;
   consumption: number;
   discount: number;
   commission: number;
   recurrence: number;
-  isPlaceholder: true;
+  isPlaceholder: boolean;
 }
-
-interface RealClientData {
-  name: string;
-  consumption: number;
-  discount: number;
-  commission: number;
-  recurrence: number;
-  isPlaceholder: false;
-}
-
-type FitEnergiaRow = PlaceholderClient | RealClientData;
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-const formatKwh = (value: number) => `${new Intl.NumberFormat('pt-BR').format(value)} kWh`;
-const formatNumber = (value: number) => new Intl.NumberFormat('pt-BR').format(value);
+const formatKwh = (value: number) => `${new Intl.NumberFormat('pt-BR').format(Math.round(value))} kWh`;
+const formatNumber = (value: number) => new Intl.NumberFormat('pt-BR').format(Math.round(value));
+
+const companyGoalsData: CompanyGoal[] = [
+  { id: 'fit_energia', name: 'Fit Energia', targetValue: 50000, kwhTarget: 50000 / KWH_TO_REAIS_FACTOR, clientTarget: 100, avgKwhPerClient: 500 },
+  { id: 'bc', name: 'BC', targetValue: 80000, kwhTarget: 80000 / KWH_TO_REAIS_FACTOR, clientTarget: 105, avgKwhPerClient: 700 },
+  { id: 'origo', name: 'Origo', targetValue: 40000, kwhTarget: 40000 / KWH_TO_REAIS_FACTOR, clientTarget: 73, avgKwhPerClient: 500 },
+];
+
+const getCompanyGoalById = (id: CompanyGoal['id']) => companyGoalsData.find(g => g.id === id)!;
+
 
 export default function GoalsPage() {
   const { fetchAllCrmLeadsGlobally } = useAuth();
@@ -52,12 +56,6 @@ export default function GoalsPage() {
   const [mainGoal, setMainGoal] = useState(170000);
   const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
   const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
-
-  const companyGoals: CompanyGoal[] = [
-    { id: 'bc', name: 'Meta BC', targetValue: 80000 },
-    { id: 'origo', name: 'Meta Origo', targetValue: 40000 },
-    { id: 'fit_energia', name: 'Meta Fit Energia', targetValue: 50000 },
-  ];
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -81,82 +79,161 @@ export default function GoalsPage() {
   }, [allLeads]);
   
   const companyProgress = useMemo(() => {
-    const progress = {
-      bc: 0,
-      origo: 0,
-      fit_energia: 0,
-    };
+    const progress = { bc: 0, origo: 0, fit_energia: 0 };
     currentMonthLeads.forEach(lead => {
       const value = lead.valueAfterDiscount || 0;
       if (lead.empresa === 'BC') progress.bc += value;
-      if (lead.empresa === 'Origo') progress.origo += value;
-      if (lead.empresa === 'Fit Energia') progress.fit_energia += value;
+      else if (lead.empresa === 'Origo') progress.origo += value;
+      else if (lead.empresa === 'Fit Energia') progress.fit_energia += value;
     });
     return progress;
   }, [currentMonthLeads]);
 
   const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia;
 
-  const fitLeads = useMemo(() => currentMonthLeads.filter(l => l.empresa === 'Fit Energia'), [currentMonthLeads]);
-  const fitKwhProgress = useMemo(() => fitLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [fitLeads]);
-  const fitClientCount = useMemo(() => fitLeads.length, [fitLeads]);
-
-  const pacingMetrics = useMemo(() => {
-    const now = new Date();
-    const daysInMonth = getDaysInMonth(now);
-    const currentDay = now.getDate();
-    const progressOfMonth = currentDay / daysInMonth;
-
-    const fitTargetKwh = 50000;
-    const fitTargetClients = 100;
-
-    return {
-      expectedKwh: fitTargetKwh * progressOfMonth,
-      actualKwh: fitKwhProgress,
-      expectedClients: fitTargetClients * progressOfMonth,
-      actualClients: fitClientCount,
-    };
-  }, [fitKwhProgress, fitClientCount]);
-
-  const fitEnergiaTableData = useMemo((): FitEnergiaRow[] => {
-    const realClientRows: RealClientData[] = fitLeads.map(lead => ({
-      name: lead.name,
-      consumption: lead.kwh || 0,
-      discount: lead.discountPercentage || 0,
-      commission: (lead.valueAfterDiscount || 0) * 0.4, // Simplified, adjust if needed
-      recurrence: 0, // Placeholder for recurrence logic
-      isPlaceholder: false,
-    }));
-
-    const fitTargetKwh = 50000;
-    const avgConsumption = 500;
-    const requiredClients = fitTargetKwh / avgConsumption;
-    const placeholderCount = Math.max(0, requiredClients - realClientRows.length);
-    
-    const placeholderRows: PlaceholderClient[] = Array.from({ length: placeholderCount }, (_, i) => {
-      const clientIndex = realClientRows.length + i + 1;
-      return {
-        name: `Cliente ${String(clientIndex).padStart(2, '0')}/${format(new Date(), 'MM')}`,
-        consumption: avgConsumption,
-        discount: 15, // Target average discount
-        commission: 0, // No commission for placeholders
-        recurrence: 0,
-        isPlaceholder: true,
-      };
-    });
-
-    return [...realClientRows, ...placeholderRows];
-  }, [fitLeads]);
-
-  const fitEnergiaAvgDiscount = useMemo(() => {
-    if (fitLeads.length === 0) return 0;
-    const totalDiscount = fitLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
-    return totalDiscount / fitLeads.length;
-  }, [fitLeads]);
-
   const handleSaveMainGoal = () => {
     setMainGoal(tempMainGoal);
     setIsEditingMainGoal(false);
+  };
+  
+  const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
+    const company = getCompanyGoalById(companyId);
+    const companyLeads = useMemo(() => currentMonthLeads.filter(l => l.empresa === company.name), [currentMonthLeads, company.name]);
+    const kwhProgress = useMemo(() => companyLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [companyLeads]);
+    const clientCount = useMemo(() => companyLeads.length, [companyLeads]);
+
+    const pacingMetrics = useMemo(() => {
+      const now = new Date();
+      const daysInMonth = getDaysInMonth(now);
+      const currentDay = now.getDate();
+      const progressOfMonth = currentDay / daysInMonth;
+
+      return {
+        expectedKwh: company.kwhTarget * progressOfMonth,
+        actualKwh: kwhProgress,
+        expectedClients: company.clientTarget * progressOfMonth,
+        actualClients: clientCount,
+      };
+    }, [kwhProgress, clientCount, company]);
+
+    return (
+       <Card className="bg-card/70 backdrop-blur-lg border">
+        <CardHeader>
+          <CardTitle>Indicadores Estratégicos - {company.name}</CardTitle>
+          <CardDescription>Acompanhe o ritmo de fechamento para atingir a meta mensal.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-6">
+          <Card className="bg-background/50">
+            <CardHeader><CardTitle className="text-base font-semibold flex items-center text-primary"><Users className="mr-2 h-4 w-4" />Ritmo de Clientes</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Previsto: {formatNumber(pacingMetrics.expectedClients)}</span>
+                  <span>Meta: {formatNumber(company.clientTarget)}</span>
+                </div>
+                <Progress value={(pacingMetrics.actualClients / company.clientTarget) * 100} />
+                <div className="text-right text-sm font-bold mt-1 text-primary">{formatNumber(pacingMetrics.actualClients)}</div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Ritmo Atual vs. Esperado</span>
+                  <span className={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'text-green-500' : 'text-red-500'}`}>{((pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0).toFixed(1)}%</span>
+                </div>
+                <Progress value={(pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0} indicatorClassName={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-background/50">
+            <CardHeader><CardTitle className="text-base font-semibold flex items-center text-primary"><Zap className="mr-2 h-4 w-4" />Ritmo de KWh</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Previsto: {formatKwh(pacingMetrics.expectedKwh)}</span>
+                  <span>Meta: {formatKwh(company.kwhTarget)}</span>
+                </div>
+                <Progress value={(pacingMetrics.actualKwh / company.kwhTarget) * 100} />
+                <div className="text-right text-sm font-bold mt-1 text-primary">{formatKwh(pacingMetrics.actualKwh)}</div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Ritmo Atual vs. Esperado</span>
+                  <span className={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'text-green-500' : 'text-red-500'}`}>{((pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0).toFixed(1)}%</span>
+                </div>
+                <Progress value={(pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0} indicatorClassName={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
+            </CardContent>
+          </Card>
+        </CardContent>
+      </Card>
+    );
+  };
+  
+  const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
+    const company = getCompanyGoalById(companyId);
+    const companyLeads = useMemo(() => currentMonthLeads.filter(l => l.empresa === company.name), [currentMonthLeads, company.name]);
+    
+    const tableData = useMemo((): ClientDataRow[] => {
+      const realClientRows: ClientDataRow[] = companyLeads.map(lead => ({
+        name: lead.name,
+        consumption: lead.kwh || 0,
+        discount: lead.discountPercentage || 0,
+        commission: (lead.valueAfterDiscount || 0) * 0.4, // Simplified, adjust if needed
+        recurrence: 0,
+        isPlaceholder: false,
+      }));
+
+      const requiredClients = company.clientTarget;
+      const placeholderCount = Math.max(0, requiredClients - realClientRows.length);
+      
+      const placeholderRows: ClientDataRow[] = Array.from({ length: placeholderCount }, (_, i) => {
+        const clientIndex = realClientRows.length + i + 1;
+        return {
+          name: `Cliente ${String(clientIndex).padStart(2, '0')}/${format(new Date(), 'MM')}`,
+          consumption: company.avgKwhPerClient,
+          discount: 15,
+          commission: 0,
+          recurrence: 0,
+          isPlaceholder: true,
+        };
+      });
+
+      return [...realClientRows, ...placeholderRows];
+    }, [companyLeads, company]);
+
+    const avgDiscount = useMemo(() => {
+      if (companyLeads.length === 0) return 0;
+      const totalDiscount = companyLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
+      return totalDiscount / companyLeads.length;
+    }, [companyLeads]);
+
+    return (
+      <Card className="bg-card/70 backdrop-blur-lg border">
+        <CardHeader>
+          <CardTitle>KPIs de Atingimento - {company.name}</CardTitle>
+          <div className="flex items-center gap-4 text-sm">
+            <p>Meta de Consumo: <span className="font-semibold text-primary">{formatKwh(company.kwhTarget)}</span></p>
+            <p>Meta Desconto Médio: <span className="font-semibold text-primary">15%</span></p>
+            <p>Desconto Médio Atual: <span className={`font-semibold ${avgDiscount > 15.5 ? 'text-red-500' : 'text-green-500'}`}>{avgDiscount.toFixed(2)}%</span></p>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Consumo (KWh)</TableHead><TableHead>Deságio (%)</TableHead><TableHead>Comissão Total</TableHead><TableHead>Recorrência</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {tableData.map((row, index) => (
+                <TableRow key={index} className={row.isPlaceholder ? 'opacity-50' : 'font-semibold'}>
+                  <TableCell>{row.name}</TableCell>
+                  <TableCell>{formatKwh(row.consumption)}</TableCell>
+                  <TableCell>{row.discount.toFixed(2)}%</TableCell>
+                  <TableCell>{formatCurrency(row.commission)}</TableCell>
+                  <TableCell>{formatCurrency(row.recurrence)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -173,12 +250,7 @@ export default function GoalsPage() {
             <CardTitle className="text-2xl text-primary">Meta Mensal Global</CardTitle>
             {isEditingMainGoal ? (
               <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={tempMainGoal}
-                  onChange={(e) => setTempMainGoal(Number(e.target.value))}
-                  className="w-40 h-8"
-                />
+                <Input type="number" value={tempMainGoal} onChange={(e) => setTempMainGoal(Number(e.target.value))} className="w-40 h-8" />
                 <Button size="sm" onClick={handleSaveMainGoal}><Check className="h-4 w-4" /></Button>
               </div>
             ) : (
@@ -200,12 +272,9 @@ export default function GoalsPage() {
       </Card>
 
       <div className="grid md:grid-cols-3 gap-6">
-        {companyGoals.map(goal => (
+        {companyGoalsData.map(goal => (
           <Card key={goal.id} className="bg-card/70 backdrop-blur-lg border">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">{goal.name}</CardTitle>
-              <CardDescription>Meta: {formatCurrency(goal.targetValue)}</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg font-semibold">{goal.name}</CardTitle><CardDescription>Meta: {formatCurrency(goal.targetValue)}</CardDescription></CardHeader>
             <CardContent>
               <Progress value={(companyProgress[goal.id] / goal.targetValue) * 100} />
               <div className="flex justify-between mt-1 text-xs">
@@ -217,104 +286,19 @@ export default function GoalsPage() {
         ))}
       </div>
       
-      {/* Indicadores Estratégicos */}
-      <Card className="bg-card/70 backdrop-blur-lg border">
-        <CardHeader>
-          <CardTitle>Indicadores Estratégicos - Fit Energia</CardTitle>
-          <CardDescription>Acompanhe o ritmo de fechamento para atingir a meta mensal.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6">
-          <Card className="bg-background/50">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center text-primary"><Users className="mr-2 h-4 w-4" />Ritmo de Clientes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Meta de Clientes (Previsto): {formatNumber(Math.round(pacingMetrics.expectedClients))}</span>
-                  <span>Meta Total: 100</span>
-                </div>
-                <Progress value={(pacingMetrics.actualClients / 100) * 100} />
-                <div className="text-right text-sm font-bold mt-1 text-primary">
-                  {formatNumber(pacingMetrics.actualClients)}
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Ritmo Atual vs. Esperado</span>
-                  <span className={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'text-green-500' : 'text-red-500'}`}>
-                    {((pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0).toFixed(1)}%
-                  </span>
-                </div>
-                <Progress value={(pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0} indicatorClassName={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'bg-green-500' : 'bg-red-500'}`} />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-background/50">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center text-primary"><Zap className="mr-2 h-4 w-4" />Ritmo de KWh</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Meta de KWh (Previsto): {formatKwh(Math.round(pacingMetrics.expectedKwh))}</span>
-                  <span>Meta Total: 50.000 kWh</span>
-                </div>
-                <Progress value={(pacingMetrics.actualKwh / 50000) * 100} />
-                <div className="text-right text-sm font-bold mt-1 text-primary">
-                   {formatKwh(pacingMetrics.actualKwh)}
-                </div>
-              </div>
-               <div>
-                <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Ritmo Atual vs. Esperado</span>
-                   <span className={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'text-green-500' : 'text-red-500'}`}>
-                    {((pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0).toFixed(1)}%
-                  </span>
-                </div>
-                <Progress value={(pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0} indicatorClassName={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'bg-green-500' : 'bg-red-500'}`} />
-              </div>
-            </CardContent>
-          </Card>
-        </CardContent>
-      </Card>
-
-
-      <Card className="bg-card/70 backdrop-blur-lg border">
-        <CardHeader>
-          <CardTitle>KPIs de Atingimento - Fit Energia</CardTitle>
-          <div className="flex items-center gap-4 text-sm">
-            <p>Meta de Consumo: <span className="font-semibold text-primary">{formatKwh(50000)}</span></p>
-            <p>Meta Desconto Médio: <span className="font-semibold text-primary">15%</span></p>
-            <p>Desconto Médio Atual: <span className={`font-semibold ${fitEnergiaAvgDiscount > 15.5 ? 'text-red-500' : 'text-green-500'}`}>{fitEnergiaAvgDiscount.toFixed(2)}%</span></p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Consumo (KWh)</TableHead>
-                <TableHead>Deságio (%)</TableHead>
-                <TableHead>Comissão Total</TableHead>
-                <TableHead>Recorrência</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fitEnergiaTableData.map((row, index) => (
-                <TableRow key={index} className={row.isPlaceholder ? 'opacity-50' : 'font-semibold'}>
-                  <TableCell>{row.name}</TableCell>
-                  <TableCell>{formatKwh(row.consumption)}</TableCell>
-                  <TableCell>{row.discount.toFixed(2)}%</TableCell>
-                  <TableCell>{formatCurrency(row.commission)}</TableCell>
-                  <TableCell>{formatCurrency(row.recurrence)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="fit_energia" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          {companyGoalsData.map(company => (
+            <TabsTrigger key={company.id} value={company.id}>{company.name}</TabsTrigger>
+          ))}
+        </TabsList>
+        {companyGoalsData.map(company => (
+          <TabsContent key={company.id} value={company.id} className="mt-4 space-y-6">
+            <PacingMetricsCard companyId={company.id} />
+            <KpiTable companyId={company.id} />
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 }
-
