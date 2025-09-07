@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -13,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon } from 'lucide-react';
+import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon, Rocket } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { LeadWithId, StageId } from '@/types/crm';
@@ -406,6 +407,14 @@ export default function GoalsPage() {
             <span className="text-muted-foreground">{((totalProgress / mainGoal) * 100 || 0).toFixed(1)}%</span>
           </div>
         </CardContent>
+        <CardFooter>
+            <Button asChild>
+                <Link href="/crm">
+                    <Rocket className="mr-2 h-4 w-4" />
+                    Atribuir Empresas no CRM
+                </Link>
+            </Button>
+        </CardFooter>
       </Card>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
