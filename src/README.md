@@ -1,6 +1,6 @@
-# planus-app-backend
+# sent-app-backend
 
-Este é o backend para o aplicativo Planus Energia, construído com Next.js e Firebase.
+Este é o backend para o aplicativo Sent Energia, construído com Next.js e Firebase.
 
 ## Como Iniciar
 

@@ -18,7 +18,7 @@ const trainingModules = [
     id: 'module1',
     title: 'Módulo 1: Boas-vindas e Introdução',
     videos: [
-      { id: 'qWpL2K_qY4Y', title: 'Introdução à Planus Energia', duration: 120 }, // Placeholder duration
+      { id: 'qWpL2K_qY4Y', title: 'Introdução à Sent Energia', duration: 120 }, // Placeholder duration
       { id: 'dQw4w9WgXcQ', title: 'Nosso Modelo de Negócio', duration: 180 },
     ],
   },

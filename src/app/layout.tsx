@@ -117,7 +117,7 @@ const MinimalShell = ({ children }: { children: React.ReactNode }) => {
     return (
         <div className="flex flex-col h-screen">
              <header className="sticky top-0 z-30 flex h-14 items-center gap-x-4 border-b bg-background/70 backdrop-blur-md px-4 sm:px-6 py-2">
-                <h1 className="text-lg font-semibold text-primary truncate flex-grow">Planus Energia - Treinamento</h1>
+                <h1 className="text-lg font-semibold text-primary truncate flex-grow">Sent Energia - Treinamento</h1>
                  <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">{appUser?.displayName || appUser?.email}</span>
                     <Button variant="outline" size="sm" onClick={handleLogout}>
@@ -230,7 +230,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                     <Button variant="ghost" size="icon" onClick={toggleSidebar} className="rounded-full h-9 w-9 p-0 text-foreground hover:bg-accent hover:text-accent-foreground -ml-1" aria-label="Toggle sidebar">
                         <Avatar className="h-8 w-8"><AvatarImage src={appUser.photoURL || undefined} alt={appUser.displayName || "Usuário"} data-ai-hint="user avatar small" /><AvatarFallback className="text-xs bg-muted text-muted-foreground">{appUser.displayName ? appUser.displayName.substring(0, 2).toUpperCase() : (appUser.email ? appUser.email.substring(0, 2).toUpperCase() : "U")}</AvatarFallback></Avatar>
                     </Button>
-                    <h1 className="text-lg font-semibold text-primary truncate flex-grow">Planus Energia</h1>
+                    <h1 className="text-lg font-semibold text-primary truncate flex-grow">Sent Energia</h1>
                 </header>
                 <main className="flex-1 overflow-auto">{children}</main>
             </SidebarInset>
@@ -250,7 +250,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
-        <title>Planus Energia App</title>
+        <title>Sent Energia App</title>
       </head>
       <body className="font-body antialiased">
         <AuthProvider>

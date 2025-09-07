@@ -44,7 +44,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 
 const EnergySection = () => {
     const [billAmount, setBillAmount] = useState(1000);
-    const savings = calculateSavings(billAmount, true);
+    const savings = calculateSavings(billAmount, { type: 'fixed', fixed: { rate: 15 }});
     const [stats, setStats] = useState({ totalKwh: 808488, pfCount: 300, pjCount: 188 });
 
     useEffect(() => {
@@ -77,7 +77,7 @@ const EnergySection = () => {
             <div className="relative z-10">
                 <h1 className="text-4xl md:text-6xl font-bold text-primary mb-4 animate-fade-in-down">Reduza sua conta de luz em até 30%</h1>
                 <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8 animate-fade-in-down animation-delay-300">
-                Com a Planus Energia, você acessa fontes de energia renovável, economiza dinheiro e ajuda o planeta. Sem instalação, sem obras e sem investimento inicial.
+                Com a Sent Energia, você acessa fontes de energia renovável, economiza dinheiro e ajuda o planeta. Sem instalação, sem obras e sem investimento inicial.
                 </p>
                 <div className="flex gap-4 justify-center animate-fade-in-up animation-delay-600">
                     <Link href="#calculator">
@@ -146,7 +146,7 @@ const EnergySection = () => {
             </div>
         </section>
 
-        {/* Why Planus Section */}
+        {/* Why Sent Section */}
         <section className="py-16 px-4">
             <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Por Que Nosso Desconto é Vantajoso?</h2>
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -175,7 +175,7 @@ const EnergySection = () => {
             </Card>
             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg text-center p-6 hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
                 <CardHeader className="p-0"><Receipt className="w-12 h-12 mx-auto text-primary mb-4" /><CardTitle className="text-xl font-semibold">Desconto Real na Fatura</CardTitle></CardHeader>
-                <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Sua economia é garantida e vem refletida na sua conta de luz, que passa a ser emitida pela Planus.</p></CardContent>
+                <CardContent className="p-0 mt-4"><p className="text-muted-foreground text-sm">Sua economia é garantida e vem refletida na sua conta de luz, que passa a ser emitida pela Sent.</p></CardContent>
             </Card>
             </div>
         </section>
@@ -212,15 +212,15 @@ const EnergySection = () => {
             <h3 className="text-3xl font-bold text-primary mb-4 flex items-center"><CalendarClock className="w-8 h-8 mr-3"/>Cronograma</h3>
             <ul className="list-none space-y-3">
                 <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">Dia 1:</strong> Assinatura digital do contrato.</p></li>
-                <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">Até 30 Dias:</strong> A Planus informa a distribuidora sobre a adesão.</p></li>
-                <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">De 60 a 90 Dias:</strong> A distribuidora processa a alteração e, no ciclo de faturamento seguinte, você recebe sua primeira fatura com o desconto da Planus.</p></li>
+                <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">Até 30 Dias:</strong> A Sent informa a distribuidora sobre a adesão.</p></li>
+                <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">De 60 a 90 Dias:</strong> A distribuidora processa a alteração e, no ciclo de faturamento seguinte, você recebe sua primeira fatura com o desconto da Sent.</p></li>
             </ul>
             </div>
         </section>
 
         {/* Our Clients */}
         <section className="py-16 px-4 bg-muted/30">
-            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Clientes que Confiam na Planus</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Clientes que Confiam na Sent</h2>
             <div className="max-w-5xl mx-auto flex flex-wrap justify-center items-center gap-x-12 gap-y-8">
                 <Image src="https://placehold.co/150x60.png" width={150} height={60} alt="Logo Cliente 1" className="opacity-60" data-ai-hint="company logo"/>
                 <Image src="https://placehold.co/150x60.png" width={150} height={60} alt="Logo Cliente 2" className="opacity-60" data-ai-hint="company logo"/>
@@ -338,7 +338,7 @@ const LandingPage = () => {
 
       {/* Footer */}
       <footer className={cn("text-center py-6 border-t", selectedApp === 'foto' ? 'bg-[#171821] border-slate-800' : 'bg-background border-border')}>
-        <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Planus Energia. Todos os direitos reservados.</p>
+        <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Sent Energia. Todos os direitos reservados.</p>
         <Link href="/politica-de-privacidade" className="text-sm text-primary hover:underline mt-1 inline-block">Política de Privacidade</Link>
       </footer>
     </div>

@@ -19,7 +19,7 @@ const careerLevelsData: CareerLevel[] = [
   {
     icon: Rocket,
     name: "Consultor de Energia",
-    description: "O ponto de partida na sua jornada de sucesso com a Planus Energia. Ideal para quem está começando e quer aprender sobre o mercado de energia.",
+    description: "O ponto de partida na sua jornada de sucesso com a Sent Energia. Ideal para quem está começando e quer aprender sobre o mercado de energia.",
     requirements: [
       "Cadastro completo e aprovado.",
       "Participação no treinamento inicial.",
@@ -28,7 +28,7 @@ const careerLevelsData: CareerLevel[] = [
     benefits: [
       "Comissão de 8% sobre vendas diretas.",
       "Acesso a materiais de marketing.",
-      "Suporte inicial da equipe Planus."
+      "Suporte inicial da equipe Sent."
     ],
     nextStep: "Consultor Sênior"
   },
@@ -62,19 +62,19 @@ const careerLevelsData: CareerLevel[] = [
       "Comissão de 12% sobre vendas diretas.",
       "Participação em comissões de rede MLM (Nível 1: 5%, Nível 2: 2%).",
       "Bônus de liderança por desempenho da equipe.",
-      "Convites para eventos exclusivos Planus."
+      "Convites para eventos exclusivos Sent."
     ],
-    nextStep: "Diamante Planus"
+    nextStep: "Diamante Sent"
   },
   {
     icon: UsersRound,
-    name: "Diamante Planus",
-    description: "O ápice da carreira na Planus Energia, um verdadeiro embaixador da marca com uma rede consolidada.",
+    name: "Diamante Sent",
+    description: "O ápice da carreira na Sent Energia, um verdadeiro embaixador da marca com uma rede consolidada.",
     requirements: [
       "50 vendas diretas concluídas.",
       "Volume de vendas de R$ 250.000.",
       "Mínimo de 10 indicados diretos ativos, com pelo menos 2 Consultores Master na equipe.",
-      "Contribuição significativa para a comunidade Planus."
+      "Contribuição significativa para a comunidade Sent."
     ],
     benefits: [
       "Comissão de 15% sobre vendas diretas.",
@@ -91,10 +91,10 @@ export default function CareerPlanPage() {
     <div className="container mx-auto px-4 py-8 text-foreground">
       <header className="text-center mb-12">
         <h1 className="text-4xl md:text-5xl font-bold text-primary mb-4">
-          Sua Jornada de Crescimento na Planus Energia
+          Sua Jornada de Crescimento na Sent Energia
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
-          A Planus Energia valoriza seus parceiros e oferece um plano de carreira estruturado para
+          A Sent Energia valoriza seus parceiros e oferece um plano de carreira estruturado para
           você alcançar novos patamares de sucesso e reconhecimento. Conheça os níveis e prepare-se para decolar!
         </p>
       </header>

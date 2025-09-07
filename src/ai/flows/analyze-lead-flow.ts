@@ -31,7 +31,7 @@ const leadAnalysisPrompt = ai.definePrompt({
   name: 'leadAnalysisPrompt',
   input: { schema: z.object({ leadData: z.any(), transcript: z.string() }) },
   output: { schema: AnalyzeLeadOutputSchema },
-  prompt: `You are a CRM assistant for an energy company called Planus Energia.
+  prompt: `You are a CRM assistant for an energy company called Sent Energia.
 Your task is to analyze a sales lead and provide a score and a concrete next action for the salesperson.
 
 LEAD DATA:

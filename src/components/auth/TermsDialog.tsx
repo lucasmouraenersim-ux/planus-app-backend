@@ -38,9 +38,9 @@ export function TermsDialog({ isOpen, onAccept }: TermsDialogProps) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ScrollArea className="h-72 w-full rounded-md border p-4">
-          <h3 className="font-semibold text-lg mb-2 text-foreground">Termos de Uso do Aplicativo Planus Energia</h3>
+          <h3 className="font-semibold text-lg mb-2 text-foreground">Termos de Uso do Aplicativo Sent Energia</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Ao acessar e usar o aplicativo Planus Energia ("Aplicativo"), você concorda em cumprir estes Termos de Uso. O Aplicativo é uma ferramenta destinada a auxiliar consultores na gestão de leads, criação de propostas e acompanhamento de performance. Você é responsável pela veracidade e legalidade das informações inseridas no sistema, incluindo dados de clientes, em conformidade com a Lei Geral de Proteção de Dados (LGPD).
+            Ao acessar e usar o aplicativo Sent Energia ("Aplicativo"), você concorda em cumprir estes Termos de Uso. O Aplicativo é uma ferramenta destinada a auxiliar consultores na gestão de leads, criação de propostas e acompanhamento de performance. Você é responsável pela veracidade e legalidade das informações inseridas no sistema, incluindo dados de clientes, em conformidade com a Lei Geral de Proteção de Dados (LGPD).
           </p>
           <h3 className="font-semibold text-lg mb-2 text-foreground">Uso Responsável e Confidencialidade</h3>
           <p className="text-sm text-muted-foreground mb-4">

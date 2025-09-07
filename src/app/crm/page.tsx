@@ -116,7 +116,7 @@ function CrmPageContent() {
   useEffect(() => {
     // This effect runs on the client, so localStorage is available.
     if (userAppRole === 'vendedor') {
-        const tutorialSeen = localStorage.getItem('planusCrmTutorialSeen');
+        const tutorialSeen = localStorage.getItem('sentCrmTutorialSeen');
         if (!tutorialSeen) {
             setIsTutorialOpen(true);
         }
@@ -125,7 +125,7 @@ function CrmPageContent() {
 
   const handleCloseTutorial = () => {
     if (dontShowTutorialAgain) {
-        localStorage.setItem('planusCrmTutorialSeen', 'true');
+        localStorage.setItem('sentCrmTutorialSeen', 'true');
     }
     setIsTutorialOpen(false);
     setTutorialStep(0); // Reset for next time if needed
@@ -550,7 +550,7 @@ function CrmPageContent() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `leads_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `leads_sent_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     toast({ title: "Exportação de Leads Iniciada", description: `${leads.length} leads exportados.` });
   };

@@ -11,7 +11,7 @@ export default function AboutPage() {
       <header className="text-center mb-12">
         <Info className="w-16 h-16 text-primary mx-auto mb-4" />
         <h1 className="text-4xl md:text-5xl font-bold text-primary mb-4">
-          Sobre o Aplicativo Planus Energia
+          Sobre o Aplicativo Sent Energia
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
           Uma ferramenta completa e integrada para impulsionar o sucesso dos nossos parceiros e consultores de energia.
@@ -28,7 +28,7 @@ export default function AboutPage() {
           </CardHeader>
           <CardContent className="text-muted-foreground space-y-4">
             <p>
-              O aplicativo Planus Energia foi desenvolvido com o objetivo de centralizar e otimizar todas as etapas do processo de vendas e gestão de relacionamento com o cliente. Nossa missão é fornecer aos nossos consultores as melhores ferramentas para que possam alcançar resultados extraordinários, com eficiência, transparência e agilidade.
+              O aplicativo Sent Energia foi desenvolvido com o objetivo de centralizar e otimizar todas as etapas do processo de vendas e gestão de relacionamento com o cliente. Nossa missão é fornecer aos nossos consultores as melhores ferramentas para que possam alcançar resultados extraordinários, com eficiência, transparência e agilidade.
             </p>
             <p>
               Desde a simulação de economia e geração de propostas personalizadas até a gestão completa do funil de vendas no CRM e o acompanhamento de comissões, tudo foi pensado para facilitar o seu dia a dia e maximizar seu potencial de ganhos.
@@ -51,7 +51,7 @@ export default function AboutPage() {
               <li><strong>Integração com WhatsApp:</strong> Receba mensagens de novos leads diretamente no seu CRM.</li>
               <li><strong>Painéis de Controle:</strong> Acompanhe seu desempenho, comissões e o ranking de performance.</li>
               <li><strong>Gestão de Carteira:</strong> Visualize seus saldos e solicite saques de comissão de forma segura.</li>
-              <li><strong>Plano de Carreira:</strong> Explore as oportunidades de crescimento e desenvolvimento dentro da Planus Energia.</li>
+              <li><strong>Plano de Carreira:</strong> Explore as oportunidades de crescimento e desenvolvimento dentro da Sent Energia.</li>
             </ul>
           </CardContent>
         </Card>
