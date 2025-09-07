@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, nextFriday, setDate as setDateFn } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -359,7 +359,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
           <div>
             <Label htmlFor="monthlyRevenue">Faturamento Previsto para o Mês (R$)</Label>
             <Input id="monthlyRevenue" type="number" value={monthlyRevenue} onChange={(e) => setMonthlyRevenue(Number(e.target.value))} readOnly className="font-bold text-lg" />
-            <FormDescription>Calculado com base nas datas de pagamento das comissões abaixo.</FormDescription>
+            <p className="text-sm text-muted-foreground mt-1">Calculado com base nas datas de pagamento das comissões abaixo.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             <div>
