@@ -1,3 +1,4 @@
+
 // src/app/admin/goals/page.tsx
 "use client";
 
@@ -9,9 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Target, DollarSign, Zap, Edit, Check } from 'lucide-react';
-import { format } from 'date-fns';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth } from 'date-fns';
 import type { LeadWithId } from '@/types/crm';
 
 interface CompanyGoal {
@@ -42,6 +42,7 @@ type FitEnergiaRow = PlaceholderClient | RealClientData;
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatKwh = (value: number) => `${new Intl.NumberFormat('pt-BR').format(value)} kWh`;
+const formatNumber = (value: number) => new Intl.NumberFormat('pt-BR').format(value);
 
 export default function GoalsPage() {
   const { fetchAllCrmLeadsGlobally } = useAuth();
@@ -78,7 +79,7 @@ export default function GoalsPage() {
       isWithinInterval(parseISO(lead.completedAt), { start, end })
     );
   }, [allLeads]);
-
+  
   const companyProgress = useMemo(() => {
     const progress = {
       bc: 0,
@@ -96,9 +97,28 @@ export default function GoalsPage() {
 
   const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia;
 
+  const fitLeads = useMemo(() => currentMonthLeads.filter(l => l.empresa === 'Fit Energia'), [currentMonthLeads]);
+  const fitKwhProgress = useMemo(() => fitLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [fitLeads]);
+  const fitClientCount = useMemo(() => fitLeads.length, [fitLeads]);
+
+  const pacingMetrics = useMemo(() => {
+    const now = new Date();
+    const daysInMonth = getDaysInMonth(now);
+    const currentDay = now.getDate();
+    const progressOfMonth = currentDay / daysInMonth;
+
+    const fitTargetKwh = 50000;
+    const fitTargetClients = 100;
+
+    return {
+      expectedKwh: fitTargetKwh * progressOfMonth,
+      actualKwh: fitKwhProgress,
+      expectedClients: fitTargetClients * progressOfMonth,
+      actualClients: fitClientCount,
+    };
+  }, [fitKwhProgress, fitClientCount]);
+
   const fitEnergiaTableData = useMemo((): FitEnergiaRow[] => {
-    const fitLeads = currentMonthLeads.filter(l => l.empresa === 'Fit Energia');
-    
     const realClientRows: RealClientData[] = fitLeads.map(lead => ({
       name: lead.name,
       consumption: lead.kwh || 0,
@@ -126,14 +146,13 @@ export default function GoalsPage() {
     });
 
     return [...realClientRows, ...placeholderRows];
-  }, [currentMonthLeads]);
+  }, [fitLeads]);
 
   const fitEnergiaAvgDiscount = useMemo(() => {
-    const fitLeads = currentMonthLeads.filter(l => l.empresa === 'Fit Energia');
     if (fitLeads.length === 0) return 0;
     const totalDiscount = fitLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
     return totalDiscount / fitLeads.length;
-  }, [currentMonthLeads]);
+  }, [fitLeads]);
 
   const handleSaveMainGoal = () => {
     setMainGoal(tempMainGoal);
@@ -197,6 +216,69 @@ export default function GoalsPage() {
           </Card>
         ))}
       </div>
+      
+      {/* Indicadores Estratégicos */}
+      <Card className="bg-card/70 backdrop-blur-lg border">
+        <CardHeader>
+          <CardTitle>Indicadores Estratégicos - Fit Energia</CardTitle>
+          <CardDescription>Acompanhe o ritmo de fechamento para atingir a meta mensal.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-6">
+          <Card className="bg-background/50">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center text-primary"><Users className="mr-2 h-4 w-4" />Ritmo de Clientes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Meta de Clientes (Previsto): {formatNumber(Math.round(pacingMetrics.expectedClients))}</span>
+                  <span>Meta Total: 100</span>
+                </div>
+                <Progress value={(pacingMetrics.actualClients / 100) * 100} />
+                <div className="text-right text-sm font-bold mt-1 text-primary">
+                  {formatNumber(pacingMetrics.actualClients)}
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Ritmo Atual vs. Esperado</span>
+                  <span className={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'text-green-500' : 'text-red-500'}`}>
+                    {((pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0).toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={(pacingMetrics.actualClients / pacingMetrics.expectedClients) * 100 || 0} indicatorClassName={`${pacingMetrics.actualClients >= pacingMetrics.expectedClients ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-background/50">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center text-primary"><Zap className="mr-2 h-4 w-4" />Ritmo de KWh</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Meta de KWh (Previsto): {formatKwh(Math.round(pacingMetrics.expectedKwh))}</span>
+                  <span>Meta Total: 50.000 kWh</span>
+                </div>
+                <Progress value={(pacingMetrics.actualKwh / 50000) * 100} />
+                <div className="text-right text-sm font-bold mt-1 text-primary">
+                   {formatKwh(pacingMetrics.actualKwh)}
+                </div>
+              </div>
+               <div>
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <span>Ritmo Atual vs. Esperado</span>
+                   <span className={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'text-green-500' : 'text-red-500'}`}>
+                    {((pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0).toFixed(1)}%
+                  </span>
+                </div>
+                <Progress value={(pacingMetrics.actualKwh / pacingMetrics.expectedKwh) * 100 || 0} indicatorClassName={`${pacingMetrics.actualKwh >= pacingMetrics.expectedKwh ? 'bg-green-500' : 'bg-red-500'}`} />
+              </div>
+            </CardContent>
+          </Card>
+        </CardContent>
+      </Card>
+
 
       <Card className="bg-card/70 backdrop-blur-lg border">
         <CardHeader>
@@ -235,3 +317,4 @@ export default function GoalsPage() {
     </div>
   );
 }
+
