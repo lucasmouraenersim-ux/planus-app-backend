@@ -59,8 +59,6 @@ export default function GoalsPage() {
   const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
   const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
   
-  const [assignments, setAssignments] = useState<Record<string, Record<number, string>>>({});
-
   useEffect(() => {
     const loadLeads = async () => {
       setIsLoading(true);
@@ -82,21 +80,19 @@ export default function GoalsPage() {
     );
   }, [allLeads]);
   
+  const getLeadsByCompany = useCallback((companyName: string) => {
+    return currentMonthLeads.filter(lead => lead.empresa?.trim().toLowerCase() === companyName.trim().toLowerCase());
+  }, [currentMonthLeads]);
+
   const companyProgress = useMemo(() => {
     const progress: { [key in CompanyGoal['id']]: number } = { bc: 0, origo: 0, fit_energia: 0 };
-    Object.keys(assignments).forEach(companyId => {
-      const companyAssignments = assignments[companyId as CompanyGoal['id']];
-      if (companyAssignments) {
-        Object.values(companyAssignments).forEach(leadId => {
-          const lead = currentMonthLeads.find(l => l.id === leadId);
-          if (lead && lead.valueAfterDiscount) {
-            progress[companyId as CompanyGoal['id']] += lead.valueAfterDiscount;
-          }
-        });
-      }
+    companyGoalsData.forEach(company => {
+        const companyLeads = getLeadsByCompany(company.name);
+        progress[company.id] = companyLeads.reduce((sum, lead) => sum + (lead.valueAfterDiscount || 0), 0);
     });
     return progress;
-  }, [currentMonthLeads, assignments]);
+  }, [getLeadsByCompany]);
+
 
   const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia;
 
@@ -105,52 +101,10 @@ export default function GoalsPage() {
     setIsEditingMainGoal(false);
   };
   
-  const handleAssignmentChange = (companyId: string, placeholderIndex: number, leadId: string) => {
-    setAssignments(prev => {
-        const newAssignments = { ...prev };
-        if (!newAssignments[companyId]) {
-            newAssignments[companyId] = {};
-        }
-
-        Object.keys(newAssignments).forEach(compId => {
-            Object.keys(newAssignments[compId]).forEach(index => {
-                if (newAssignments[compId][Number(index)] === leadId) {
-                    delete newAssignments[compId][Number(index)];
-                }
-            });
-        });
-
-        if (leadId === 'remove') {
-            delete newAssignments[companyId][placeholderIndex];
-        } else {
-            newAssignments[companyId][placeholderIndex] = leadId;
-        }
-
-        return newAssignments;
-    });
-  };
-  
-  const allAssignedLeadIds = useMemo(() => 
-    new Set(Object.values(assignments).flatMap(compAssignments => Object.values(compAssignments))),
-    [assignments]
-  );
-  
-  const unassignedLeads = useMemo(() =>
-    currentMonthLeads.filter(lead => !allAssignedLeadIds.has(lead.id)),
-    [currentMonthLeads, allAssignedLeadIds]
-  );
-
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
+    const assignedLeadsForCompany = getLeadsByCompany(company.name);
     
-    const companyAssignments = assignments[company.id] || {};
-    const assignedLeadsForCompany = useMemo(() => 
-        Object.values(companyAssignments)
-            .map(leadId => currentMonthLeads.find(l => l.id === leadId))
-            .filter((l): l is LeadWithId => !!l),
-    [companyAssignments, currentMonthLeads]);
-
-
     const kwhProgress = useMemo(() => assignedLeadsForCompany.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [assignedLeadsForCompany]);
     const clientCount = useMemo(() => assignedLeadsForCompany.length, [assignedLeadsForCompany]);
 
@@ -222,47 +176,38 @@ export default function GoalsPage() {
   
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyAssignments = assignments[company.id] || {};
+    const assignedLeads = getLeadsByCompany(company.name);
 
     const tableData = useMemo((): ClientDataRow[] => {
-      const rows: ClientDataRow[] = [];
-      const usedLeadIdsInThisTable = new Set<string>();
+      const rows: ClientDataRow[] = assignedLeads.map(lead => ({
+        leadId: lead.id,
+        name: lead.name,
+        consumption: lead.kwh || 0,
+        discount: lead.discountPercentage || 0,
+        commission: (lead.valueAfterDiscount || 0) * 0.4, // Example commission
+        recurrence: 0,
+        isPlaceholder: false,
+      }));
 
-      for (let i = 0; i < company.clientTarget; i++) {
-        const assignedLeadId = companyAssignments[i];
-        const assignedLead = assignedLeadId ? allLeads.find(l => l.id === assignedLeadId) : undefined;
-        
-        if (assignedLead && !usedLeadIdsInThisTable.has(assignedLead.id)) {
-            rows.push({
-                leadId: assignedLead.id,
-                name: assignedLead.name,
-                consumption: assignedLead.kwh || 0,
-                discount: assignedLead.discountPercentage || 0,
-                commission: (assignedLead.valueAfterDiscount || 0) * 0.4,
-                recurrence: 0,
-                isPlaceholder: false,
-            });
-            usedLeadIdsInThisTable.add(assignedLead.id);
-        } else {
-            rows.push({
-                name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(new Date(), 'MM')}`,
-                consumption: company.avgKwhPerClient,
-                discount: 15,
-                commission: 0,
-                recurrence: 0,
-                isPlaceholder: true,
-            });
-        }
+      const placeholdersNeeded = Math.max(0, company.clientTarget - rows.length);
+      for (let i = 0; i < placeholdersNeeded; i++) {
+        rows.push({
+            name: `Cliente ${String(assignedLeads.length + i + 1).padStart(2, '0')}/${format(new Date(), 'MM')}`,
+            consumption: company.avgKwhPerClient,
+            discount: 15,
+            commission: 0,
+            recurrence: 0,
+            isPlaceholder: true,
+        });
       }
       return rows;
-    }, [company, companyAssignments, allLeads]);
+    }, [company, assignedLeads]);
 
     const avgDiscount = useMemo(() => {
-      const assignedLeads = Object.values(companyAssignments).map(id => allLeads.find(l => l.id === id)).filter(Boolean) as LeadWithId[];
       if (assignedLeads.length === 0) return 0;
       const totalDiscount = assignedLeads.reduce((sum, lead) => sum + (lead.discountPercentage || 0), 0);
       return totalDiscount / assignedLeads.length;
-    }, [companyAssignments, allLeads]);
+    }, [assignedLeads]);
 
 
     return (
@@ -280,22 +225,8 @@ export default function GoalsPage() {
             <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Consumo (KWh)</TableHead><TableHead>Deságio (%)</TableHead><TableHead>Comissão Total</TableHead><TableHead>Recorrência</TableHead></TableRow></TableHeader>
             <TableBody>
               {tableData.map((row, index) => (
-                <TableRow key={index} className={row.isPlaceholder ? 'opacity-60' : 'font-semibold'}>
-                  <TableCell>
-                      <Select 
-                        value={row.leadId || ''}
-                        onValueChange={(leadId) => handleAssignmentChange(company.id, index, leadId)}>
-                          <SelectTrigger className="w-[200px] h-8 text-xs bg-muted/50">
-                              <SelectValue placeholder={row.name} />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {row.leadId && <SelectItem value="remove" className="text-red-500">Remover Associação</SelectItem>}
-                              {unassignedLeads.map(lead => (
-                                  <SelectItem key={lead.id} value={lead.id}>{lead.name} ({lead.kwh} kWh)</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                  </TableCell>
+                <TableRow key={row.leadId || `placeholder-${index}`} className={row.isPlaceholder ? 'opacity-60' : 'font-semibold'}>
+                  <TableCell>{row.name}</TableCell>
                   <TableCell>{formatKwh(row.consumption)}</TableCell>
                   <TableCell>{row.discount.toFixed(2)}%</TableCell>
                   <TableCell>{formatCurrency(row.commission)}</TableCell>
