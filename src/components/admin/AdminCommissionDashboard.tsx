@@ -217,10 +217,14 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
   // Calculate Receivables and Monthly Revenue
   useEffect(() => {
-    const finalizedLeads = leads.filter(l => l.stageId === 'finalizado' && l.completedAt);
+    const relevantStages: StageId[] = ['finalizado', 'assinado', 'conformidade'];
+    const receivableLeads = leads.filter(l => 
+        relevantStages.includes(l.stageId) && 
+        (l.completedAt || l.signedAt)
+    );
     
-    const calculatedReceivables: Receivable[] = finalizedLeads.map(lead => {
-      const finalizationDate = parseISO(lead.completedAt!);
+    const calculatedReceivables: Receivable[] = receivableLeads.map(lead => {
+      const finalizationDate = parseISO(lead.completedAt || lead.signedAt!);
       const proposta = lead.valueAfterDiscount || 0;
       const empresa = lead.empresa || 'Bowe';
 
