@@ -12,14 +12,17 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth } from 'date-fns';
+import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth, addMonths, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import type { LeadWithId, StageId } from '@/types/crm';
+import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 const KWH_TO_REAIS_FACTOR = 1.093113;
 
 interface CompanyGoal {
-  id: 'fit_energia' | 'bc' | 'origo';
+  id: 'fit_energia' | 'bc' | 'origo' | 'bowe';
   name: string;
   targetValue: number; // in Reais (R$)
   kwhTarget: number;
@@ -45,6 +48,7 @@ const companyGoalsData: CompanyGoal[] = [
   { id: 'fit_energia', name: 'Fit Energia', targetValue: 50000, kwhTarget: 50000 / KWH_TO_REAIS_FACTOR, clientTarget: 100, avgKwhPerClient: 500 },
   { id: 'bc', name: 'BC', targetValue: 80000, kwhTarget: 80000 / KWH_TO_REAIS_FACTOR, clientTarget: 105, avgKwhPerClient: 700 },
   { id: 'origo', name: 'Origo', targetValue: 40000, kwhTarget: 40000 / KWH_TO_REAIS_FACTOR, clientTarget: 73, avgKwhPerClient: 500 },
+  { id: 'bowe', name: 'Bowe', targetValue: 60000, kwhTarget: 60000 / KWH_TO_REAIS_FACTOR, clientTarget: 90, avgKwhPerClient: 600 },
 ];
 
 const getCompanyGoalById = (id: CompanyGoal['id']) => companyGoalsData.find(g => g.id === id)!;
@@ -52,17 +56,14 @@ const getCompanyGoalById = (id: CompanyGoal['id']) => companyGoalsData.find(g =>
 
 export default function GoalsPage() {
   const { fetchAllCrmLeadsGlobally } = useAuth();
+  const { toast } = useToast();
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [mainGoal, setMainGoal] = useState(170000);
+  const [mainGoal, setMainGoal] = useState(230000); // 50k + 80k + 40k + 60k
   const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
   const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
-  
-  // State to track manual assignments { placeholderIndex: leadId }
-  const [fitAssignments, setFitAssignments] = useState<Record<number, string>>({});
-  const [bcAssignments, setBcAssignments] = useState<Record<number, string>>({});
-  const [origoAssignments, setOrigoAssignments] = useState<Record<number, string>>({});
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -74,52 +75,41 @@ export default function GoalsPage() {
     loadLeads();
   }, [fetchAllCrmLeadsGlobally]);
 
-  const commissionBoardLeads = useMemo(() => {
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = endOfMonth(now);
+  const monthlyLeads = useMemo(() => {
+    const start = startOfMonth(selectedMonth);
+    const end = endOfMonth(selectedMonth);
     const stagesToInclude: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
     return allLeads.filter(lead => {
       const relevantDateStr = lead.completedAt || lead.signedAt || lead.lastContact;
       const relevantDate = parseISO(relevantDateStr);
       return stagesToInclude.includes(lead.stageId) && isWithinInterval(relevantDate, { start, end });
     });
-  }, [allLeads]);
+  }, [allLeads, selectedMonth]);
 
-  const allAssignedLeadIds = useMemo(() => {
-    return new Set([
-      ...Object.values(fitAssignments),
-      ...Object.values(bcAssignments),
-      ...Object.values(origoAssignments)
-    ]);
-  }, [fitAssignments, bcAssignments, origoAssignments]);
+  const assignedLeads = useMemo(() => {
+    const assigned: { [key in CompanyGoal['id']]?: LeadWithId[] } = {};
+    for (const goal of companyGoalsData) {
+        assigned[goal.id] = monthlyLeads.filter(lead => lead.assignedToCompanyGoal === goal.id);
+    }
+    return assigned;
+  }, [monthlyLeads]);
 
   const unassignedCommissionLeads = useMemo(() => {
-    return commissionBoardLeads.filter(lead => !allAssignedLeadIds.has(lead.id));
-  }, [commissionBoardLeads, allAssignedLeadIds]);
-
+    return monthlyLeads.filter(lead => !lead.assignedToCompanyGoal);
+  }, [monthlyLeads]);
   
   const companyProgress = useMemo(() => {
-    const progress: { [key in CompanyGoal['id']]: number } = { bc: 0, origo: 0, fit_energia: 0 };
-    
-    Object.values(fitAssignments).forEach(leadId => {
-      const lead = allLeads.find(l => l.id === leadId);
-      if(lead) progress.fit_energia += lead.valueAfterDiscount || 0;
-    });
-    Object.values(bcAssignments).forEach(leadId => {
-      const lead = allLeads.find(l => l.id === leadId);
-      if(lead) progress.bc += lead.valueAfterDiscount || 0;
-    });
-    Object.values(origoAssignments).forEach(leadId => {
-      const lead = allLeads.find(l => l.id === leadId);
-      if(lead) progress.origo += lead.valueAfterDiscount || 0;
-    });
-    
+    const progress: { [key in CompanyGoal['id']]: number } = { bc: 0, origo: 0, fit_energia: 0, bowe: 0 };
+    for (const companyId in assignedLeads) {
+        const leadsForCompany = assignedLeads[companyId as CompanyGoal['id']];
+        if (leadsForCompany) {
+            progress[companyId as CompanyGoal['id']] = leadsForCompany.reduce((sum, lead) => sum + (lead.valueAfterDiscount || 0), 0);
+        }
+    }
     return progress;
-  }, [fitAssignments, bcAssignments, origoAssignments, allLeads]);
+  }, [assignedLeads]);
 
-
-  const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia;
+  const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia + companyProgress.bowe;
 
   const handleSaveMainGoal = () => {
     setMainGoal(tempMainGoal);
@@ -128,22 +118,16 @@ export default function GoalsPage() {
   
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    let assignments = {};
-    if (companyId === 'fit_energia') assignments = fitAssignments;
-    else if (companyId === 'bc') assignments = bcAssignments;
-    else if (companyId === 'origo') assignments = origoAssignments;
-
-    const assignedLeadsForCompany = useMemo(() => {
-        return Object.values(assignments).map(leadId => allLeads.find(l => l.id === leadId)).filter((l): l is LeadWithId => !!l);
-    }, [assignments, allLeads]);
+    const assignedLeadsForCompany = assignedLeads[companyId] || [];
     
     const kwhProgress = useMemo(() => assignedLeadsForCompany.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [assignedLeadsForCompany]);
     const clientCount = useMemo(() => assignedLeadsForCompany.length, [assignedLeadsForCompany]);
 
     const pacingMetrics = useMemo(() => {
       const now = new Date();
-      const daysInMonth = getDaysInMonth(now);
-      const currentDay = now.getDate();
+      const isCurrentMonth = selectedMonth.getMonth() === now.getMonth() && selectedMonth.getFullYear() === now.getFullYear();
+      const daysInMonth = getDaysInMonth(selectedMonth);
+      const currentDay = isCurrentMonth ? now.getDate() : daysInMonth; // If past month, assume 100% progress
       const progressOfMonth = currentDay / daysInMonth;
 
       return {
@@ -152,7 +136,7 @@ export default function GoalsPage() {
         expectedClients: company.clientTarget * progressOfMonth,
         actualClients: clientCount,
       };
-    }, [kwhProgress, clientCount, company]);
+    }, [kwhProgress, clientCount, company, selectedMonth]);
 
     return (
        <Card className="bg-card/70 backdrop-blur-lg border">
@@ -208,49 +192,32 @@ export default function GoalsPage() {
   
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    let assignments: Record<number, string> = {};
-    let setAssignments: React.Dispatch<React.SetStateAction<Record<number, string>>> = () => {};
-    
-    if (companyId === 'fit_energia') {
-        assignments = fitAssignments;
-        setAssignments = setFitAssignments;
-    } else if (companyId === 'bc') {
-        assignments = bcAssignments;
-        setAssignments = setBcAssignments;
-    } else if (companyId === 'origo') {
-        assignments = origoAssignments;
-        setAssignments = setOrigoAssignments;
-    }
 
-    const handleAssignmentChange = (placeholderIndex: number, newLeadId: string) => {
-        setAssignments(prev => {
-            const updated = {...prev};
-            
-            // If the leadId is already assigned elsewhere in this company's table, remove the old assignment
-            for (const key in updated) {
-                if (updated[key] === newLeadId) {
-                    delete updated[key];
-                }
+    const handleAssignmentChange = async (newLeadId: string, currentLeadId?: string) => {
+        try {
+            // If there's a lead currently in this slot, un-assign it
+            if (currentLeadId) {
+                await updateCrmLeadDetails(currentLeadId, { assignedToCompanyGoal: undefined });
             }
-            
-            if (newLeadId === 'placeholder') {
-                delete updated[placeholderIndex];
-            } else {
-                updated[placeholderIndex] = newLeadId;
+            // Assign the new lead
+            if (newLeadId !== 'placeholder') {
+                await updateCrmLeadDetails(newLeadId, { assignedToCompanyGoal: companyId });
             }
-            return updated;
-        });
+            toast({ title: "Sucesso", description: "Atribuição salva com sucesso!" });
+            const leads = await fetchAllCrmLeadsGlobally(); // Re-fetch to update state
+            setAllLeads(leads);
+        } catch (error) {
+            console.error("Failed to update lead assignment:", error);
+            toast({ title: "Erro", description: "Não foi possível salvar a atribuição.", variant: "destructive" });
+        }
     };
 
     const tableData = useMemo((): ClientDataRow[] => {
-      const rows: ClientDataRow[] = [];
-      const assignedLeadIdsInThisTable = new Set(Object.values(assignments));
+      let rows: ClientDataRow[] = [];
+      const companyAssignedLeads = assignedLeads[company.id] || [];
 
-      for (let i = 0; i < company.clientTarget; i++) {
-        const assignedLeadId = assignments[i];
-        const assignedLead = assignedLeadId ? allLeads.find(l => l.id === assignedLeadId) : undefined;
-        
-        if (assignedLead) {
+      // Add assigned leads to the table
+      companyAssignedLeads.forEach(assignedLead => {
           const proposta = assignedLead.valueAfterDiscount || 0;
           const desagil = assignedLead.discountPercentage || 0;
           let commission = 0;
@@ -265,6 +232,8 @@ export default function GoalsPage() {
               commission = proposta * 1.6; // 160%
           } else if (company.id === 'origo') {
               commission = proposta * 1.5; // 150%
+          } else if (company.id === 'bowe') {
+              commission = proposta * 0.6; // 60%
           }
 
           rows.push({
@@ -276,26 +245,30 @@ export default function GoalsPage() {
             recurrence: recurrence,
             isPlaceholder: false,
           });
-        } else {
+      });
+
+      // Add placeholder rows
+      const placeholderCount = company.clientTarget - rows.length;
+      for (let i = 0; i < placeholderCount; i++) {
           rows.push({
-            name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(new Date(), 'MM')}`,
+            name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(selectedMonth, 'MM')}`,
             consumption: company.avgKwhPerClient,
             discount: 15,
             commission: 0,
             recurrence: 0,
             isPlaceholder: true,
           });
-        }
       }
+      
       return rows;
-    }, [company, assignments, allLeads]);
+    }, [company, assignedLeads, selectedMonth]);
 
-    const realLeadsInTable = tableData.filter(row => !row.isPlaceholder);
     const avgDiscount = useMemo(() => {
+      const realLeadsInTable = tableData.filter(row => !row.isPlaceholder);
       if (realLeadsInTable.length === 0) return 0;
       const totalDiscount = realLeadsInTable.reduce((sum, row) => sum + row.discount, 0);
       return totalDiscount / realLeadsInTable.length;
-    }, [realLeadsInTable]);
+    }, [tableData]);
 
     return (
       <Card className="bg-card/70 backdrop-blur-lg border">
@@ -314,21 +287,20 @@ export default function GoalsPage() {
               {tableData.map((row, index) => (
                 <TableRow key={row.leadId || `placeholder-${index}`} className={row.isPlaceholder ? 'opacity-60' : 'font-semibold'}>
                   <TableCell>
-                     {row.isPlaceholder ? (
-                        <Select onValueChange={(value) => handleAssignmentChange(index, value)}>
-                            <SelectTrigger className="w-[180px] h-8 text-xs">
-                                <SelectValue placeholder={row.name} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="placeholder">-- Vazio --</SelectItem>
-                                {unassignedCommissionLeads.map(lead => (
-                                    <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                     ) : (
-                       row.name
-                     )}
+                     <Select onValueChange={(value) => handleAssignmentChange(value, row.leadId)} value={row.leadId || 'placeholder'}>
+                        <SelectTrigger className="w-[200px] h-8 text-xs">
+                            <SelectValue placeholder={row.name} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="placeholder">-- Vazio --</SelectItem>
+                             {row.leadId && !row.isPlaceholder && (
+                                <SelectItem key={row.leadId} value={row.leadId}>{row.name}</SelectItem>
+                            )}
+                            {unassignedCommissionLeads.map(lead => (
+                                <SelectItem key={lead.id} value={lead.id}>{lead.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>{formatKwh(row.consumption)}</TableCell>
                   <TableCell>{row.discount.toFixed(2)}%</TableCell>
@@ -350,6 +322,18 @@ export default function GoalsPage() {
         <h1 className="text-4xl font-bold text-primary">Painel de Metas</h1>
         <p className="text-muted-foreground mt-2">Acompanhe o progresso mensal da equipe e os KPIs.</p>
       </header>
+      
+       <div className="flex justify-center items-center gap-4">
+            <Button variant="outline" size="icon" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+                <CalendarIcon className="h-4 w-4" />
+            </Button>
+            <h2 className="text-2xl font-semibold text-center text-primary">
+                {format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+            </h2>
+            <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+                <CalendarIcon className="h-4 w-4" />
+            </Button>
+        </div>
       
       <Card className="bg-primary/10 border-primary shadow-lg">
         <CardHeader>
@@ -373,20 +357,20 @@ export default function GoalsPage() {
           <Progress value={(totalProgress / mainGoal) * 100} className="h-4" />
           <div className="flex justify-between mt-2 text-sm font-medium">
             <span className="text-primary">{formatCurrency(totalProgress)}</span>
-            <span className="text-muted-foreground">{((totalProgress / mainGoal) * 100).toFixed(1)}%</span>
+            <span className="text-muted-foreground">{((totalProgress / mainGoal) * 100 || 0).toFixed(1)}%</span>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
         {companyGoalsData.map(goal => (
           <Card key={goal.id} className="bg-card/70 backdrop-blur-lg border">
             <CardHeader><CardTitle className="text-lg font-semibold">{goal.name}</CardTitle><CardDescription>Meta: {formatCurrency(goal.targetValue)}</CardDescription></CardHeader>
             <CardContent>
-              <Progress value={(companyProgress[goal.id] / goal.targetValue) * 100} />
+              <Progress value={(companyProgress[goal.id] / goal.targetValue) * 100 || 0} />
               <div className="flex justify-between mt-1 text-xs">
                 <span>{formatCurrency(companyProgress[goal.id])}</span>
-                <span>{((companyProgress[goal.id] / goal.targetValue) * 100).toFixed(1)}%</span>
+                <span>{((companyProgress[goal.id] / goal.targetValue) * 100 || 0).toFixed(1)}%</span>
               </div>
             </CardContent>
           </Card>
@@ -394,7 +378,7 @@ export default function GoalsPage() {
       </div>
       
       <Tabs defaultValue="fit_energia" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           {companyGoalsData.map(company => (
             <TabsTrigger key={company.id} value={company.id}>{company.name}</TabsTrigger>
           ))}
@@ -409,3 +393,4 @@ export default function GoalsPage() {
     </div>
   );
 }
+
