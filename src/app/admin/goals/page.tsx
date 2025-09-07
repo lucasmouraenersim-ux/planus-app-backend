@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,14 +45,12 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style
 const formatKwh = (value: number) => `${new Intl.NumberFormat('pt-BR').format(Math.round(value))} kWh`;
 const formatNumber = (value: number) => new Intl.NumberFormat('pt-BR').format(Math.round(value));
 
-const companyGoalsData: CompanyGoal[] = [
-  { id: 'fit_energia', name: 'Fit Energia', targetValue: 50000, kwhTarget: 50000 / KWH_TO_REAIS_FACTOR, clientTarget: 100, avgKwhPerClient: 500 },
-  { id: 'bc', name: 'BC', targetValue: 80000, kwhTarget: 80000 / KWH_TO_REAIS_FACTOR, clientTarget: 105, avgKwhPerClient: 700 },
-  { id: 'origo', name: 'Origo', targetValue: 40000, kwhTarget: 40000 / KWH_TO_REAIS_FACTOR, clientTarget: 73, avgKwhPerClient: 500 },
-  { id: 'bowe', name: 'Bowe', targetValue: 60000, kwhTarget: 60000 / KWH_TO_REAIS_FACTOR, clientTarget: 90, avgKwhPerClient: 600 },
+const initialCompanyGoalsData: Omit<CompanyGoal, 'targetValue' | 'kwhTarget'>[] = [
+  { id: 'fit_energia', name: 'Fit Energia', clientTarget: 100, avgKwhPerClient: 500 },
+  { id: 'bc', name: 'BC', clientTarget: 105, avgKwhPerClient: 700 },
+  { id: 'origo', name: 'Origo', clientTarget: 73, avgKwhPerClient: 500 },
+  { id: 'bowe', name: 'Bowe', clientTarget: 90, avgKwhPerClient: 600 },
 ];
-
-const getCompanyGoalById = (id: CompanyGoal['id']) => companyGoalsData.find(g => g.id === id)!;
 
 
 export default function GoalsPage() {
@@ -60,10 +59,35 @@ export default function GoalsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [mainGoal, setMainGoal] = useState(230000); // 50k + 80k + 40k + 60k
-  const [isEditingMainGoal, setIsEditingMainGoal] = useState(false);
-  const [tempMainGoal, setTempMainGoal] = useState(mainGoal);
+  const [companyGoals, setCompanyGoals] = useState<CompanyGoal[]>(initialCompanyGoalsData.map(g => ({
+      ...g,
+      targetValue: 50000, // Initial default value
+      kwhTarget: (50000 / KWH_TO_REAIS_FACTOR),
+  })));
+
+  const [tempGoals, setTempGoals] = useState<Record<CompanyGoal['id'], number>>({
+      fit_energia: 50000,
+      bc: 80000,
+      origo: 40000,
+      bowe: 60000,
+  });
+  
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+
+  useEffect(() => {
+     // Set initial tempGoals from the main companyGoals state
+     const initialTemps = companyGoals.reduce((acc, goal) => {
+        acc[goal.id] = goal.targetValue;
+        return acc;
+     }, {} as Record<CompanyGoal['id'], number>);
+     setTempGoals(initialTemps);
+  }, [companyGoals]);
+  
+  const mainGoal = useMemo(() => companyGoals.reduce((sum, goal) => sum + goal.targetValue, 0), [companyGoals]);
+  
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+
+  const getCompanyGoalById = useCallback((id: CompanyGoal['id']) => companyGoals.find(g => g.id === id)!, [companyGoals]);
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -88,11 +112,11 @@ export default function GoalsPage() {
 
   const assignedLeads = useMemo(() => {
     const assigned: { [key in CompanyGoal['id']]?: LeadWithId[] } = {};
-    for (const goal of companyGoalsData) {
+    for (const goal of companyGoals) {
         assigned[goal.id] = monthlyLeads.filter(lead => lead.assignedToCompanyGoal === goal.id);
     }
     return assigned;
-  }, [monthlyLeads]);
+  }, [monthlyLeads, companyGoals]);
 
   const unassignedCommissionLeads = useMemo(() => {
     return monthlyLeads.filter(lead => !lead.assignedToCompanyGoal);
@@ -109,11 +133,16 @@ export default function GoalsPage() {
     return progress;
   }, [assignedLeads]);
 
-  const totalProgress = companyProgress.bc + companyProgress.origo + companyProgress.fit_energia + companyProgress.bowe;
+  const totalProgress = Object.values(companyProgress).reduce((sum, progress) => sum + progress, 0);
 
-  const handleSaveMainGoal = () => {
-    setMainGoal(tempMainGoal);
-    setIsEditingMainGoal(false);
+  const handleSaveGoals = () => {
+      setCompanyGoals(prevGoals => prevGoals.map(goal => ({
+          ...goal,
+          targetValue: tempGoals[goal.id],
+          kwhTarget: tempGoals[goal.id] / KWH_TO_REAIS_FACTOR,
+      })));
+      setIsGoalModalOpen(false);
+      toast({ title: "Metas Atualizadas", description: "As metas das empresas e a meta global foram salvas." });
   };
   
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
@@ -127,7 +156,7 @@ export default function GoalsPage() {
       const now = new Date();
       const isCurrentMonth = selectedMonth.getMonth() === now.getMonth() && selectedMonth.getFullYear() === now.getFullYear();
       const daysInMonth = getDaysInMonth(selectedMonth);
-      const currentDay = isCurrentMonth ? now.getDate() : daysInMonth; // If past month, assume 100% progress
+      const currentDay = isCurrentMonth ? now.getDate() : daysInMonth; 
       const progressOfMonth = currentDay / daysInMonth;
 
       return {
@@ -195,16 +224,14 @@ export default function GoalsPage() {
 
     const handleAssignmentChange = async (newLeadId: string, currentLeadId?: string) => {
         try {
-            // If there's a lead currently in this slot, un-assign it
             if (currentLeadId) {
                 await updateCrmLeadDetails(currentLeadId, { assignedToCompanyGoal: undefined });
             }
-            // Assign the new lead
             if (newLeadId !== 'placeholder') {
                 await updateCrmLeadDetails(newLeadId, { assignedToCompanyGoal: companyId });
             }
             toast({ title: "Sucesso", description: "Atribuição salva com sucesso!" });
-            const leads = await fetchAllCrmLeadsGlobally(); // Re-fetch to update state
+            const leads = await fetchAllCrmLeadsGlobally();
             setAllLeads(leads);
         } catch (error) {
             console.error("Failed to update lead assignment:", error);
@@ -216,7 +243,6 @@ export default function GoalsPage() {
       let rows: ClientDataRow[] = [];
       const companyAssignedLeads = assignedLeads[company.id] || [];
 
-      // Add assigned leads to the table
       companyAssignedLeads.forEach(assignedLead => {
           const proposta = assignedLead.valueAfterDiscount || 0;
           const desagil = assignedLead.discountPercentage || 0;
@@ -224,16 +250,16 @@ export default function GoalsPage() {
           let recurrence = 0;
           
           if (company.id === 'fit_energia') {
-              commission = proposta; // 100%
+              commission = proposta;
               if (desagil < 25) {
                   recurrence = proposta * ((25 - desagil) / 100);
               }
           } else if (company.id === 'bc') {
-              commission = proposta * 1.6; // 160%
+              commission = proposta * 1.6;
           } else if (company.id === 'origo') {
-              commission = proposta * 1.5; // 150%
+              commission = proposta * 1.5;
           } else if (company.id === 'bowe') {
-              commission = proposta * 0.6; // 60%
+              commission = proposta * 0.6;
           }
 
           rows.push({
@@ -247,7 +273,6 @@ export default function GoalsPage() {
           });
       });
 
-      // Add placeholder rows
       const placeholderCount = company.clientTarget - rows.length;
       for (let i = 0; i < placeholderCount; i++) {
           rows.push({
@@ -339,17 +364,38 @@ export default function GoalsPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl text-primary">Meta Mensal Global</CardTitle>
-            {isEditingMainGoal ? (
-              <div className="flex items-center gap-2">
-                <Input type="number" value={tempMainGoal} onChange={(e) => setTempMainGoal(Number(e.target.value))} className="w-40 h-8" />
-                <Button size="sm" onClick={handleSaveMainGoal}><Check className="h-4 w-4" /></Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-primary">{formatCurrency(mainGoal)}</span>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setTempMainGoal(mainGoal); setIsEditingMainGoal(true); }}><Edit className="h-4 w-4" /></Button>
+                <Dialog open={isGoalModalOpen} onOpenChange={setIsGoalModalOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Editar Metas por Empresa</DialogTitle>
+                            <DialogDescription>A meta global será a soma das metas individuais.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            {companyGoals.map(goal => (
+                                <div key={goal.id} className="grid grid-cols-2 items-center gap-4">
+                                    <Label htmlFor={`goal-${goal.id}`}>{goal.name}</Label>
+                                    <Input 
+                                        id={`goal-${goal.id}`} 
+                                        type="number" 
+                                        value={tempGoals[goal.id]} 
+                                        onChange={(e) => setTempGoals(prev => ({...prev, [goal.id]: Number(e.target.value)}))}
+                                        className="text-right"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsGoalModalOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleSaveGoals}><Check className="mr-2 h-4 w-4"/>Salvar Metas</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
               </div>
-            )}
           </div>
           <CardDescription>Progresso total em relação à meta principal do mês.</CardDescription>
         </CardHeader>
@@ -363,7 +409,7 @@ export default function GoalsPage() {
       </Card>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {companyGoalsData.map(goal => (
+        {companyGoals.map(goal => (
           <Card key={goal.id} className="bg-card/70 backdrop-blur-lg border">
             <CardHeader><CardTitle className="text-lg font-semibold">{goal.name}</CardTitle><CardDescription>Meta: {formatCurrency(goal.targetValue)}</CardDescription></CardHeader>
             <CardContent>
@@ -379,11 +425,11 @@ export default function GoalsPage() {
       
       <Tabs defaultValue="fit_energia" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          {companyGoalsData.map(company => (
+          {companyGoals.map(company => (
             <TabsTrigger key={company.id} value={company.id}>{company.name}</TabsTrigger>
           ))}
         </TabsList>
-        {companyGoalsData.map(company => (
+        {companyGoals.map(company => (
           <TabsContent key={company.id} value={company.id} className="mt-4 space-y-6">
             <PacingMetricsCard companyId={company.id} />
             <KpiTable companyId={company.id} />
@@ -393,4 +439,3 @@ export default function GoalsPage() {
     </div>
   );
 }
-
