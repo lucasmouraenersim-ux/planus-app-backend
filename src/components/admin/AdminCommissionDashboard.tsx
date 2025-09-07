@@ -1,3 +1,4 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -35,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1236,7 +1237,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                               <SelectItem value="9999">Ilimitado</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground">Máximo de leads sem feedback que o vendedor pode ter.</p>
+                          <FormDescription className="text-xs text-muted-foreground">Máximo de leads sem feedback que o vendedor pode ter.</FormDescription>
                         </FormItem>
                       )}
                     />
@@ -1248,7 +1249,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <FormItem>
                           <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta (%)</FormLabel>
                           <FormControl><Input type="number" step="1" placeholder="Padrão do Nível" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <p className="text-xs text-muted-foreground">Deixe em branco para usar o padrão do nível (40% ou 50%).</p>
+                          <FormDescription className="text-xs text-muted-foreground">Deixe em branco para usar o padrão do nível (40% ou 50%).</FormDescription>
                           <FormMessage />
                       </FormItem>
                     )} />
@@ -1256,7 +1257,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <FormItem>
                           <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência (%)</FormLabel>
                           <FormControl><Input type="number" step="0.1" placeholder="Sem Recorrência" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <p className="text-xs text-muted-foreground">Deixe em branco para sem recorrência.</p>
+                          <FormDescription className="text-xs text-muted-foreground">Deixe em branco para sem recorrência.</FormDescription>
                           <FormMessage />
                         </FormItem>
                     )} />
