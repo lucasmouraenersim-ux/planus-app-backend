@@ -157,7 +157,6 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const PAYROLL_STORAGE_KEY = 'companyPayroll';
   const RECEIVABLE_DATES_KEY = 'receivableDates';
 
-
   const [proLabore, setProLabore] = useState(25);
   const [tax, setTax] = useState(6);
   const [reinvest, setReinvest] = useState(15);
@@ -166,10 +165,17 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const [payroll, setPayroll] = useState<Employee[]>([]);
   const [newEmployee, setNewEmployee] = useState({ name: '', regime: 'CLT' as 'CLT' | 'PJ', role: 'SDR' as 'SDR' | 'Marketing' | 'Outro', salary: 0, monthlyRevenueGenerated: 0 });
 
-  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [allReceivables, setAllReceivables] = useState<Receivable[]>([]);
   const [receivableDates, setReceivableDates] = useState<Record<string, { second?: string; third?: string }>>({});
 
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+
+  // New states for filtering and pagination
+  const [receivableCompanyFilter, setReceivableCompanyFilter] = useState('all');
+  const [receivablePromoterFilter, setReceivablePromoterFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 50;
+
 
   // Load from LocalStorage
   useEffect(() => {
@@ -281,7 +287,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       };
     });
 
-    setReceivables(calculatedReceivables);
+    setAllReceivables(calculatedReceivables.sort((a, b) => b.finalizationDate.getTime() - a.finalizationDate.getTime()));
 
     // Calculate this month's revenue
     const now = new Date();
@@ -348,6 +354,25 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       return `${roi.toFixed(2)}%`;
   };
 
+  const filteredReceivables = useMemo(() => {
+    return allReceivables.filter(r => 
+        (receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter) &&
+        (receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter)
+    );
+  }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads]);
+  
+  const promotersWithLeads = useMemo(() => {
+      const promoterSet = new Set<string>();
+      allReceivables.forEach(r => {
+        const lead = leads.find(l => l.id === r.leadId);
+        if (lead?.sellerName) promoterSet.add(lead.sellerName);
+      });
+      return Array.from(promoterSet).sort();
+  }, [allReceivables, leads]);
+
+  const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
+  const paginatedReceivables = filteredReceivables.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -385,7 +410,22 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       </Card>
        
       <Card>
-        <CardHeader><CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle></CardHeader>
+        <CardHeader>
+            <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle>
+            <CardDescription>
+                Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros.
+            </CardDescription>
+            <div className="flex flex-wrap gap-2 pt-2">
+                 <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}>
+                    <SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(allReceivables.map(r => r.company))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}>
+                    <SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
+        </CardHeader>
         <CardContent>
             <Table>
                 <TableHeader><TableRow>
@@ -395,7 +435,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                     <TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                    {receivables.map(r => (
+                    {paginatedReceivables.map(r => (
                         <TableRow key={r.leadId}>
                             <TableCell>{r.clientName}</TableCell>
                             <TableCell>{r.company}</TableCell>
@@ -418,6 +458,11 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                 </TableBody>
             </Table>
         </CardContent>
+        <CardFooter className="flex justify-end items-center gap-4">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button>
+        </CardFooter>
       </Card>
 
        <Card>
@@ -459,14 +504,14 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       <Card>
           <CardHeader><CardTitle className="flex items-center"><PieChartIcon className="mr-2 h-5 w-5"/>Distribuição do Faturamento</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-              <div className="flex justify-between items-center"><span className="text-muted-foreground">Faturamento Bruto:</span><span className="font-semibold">{formatCurrency(monthlyRevenue)}</span></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Faturamento Bruto:</p><p className="font-semibold">{formatCurrency(monthlyRevenue)}</p></div>
               <Separator/>
-              <div className="flex justify-between items-center"><span className="text-muted-foreground">Pró-labore ({proLabore}%):</span><span className="font-semibold">{formatCurrency(proLaboreValue)}</span></div>
-              <div className="flex justify-between items-center"><span className="text-muted-foreground">Impostos ({tax}%):</span><span className="font-semibold">{formatCurrency(taxValue)}</span></div>
-              <div className="flex justify-between items-center"><span className="text-muted-foreground">Reinvestimento ({reinvest}%):</span><span className="font-semibold">{formatCurrency(reinvestValue)}</span></div>
-              <div className="flex justify-between items-center"><span className="text-muted-foreground">Custos Fixos (Folha + Risco):</span><span className="font-semibold">{formatCurrency(fixedCosts)}</span></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Pró-labore ({proLabore}%):</p><p className="font-semibold">{formatCurrency(proLaboreValue)}</p></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Impostos ({tax}%):</p><p className="font-semibold">{formatCurrency(taxValue)}</p></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Reinvestimento ({reinvest}%):</p><p className="font-semibold">{formatCurrency(reinvestValue)}</p></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Custos Fixos (Folha + Risco):</p><p className="font-semibold">{formatCurrency(fixedCosts)}</p></div>
               <Separator/>
-              <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Lucro Líquido Estimado:</span><span className="font-bold text-primary">{formatCurrency(netProfit)}</span></div>
+              <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Lucro Líquido Estimado:</p><p className="font-bold text-primary">{formatCurrency(netProfit)}</p></div>
           </CardContent>
       </Card>
     </div>
@@ -549,14 +594,14 @@ function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) 
         <Card>
             <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-                <div className="flex justify-between items-center"><span className="text-muted-foreground">Patrimônio Total:</span><span className="font-semibold">{formatCurrency(personalCapital)}</span></div>
+                <div className="flex justify-between items-center"><p className="text-muted-foreground">Patrimônio Total:</p><p className="font-semibold">{formatCurrency(personalCapital)}</p></div>
                 <Separator/>
-                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Ações:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</span></div>
-                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Renda Fixa:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</span></div>
-                <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Cripto:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</span></div>
-                 <div className="flex justify-between items-center"><span className="text-muted-foreground">Alocado em Imóveis:</span><span className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</span></div>
+                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Ações:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</p></div>
+                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Renda Fixa:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</p></div>
+                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Cripto:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</p></div>
+                 <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Imóveis:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</p></div>
                 <Separator/>
-                <div className="flex justify-between items-center text-lg"><span className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</span><span className="font-bold text-primary">{formatCurrency(monthlyProLabore - monthlyExpenses)}</span></div>
+                <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</p><p className="font-bold text-primary">{formatCurrency(monthlyProLabore - monthlyExpenses)}</p></div>
             </CardContent>
         </Card>
     </div>
