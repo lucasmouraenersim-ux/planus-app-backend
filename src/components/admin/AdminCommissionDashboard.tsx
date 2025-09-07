@@ -125,41 +125,95 @@ interface AdminCommissionDashboardProps {
   onUsersChange: () => Promise<void>;
 }
 
+interface Employee {
+  id: string;
+  name: string;
+  regime: 'CLT' | 'PJ';
+  role: 'SDR' | 'Marketing' | 'Outro';
+  salary: number;
+  monthlyRevenueGenerated: number;
+}
+
+
 // New component for Company Management
 function CompanyManagementTab() {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const STORAGE_KEY = 'companyManagementSettings';
+  const PAYROLL_STORAGE_KEY = 'companyPayroll';
 
   const [proLabore, setProLabore] = useState(25);
   const [tax, setTax] = useState(6);
   const [reinvest, setReinvest] = useState(15);
-  const [payroll, setPayroll] = useState(15000);
   const [riskFund, setRiskFund] = useState(10000);
   const [monthlyRevenue, setMonthlyRevenue] = useState(120000);
+  
+  const [payroll, setPayroll] = useState<Employee[]>([]);
+  const [newEmployee, setNewEmployee] = useState({ name: '', regime: 'CLT' as 'CLT' | 'PJ', role: 'SDR' as 'SDR' | 'Marketing' | 'Outro', salary: 0, monthlyRevenueGenerated: 0 });
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem(STORAGE_KEY);
+    const savedSettings = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     if (savedSettings) {
-      const { proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue } = JSON.parse(savedSettings);
-      setProLabore(proLabore || 25);
-      setTax(tax || 6);
-      setReinvest(reinvest || 15);
-      setPayroll(payroll || 15000);
-      setRiskFund(riskFund || 10000);
-      setMonthlyRevenue(monthlyRevenue || 120000);
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setProLabore(parsed.proLabore || 25);
+        setTax(parsed.tax || 6);
+        setReinvest(parsed.reinvest || 15);
+        setRiskFund(parsed.riskFund || 10000);
+        setMonthlyRevenue(parsed.monthlyRevenue || 120000);
+      } catch (e) {
+        console.error("Failed to parse company settings from localStorage", e);
+      }
+    }
+    const savedPayroll = typeof window !== 'undefined' ? localStorage.getItem(PAYROLL_STORAGE_KEY) : null;
+    if(savedPayroll) {
+      try {
+        setPayroll(JSON.parse(savedPayroll));
+      } catch (e) {
+        console.error("Failed to parse payroll from localStorage", e);
+      }
     }
   }, []);
 
   useEffect(() => {
-    const settings = { proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue };
+    const settings = { proLabore, tax, reinvest, riskFund, monthlyRevenue };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [proLabore, tax, reinvest, payroll, riskFund, monthlyRevenue]);
+  }, [proLabore, tax, reinvest, riskFund, monthlyRevenue]);
+
+  useEffect(() => {
+    localStorage.setItem(PAYROLL_STORAGE_KEY, JSON.stringify(payroll));
+  }, [payroll]);
+  
+  const totalPayroll = useMemo(() => payroll.reduce((sum, emp) => sum + emp.salary, 0), [payroll]);
 
   const proLaboreValue = monthlyRevenue * (proLabore / 100);
   const taxValue = monthlyRevenue * (tax / 100);
   const reinvestValue = monthlyRevenue * (reinvest / 100);
-  const fixedCosts = payroll + riskFund;
+  const fixedCosts = totalPayroll + riskFund;
   const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts;
+  
+  const handleAddEmployee = () => {
+    if (!newEmployee.name || newEmployee.salary <= 0) {
+      alert("Nome e salário são obrigatórios.");
+      return;
+    }
+    setPayroll([...payroll, { ...newEmployee, id: Date.now().toString() }]);
+    setNewEmployee({ name: '', regime: 'CLT', role: 'SDR', salary: 0, monthlyRevenueGenerated: 0 });
+  };
+  
+  const handleRemoveEmployee = (id: string) => {
+    setPayroll(payroll.filter(emp => emp.id !== id));
+  };
+  
+  const calculateTax = (employee: Employee) => {
+    return employee.regime === 'CLT' ? employee.salary * 0.20 : 0; // Simplified 20% tax for CLT
+  };
+
+  const calculateROI = (employee: Employee) => {
+      const totalCost = employee.salary + calculateTax(employee);
+      if (totalCost === 0) return 'N/A';
+      const roi = ((employee.monthlyRevenueGenerated - totalCost) / totalCost) * 100;
+      return `${roi.toFixed(2)}%`;
+  };
 
   return (
     <div className="space-y-6">
@@ -189,14 +243,46 @@ function CompanyManagementTab() {
           </div>
            <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <Label htmlFor="payroll">Folha de Pagamento (R$)</Label>
-                <Input id="payroll" type="number" value={payroll} onChange={(e) => setPayroll(Number(e.target.value))} />
-              </div>
-              <div>
                 <Label htmlFor="riskFund">Caixa de Risco (R$)</Label>
                 <Input id="riskFund" type="number" value={riskFund} onChange={(e) => setRiskFund(Number(e.target.value))} />
               </div>
            </div>
+        </CardContent>
+      </Card>
+      
+       <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center"><Users className="mr-2 h-5 w-5" />Folha de Pagamento</CardTitle>
+          <CardDescription>Gerencie seus funcionários e seus custos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+           <div className="grid md:grid-cols-3 gap-4 mb-4">
+              <Input placeholder="Nome" value={newEmployee.name} onChange={e => setNewEmployee({...newEmployee, name: e.target.value})} />
+              <Select value={newEmployee.regime} onValueChange={(v: 'CLT'|'PJ') => setNewEmployee({...newEmployee, regime: v})}>
+                  <SelectTrigger><SelectValue/></SelectTrigger>
+                  <SelectContent><SelectItem value="CLT">CLT</SelectItem><SelectItem value="PJ">PJ</SelectItem></SelectContent>
+              </Select>
+               <Select value={newEmployee.role} onValueChange={(v: 'SDR'|'Marketing'|'Outro') => setNewEmployee({...newEmployee, role: v})}>
+                  <SelectTrigger><SelectValue/></SelectTrigger>
+                  <SelectContent><SelectItem value="SDR">SDR</SelectItem><SelectItem value="Marketing">Marketing</SelectItem><SelectItem value="Outro">Outro</SelectItem></SelectContent>
+              </Select>
+              <Input type="number" placeholder="Salário (R$)" value={newEmployee.salary || ''} onChange={e => setNewEmployee({...newEmployee, salary: Number(e.target.value)})} />
+              <Input type="number" placeholder="Receita Gerada/Mês (R$)" value={newEmployee.monthlyRevenueGenerated || ''} onChange={e => setNewEmployee({...newEmployee, monthlyRevenueGenerated: Number(e.target.value)})} />
+              <Button onClick={handleAddEmployee}>Adicionar Funcionário</Button>
+           </div>
+          <Table>
+            <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Regime</TableHead><TableHead>Função</TableHead><TableHead>Salário</TableHead><TableHead>Impostos (CLT 20%)</TableHead><TableHead>ROI</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {payroll.map(emp => (
+                <TableRow key={emp.id}>
+                  <TableCell>{emp.name}</TableCell><TableCell>{emp.regime}</TableCell><TableCell>{emp.role}</TableCell>
+                  <TableCell>{formatCurrency(emp.salary)}</TableCell><TableCell>{formatCurrency(calculateTax(emp))}</TableCell>
+                  <TableCell>{calculateROI(emp)}</TableCell>
+                  <TableCell><Button variant="destructive" size="sm" onClick={() => handleRemoveEmployee(emp.id)}>Remover</Button></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
       
@@ -231,12 +317,16 @@ function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) 
   });
 
   useEffect(() => {
-    const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
+    const savedPersonal = typeof window !== 'undefined' ? localStorage.getItem(PERSONAL_FINANCE_KEY) : null;
     if (savedPersonal) {
-        const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
-        setPersonalCapital(personalCapital || 500000);
-        setMonthlyExpenses(monthlyExpenses || 8000);
-        setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+        try {
+            const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
+            setPersonalCapital(personalCapital || 500000);
+            setMonthlyExpenses(monthlyExpenses || 8000);
+            setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+        } catch(e) {
+            console.error("Failed to parse personal finance from localStorage", e);
+        }
     }
   }, []);
 
@@ -512,7 +602,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `usuarios_planus_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `usuarios_sent_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     toast({ title: "Exportação Iniciada", description: `${filteredUsers.length} usuários exportados.` });
   };
