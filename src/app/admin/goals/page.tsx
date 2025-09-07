@@ -392,7 +392,7 @@ export default function GoalsPage() {
             <Button variant="outline" size="icon" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
                 <CalendarIcon className="h-4 w-4" />
             </Button>
-            <h2 className="text-2xl font-semibold text-center text-primary">
+            <h2 className="text-2xl font-semibold text-center text-primary capitalize">
                 {format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
             </h2>
             <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
