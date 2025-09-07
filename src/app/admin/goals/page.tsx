@@ -83,9 +83,9 @@ export default function GoalsPage() {
     currentMonthLeads.forEach(lead => {
       const value = lead.valueAfterDiscount || 0;
       const leadCompany = lead.empresa || '';
-      if (leadCompany.toLowerCase().includes('bc')) progress.bc += value;
-      else if (leadCompany.toLowerCase().includes('origo')) progress.origo += value;
-      else if (leadCompany.toLowerCase().includes('fit')) progress.fit_energia += value;
+      if (leadCompany.toLowerCase() === 'bc') progress.bc += value;
+      else if (leadCompany.toLowerCase() === 'origo') progress.origo += value;
+      else if (leadCompany.toLowerCase() === 'fit energia') progress.fit_energia += value;
     });
     return progress;
   }, [currentMonthLeads]);
@@ -99,7 +99,7 @@ export default function GoalsPage() {
   
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())), [currentMonthLeads, company.name]);
+    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase() === company.name.toLowerCase()), [currentMonthLeads, company.name]);
     const kwhProgress = useMemo(() => companyLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [companyLeads]);
     const clientCount = useMemo(() => companyLeads.length, [companyLeads]);
 
@@ -171,7 +171,7 @@ export default function GoalsPage() {
   
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())), [currentMonthLeads, company.name]);
+    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase() === company.name.toLowerCase()), [currentMonthLeads, company.name]);
     
     const tableData = useMemo((): ClientDataRow[] => {
       const realClientRows: ClientDataRow[] = companyLeads.map(lead => ({
