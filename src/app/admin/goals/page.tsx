@@ -1,4 +1,3 @@
-
 // src/app/admin/goals/page.tsx
 "use client";
 
@@ -22,6 +21,7 @@ import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 const KWH_TO_REAIS_FACTOR = 1.093113;
+const GOALS_STORAGE_KEY = 'sent-company-goals';
 
 interface CompanyGoal {
   id: 'fit_energia' | 'bc' | 'origo' | 'bowe';
@@ -60,29 +60,31 @@ export default function GoalsPage() {
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [companyGoals, setCompanyGoals] = useState<CompanyGoal[]>(initialCompanyGoalsData.map(g => ({
-      ...g,
-      targetValue: 50000, // Initial default value
-      kwhTarget: (50000 / KWH_TO_REAIS_FACTOR),
-  })));
-
-  const [tempGoals, setTempGoals] = useState<Record<CompanyGoal['id'], number>>({
+  const [companyGoals, setCompanyGoals] = useState<CompanyGoal[]>(() => {
+    // Initialize state from localStorage or use defaults
+    const savedGoals = typeof window !== 'undefined' ? localStorage.getItem(GOALS_STORAGE_KEY) : null;
+    const initialGoals = savedGoals ? JSON.parse(savedGoals) : {
       fit_energia: 50000,
       bc: 80000,
       origo: 40000,
       bowe: 60000,
+    };
+    
+    return initialCompanyGoalsData.map(g => ({
+        ...g,
+        targetValue: initialGoals[g.id] || 50000,
+        kwhTarget: (initialGoals[g.id] || 50000) / KWH_TO_REAIS_FACTOR,
+    }));
+  });
+
+  const [tempGoals, setTempGoals] = useState<Record<CompanyGoal['id'], number>>({
+      fit_energia: companyGoals.find(g => g.id === 'fit_energia')?.targetValue || 50000,
+      bc: companyGoals.find(g => g.id === 'bc')?.targetValue || 80000,
+      origo: companyGoals.find(g => g.id === 'origo')?.targetValue || 40000,
+      bowe: companyGoals.find(g => g.id === 'bowe')?.targetValue || 60000,
   });
   
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
-
-  useEffect(() => {
-     // Set initial tempGoals from the main companyGoals state
-     const initialTemps = companyGoals.reduce((acc, goal) => {
-        acc[goal.id] = goal.targetValue;
-        return acc;
-     }, {} as Record<CompanyGoal['id'], number>);
-     setTempGoals(initialTemps);
-  }, [companyGoals]);
   
   const mainGoal = useMemo(() => companyGoals.reduce((sum, goal) => sum + goal.targetValue, 0), [companyGoals]);
   
@@ -99,6 +101,18 @@ export default function GoalsPage() {
     };
     loadLeads();
   }, [fetchAllCrmLeadsGlobally]);
+
+  // When modal opens, sync tempGoals with current goals
+  useEffect(() => {
+    if (isGoalModalOpen) {
+      const currentGoals = companyGoals.reduce((acc, goal) => {
+        acc[goal.id] = goal.targetValue;
+        return acc;
+      }, {} as Record<CompanyGoal['id'], number>);
+      setTempGoals(currentGoals);
+    }
+  }, [isGoalModalOpen, companyGoals]);
+
 
   const monthlyLeads = useMemo(() => {
     const start = startOfMonth(selectedMonth);
@@ -137,11 +151,22 @@ export default function GoalsPage() {
   const totalProgress = Object.values(companyProgress).reduce((sum, progress) => sum + progress, 0);
 
   const handleSaveGoals = () => {
-      setCompanyGoals(prevGoals => prevGoals.map(goal => ({
-          ...goal,
-          targetValue: tempGoals[goal.id],
-          kwhTarget: tempGoals[goal.id] / KWH_TO_REAIS_FACTOR,
-      })));
+      const newGoalsState = initialCompanyGoalsData.map(goalInfo => ({
+          ...goalInfo,
+          targetValue: tempGoals[goalInfo.id],
+          kwhTarget: tempGoals[goalInfo.id] / KWH_TO_REAIS_FACTOR,
+      }));
+      setCompanyGoals(newGoalsState);
+      
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        const goalsToSave = newGoalsState.reduce((acc, goal) => {
+            acc[goal.id] = goal.targetValue;
+            return acc;
+        }, {} as Record<CompanyGoal['id'], number>);
+        localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(goalsToSave));
+      }
+
       setIsGoalModalOpen(false);
       toast({ title: "Metas Atualizadas", description: "As metas das empresas e a meta global foram salvas." });
   };
@@ -377,7 +402,7 @@ export default function GoalsPage() {
                             <DialogDescription>A meta global será a soma das metas individuais.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
-                            {companyGoals.map(goal => (
+                            {initialCompanyGoalsData.map(goal => (
                                 <div key={goal.id} className="grid grid-cols-2 items-center gap-4">
                                     <Label htmlFor={`goal-${goal.id}`}>{goal.name}</Label>
                                     <Input 
