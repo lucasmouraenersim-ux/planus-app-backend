@@ -110,23 +110,39 @@ export default function GoalsPage() {
             newAssignments[companyId] = {};
         }
 
-        // Check if the lead is already assigned somewhere else for this company and remove it
-        Object.keys(newAssignments[companyId]).forEach(index => {
-            if (newAssignments[companyId][Number(index)] === leadId) {
-                delete newAssignments[companyId][Number(index)];
-            }
+        // Check if the lead is already assigned somewhere else and remove it
+        Object.keys(newAssignments).forEach(compId => {
+            Object.keys(newAssignments[compId]).forEach(index => {
+                if (newAssignments[compId][Number(index)] === leadId) {
+                    delete newAssignments[compId][Number(index)];
+                }
+            });
         });
-        
-        newAssignments[companyId][placeholderIndex] = leadId;
+
+        if (leadId === 'remove') {
+            delete newAssignments[companyId][placeholderIndex];
+        } else {
+            newAssignments[companyId][placeholderIndex] = leadId;
+        }
+
         return newAssignments;
     });
   };
 
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
-    const companyLeads = useMemo(() => currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())), [currentMonthLeads, company.name]);
-    const kwhProgress = useMemo(() => companyLeads.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [companyLeads]);
-    const clientCount = useMemo(() => companyLeads.length, [companyLeads]);
+    
+    // Corrected: Progress should be calculated from assigned leads in the UI
+    const companyAssignments = assignments[company.id] || {};
+    const assignedLeadsForCompany = useMemo(() => 
+        Object.values(companyAssignments)
+            .map(leadId => currentMonthLeads.find(l => l.id === leadId))
+            .filter((l): l is LeadWithId => !!l),
+    [companyAssignments, currentMonthLeads]);
+
+
+    const kwhProgress = useMemo(() => assignedLeadsForCompany.reduce((sum, lead) => sum + (lead.kwh || 0), 0), [assignedLeadsForCompany]);
+    const clientCount = useMemo(() => assignedLeadsForCompany.length, [assignedLeadsForCompany]);
 
     const pacingMetrics = useMemo(() => {
       const now = new Date();
@@ -197,26 +213,27 @@ export default function GoalsPage() {
   const KpiTable = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
     
-    const leadsByCompany = useMemo(() => 
-        currentMonthLeads.filter(l => (l.empresa || '').toLowerCase().includes(company.name.toLowerCase())),
-    [currentMonthLeads, company.name]);
+    // Corrected: All assigned leads from ALL companies
+    const allAssignedLeadIds = useMemo(() => 
+        new Set(Object.values(assignments).flatMap(compAssignments => Object.values(compAssignments))),
+    [assignments]);
+
+    // Corrected: Unassigned leads are those from the current month not in the `allAssignedLeadIds` set
+    const unassignedLeads = useMemo(() =>
+        currentMonthLeads.filter(lead => !allAssignedLeadIds.has(lead.id)),
+    [currentMonthLeads, allAssignedLeadIds]);
     
     const companyAssignments = assignments[company.id] || {};
-    const assignedLeadIds = new Set(Object.values(companyAssignments));
-
-    const unassignedLeads = useMemo(() =>
-        currentMonthLeads.filter(lead => !assignedLeadIds.has(lead.id)),
-    [currentMonthLeads, assignedLeadIds]);
 
     const tableData = useMemo((): ClientDataRow[] => {
       const rows: ClientDataRow[] = [];
-      const usedLeadIds = new Set<string>();
+      const usedLeadIdsInThisTable = new Set<string>();
 
       for (let i = 0; i < company.clientTarget; i++) {
         const assignedLeadId = companyAssignments[i];
         const assignedLead = assignedLeadId ? allLeads.find(l => l.id === assignedLeadId) : undefined;
         
-        if (assignedLead && !usedLeadIds.has(assignedLead.id)) {
+        if (assignedLead && !usedLeadIdsInThisTable.has(assignedLead.id)) {
             rows.push({
                 leadId: assignedLead.id,
                 name: assignedLead.name,
@@ -226,7 +243,7 @@ export default function GoalsPage() {
                 recurrence: 0,
                 isPlaceholder: false,
             });
-            usedLeadIds.add(assignedLead.id);
+            usedLeadIdsInThisTable.add(assignedLead.id);
         } else {
             rows.push({
                 name: `Cliente ${String(i + 1).padStart(2, '0')}/${format(new Date(), 'MM')}`,
@@ -266,21 +283,19 @@ export default function GoalsPage() {
               {tableData.map((row, index) => (
                 <TableRow key={index} className={row.isPlaceholder ? 'opacity-60' : 'font-semibold'}>
                   <TableCell>
-                    {row.isPlaceholder ? (
-                        <Select onValueChange={(leadId) => handleAssignmentChange(company.id, index, leadId)}>
-                            <SelectTrigger className="w-[200px] h-8 text-xs bg-muted/50">
-                                <SelectValue placeholder={row.name} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="remove" className="text-red-500">Remover Associação</SelectItem>
-                                {unassignedLeads.map(lead => (
-                                    <SelectItem key={lead.id} value={lead.id}>{lead.name} ({lead.kwh} kWh)</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        row.name
-                    )}
+                      <Select 
+                        value={row.leadId || ''}
+                        onValueChange={(leadId) => handleAssignmentChange(company.id, index, leadId)}>
+                          <SelectTrigger className="w-[200px] h-8 text-xs bg-muted/50">
+                              <SelectValue placeholder={row.name} />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {row.leadId && <SelectItem value="remove" className="text-red-500">Remover Associação</SelectItem>}
+                              {unassignedLeads.map(lead => (
+                                  <SelectItem key={lead.id} value={lead.id}>{lead.name} ({lead.kwh} kWh)</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
                   </TableCell>
                   <TableCell>{formatKwh(row.consumption)}</TableCell>
                   <TableCell>{row.discount.toFixed(2)}%</TableCell>
