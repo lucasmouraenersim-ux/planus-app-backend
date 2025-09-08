@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -15,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import CompanyCommissionsTable from './CompanyCommissionsTable';
+import { Textarea } from '../ui/textarea';
 
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -150,6 +150,21 @@ interface Receivable {
   isThirdPaymentDateEditable: boolean;
 }
 
+interface PersonalExpense {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'Fixo' | 'Variavel';
+  installments: number;
+}
+
+interface PersonalRevenue {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+}
+
 const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number, prefix?: string, suffix?: string }) => {
   const [displayValue, setDisplayValue] = useState(0);
   const duration = 800; // Animation duration in milliseconds
@@ -188,6 +203,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const [tax, setTax] = useState(6);
   const [reinvest, setReinvest] = useState(15);
   const [riskFund, setRiskFund] = useState(10000);
+  const [missionaryHelp, setMissionaryHelp] = useState(10);
   
   const [payroll, setPayroll] = useState<Employee[]>([]);
   const [newEmployee, setNewEmployee] = useState({ name: '', regime: 'CLT' as 'CLT' | 'PJ', role: 'SDR' as 'SDR' | 'Marketing' | 'Outro', salary: 0, monthlyRevenueGenerated: 0 });
@@ -214,6 +230,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         setTax(parsed.tax || 6);
         setReinvest(parsed.reinvest || 15);
         setRiskFund(parsed.riskFund || 10000);
+        setMissionaryHelp(parsed.missionaryHelp || 10);
       } catch (e) { console.error("Failed to parse company settings", e); }
     }
     const savedPayroll = localStorage.getItem(PAYROLL_STORAGE_KEY);
@@ -230,9 +247,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
   // Save to LocalStorage
   useEffect(() => {
-    const settings = { proLabore, tax, reinvest, riskFund };
+    const settings = { proLabore, tax, reinvest, riskFund, missionaryHelp };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [proLabore, tax, reinvest, riskFund]);
+  }, [proLabore, tax, reinvest, riskFund, missionaryHelp]);
 
   useEffect(() => {
     localStorage.setItem(PAYROLL_STORAGE_KEY, JSON.stringify(payroll));
@@ -358,8 +375,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const proLaboreValue = monthlyRevenue * (proLabore / 100);
   const taxValue = monthlyRevenue * (tax / 100);
   const reinvestValue = monthlyRevenue * (reinvest / 100);
+  const missionaryHelpValue = monthlyRevenue * (missionaryHelp / 100);
   const fixedCosts = totalPayroll + riskFund;
-  const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts;
+  const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts - missionaryHelpValue;
   
   const handleAddEmployee = () => {
     if (!newEmployee.name || newEmployee.salary <= 0) {
@@ -419,7 +437,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
             </div>
             <p className="text-sm text-muted-foreground mt-1">Calculado com base nas datas de pagamento das comissões abaixo.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-4 gap-6">
             <div>
               <Label>Pró-labore ({proLabore}%)</Label>
               <Slider value={[proLabore]} onValueChange={(val) => setProLabore(val[0])} max={100} step={1} />
@@ -431,6 +449,10 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
             <div>
               <Label>Reinvestimento ({reinvest}%)</Label>
               <Slider value={[reinvest]} onValueChange={(val) => setReinvest(val[0])} max={100} step={1} />
+            </div>
+            <div>
+              <Label>Ajuda Missionária ({missionaryHelp}%)</Label>
+              <Slider value={[missionaryHelp]} onValueChange={(val) => setMissionaryHelp(val[0])} max={100} step={1} />
             </div>
           </div>
            <div className="grid md:grid-cols-2 gap-6">
@@ -542,6 +564,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Pró-labore ({proLabore}%):</p><p className="font-semibold">{formatCurrency(proLaboreValue)}</p></div>
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Impostos ({tax}%):</p><p className="font-semibold">{formatCurrency(taxValue)}</p></div>
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Reinvestimento ({reinvest}%):</p><p className="font-semibold">{formatCurrency(reinvestValue)}</p></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Ajuda Missionária ({missionaryHelp}%):</p><p className="font-semibold">{formatCurrency(missionaryHelpValue)}</p></div>
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Custos Fixos (Folha + Risco):</p><p className="font-semibold">{formatCurrency(fixedCosts)}</p></div>
               <Separator/>
               <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Lucro Líquido Estimado:</p><p className="font-bold text-primary">{formatCurrency(netProfit)}</p></div>
@@ -552,93 +575,174 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 }
 
 function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) {
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance';
-  
-  const [personalCapital, setPersonalCapital] = useState(500000);
-  const [monthlyExpenses, setMonthlyExpenses] = useState(8000);
-  const [investmentAllocation, setInvestmentAllocation] = useState({
-    stocks: 40,
-    fixedIncome: 30,
-    crypto: 15,
-    realEstate: 15,
-  });
+    const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance_v2';
+    
+    const [personalCapital, setPersonalCapital] = useState(500000);
+    const [investmentAllocation, setInvestmentAllocation] = useState({ stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+    
+    // Expenses
+    const [expenses, setExpenses] = useState<PersonalExpense[]>([]);
+    const [newExpense, setNewExpense] = useState({ description: '', amount: 0, type: 'Variavel' as 'Fixo' | 'Variavel', installments: 1 });
+    
+    // Revenues
+    const [revenues, setRevenues] = useState<PersonalRevenue[]>([]);
+    const [newRevenue, setNewRevenue] = useState({ description: '', amount: 0, date: '' });
+    const [editingRevenue, setEditingRevenue] = useState<PersonalRevenue | null>(null);
 
-  useEffect(() => {
-    const savedPersonal = typeof window !== 'undefined' ? localStorage.getItem(PERSONAL_FINANCE_KEY) : null;
-    if (savedPersonal) {
-        try {
-            const { personalCapital, monthlyExpenses, investmentAllocation } = JSON.parse(savedPersonal);
-            setPersonalCapital(personalCapital || 500000);
-            setMonthlyExpenses(monthlyExpenses || 8000);
-            setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
-        } catch(e) {
-            console.error("Failed to parse personal finance from localStorage", e);
+    useEffect(() => {
+        const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
+        if (savedPersonal) {
+            try {
+                const { personalCapital, investmentAllocation, expenses, revenues } = JSON.parse(savedPersonal);
+                setPersonalCapital(personalCapital || 500000);
+                setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+                setExpenses(expenses || []);
+                setRevenues(revenues || []);
+            } catch(e) { console.error("Failed to parse personal finance from localStorage", e); }
         }
-    }
-  }, []);
+    }, []);
 
-  useEffect(() => {
-      const personalData = { personalCapital, monthlyExpenses, investmentAllocation };
-      localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
-  }, [personalCapital, monthlyExpenses, investmentAllocation]);
+    useEffect(() => {
+        const personalData = { personalCapital, investmentAllocation, expenses, revenues };
+        localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
+    }, [personalCapital, investmentAllocation, expenses, revenues]);
 
-  return (
-    <div className="space-y-6">
-        <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center"><PiggyBank className="mr-2 h-5 w-5" />Controle Financeiro Pessoal</CardTitle>
-              <CardDescription>Gerencie seu capital pessoal, despesas e investimentos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                        <Label htmlFor="personalCapital">Capital Pessoal Total (R$)</Label>
-                        <Input id="personalCapital" type="number" value={personalCapital} onChange={(e) => setPersonalCapital(Number(e.target.value))} />
+    const handleAddExpense = () => {
+        if (!newExpense.description || newExpense.amount <= 0) { alert("Descrição e valor são obrigatórios."); return; }
+        setExpenses([...expenses, { ...newExpense, id: Date.now().toString() }]);
+        setNewExpense({ description: '', amount: 0, type: 'Variavel', installments: 1 });
+    };
+
+    const handleRemoveExpense = (id: string) => {
+        setExpenses(expenses.filter(exp => exp.id !== id));
+    };
+
+    const handleAddRevenue = () => {
+      if (!newRevenue.description || newRevenue.amount <= 0) { alert("Descrição e valor são obrigatórios."); return; }
+      setRevenues([...revenues, { ...newRevenue, id: Date.now().toString(), date: newRevenue.date || new Date().toISOString().split('T')[0] }]);
+      setNewRevenue({ description: '', amount: 0, date: '' });
+    };
+
+    const handleUpdateRevenue = () => {
+        if (!editingRevenue) return;
+        setRevenues(revenues.map(r => r.id === editingRevenue.id ? editingRevenue : r));
+        setEditingRevenue(null);
+    };
+    
+    const handleRemoveRevenue = (id: string) => {
+        setRevenues(revenues.filter(rev => rev.id !== id));
+    };
+
+    const totalMonthlyExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
+    const totalMonthlyRevenues = useMemo(() => revenues.reduce((sum, rev) => sum + rev.amount, 0), [revenues]);
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center"><PiggyBank className="mr-2 h-5 w-5" />Controle Financeiro Pessoal</CardTitle>
+                    <CardDescription>Gerencie seu capital pessoal, despesas e investimentos.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                     <div className="grid md:grid-cols-2 gap-6">
+                         <div>
+                            <Label htmlFor="personalCapital">Capital Pessoal Total (R$)</Label>
+                            <Input id="personalCapital" type="number" value={personalCapital} onChange={(e) => setPersonalCapital(Number(e.target.value))} />
+                        </div>
                     </div>
                     <div>
-                        <Label htmlFor="monthlyExpenses">Despesas Mensais Fixas (R$)</Label>
-                        <Input id="monthlyExpenses" type="number" value={monthlyExpenses} onChange={(e) => setMonthlyExpenses(Number(e.target.value))} />
-                    </div>
-                </div>
-                <div>
-                    <Label>Alocação de Investimentos (%)</Label>
-                    <div className="space-y-3 pt-2">
-                        <div>
-                            <div className="flex justify-between text-sm mb-1"><Label>Ações</Label><span>{investmentAllocation.stocks}%</span></div>
-                            <Slider value={[investmentAllocation.stocks]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, stocks: v[0]}))} />
-                        </div>
-                         <div>
-                            <div className="flex justify-between text-sm mb-1"><Label>Renda Fixa</Label><span>{investmentAllocation.fixedIncome}%</span></div>
-                            <Slider value={[investmentAllocation.fixedIncome]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, fixedIncome: v[0]}))} />
-                        </div>
-                         <div>
-                            <div className="flex justify-between text-sm mb-1"><Label>Criptomoedas</Label><span>{investmentAllocation.crypto}%</span></div>
-                            <Slider value={[investmentAllocation.crypto]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, crypto: v[0]}))} />
-                        </div>
-                         <div>
-                            <div className="flex justify-between text-sm mb-1"><Label>Imóveis</Label><span>{investmentAllocation.realEstate}%</span></div>
-                            <Slider value={[investmentAllocation.realEstate]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, realEstate: v[0]}))} />
+                        <Label>Alocação de Investimentos (%)</Label>
+                        <div className="space-y-3 pt-2">
+                            <div>
+                                <div className="flex justify-between text-sm mb-1"><Label>Ações</Label><span>{investmentAllocation.stocks}%</span></div>
+                                <Slider value={[investmentAllocation.stocks]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, stocks: v[0]}))} />
+                            </div>
+                             <div>
+                                <div className="flex justify-between text-sm mb-1"><Label>Renda Fixa</Label><span>{investmentAllocation.fixedIncome}%</span></div>
+                                <Slider value={[investmentAllocation.fixedIncome]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, fixedIncome: v[0]}))} />
+                            </div>
+                             <div>
+                                <div className="flex justify-between text-sm mb-1"><Label>Criptomoedas</Label><span>{investmentAllocation.crypto}%</span></div>
+                                <Slider value={[investmentAllocation.crypto]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, crypto: v[0]}))} />
+                            </div>
+                             <div>
+                                <div className="flex justify-between text-sm mb-1"><Label>Imóveis</Label><span>{investmentAllocation.realEstate}%</span></div>
+                                <Slider value={[investmentAllocation.realEstate]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, realEstate: v[0]}))} />
+                            </div>
                         </div>
                     </div>
-                </div>
-            </CardContent>
-        </Card>
-        <Card>
-            <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-                <div className="flex justify-between items-center"><p className="text-muted-foreground">Patrimônio Total:</p><p className="font-semibold">{formatCurrency(personalCapital)}</p></div>
-                <Separator/>
-                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Ações:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</p></div>
-                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Renda Fixa:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</p></div>
-                <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Cripto:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</p></div>
-                 <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Imóveis:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</p></div>
-                <Separator/>
-                <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Saldo Líquido Mensal (Pró-labore - Despesas):</p><p className="font-bold text-primary">{formatCurrency(monthlyProLabore - monthlyExpenses)}</p></div>
-            </CardContent>
-        </Card>
-    </div>
-  );
+                </CardContent>
+            </Card>
+
+            <div className="grid md:grid-cols-2 gap-6">
+                 <Card>
+                    <CardHeader><CardTitle className="text-base">Gerenciar Receitas</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="space-y-2 mb-4">
+                            <Input placeholder="Descrição da Receita" value={editingRevenue ? editingRevenue.description : newRevenue.description} onChange={e => editingRevenue ? setEditingRevenue({...editingRevenue, description: e.target.value}) : setNewRevenue({ ...newRevenue, description: e.target.value })} />
+                            <Input type="number" placeholder="Valor (R$)" value={editingRevenue ? editingRevenue.amount : newRevenue.amount} onChange={e => editingRevenue ? setEditingRevenue({...editingRevenue, amount: Number(e.target.value)}) : setNewRevenue({ ...newRevenue, amount: Number(e.target.value) })} />
+                            <Input type="date" value={editingRevenue ? editingRevenue.date : newRevenue.date} onChange={e => editingRevenue ? setEditingRevenue({...editingRevenue, date: e.target.value}) : setNewRevenue({ ...newRevenue, date: e.target.value })} />
+                            {editingRevenue ? (
+                                <div className="flex gap-2"><Button onClick={handleUpdateRevenue}>Salvar</Button><Button variant="ghost" onClick={() => setEditingRevenue(null)}>Cancelar</Button></div>
+                            ) : (
+                                <Button onClick={handleAddRevenue}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar Receita</Button>
+                            )}
+                        </div>
+                         <Table><TableHeader><TableRow><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader>
+                            <TableBody>{revenues.map(rev => (
+                                <TableRow key={rev.id}>
+                                    <TableCell>{rev.description}</TableCell><TableCell>{formatCurrency(rev.amount)}</TableCell><TableCell>{rev.date}</TableCell>
+                                    <TableCell><Button size="icon" variant="ghost" onClick={() => setEditingRevenue(rev)}><Pencil className="h-4 w-4"/></Button><Button size="icon" variant="ghost" onClick={() => handleRemoveRevenue(rev.id)}><Trash className="h-4 w-4 text-destructive"/></Button></TableCell>
+                                </TableRow>
+                            ))}</TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader><CardTitle className="text-base">Gerenciar Despesas</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="space-y-2 mb-4">
+                            <Input placeholder="Descrição da Despesa" value={newExpense.description} onChange={e => setNewExpense({ ...newExpense, description: e.target.value })} />
+                            <Input type="number" placeholder="Valor (R$)" value={newExpense.amount || ''} onChange={e => setNewExpense({ ...newExpense, amount: Number(e.target.value) })} />
+                            <Select value={newExpense.type} onValueChange={(v: 'Fixo' | 'Variavel') => setNewExpense({ ...newExpense, type: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent><SelectItem value="Fixo">Fixo</SelectItem><SelectItem value="Variavel">Variável</SelectItem></SelectContent>
+                            </Select>
+                            <Input type="number" placeholder="Nº de Parcelas" value={newExpense.installments || ''} onChange={e => setNewExpense({ ...newExpense, installments: Number(e.target.value) })} />
+                            <Button onClick={handleAddExpense}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar Despesa</Button>
+                        </div>
+                         <Table><TableHeader><TableRow><TableHead>Descrição</TableHead><TableHead>Valor</TableHead><TableHead>Tipo</TableHead><TableHead>Ações</TableHead></TableRow></TableHeader>
+                            <TableBody>{expenses.map(exp => (
+                                <TableRow key={exp.id}>
+                                    <TableCell>{exp.description}</TableCell><TableCell>{formatCurrency(exp.amount)}</TableCell><TableCell>{exp.type}</TableCell>
+                                    <TableCell><Button size="icon" variant="ghost" onClick={() => handleRemoveExpense(exp.id)}><Trash className="h-4 w-4 text-destructive"/></Button></TableCell>
+                                </TableRow>
+                            ))}</TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card>
+                <CardHeader><CardTitle className="flex items-center"><Briefcase className="mr-2 h-5 w-5"/>Resumo do Patrimônio Pessoal</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Patrimônio Total:</p><p className="font-semibold">{formatCurrency(personalCapital)}</p></div>
+                    <Separator/>
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Ações:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Renda Fixa:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Cripto:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</p></div>
+                     <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Imóveis:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</p></div>
+                    <Separator/>
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Total de Receitas Mensais Adicionais:</p><p className="font-semibold text-green-500">{formatCurrency(totalMonthlyRevenues)}</p></div>
+                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Total de Despesas Mensais:</p><p className="font-semibold text-red-500">{formatCurrency(totalMonthlyExpenses)}</p></div>
+                    <Separator />
+                    <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Saldo Líquido Mensal:</p><p className="font-bold text-primary">{formatCurrency(monthlyProLabore + totalMonthlyRevenues - totalMonthlyExpenses)}</p></div>
+                </CardContent>
+            </Card>
+        </div>
+    );
 }
 
 
