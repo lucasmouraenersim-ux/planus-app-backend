@@ -1,7 +1,7 @@
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -574,64 +574,55 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   );
 }
 
-function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) {
+function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLabore: number; user: AppUser; onUpdate: (updates: Partial<FirestoreUser>) => Promise<void> }) {
     const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-    const PERSONAL_FINANCE_KEY = 'superAdminPersonalFinance_v2';
     
-    const [personalCapital, setPersonalCapital] = useState(500000);
-    const [investmentAllocation, setInvestmentAllocation] = useState({ stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
-    
-    // Expenses
-    const [expenses, setExpenses] = useState<PersonalExpense[]>([]);
+    const [personalCapital, setPersonalCapital] = useState(user.personalFinance?.personalCapital || 500000);
+    const [investmentAllocation, setInvestmentAllocation] = useState(user.personalFinance?.investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
+    const [expenses, setExpenses] = useState<PersonalExpense[]>(user.personalFinance?.expenses || []);
     const [newExpense, setNewExpense] = useState({ description: '', amount: 0, type: 'Variavel' as 'Fixo' | 'Variavel', installments: 1 });
-    
-    // Revenues
-    const [revenues, setRevenues] = useState<PersonalRevenue[]>([]);
+    const [revenues, setRevenues] = useState<PersonalRevenue[]>(user.personalFinance?.revenues || []);
     const [newRevenue, setNewRevenue] = useState({ description: '', amount: 0, date: '' });
     const [editingRevenue, setEditingRevenue] = useState<PersonalRevenue | null>(null);
 
-    useEffect(() => {
-        const savedPersonal = localStorage.getItem(PERSONAL_FINANCE_KEY);
-        if (savedPersonal) {
-            try {
-                const { personalCapital, investmentAllocation, expenses, revenues } = JSON.parse(savedPersonal);
-                setPersonalCapital(personalCapital || 500000);
-                setInvestmentAllocation(investmentAllocation || { stocks: 40, fixedIncome: 30, crypto: 15, realEstate: 15 });
-                setExpenses(expenses || []);
-                setRevenues(revenues || []);
-            } catch(e) { console.error("Failed to parse personal finance from localStorage", e); }
-        }
-    }, []);
-
-    useEffect(() => {
-        const personalData = { personalCapital, investmentAllocation, expenses, revenues };
-        localStorage.setItem(PERSONAL_FINANCE_KEY, JSON.stringify(personalData));
-    }, [personalCapital, investmentAllocation, expenses, revenues]);
+    const updateFirestore = useCallback((data: Partial<FirestoreUser['personalFinance']>) => {
+        onUpdate({ personalFinance: { ...user.personalFinance, ...data } as FirestoreUser['personalFinance'] });
+    }, [onUpdate, user.personalFinance]);
 
     const handleAddExpense = () => {
         if (!newExpense.description || newExpense.amount <= 0) { alert("Descrição e valor são obrigatórios."); return; }
-        setExpenses([...expenses, { ...newExpense, id: Date.now().toString() }]);
+        const updatedExpenses = [...expenses, { ...newExpense, id: Date.now().toString() }];
+        setExpenses(updatedExpenses);
+        updateFirestore({ expenses: updatedExpenses });
         setNewExpense({ description: '', amount: 0, type: 'Variavel', installments: 1 });
     };
 
     const handleRemoveExpense = (id: string) => {
-        setExpenses(expenses.filter(exp => exp.id !== id));
+        const updatedExpenses = expenses.filter(exp => exp.id !== id);
+        setExpenses(updatedExpenses);
+        updateFirestore({ expenses: updatedExpenses });
     };
 
     const handleAddRevenue = () => {
       if (!newRevenue.description || newRevenue.amount <= 0) { alert("Descrição e valor são obrigatórios."); return; }
-      setRevenues([...revenues, { ...newRevenue, id: Date.now().toString(), date: newRevenue.date || new Date().toISOString().split('T')[0] }]);
+      const updatedRevenues = [...revenues, { ...newRevenue, id: Date.now().toString(), date: newRevenue.date || new Date().toISOString().split('T')[0] }];
+      setRevenues(updatedRevenues);
+      updateFirestore({ revenues: updatedRevenues });
       setNewRevenue({ description: '', amount: 0, date: '' });
     };
 
     const handleUpdateRevenue = () => {
         if (!editingRevenue) return;
-        setRevenues(revenues.map(r => r.id === editingRevenue.id ? editingRevenue : r));
+        const updatedRevenues = revenues.map(r => r.id === editingRevenue.id ? editingRevenue : r);
+        setRevenues(updatedRevenues);
+        updateFirestore({ revenues: updatedRevenues });
         setEditingRevenue(null);
     };
     
     const handleRemoveRevenue = (id: string) => {
-        setRevenues(revenues.filter(rev => rev.id !== id));
+        const updatedRevenues = revenues.filter(rev => rev.id !== id);
+        setRevenues(updatedRevenues);
+        updateFirestore({ revenues: updatedRevenues });
     };
 
     const totalMonthlyExpenses = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
@@ -648,7 +639,7 @@ function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) 
                      <div className="grid md:grid-cols-2 gap-6">
                          <div>
                             <Label htmlFor="personalCapital">Capital Pessoal Total (R$)</Label>
-                            <Input id="personalCapital" type="number" value={personalCapital} onChange={(e) => setPersonalCapital(Number(e.target.value))} />
+                            <Input id="personalCapital" type="number" value={personalCapital} onChange={(e) => setPersonalCapital(Number(e.target.value))} onBlur={() => updateFirestore({ personalCapital })} />
                         </div>
                     </div>
                     <div>
@@ -656,19 +647,19 @@ function PersonalFinanceTab({ monthlyProLabore }: { monthlyProLabore: number }) 
                         <div className="space-y-3 pt-2">
                             <div>
                                 <div className="flex justify-between text-sm mb-1"><Label>Ações</Label><span>{investmentAllocation.stocks}%</span></div>
-                                <Slider value={[investmentAllocation.stocks]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, stocks: v[0]}))} />
+                                <Slider value={[investmentAllocation.stocks]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, stocks: v[0]}))} onValueCommit={(v) => updateFirestore({ investmentAllocation: { ...investmentAllocation, stocks: v[0] } })} />
                             </div>
                              <div>
                                 <div className="flex justify-between text-sm mb-1"><Label>Renda Fixa</Label><span>{investmentAllocation.fixedIncome}%</span></div>
-                                <Slider value={[investmentAllocation.fixedIncome]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, fixedIncome: v[0]}))} />
+                                <Slider value={[investmentAllocation.fixedIncome]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, fixedIncome: v[0]}))} onValueCommit={(v) => updateFirestore({ investmentAllocation: { ...investmentAllocation, fixedIncome: v[0] } })} />
                             </div>
                              <div>
                                 <div className="flex justify-between text-sm mb-1"><Label>Criptomoedas</Label><span>{investmentAllocation.crypto}%</span></div>
-                                <Slider value={[investmentAllocation.crypto]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, crypto: v[0]}))} />
+                                <Slider value={[investmentAllocation.crypto]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, crypto: v[0]}))} onValueCommit={(v) => updateFirestore({ investmentAllocation: { ...investmentAllocation, crypto: v[0] } })} />
                             </div>
                              <div>
                                 <div className="flex justify-between text-sm mb-1"><Label>Imóveis</Label><span>{investmentAllocation.realEstate}%</span></div>
-                                <Slider value={[investmentAllocation.realEstate]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, realEstate: v[0]}))} />
+                                <Slider value={[investmentAllocation.realEstate]} onValueChange={(v) => setInvestmentAllocation(p => ({...p, realEstate: v[0]}))} onValueCommit={(v) => updateFirestore({ investmentAllocation: { ...investmentAllocation, realEstate: v[0] } })} />
                             </div>
                         </div>
                     </div>
@@ -838,6 +829,23 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       setIsSubmittingAction(false);
     }
   };
+
+  const handleUpdatePersonalFinance = useCallback(async (personalFinanceData: Partial<FirestoreUser['personalFinance']>) => {
+    if (userAppRole !== 'superadmin' || !loggedInUser) return;
+    try {
+      await updateUser(loggedInUser.uid, {
+        personalFinance: {
+          ...loggedInUser.personalFinance,
+          ...personalFinanceData
+        } as FirestoreUser['personalFinance']
+      });
+      // Optionally toast success, but maybe too noisy for every change
+    } catch (error) {
+      console.error("Error updating personal finance data:", error);
+      toast({ title: "Erro", description: "Não foi possível salvar os dados financeiros.", variant: "destructive" });
+    }
+  }, [loggedInUser, onUsersChange, toast, userAppRole]);
+
 
   const handleOpenResetPasswordModal = (user: FirestoreUser) => {
     setSelectedUser(user);
@@ -1283,7 +1291,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         
         {userAppRole === 'superadmin' && (
           <TabsContent value="personal_finance">
-            <PersonalFinanceTab monthlyProLabore={0} />
+            <PersonalFinanceTab monthlyProLabore={0} user={loggedInUser} onUpdate={handleUpdatePersonalFinance} />
           </TabsContent>
         )}
 
@@ -1322,7 +1330,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
 
       {/* Modals */}
-      <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></DialogFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><CardFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></CardFooter></form></Form></DialogContent></Dialog>
       
       {selectedUser && (
         <Dialog open={isEditUserModalOpen} onOpenChange={setIsEditUserModalOpen}>
@@ -1400,7 +1408,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 </CardContent></Card>
 
 
-                <DialogFooter>
+                <CardFooter>
                   <Button type="button" variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isSubmittingAction}>
                     {canEdit ? 'Cancelar' : 'Fechar'}
                   </Button>
@@ -1410,14 +1418,14 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       Salvar Alterações
                     </Button>
                   )}
-                </DialogFooter>
+                </CardFooter>
               </form>
             </Form>
           </DialogContent>
         </Dialog>
       )}
 
-      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></DialogFooter></form></Form></DialogContent></Dialog>)}
+      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><CardFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></CardFooter></form></Form></DialogContent></Dialog>)}
       
       <AlertDialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Redefinição de Senha</AlertDialogTitle><AlertDialogDescription>Um email será enviado para <strong>{selectedUser?.email}</strong> com instruções para criar uma nova senha. O usuário será desconectado de todas as sessões ativas. Deseja continuar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmResetPassword} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar Email</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       

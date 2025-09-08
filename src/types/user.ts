@@ -3,6 +3,29 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type UserType = 'admin' | 'superadmin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup';
 
+interface PersonalExpense {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'Fixo' | 'Variavel';
+  installments: number;
+}
+
+interface PersonalRevenue {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+}
+
+interface PersonalFinanceData {
+  personalCapital: number;
+  investmentAllocation: { stocks: number; fixedIncome: number; crypto: number; realEstate: number };
+  expenses: PersonalExpense[];
+  revenues: PersonalRevenue[];
+}
+
+
 // Represents the data structure for a user in Firestore
 export type FirestoreUser = {
   uid: string;
@@ -39,6 +62,9 @@ export type FirestoreUser = {
       };
     };
   };
+
+  // Personal finance data for superadmin
+  personalFinance?: PersonalFinanceData;
 };
 
 // User object available in the auth context or passed as props
@@ -77,4 +103,7 @@ export type AppUser = {
       };
     };
   };
+  
+  // Personal finance data for superadmin
+  personalFinance?: PersonalFinanceData;
 };
