@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -292,11 +292,12 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
       // Fit Energia
       if (empresa === 'Fit Energia') {
-        immediateCommission = proposta * 0.40;
-        immediatePaymentDate = setDateFn(addMonths(finalizationDate, 1), 15);
-        secondCommission = proposta * 0.60;
-        secondPaymentDate = addMonths(finalizationDate, 4);
-        isSecondPaymentDateEditable = true;
+        immediateCommission = 0; // As requested
+        secondCommission = proposta * 0.40;
+        secondPaymentDate = setDateFn(addMonths(finalizationDate, 1), 15);
+        thirdCommission = proposta * 0.60;
+        thirdPaymentDate = addMonths(finalizationDate, 4);
+        isThirdPaymentDateEditable = true;
       }
       // BC
       else if (empresa === 'BC') {
@@ -370,8 +371,6 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const taxValue = monthlyRevenue * (tax / 100);
   const reinvestValue = monthlyRevenue * (reinvest / 100);
   const missionaryHelpValue = monthlyRevenue * (missionaryHelp / 100);
-  const fixedCosts = totalPayroll + riskFund;
-  const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts - missionaryHelpValue;
   
   const handleAddEmployee = () => {
     if (!newEmployee.name || newEmployee.salary <= 0) { alert("Nome e salário são obrigatórios."); return; }
@@ -423,7 +422,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const endOfCurrentMonth = endOfMonth(now);
     
     let totalReceivable = 0;
-    let totalCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
+    let operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
     
     allReceivables.forEach(r => {
         let receivableInMonth = 0;
@@ -433,18 +432,27 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
         if (receivableInMonth > 0) {
             totalReceivable += receivableInMonth;
-            totalCosts.juros += r.jurosRS;
-            totalCosts.churn += r.garantiaChurn;
-            totalCosts.comercializador += r.comercializador;
-            totalCosts.nota += r.nota;
+            operationCosts.juros += r.jurosRS;
+            operationCosts.churn += r.garantiaChurn;
+            operationCosts.comercializador += r.comercializador;
+            operationCosts.nota += r.nota;
         }
     });
     
-    const totalCostSum = Object.values(totalCosts).reduce((sum, val) => sum + val, 0);
-    const netProfit = totalReceivable - totalCostSum;
+    const totalOperationCosts = Object.values(operationCosts).reduce((sum, val) => sum + val, 0);
 
-    return { totalReceivable, totalCosts, netProfit };
-  }, [showMonthlyDashboard, allReceivables]);
+    const adminCosts = {
+      proLabore: totalReceivable * (proLabore / 100),
+      tax: totalReceivable * (tax / 100),
+      reinvest: totalReceivable * (reinvest / 100),
+      missionary: totalReceivable * (missionaryHelp / 100),
+      fixed: totalPayroll + riskFund,
+    };
+    const totalAdminCosts = Object.values(adminCosts).reduce((sum, val) => sum + val, 0);
+    const netProfit = totalReceivable - totalOperationCosts - totalAdminCosts;
+
+    return { totalReceivable, operationCosts, adminCosts, netProfit };
+  }, [showMonthlyDashboard, allReceivables, proLabore, tax, reinvest, missionaryHelp, totalPayroll, riskFund]);
 
   const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
   const paginatedReceivables = filteredReceivables.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
@@ -464,7 +472,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
             </div>
             <p className="text-sm text-muted-foreground mt-1">Calculado com base nas datas de pagamento das comissões abaixo.</p>
           </div>
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-5 gap-6">
             <div>
               <Label>Pró-labore ({proLabore}%)</Label>
               <Slider value={[proLabore]} onValueChange={(val) => setProLabore(val[0])} max={100} step={1} />
@@ -481,14 +489,11 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
               <Label>Ajuda Missionária ({missionaryHelp}%)</Label>
               <Slider value={[missionaryHelp]} onValueChange={(val) => setMissionaryHelp(val[0])} max={100} step={1} />
             </div>
+            <div>
+              <Label htmlFor="riskFund">Caixa de Risco (R$)</Label>
+              <Input id="riskFund" type="number" value={riskFund} onChange={(e) => setRiskFund(Number(e.target.value))} />
+            </div>
           </div>
-           <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="riskFund">Caixa de Risco (R$)</Label>
-                <Input id="riskFund" type="number" value={riskFund} onChange={(e) => setRiskFund(Number(e.target.value))} />
-                <p className="text-xs text-muted-foreground mt-1">Fundo para cobrir inadimplências e churn.</p>
-              </div>
-           </div>
         </CardContent>
       </Card>
        
@@ -518,11 +523,32 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
             </div>
         </CardHeader>
         {showMonthlyDashboard && monthlyDashboardMetrics && (
-             <CardContent className="mb-4">
+             <CardContent className="mb-4 space-y-4">
                 <div className="grid md:grid-cols-3 gap-4 text-center">
                     <Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card>
-                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(monthlyDashboardMetrics.totalCosts.juros + monthlyDashboardMetrics.totalCosts.churn + monthlyDashboardMetrics.totalCosts.comercializador + monthlyDashboardMetrics.totalCosts.nota)}</p></Card>
+                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(Object.values(monthlyDashboardMetrics.operationCosts).reduce((s, v) => s + v, 0) + Object.values(monthlyDashboardMetrics.adminCosts).reduce((s, v) => s + v, 0))}</p></Card>
                     <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
+                </div>
+                 <div className="grid md:grid-cols-2 gap-4">
+                    <Card>
+                        <CardHeader className="p-3"><CardTitle className="text-base text-primary">Custos da Operação</CardTitle></CardHeader>
+                        <CardContent className="p-3 text-sm space-y-1">
+                            <div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div>
+                            <div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div>
+                            <div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div>
+                            <div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="p-3"><CardTitle className="text-base text-primary">Custos Administrativos</CardTitle></CardHeader>
+                        <CardContent className="p-3 text-sm space-y-1">
+                            <div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div>
+                            <div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div>
+                            <div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div>
+                            <div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div>
+                            <div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div>
+                        </CardContent>
+                    </Card>
                 </div>
             </CardContent>
         )}
@@ -610,9 +636,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Impostos ({tax}%):</p><p className="font-semibold">{formatCurrency(taxValue)}</p></div>
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Reinvestimento ({reinvest}%):</p><p className="font-semibold">{formatCurrency(reinvestValue)}</p></div>
               <div className="flex justify-between items-center"><p className="text-muted-foreground">Ajuda Missionária ({missionaryHelp}%):</p><p className="font-semibold">{formatCurrency(missionaryHelpValue)}</p></div>
-              <div className="flex justify-between items-center"><p className="text-muted-foreground">Custos Fixos (Folha + Risco):</p><p className="font-semibold">{formatCurrency(fixedCosts)}</p></div>
+              <div className="flex justify-between items-center"><p className="text-muted-foreground">Custos Fixos (Folha + Risco):</p><p className="font-semibold">{formatCurrency(totalPayroll + riskFund)}</p></div>
               <Separator/>
-              <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Lucro Líquido Estimado:</p><p className="font-bold text-primary">{formatCurrency(netProfit)}</p></div>
+              <div className="flex justify-between items-center text-lg"><p className="font-bold text-primary">Lucro Líquido Estimado:</p><p className="font-bold text-primary">{formatCurrency(monthlyRevenue - proLaboreValue - taxValue - reinvestValue - (totalPayroll + riskFund) - missionaryHelpValue)}</p></div>
           </CardContent>
       </Card>
     </div>
@@ -784,7 +810,7 @@ function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLa
 
 export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, onUsersChange }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
-  const { userAppRole, fetchAllCrmLeadsGlobally } = useAuth();
+  const { userAppRole, fetchAllCrmLeadsGlobally, updateAppUserProfile } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
   
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
@@ -878,18 +904,16 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const handleUpdatePersonalFinance = useCallback(async (personalFinanceData: Partial<FirestoreUser['personalFinance']>) => {
     if (userAppRole !== 'superadmin' || !loggedInUser) return;
     try {
-      await updateUser(loggedInUser.uid, {
-        personalFinance: {
+      await updateAppUserProfile({ personalFinance: {
           ...loggedInUser.personalFinance,
           ...personalFinanceData
-        } as FirestoreUser['personalFinance']
-      });
+        } as FirestoreUser['personalFinance'] });
       // Optionally toast success, but maybe too noisy for every change
     } catch (error) {
       console.error("Error updating personal finance data:", error);
       toast({ title: "Erro", description: "Não foi possível salvar os dados financeiros.", variant: "destructive" });
     }
-  }, [loggedInUser, onUsersChange, toast, userAppRole]);
+  }, [loggedInUser, updateAppUserProfile, userAppRole, toast]);
 
 
   const handleOpenResetPasswordModal = (user: FirestoreUser) => {
@@ -1336,7 +1360,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         
         {userAppRole === 'superadmin' && (
           <TabsContent value="personal_finance">
-            <PersonalFinanceTab monthlyProLabore={0} user={loggedInUser} onUpdate={handleUpdatePersonalFinance} />
+            <PersonalFinanceTab monthlyProLabore={(loggedInUser.personalFinance?.revenues.find(r => r.description.toLowerCase().includes('pró-labore'))?.amount || 0)} user={loggedInUser} onUpdate={handleUpdatePersonalFinance} />
           </TabsContent>
         )}
 
@@ -1375,7 +1399,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
 
       {/* Modals */}
-      <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><CardFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></CardFooter></form></Form></DialogContent></Dialog>
+      <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}><DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader><Form {...addUserForm}><form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3"><FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="Ex: joao.silva@example.com" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="cpf" render={({ field }) => (<FormItem><FormLabel>CPF*</FormLabel><FormControl><Input placeholder="Ex: 000.000.000-00" {...field} /></FormControl><FormMessage /></FormItem>)} /><FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><DialogFooter><Button type="button" variant="outline" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button><Button type="submit" disabled={isSubmittingUser}>{isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Adicionar</Button></DialogFooter></form></Form></DialogContent></Dialog>
       
       {selectedUser && (
         <Dialog open={isEditUserModalOpen} onOpenChange={setIsEditUserModalOpen}>

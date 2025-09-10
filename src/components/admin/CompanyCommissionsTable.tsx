@@ -128,7 +128,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' >) => {
+  const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' | 'recorrenciaComissao'>) => {
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
     const garantiaChurn = comissaoTotal * 0.10;
@@ -149,7 +149,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         jurosPerc = "17%";
     }
     
-    const recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
+    let recorrenciaComissao = 0;
+    if (rowData.empresa === 'Fit Energia' && rowData.recorrenciaAtiva && rowData.desagil < 25) {
+        recorrenciaComissao = rowData.proposta * ((25 - rowData.desagil) / 100);
+    } else {
+        recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
+    }
+
 
     return {
       comissaoTotal,
@@ -178,7 +184,12 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         // Recorrência
         const sellerNameLower = (lead.sellerName || '').toLowerCase();
         const isExcludedFromRecurrence = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
-        const recorrenciaAtivaInitial = !isExcludedFromRecurrence;
+        let recorrenciaAtivaInitial = !isExcludedFromRecurrence;
+        // Fit specific recurrence logic
+        if (empresa === 'Fit Energia') {
+          recorrenciaAtivaInitial = desagilInitial < 25;
+        }
+
         const recorrenciaPercInitial = !isExcludedFromRecurrence ? 1 : 0;
 
         // Comissão do Promotor
@@ -193,7 +204,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         } else if (empresa === 'BC') {
             comissaoImediata = proposta * 0.50;
         } else if (empresa === 'Fit Energia') {
-            comissaoImediata = proposta * 0.40;
+            comissaoImediata = 0; // As requested
         }
 
         // Segunda Comissão
@@ -205,7 +216,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             segundaComissaoPerc = 100; // Defaulting to 100% for Origo
             segundaComissao = proposta * (segundaComissaoPerc / 100);
         } else if (empresa === 'Fit Energia') {
-            segundaComissao = proposta * 0.60;
+            segundaComissao = proposta * 0.40;
         }
 
         // Terceira Comissão
@@ -222,6 +233,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 terceiraComissaoPerc = 0;
             }
             terceiraComissao = proposta * (terceiraComissaoPerc / 100);
+        } else if (empresa === 'Fit Energia') {
+            terceiraComissao = proposta * 0.60;
         }
 
         // Check if the lead was finalized more than 120 days ago
@@ -293,7 +306,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           } else if (updatedRow.empresa === 'BC') {
               comissaoImediata = updatedRow.proposta * 0.50;
           } else if (updatedRow.empresa === 'Fit Energia') {
-              comissaoImediata = updatedRow.proposta * 0.40;
+              comissaoImediata = 0; // As requested
           }
           updatedRow.comissaoImediata = comissaoImediata;
 
@@ -305,8 +318,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           } else if (updatedRow.empresa === 'Origo') {
               segundaComissao = updatedRow.proposta * (updatedRow.segundaComissaoPerc / 100);
           } else if (updatedRow.empresa === 'Fit Energia') {
-              segundaComissao = updatedRow.proposta * 0.60;
-              updatedRow.segundaComissaoPerc = 0;
+              segundaComissao = updatedRow.proposta * 0.40;
+              updatedRow.segundaComissaoPerc = 0; // No percentage selection for Fit
           } else {
               updatedRow.segundaComissaoPerc = 0;
           }
@@ -319,6 +332,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
               updatedRow.terceiraComissaoPerc = 60;
           } else if (updatedRow.empresa === 'Origo') {
              terceiraComissao = updatedRow.proposta * (updatedRow.terceiraComissaoPerc / 100);
+          } else if (updatedRow.empresa === 'Fit Energia') {
+             terceiraComissao = updatedRow.proposta * 0.60;
+             updatedRow.terceiraComissaoPerc = 0; // No percentage selection for Fit
           } else {
               updatedRow.terceiraComissaoPerc = 0;
           }
@@ -446,11 +462,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 <TableHead>Comissão Promotor (R$)</TableHead>
                 <TableHead>Lucro Bruto (R$)</TableHead>
                 <TableHead>Lucro Líquido (R$)</TableHead>
-                <TableHead>Juros (%)</TableHead>
-                <TableHead>Juros (R$)</TableHead>
-                <TableHead>Garantia Churn (R$)</TableHead>
-                <TableHead>Comercializador (R$)</TableHead>
-                <TableHead>Nota</TableHead>
+                <TableHead className="text-red-500">Juros (%)</TableHead>
+                <TableHead className="text-red-500">Juros (R$)</TableHead>
+                <TableHead className="text-red-500">Garantia Churn (R$)</TableHead>
+                <TableHead className="text-red-500">Comercializador (R$)</TableHead>
+                <TableHead className="text-red-500">Nota</TableHead>
                 <TableHead>Data.4</TableHead>
                 <TableHead>Recorrência Comissão (R$)</TableHead>
                 <TableHead>Recorrência Paga?</TableHead>
@@ -512,6 +528,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell>{row.dataSegundaComissao}</TableCell>
                      <TableCell className="w-[150px]">
                         {row.empresa === 'BC' && formatCurrency(row.terceiraComissao)}
+                         {row.empresa === 'Fit Energia' && formatCurrency(row.terceiraComissao)}
                         {row.empresa === 'Origo' && (
                             <Select
                                 value={String(row.terceiraComissaoPerc)}
@@ -527,7 +544,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 </SelectContent>
                             </Select>
                         )}
-                        {(row.empresa !== 'BC' && row.empresa !== 'Origo') && formatCurrency(row.terceiraComissao)}
+                        {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.terceiraComissao)}
                     </TableCell>
                     <TableCell>{row.dataTerceiraComissao}</TableCell>
                     <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
@@ -549,7 +566,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                           checked={row.recorrenciaAtiva}
                           onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
                         />
-                        {row.recorrenciaAtiva ? (
+                        {row.empresa !== 'Fit Energia' && row.recorrenciaAtiva ? (
                            <Input
                               type="number"
                               value={row.recorrenciaPerc}
