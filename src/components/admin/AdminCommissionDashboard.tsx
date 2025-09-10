@@ -292,7 +292,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
       // Fit Energia
       if (empresa === 'Fit Energia') {
-        immediateCommission = 0; // As requested
+        immediateCommission = 0;
         secondCommission = proposta * 0.40;
         secondPaymentDate = setDateFn(addMonths(finalizationDate, 1), 15);
         thirdCommission = proposta * 0.60;
@@ -323,10 +323,13 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       }
       
       const comissaoTotal = immediateCommission + secondCommission + thirdCommission;
-      const jurosRS = (empresa === 'BC' ? immediateCommission * 0.12 : (empresa === 'Origo' ? immediateCommission * 0.17 : 0));
-      const garantiaChurn = comissaoTotal * 0.10;
-      const comercializador = (empresa === 'Bowe' || empresa === 'Matrix' || empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
-      const nota = comissaoTotal * 0.12;
+      let jurosRS = 0;
+      if (empresa === 'BC') { jurosRS = immediateCommission * 0.12; }
+      if (empresa === 'Origo') { jurosRS = immediateCommission * 0.17; }
+
+      let garantiaChurn = (empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
+      let comercializador = (empresa === 'Bowe' || empresa === 'Matrix' || empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
+      let nota = (empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.12; // Nota is 0 for Fit, handled in admin tax.
 
       const customDates = receivableDates[lead.id];
       if (customDates?.second) secondPaymentDate = parseISO(customDates.second);
@@ -422,20 +425,26 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const endOfCurrentMonth = endOfMonth(now);
     
     let totalReceivable = 0;
-    let operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
+    const operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
     
     allReceivables.forEach(r => {
         let receivableInMonth = 0;
-        if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.immediateCommission;
+        if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+            receivableInMonth += r.immediateCommission;
+            // Juros is only on immediate commission
+            if (r.company === 'BC') operationCosts.juros += r.immediateCommission * 0.12;
+            if (r.company === 'Origo') operationCosts.juros += r.immediateCommission * 0.17;
+        }
         if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.secondCommission;
         if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.thirdCommission;
 
         if (receivableInMonth > 0) {
             totalReceivable += receivableInMonth;
-            operationCosts.juros += r.jurosRS;
-            operationCosts.churn += r.garantiaChurn;
-            operationCosts.comercializador += r.comercializador;
-            operationCosts.nota += r.nota;
+            if (r.company !== 'Fit Energia') {
+                operationCosts.churn += receivableInMonth * 0.10;
+                operationCosts.comercializador += receivableInMonth * 0.10;
+                operationCosts.nota += receivableInMonth * 0.12;
+            }
         }
     });
     
