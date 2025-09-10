@@ -59,7 +59,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Shuffle, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -148,6 +148,11 @@ interface Receivable {
   thirdCommission: number;
   thirdPaymentDate: Date;
   isThirdPaymentDateEditable: boolean;
+  // Cost fields for monthly dashboard
+  jurosRS: number;
+  garantiaChurn: number;
+  comercializador: number;
+  nota: number;
 }
 
 interface PersonalExpense {
@@ -219,6 +224,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
 
+  // State for the new monthly dashboard filter
+  const [showMonthlyDashboard, setShowMonthlyDashboard] = useState(false);
+
 
   // Load from LocalStorage
   useEffect(() => {
@@ -265,7 +273,6 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const receivableLeads = leads.filter(l => relevantStages.includes(l.stageId));
     
     const calculatedReceivables: Receivable[] = receivableLeads.map(lead => {
-      // Use completedAt, signedAt, or createdAt as the base date for calculation.
       const baseDateStr = lead.completedAt || lead.signedAt || lead.createdAt;
       const finalizationDate = parseISO(baseDateStr);
 
@@ -305,69 +312,56 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         immediateCommission = proposta * 0.50;
         secondCommission = proposta;
         secondPaymentDate = setDateFn(addMonths(finalizationDate, 2), 15);
-        thirdCommission = proposta * 0.50; // Assuming 50% as a base
+        thirdCommission = proposta * 0.50;
         thirdPaymentDate = addMonths(finalizationDate, 4);
         isThirdPaymentDateEditable = true;
       }
       // Bowe & Matrix
-      else { // Bowe or Matrix
+      else { 
         immediateCommission = proposta * 0.60;
       }
+      
+      const comissaoTotal = immediateCommission + secondCommission + thirdCommission;
+      const jurosRS = (empresa === 'BC' ? immediateCommission * 0.12 : (empresa === 'Origo' ? immediateCommission * 0.17 : 0));
+      const garantiaChurn = comissaoTotal * 0.10;
+      const comercializador = (empresa === 'Bowe' || empresa === 'Matrix' || empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
+      const nota = comissaoTotal * 0.12;
 
-      // Check for custom saved dates
       const customDates = receivableDates[lead.id];
       if (customDates?.second) secondPaymentDate = parseISO(customDates.second);
       if (customDates?.third) thirdPaymentDate = parseISO(customDates.third);
 
       return {
-        leadId: lead.id,
-        clientName: lead.name,
-        company: empresa,
-        finalizationDate,
-        immediateCommission,
-        immediatePaymentDate,
-        secondCommission,
-        secondPaymentDate,
-        isSecondPaymentDateEditable,
-        thirdCommission,
-        thirdPaymentDate,
-        isThirdPaymentDateEditable,
+        leadId: lead.id, clientName: lead.name, company: empresa, finalizationDate,
+        immediateCommission, immediatePaymentDate,
+        secondCommission, secondPaymentDate, isSecondPaymentDateEditable,
+        thirdCommission, thirdPaymentDate, isThirdPaymentDateEditable,
+        jurosRS, garantiaChurn, comercializador, nota,
       };
     });
 
     setAllReceivables(calculatedReceivables.sort((a, b) => b.finalizationDate.getTime() - a.finalizationDate.getTime()));
 
-    // Calculate this month's revenue
     const now = new Date();
     const startOfCurrentMonth = startOfMonth(now);
     const endOfCurrentMonth = endOfMonth(now);
 
     const revenue = calculatedReceivables.reduce((total, r) => {
       let monthTotal = 0;
-      if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-        monthTotal += r.immediateCommission;
-      }
-      if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-        monthTotal += r.secondCommission;
-      }
-       if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-        monthTotal += r.thirdCommission;
-      }
+      if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.immediateCommission;
+      if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.secondCommission;
+      if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.thirdCommission;
       return total + monthTotal;
     }, 0);
 
     setMonthlyRevenue(revenue);
-
   }, [leads, receivableDates]);
   
   const handleReceivableDateChange = (leadId: string, commissionType: 'second' | 'third', newDate?: Date) => {
     if (!newDate) return;
     setReceivableDates(prev => ({
       ...prev,
-      [leadId]: {
-        ...prev[leadId],
-        [commissionType]: newDate.toISOString(),
-      }
+      [leadId]: { ...prev[leadId], [commissionType]: newDate.toISOString() }
     }));
   };
 
@@ -380,21 +374,14 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const netProfit = monthlyRevenue - proLaboreValue - taxValue - reinvestValue - fixedCosts - missionaryHelpValue;
   
   const handleAddEmployee = () => {
-    if (!newEmployee.name || newEmployee.salary <= 0) {
-      alert("Nome e salário são obrigatórios.");
-      return;
-    }
+    if (!newEmployee.name || newEmployee.salary <= 0) { alert("Nome e salário são obrigatórios."); return; }
     setPayroll([...payroll, { ...newEmployee, id: Date.now().toString() }]);
     setNewEmployee({ name: '', regime: 'CLT', role: 'SDR', salary: 0, monthlyRevenueGenerated: 0 });
   };
   
-  const handleRemoveEmployee = (id: string) => {
-    setPayroll(payroll.filter(emp => emp.id !== id));
-  };
+  const handleRemoveEmployee = (id: string) => { setPayroll(payroll.filter(emp => emp.id !== id)); };
   
-  const calculateTax = (employee: Employee) => {
-    return employee.regime === 'CLT' ? employee.salary * 0.20 : 0; // Simplified 20% tax for CLT
-  };
+  const calculateTax = (employee: Employee) => employee.regime === 'CLT' ? employee.salary * 0.20 : 0;
 
   const calculateROI = (employee: Employee) => {
       const totalCost = employee.salary + calculateTax(employee);
@@ -402,13 +389,22 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       const roi = ((employee.monthlyRevenueGenerated - totalCost) / totalCost) * 100;
       return `${roi.toFixed(2)}%`;
   };
-
+  
   const filteredReceivables = useMemo(() => {
+    const now = new Date();
+    const startOfCurrentMonth = startOfMonth(now);
+    const endOfCurrentMonth = endOfMonth(now);
+
     return allReceivables.filter(r => 
         (receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter) &&
-        (receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter)
+        (receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter) &&
+        (!showMonthlyDashboard || (
+            isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth }) ||
+            isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth }) ||
+            isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })
+        ))
     );
-  }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads]);
+  }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, showMonthlyDashboard]);
   
   const promotersWithLeads = useMemo(() => {
       const promoterSet = new Set<string>();
@@ -418,6 +414,37 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       });
       return Array.from(promoterSet).sort();
   }, [allReceivables, leads]);
+
+  const monthlyDashboardMetrics = useMemo(() => {
+    if (!showMonthlyDashboard) return null;
+    
+    const now = new Date();
+    const startOfCurrentMonth = startOfMonth(now);
+    const endOfCurrentMonth = endOfMonth(now);
+    
+    let totalReceivable = 0;
+    let totalCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
+    
+    allReceivables.forEach(r => {
+        let receivableInMonth = 0;
+        if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.immediateCommission;
+        if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.secondCommission;
+        if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.thirdCommission;
+
+        if (receivableInMonth > 0) {
+            totalReceivable += receivableInMonth;
+            totalCosts.juros += r.jurosRS;
+            totalCosts.churn += r.garantiaChurn;
+            totalCosts.comercializador += r.comercializador;
+            totalCosts.nota += r.nota;
+        }
+    });
+    
+    const totalCostSum = Object.values(totalCosts).reduce((sum, val) => sum + val, 0);
+    const netProfit = totalReceivable - totalCostSum;
+
+    return { totalReceivable, totalCosts, netProfit };
+  }, [showMonthlyDashboard, allReceivables]);
 
   const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
   const paginatedReceivables = filteredReceivables.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
@@ -459,6 +486,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
               <div>
                 <Label htmlFor="riskFund">Caixa de Risco (R$)</Label>
                 <Input id="riskFund" type="number" value={riskFund} onChange={(e) => setRiskFund(Number(e.target.value))} />
+                <p className="text-xs text-muted-foreground mt-1">Fundo para cobrir inadimplências e churn.</p>
               </div>
            </div>
         </CardContent>
@@ -466,10 +494,18 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
        
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle>
-            <CardDescription>
-                Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros.
-            </CardDescription>
+            <div className="flex justify-between items-center">
+                <div>
+                    <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle>
+                    <CardDescription>
+                        Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros.
+                    </CardDescription>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <Label htmlFor="monthly-dashboard-switch" className="text-sm font-medium">Visualizar Dashboard do Mês</Label>
+                    <Switch id="monthly-dashboard-switch" checked={showMonthlyDashboard} onCheckedChange={setShowMonthlyDashboard} />
+                </div>
+            </div>
             <div className="flex flex-wrap gap-2 pt-2">
                  <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}>
                     <SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
@@ -481,6 +517,15 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                 </Select>
             </div>
         </CardHeader>
+        {showMonthlyDashboard && monthlyDashboardMetrics && (
+             <CardContent className="mb-4">
+                <div className="grid md:grid-cols-3 gap-4 text-center">
+                    <Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card>
+                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(monthlyDashboardMetrics.totalCosts.juros + monthlyDashboardMetrics.totalCosts.churn + monthlyDashboardMetrics.totalCosts.comercializador + monthlyDashboardMetrics.totalCosts.nota)}</p></Card>
+                    <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
+                </div>
+            </CardContent>
+        )}
         <CardContent>
             <Table>
                 <TableHeader><TableRow>
@@ -1377,7 +1422,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                               <SelectItem value="9999">Ilimitado</SelectItem>
                             </SelectContent>
                           </Select>
-                          <FormDescription className="text-xs text-muted-foreground">Máximo de leads sem feedback que o vendedor pode ter.</FormDescription>
+                          <p className="text-xs text-muted-foreground">Máximo de leads sem feedback que o vendedor pode ter.</p>
                         </FormItem>
                       )}
                     />
@@ -1389,7 +1434,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <FormItem>
                           <FormLabel className="flex items-center"><Percent className="mr-2 h-4 w-4"/>Comissão Direta (%)</FormLabel>
                           <FormControl><Input type="number" step="1" placeholder="Padrão do Nível" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <FormDescription className="text-xs text-muted-foreground">Deixe em branco para usar o padrão do nível (40% ou 50%).</FormDescription>
+                          <p className="text-xs text-muted-foreground">Deixe em branco para usar o padrão do nível (40% ou 50%).</p>
                           <FormMessage />
                       </FormItem>
                     )} />
@@ -1397,7 +1442,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                         <FormItem>
                           <FormLabel className="flex items-center"><RefreshCw className="mr-2 h-4 w-4"/>Recorrência (%)</FormLabel>
                           <FormControl><Input type="number" step="0.1" placeholder="Sem Recorrência" {...field} value={field.value ?? ''} disabled={!canEdit || isSubmittingAction} /></FormControl>
-                          <FormDescription className="text-xs text-muted-foreground">Deixe em branco para sem recorrência.</FormDescription>
+                          <p className="text-xs text-muted-foreground">Deixe em branco para sem recorrência.</p>
                           <FormMessage />
                         </FormItem>
                     )} />
@@ -1425,7 +1470,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </Dialog>
       )}
 
-      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><CardFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}Atualizar Status</Button></CardFooter></form></Form></DialogContent></Dialog>)}
+      {selectedWithdrawal && (<Dialog open={isUpdateWithdrawalModalOpen} onOpenChange={setIsUpdateWithdrawalModalOpen}><DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground"><DialogHeader><DialogTitle className="text-primary">Processar Solicitação de Saque</DialogTitle><DialogDescription>ID: {selectedWithdrawal.id}</DialogDescription></DialogHeader><div className="py-2 text-sm"><p><strong>Usuário:</strong> {selectedWithdrawal.userName || selectedWithdrawal.userEmail}</p><p><strong>Valor:</strong> {formatCurrency(selectedWithdrawal.amount)} ({selectedWithdrawal.withdrawalType})</p><p><strong>PIX:</strong> {selectedWithdrawal.pixKeyType} - {selectedWithdrawal.pixKey}</p><p><strong>Solicitado em:</strong> {selectedWithdrawal.requestedAt ? format(parseISO(selectedWithdrawal.requestedAt as string), "dd/MM/yyyy HH:mm") : 'N/A'}</p></div><Form {...updateWithdrawalForm}><form onSubmit={updateWithdrawalForm.handleSubmit(handleUpdateWithdrawal)} className="space-y-4 pt-2"><FormField control={updateWithdrawalForm.control} name="status" render={({ field }) => (<FormItem><FormLabel>Novo Status</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger></FormControl><SelectContent>{WITHDRAWAL_STATUSES_ADMIN.map(status => (<SelectItem key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} /><FormField control={updateWithdrawalForm.control} name="adminNotes" render={({ field }) => (<FormItem><FormLabel>Notas do Admin (Opcional)</FormLabel><FormControl><Input placeholder="Ex: Pagamento efetuado" {...field} /></FormControl><FormMessage /></FormItem>)} /><CardFooter><Button type="button" variant="outline" onClick={() => setIsUpdateWithdrawalModalOpen(false)} disabled={isSubmittingAction}>Cancelar</Button><Button type="submit" disabled={isSubmittingAction}>{isSubmittingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Atualizar Status</Button></CardFooter></form></Form></DialogContent></Dialog>)}
       
       <AlertDialog open={isResetPasswordModalOpen} onOpenChange={setIsResetPasswordModalOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar Redefinição de Senha</AlertDialogTitle><AlertDialogDescription>Um email será enviado para <strong>{selectedUser?.email}</strong> com instruções para criar uma nova senha. O usuário será desconectado de todas as sessões ativas. Deseja continuar?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={isSubmittingAction}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmResetPassword} disabled={isSubmittingAction}>{isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Enviar Email</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       

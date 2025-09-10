@@ -536,11 +536,11 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableCell className="font-semibold text-primary">{formatCurrency(row.comissaoPromotor)}</TableCell>
                     <TableCell className="font-semibold text-green-600">{formatCurrency(row.lucroBruto)}</TableCell>
                     <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
-                    <TableCell>{row.jurosPerc}</TableCell>
-                    <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
-                    <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
-                    <TableCell>{formatCurrency(row.comercializador)}</TableCell>
-                    <TableCell>{formatCurrency(row.nota)}</TableCell>
+                    <TableCell className="text-red-500">{row.jurosPerc}</TableCell>
+                    <TableCell className="text-red-500">{formatCurrency(row.jurosRS)}</TableCell>
+                    <TableCell className="text-red-500">{formatCurrency(row.garantiaChurn)}</TableCell>
+                    <TableCell className="text-red-500">{formatCurrency(row.comercializador)}</TableCell>
+                    <TableCell className="text-red-500">{formatCurrency(row.nota)}</TableCell>
                     <TableCell></TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2 w-[200px]">
