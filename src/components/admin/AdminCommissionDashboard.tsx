@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart, TrendingUp as TrendingUpIcon, Landmark
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -292,7 +292,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
       // Fit Energia
       if (empresa === 'Fit Energia') {
-        immediateCommission = 0;
+        immediateCommission = 0; // Corrected
         secondCommission = proposta * 0.40;
         secondPaymentDate = setDateFn(addMonths(finalizationDate, 1), 15);
         thirdCommission = proposta * 0.60;
@@ -325,7 +325,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       const comissaoTotal = immediateCommission + secondCommission + thirdCommission;
       let jurosRS = 0;
       if (empresa === 'BC') { jurosRS = immediateCommission * 0.12; }
-      if (empresa === 'Origo') { jurosRS = immediateCommission * 0.17; }
+      else if (empresa === 'Origo') { jurosRS = immediateCommission * 0.17; }
 
       let garantiaChurn = (empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
       let comercializador = (empresa === 'Bowe' || empresa === 'Matrix' || empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
@@ -424,30 +424,42 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const startOfCurrentMonth = startOfMonth(now);
     const endOfCurrentMonth = endOfMonth(now);
     
-    let totalReceivable = 0;
+    const revenueByType = { immediate: 0, second: 0, third: 0, fourth: 0 };
     const operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
     
     allReceivables.forEach(r => {
         let receivableInMonth = 0;
+        let commissionTotalInMonth = 0;
+
         if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
             receivableInMonth += r.immediateCommission;
-            // Juros is only on immediate commission
+            commissionTotalInMonth += r.immediateCommission;
+            revenueByType.immediate += r.immediateCommission;
             if (r.company === 'BC') operationCosts.juros += r.immediateCommission * 0.12;
             if (r.company === 'Origo') operationCosts.juros += r.immediateCommission * 0.17;
         }
-        if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.secondCommission;
-        if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) receivableInMonth += r.thirdCommission;
+        if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+            receivableInMonth += r.secondCommission;
+            commissionTotalInMonth += r.secondCommission;
+            revenueByType.second += r.secondCommission;
+        }
+        if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+            receivableInMonth += r.thirdCommission;
+            commissionTotalInMonth += r.thirdCommission;
+            revenueByType.third += r.thirdCommission;
+        }
 
         if (receivableInMonth > 0) {
-            totalReceivable += receivableInMonth;
+            const comissaoTotalParaCalculoCustos = r.immediateCommission + r.secondCommission + r.thirdCommission;
             if (r.company !== 'Fit Energia') {
-                operationCosts.churn += receivableInMonth * 0.10;
-                operationCosts.comercializador += receivableInMonth * 0.10;
-                operationCosts.nota += receivableInMonth * 0.12;
+                operationCosts.churn += comissaoTotalParaCalculoCustos * 0.10;
+                operationCosts.comercializador += comissaoTotalParaCalculoCustos * 0.10;
+                operationCosts.nota += comissaoTotalParaCalculoCustos * 0.12;
             }
         }
     });
-    
+
+    const totalReceivable = Object.values(revenueByType).reduce((sum, val) => sum + val, 0);
     const totalOperationCosts = Object.values(operationCosts).reduce((sum, val) => sum + val, 0);
 
     const adminCosts = {
@@ -460,7 +472,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const totalAdminCosts = Object.values(adminCosts).reduce((sum, val) => sum + val, 0);
     const netProfit = totalReceivable - totalOperationCosts - totalAdminCosts;
 
-    return { totalReceivable, operationCosts, adminCosts, netProfit };
+    return { totalReceivable, operationCosts, adminCosts, netProfit, revenueByType };
   }, [showMonthlyDashboard, allReceivables, proLabore, tax, reinvest, missionaryHelp, totalPayroll, riskFund]);
 
   const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
@@ -538,24 +550,39 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                     <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(Object.values(monthlyDashboardMetrics.operationCosts).reduce((s, v) => s + v, 0) + Object.values(monthlyDashboardMetrics.adminCosts).reduce((s, v) => s + v, 0))}</p></Card>
                     <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
                 </div>
-                 <div className="grid md:grid-cols-2 gap-4">
+                 <div className="grid md:grid-cols-3 gap-4">
                     <Card>
-                        <CardHeader className="p-3"><CardTitle className="text-base text-primary">Custos da Operação</CardTitle></CardHeader>
+                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader>
+                        <CardContent className="p-3 text-sm space-y-1">
+                            <div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div>
+                            <div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div>
+                            <div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div>
+                            <div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div>
+                            <Separator className="my-1"/>
+                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader>
                         <CardContent className="p-3 text-sm space-y-1">
                             <div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div>
                             <div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div>
                             <div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div>
                             <div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div>
+                            <Separator className="my-1"/>
+                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(Object.values(monthlyDashboardMetrics.operationCosts).reduce((s, v) => s + v, 0))}</span></div>
                         </CardContent>
                     </Card>
                     <Card>
-                        <CardHeader className="p-3"><CardTitle className="text-base text-primary">Custos Administrativos</CardTitle></CardHeader>
+                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader>
                         <CardContent className="p-3 text-sm space-y-1">
                             <div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div>
                             <div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div>
                             <div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div>
                             <div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div>
                             <div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div>
+                            <Separator className="my-1"/>
+                             <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(Object.values(monthlyDashboardMetrics.adminCosts).reduce((s, v) => s + v, 0))}</span></div>
                         </CardContent>
                     </Card>
                 </div>
@@ -1486,7 +1513,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 </CardContent></Card>
 
 
-                <CardFooter>
+                <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isSubmittingAction}>
                     {canEdit ? 'Cancelar' : 'Fechar'}
                   </Button>
@@ -1496,7 +1523,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       Salvar Alterações
                     </Button>
                   )}
-                </CardFooter>
+                </DialogFooter>
               </form>
             </Form>
           </DialogContent>
