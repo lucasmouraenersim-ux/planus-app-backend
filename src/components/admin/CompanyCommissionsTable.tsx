@@ -131,13 +131,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const calculateFinancials = (rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' | 'recorrenciaComissao'>) => {
     const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
     const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
-    const garantiaChurn = comissaoTotal * 0.10;
     
-    // Updated Comercializador logic
-    const comercializador = (rowData.empresa === 'Bowe' || rowData.empresa === 'Matrix' || rowData.empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
-    
-    const nota = comissaoTotal * 0.12;
-    const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota;
+    let garantiaChurn = 0;
+    let comercializador = 0;
+    let nota = 0;
+
+    if (rowData.empresa !== 'Fit Energia') {
+        garantiaChurn = comissaoTotal * 0.10;
+        comercializador = comissaoTotal * 0.10;
+        nota = comissaoTotal * 0.12;
+    }
 
     let jurosRS = 0;
     let jurosPerc = "0%";
@@ -155,6 +158,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     } else {
         recorrenciaComissao = rowData.recorrenciaAtiva ? rowData.proposta * (rowData.recorrenciaPerc / 100) : 0;
     }
+
+    const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota - jurosRS;
 
 
     return {

@@ -327,10 +327,16 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       if (empresa === 'BC') { jurosRS = immediateCommission * 0.12; }
       else if (empresa === 'Origo') { jurosRS = immediateCommission * 0.17; }
 
-      let garantiaChurn = (empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
-      let comercializador = (empresa === 'Bowe' || empresa === 'Matrix' || empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.10;
-      let nota = (empresa === 'Fit Energia') ? 0 : comissaoTotal * 0.12; // Nota is 0 for Fit, handled in admin tax.
-
+      let garantiaChurn = 0;
+      let comercializador = 0;
+      let nota = 0;
+      
+      if (empresa !== 'Fit Energia') {
+          garantiaChurn = comissaoTotal * 0.10;
+          comercializador = comissaoTotal * 0.10;
+          nota = comissaoTotal * 0.12;
+      }
+      
       const customDates = receivableDates[lead.id];
       if (customDates?.second) secondPaymentDate = parseISO(customDates.second);
       if (customDates?.third) thirdPaymentDate = parseISO(customDates.third);
@@ -428,34 +434,28 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
     
     allReceivables.forEach(r => {
-        let receivableInMonth = 0;
-        let commissionTotalInMonth = 0;
+        let commissionPaidThisMonth = 0;
 
         if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-            receivableInMonth += r.immediateCommission;
-            commissionTotalInMonth += r.immediateCommission;
+            commissionPaidThisMonth += r.immediateCommission;
             revenueByType.immediate += r.immediateCommission;
+            // Juros is calculated only on immediate commission
             if (r.company === 'BC') operationCosts.juros += r.immediateCommission * 0.12;
             if (r.company === 'Origo') operationCosts.juros += r.immediateCommission * 0.17;
         }
         if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-            receivableInMonth += r.secondCommission;
-            commissionTotalInMonth += r.secondCommission;
+            commissionPaidThisMonth += r.secondCommission;
             revenueByType.second += r.secondCommission;
         }
         if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
-            receivableInMonth += r.thirdCommission;
-            commissionTotalInMonth += r.thirdCommission;
+            commissionPaidThisMonth += r.thirdCommission;
             revenueByType.third += r.thirdCommission;
         }
 
-        if (receivableInMonth > 0) {
-            const comissaoTotalParaCalculoCustos = r.immediateCommission + r.secondCommission + r.thirdCommission;
-            if (r.company !== 'Fit Energia') {
-                operationCosts.churn += comissaoTotalParaCalculoCustos * 0.10;
-                operationCosts.comercializador += comissaoTotalParaCalculoCustos * 0.10;
-                operationCosts.nota += comissaoTotalParaCalculoCustos * 0.12;
-            }
+        if (commissionPaidThisMonth > 0 && r.company !== 'Fit Energia') {
+            operationCosts.churn += commissionPaidThisMonth * 0.10;
+            operationCosts.comercializador += commissionPaidThisMonth * 0.10;
+            operationCosts.nota += commissionPaidThisMonth * 0.12;
         }
     });
 
@@ -474,6 +474,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
     return { totalReceivable, operationCosts, adminCosts, netProfit, revenueByType };
   }, [showMonthlyDashboard, allReceivables, proLabore, tax, reinvest, missionaryHelp, totalPayroll, riskFund]);
+
 
   const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
   const paginatedReceivables = filteredReceivables.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
@@ -547,7 +548,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
              <CardContent className="mb-4 space-y-4">
                 <div className="grid md:grid-cols-3 gap-4 text-center">
                     <Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card>
-                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(Object.values(monthlyDashboardMetrics.operationCosts).reduce((s, v) => s + v, 0) + Object.values(monthlyDashboardMetrics.adminCosts).reduce((s, v) => s + v, 0))}</p></Card>
+                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(monthlyDashboardMetrics.totalOperationCosts + monthlyDashboardMetrics.totalAdminCosts)}</p></Card>
                     <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
                 </div>
                  <div className="grid md:grid-cols-3 gap-4">
@@ -570,7 +571,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                             <div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div>
                             <div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div>
                             <Separator className="my-1"/>
-                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(Object.values(monthlyDashboardMetrics.operationCosts).reduce((s, v) => s + v, 0))}</span></div>
+                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -582,7 +583,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                             <div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div>
                             <div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div>
                             <Separator className="my-1"/>
-                             <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(Object.values(monthlyDashboardMetrics.adminCosts).reduce((s, v) => s + v, 0))}</span></div>
+                             <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div>
                         </CardContent>
                     </Card>
                 </div>
@@ -1560,3 +1561,4 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
+
