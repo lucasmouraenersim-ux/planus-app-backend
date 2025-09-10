@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -440,9 +440,6 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
             commissionPaidThisMonth += r.immediateCommission;
             revenueByType.immediate += r.immediateCommission;
-            // Juros is calculated only on immediate commission
-            if (r.company === 'BC') operationCosts.juros += r.immediateCommission * 0.12;
-            if (r.company === 'Origo') operationCosts.juros += r.immediateCommission * 0.17;
         }
         if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
             commissionPaidThisMonth += r.secondCommission;
@@ -453,11 +450,19 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
             revenueByType.third += r.thirdCommission;
         }
 
-        if (commissionPaidThisMonth > 0 && r.company !== 'Fit Energia') {
+        if (commissionPaidThisMonth > 0) {
             // Apply costs only on the portion paid this month
-            operationCosts.churn += commissionPaidThisMonth * 0.10;
-            operationCosts.comercializador += commissionPaidThisMonth * 0.10;
-            operationCosts.nota += commissionPaidThisMonth * 0.12;
+            if (r.company === 'BC') {
+                 operationCosts.juros += r.immediateCommission * 0.12; 
+                 operationCosts.churn += commissionPaidThisMonth * 0.10;
+                 operationCosts.comercializador += commissionPaidThisMonth * 0.10;
+                 operationCosts.nota += commissionPaidThisMonth * 0.12;
+            } else if (r.company === 'Origo') {
+                 operationCosts.juros += r.immediateCommission * 0.17;
+                 operationCosts.churn += commissionPaidThisMonth * 0.10;
+                 operationCosts.comercializador += commissionPaidThisMonth * 0.10;
+                 operationCosts.nota += commissionPaidThisMonth * 0.12;
+            }
         }
     });
 
@@ -555,7 +560,9 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                 </div>
                  <div className="grid md:grid-cols-3 gap-4">
                     <Card>
-                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader>
+                        <CardHeader className="p-3">
+                            <CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle>
+                        </CardHeader>
                         <CardContent className="p-3 text-sm space-y-1">
                             <div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div>
                             <div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div>
@@ -1563,4 +1570,3 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
-
