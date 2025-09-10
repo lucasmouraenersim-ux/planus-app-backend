@@ -1,3 +1,4 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -36,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -453,6 +454,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         }
 
         if (commissionPaidThisMonth > 0 && r.company !== 'Fit Energia') {
+            // Apply costs only on the portion paid this month
             operationCosts.churn += commissionPaidThisMonth * 0.10;
             operationCosts.comercializador += commissionPaidThisMonth * 0.10;
             operationCosts.nota += commissionPaidThisMonth * 0.12;
@@ -467,7 +469,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       tax: totalReceivable * (tax / 100),
       reinvest: totalReceivable * (reinvest / 100),
       missionary: totalReceivable * (missionaryHelp / 100),
-      fixed: totalPayroll + riskFund,
+      fixed: (totalPayroll || 0) + (riskFund || 0),
     };
     const totalAdminCosts = Object.values(adminCosts).reduce((sum, val) => sum + val, 0);
     const netProfit = totalReceivable - totalOperationCosts - totalAdminCosts;
@@ -548,7 +550,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
              <CardContent className="mb-4 space-y-4">
                 <div className="grid md:grid-cols-3 gap-4 text-center">
                     <Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card>
-                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency(monthlyDashboardMetrics.totalOperationCosts + monthlyDashboardMetrics.totalAdminCosts)}</p></Card>
+                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card>
                     <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
                 </div>
                  <div className="grid md:grid-cols-3 gap-4">
