@@ -5,7 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
-import { getFirestore, Timestamp, collection, where, getDocs, writeBatch, doc } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, collection, where, getDocs, writeBatch, doc, query } from 'firebase-admin/firestore';
 
 export interface LeadDisplayData {
     id: string;
@@ -30,11 +30,11 @@ function normalizeHeader(header: string): string {
 }
 
 const FIELD_TO_HEADER_ALIASES: Record<string, string[]> = {
-    cliente: ["negocio - pessoa de contato"],
-    estagio: ["negocio - status"],
-    telefone: ["negocio - celular titular", "negocio - telefone"],
+    cliente: ["negocio - pessoa de contato", "nome do contato"],
+    estagio: ["negocio - status", "estagio negociacao"],
+    telefone: ["negocio - celular titular", "whatsapp", "telefone"],
     consumoKwh: ["negocio - consumo medio mensal (kwh)"],
-    mediaFatura: ["negocio - valor"],
+    mediaFatura: ["negocio - valor", "media r$"],
 };
 
 export async function uploadAndProcessLeads(formData: FormData): Promise<ActionResult> {
@@ -74,42 +74,34 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
                   }
               }
           }
-
-          if (!headerMap.cliente || !headerMap.telefone) {
-              const missing = [!headerMap.cliente && "'Negócio - Pessoa de contato'", !headerMap.telefone && "'Negócio - Celular Titular'"].filter(Boolean).join(' e ');
-              resolve({ success: false, error: `Coluna(s) obrigatória(s) ${missing} não encontrada(s) na planilha.` });
-              return;
-          }
-
-          const allPhones = results.data
-            .map(row => String(row[headerMap.telefone!] || '').replace(/\D/g, ''))
-            .filter(phone => phone.length >= 10);
           
-          const uniquePhones = [...new Set(allPhones)];
-          const existingPhones = new Set<string>();
-
-          if (uniquePhones.length > 0) {
-            const leadsRef = collection(adminDb, "crm_leads");
-            for (let i = 0; i < uniquePhones.length; i += 30) {
-              const chunk = uniquePhones.slice(i, i + 30);
-              const q = where('phone', 'in', chunk);
-              const querySnapshot = await getDocs(query(leadsRef, q));
-              querySnapshot.forEach(doc => existingPhones.add(doc.data().phone));
-            }
+          const requiredHeaders = ['cliente', 'telefone'];
+          const missingHeaders = requiredHeaders.filter(h => !headerMap[h]);
+          if(missingHeaders.length > 0) {
+              const formattedMissing = missingHeaders.map(h => `'${FIELD_TO_HEADER_ALIASES[h][0]}'`).join(' e ');
+              return resolve({ success: false, error: `Coluna(s) obrigatória(s) ${formattedMissing} não encontrada(s).` });
           }
 
           let newLeadsCount = 0;
           let duplicatesSkipped = 0;
           const leadsForDisplay: LeadDisplayData[] = [];
           const batch = writeBatch(adminDb);
+          const leadsRef = collection(adminDb, "crm_leads");
 
-          results.data.forEach(row => {
+          for (const row of results.data) {
             const clientValue = String(row[headerMap.cliente!] || '').trim();
             const phoneValue = String(row[headerMap.telefone!] || '').replace(/\D/g, '');
 
-            if (!clientValue || !phoneValue || phoneValue.length < 10 || existingPhones.has(phoneValue)) {
-                if (existingPhones.has(phoneValue)) duplicatesSkipped++;
-                return; 
+            if (!clientValue || !phoneValue || phoneValue.length < 10) {
+                continue; 
+            }
+            
+            // Check for duplicates one by one
+            const q = query(leadsRef, where('phone', '==', phoneValue));
+            const existingLeadSnapshot = await getDocs(q);
+            if (!existingLeadSnapshot.empty) {
+                duplicatesSkipped++;
+                continue;
             }
 
             const estagioValue = headerMap.estagio ? String(row[headerMap.estagio] || '') : 'N/A';
@@ -135,7 +127,6 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             };
 
             batch.set(newLeadRef, leadData);
-            existingPhones.add(phoneValue);
             newLeadsCount++;
             leadsForDisplay.push({
                 id: newLeadRef.id,
@@ -145,12 +136,22 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
                 consumoKwh: leadData.kwh,
                 mediaFatura: leadData.value,
             });
-          });
 
+            // Commit batch in chunks to avoid exceeding limits
+            if (newLeadsCount % 400 === 0) {
+                await batch.commit();
+                // Re-initialize batch for the next chunk
+                const newBatch = writeBatch(adminDb);
+                // The 'batch' variable in the loop will now refer to this new batch
+                Object.assign(batch, newBatch);
+            }
+          }
+          
+          // Commit any remaining operations in the last batch
           if (newLeadsCount > 0) {
             await batch.commit();
           }
-          
+
           let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s) e adicionado(s) ao CRM.`;
           if (duplicatesSkipped > 0) successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
           
