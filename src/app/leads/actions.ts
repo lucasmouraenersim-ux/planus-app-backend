@@ -54,7 +54,7 @@ const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData)[]> = {
     "negocio - celular titular": ["telefone"],
     "whatsapp": ["telefone"],
     "telefone": ["telefone"],
-    "celular": ["telefone"],
+    "celular": ["celular"],
     "negocio - consumo medio mensal (kwh)": ["consumoKwh"],
     "consumo (kwh)": ["consumoKwh"],
     "consumo": ["consumoKwh"],
@@ -209,10 +209,18 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             await batch.commit();
           }
           
+          let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s).`;
+          if (duplicatesSkipped > 0) {
+            successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
+          }
+          if (newLeadsCount === 0 && duplicatesSkipped === 0) {
+              successMessage = "Nenhum lead novo para importar. Verifique se os contatos já existem ou se o arquivo está preenchido corretamente.";
+          }
+
           resolve({
             success: true,
             leads: leadsForDisplay,
-            message: `${newLeadsCount} novos leads importados. ${duplicatesSkipped} duplicatas foram ignoradas.`,
+            message: successMessage,
           });
         },
         error: (error: Error) => {
