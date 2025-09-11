@@ -26,15 +26,15 @@ type ActionResult = z.infer<typeof ActionResultSchema>;
 
 function normalizeHeader(header: string): string {
     if (!header) return '';
-    return header.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return header.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ');
 }
 
 const FIELD_TO_HEADER_ALIASES: Record<string, string[]> = {
-    cliente: ["negocio - pessoa de contato", "nome do contato", "cliente", "nome"],
-    estagio: ["negocio - status", "estagio negociacao", "status", "estagio"],
-    telefone: ["negocio - celular titular", "whatsapp", "telefone", "celular"],
-    consumoKwh: ["negocio - consumo medio mensal (kwh)", "consumo (kwh)", "consumo"],
-    mediaFatura: ["media r$", "media fatura", "valor medio"],
+    cliente: ["negocio - pessoa de contato"],
+    estagio: ["negocio - status"],
+    telefone: ["negocio - celular titular", "negocio - telefone"],
+    consumoKwh: ["negocio - consumo medio mensal (kwh)"],
+    mediaFatura: ["negocio - valor"],
 };
 
 export async function uploadAndProcessLeads(formData: FormData): Promise<ActionResult> {
@@ -64,6 +64,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
           const normalizedHeaders = results.meta.fields.map(normalizeHeader);
           const headerMap: Record<string, string | undefined> = {};
+          
           for (const field in FIELD_TO_HEADER_ALIASES) {
               for (const alias of FIELD_TO_HEADER_ALIASES[field]) {
                   const index = normalizedHeaders.indexOf(alias);
@@ -75,8 +76,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           }
 
           if (!headerMap.cliente || !headerMap.telefone) {
-              const missing = [!headerMap.cliente && "'Cliente'", !headerMap.telefone && "'Telefone'"].filter(Boolean).join(' e ');
-              resolve({ success: false, error: `Coluna(s) obrigatória(s) ${missing} não encontrada(s).` });
+              const missing = [!headerMap.cliente && "'Negócio - Pessoa de contato'", !headerMap.telefone && "'Negócio - Celular Titular'"].filter(Boolean).join(' e ');
+              resolve({ success: false, error: `Coluna(s) obrigatória(s) ${missing} não encontrada(s) na planilha.` });
               return;
           }
 
@@ -113,10 +114,10 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
             const estagioValue = headerMap.estagio ? String(row[headerMap.estagio] || '') : 'N/A';
             const consumoKwhValue = headerMap.consumoKwh ? String(row[headerMap.consumoKwh] || '0') : '0';
-            const mediaFaturaValue = headerMap.mediaFatura ? String(row[headerMap.mediaFatura] || '0') : '0';
+            const mediaFaturaValue = headerMap.mediaFatura ? String(row[headerMap.mediaFatura] || '0').replace('BRL', '').trim() : '0';
 
             const consumoKwh = parseInt(consumoKwhValue.replace(/\D/g, ''), 10);
-            const mediaFatura = parseFloat(mediaFaturaValue.replace(',', '.'));
+            const mediaFatura = parseFloat(mediaFaturaValue.replace('.', '').replace(',', '.'));
             
             const newLeadRef = doc(collection(adminDb, "crm_leads"));
             
@@ -150,16 +151,17 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             await batch.commit();
           }
           
-          let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s).`;
+          let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s) e adicionado(s) ao CRM.`;
           if (duplicatesSkipped > 0) successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
           
           if (newLeadsCount === 0 && results.data.length > 0) {
-              successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped > 0 ? `${duplicatesSkipped} lead(s) já existiam.` : 'Verifique os dados da planilha.'}`;
+              successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped > 0 ? `${duplicatesSkipped} lead(s) já existiam no sistema.` : 'Verifique se os dados da planilha estão corretos.'}`;
           }
 
           resolve({ success: true, leads: leadsForDisplay, message: successMessage });
         },
         error: (error: Error) => {
+          console.error('[Leads Action] PapaParse error:', error);
           resolve({ success: false, error: `Erro ao processar o CSV: ${error.message}` });
         },
       });
@@ -167,6 +169,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
+    console.error('[Leads Action] Critical server error:', err);
     return { success: false, error: `Erro crítico no servidor: ${errorMessage}` };
   }
 }

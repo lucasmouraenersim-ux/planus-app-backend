@@ -127,7 +127,7 @@ export default function LeadsPage() {
             </CardContent>
             <CardFooter>
                  <p className="text-xs text-muted-foreground">
-                    O sistema buscará por colunas como 'Nome do contato', 'Estágio Negociacao', 'WhatsApp', 'Consumo (Kwh)' e 'Media R$'.
+                    O sistema buscará por colunas como 'Negócio - Pessoa de contato', 'Negócio - Celular Titular', etc.
                 </p>
             </CardFooter>
         </Card>
@@ -137,7 +137,7 @@ export default function LeadsPage() {
                 <CardTitle>2. Lista de Contatos Importados</CardTitle>
                 <CardDescription>
                     {leads.length > 0
-                    ? `${filteredLeads.length} de ${leads.length} leads importados nesta sessão.`
+                    ? `Exibindo ${filteredLeads.length} de ${leads.length} leads importados nesta sessão.`
                     : "Aguardando importação para exibir os leads."}
                 </CardDescription>
                 <div className="relative pt-2">
@@ -156,7 +156,7 @@ export default function LeadsPage() {
                   <TableHeader className="sticky top-0 bg-card z-10">
                     <TableRow>
                       <TableHead>Cliente</TableHead>
-                      <TableHead>Estágio</TableHead>
+                      <TableHead>Estágio (da planilha)</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead className="text-right">Consumo (kWh)</TableHead>
                       <TableHead className="text-right">Média Fatura (R$)</TableHead>
