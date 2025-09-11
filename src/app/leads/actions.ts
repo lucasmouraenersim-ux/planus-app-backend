@@ -5,7 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
-import { getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
+import { getDocs, collection, query, where, writeBatch, doc } from 'firebase/firestore';
 
 // Defines the structure of the data we want to display on the frontend table.
 export interface LeadDisplayData {
@@ -32,6 +32,7 @@ type ActionResult = z.infer<typeof ActionResultSchema>;
  * @returns The normalized header string.
  */
 function normalizeHeader(header: string): string {
+    if (!header) return '';
     return header
         .toLowerCase()
         .trim()
@@ -105,47 +106,44 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               return;
           }
 
-          const headerToFieldMap: { [originalHeader: string]: keyof LeadDisplayData | 'celular' } = {};
+          const headerToFieldMap: { [originalHeader: string]: (keyof LeadDisplayData | 'celular')[] } = {};
           let hasClient = false;
-          let phoneHeaderKey: string | null = null;
+          let hasPhone = false;
           
           results.meta.fields.forEach(header => {
               const normalized = normalizeHeader(header);
               for (const mappingKey in HEADER_MAPPINGS) {
                   if (normalized === mappingKey) {
-                      const field = HEADER_MAPPINGS[mappingKey][0];
-                      headerToFieldMap[header] = field;
-                      if (field === 'cliente') hasClient = true;
-                      if (field === 'telefone' || field === 'celular') {
-                        phoneHeaderKey = header;
-                      }
+                      const fields = HEADER_MAPPINGS[mappingKey];
+                      headerToFieldMap[header] = fields;
+                      if (fields.includes('cliente')) hasClient = true;
+                      if (fields.includes('telefone')) hasPhone = true;
                       break;
                   }
               }
           });
-
+          
           console.log('[Leads Action] Header mapping created:', headerToFieldMap);
 
-          if (!hasClient) {
-              console.log("[Leads Action] 'Cliente' column is missing.");
-              resolve({ success: false, error: "A coluna 'Cliente' (ou uma variação como 'Nome') é obrigatória e não foi encontrada."});
+          if (!hasClient || !hasPhone) {
+              const missingColumns = [!hasClient && "'Cliente'", !hasPhone && "'Telefone'"].filter(Boolean).join(' e ');
+              console.log(`[Leads Action] Missing required columns: ${missingColumns}.`);
+              resolve({ success: false, error: `A(s) coluna(s) ${missingColumns} (ou uma variação como 'Nome', 'WhatsApp') é/são obrigatória(s) e não foi/foram encontrada(s).`});
               return;
           }
 
           const allPhones = results.data
             .map(row => {
-              let phoneValue = null;
-              // Find phone by checking all possible keys
-              const phoneKeys = Object.keys(headerToFieldMap).filter(key => HEADER_MAPPINGS[normalizeHeader(key)]?.includes('telefone'));
-              for(const key of phoneKeys) {
-                if (row[key]) {
-                    phoneValue = String(row[key]).replace(/\D/g, '');
-                    break;
+              for (const header in row) {
+                const fields = headerToFieldMap[header];
+                if (fields && (fields.includes('telefone') || fields.includes('celular'))) {
+                   const phoneValue = String(row[header] || '').replace(/\D/g, '');
+                   if (phoneValue.length >= 10) return phoneValue;
                 }
               }
-              return phoneValue;
+              return null;
             })
-            .filter((phone): phone is string => !!phone && phone.length >= 10);
+            .filter((phone): phone is string => !!phone);
           
           const uniquePhones = [...new Set(allPhones)];
           console.log(`[Leads Action] Found ${uniquePhones.length} unique phone numbers in CSV to check for duplicates.`);
@@ -171,47 +169,57 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const batch = writeBatch(adminDb);
 
           results.data.forEach(row => {
-            const processedRow: Partial<LeadDisplayData> = {};
             let phoneValue: string | null = null;
             let clientValue: string | null = null;
+            let estagioValue: string | null = null;
+            let consumoKwhValue: string | null = null;
+            let mediaFaturaValue: string | null = null;
             
             for (const header in row) {
-                const normalizedHeader = normalizeHeader(header);
-                const field = HEADER_MAPPINGS[normalizedHeader]?.[0];
-                if (field) {
-                    (processedRow as any)[field] = row[header];
-                    if (field === 'telefone' && row[header]) {
-                        phoneValue = String(row[header]).replace(/\D/g, '');
-                    }
-                    if (field === 'cliente' && row[header]) {
-                        clientValue = String(row[header]);
-                    }
+              const fields = headerToFieldMap[header];
+              if (fields) {
+                if (fields.includes('cliente') && !clientValue) clientValue = String(row[header] || '');
+                if (fields.includes('estagio') && !estagioValue) estagioValue = String(row[header] || '');
+                if (fields.includes('consumoKwh') && !consumoKwhValue) consumoKwhValue = String(row[header] || '0');
+                if (fields.includes('mediaFatura') && !mediaFaturaValue) mediaFaturaValue = String(row[header] || '0');
+                if ((fields.includes('telefone') || fields.includes('celular')) && !phoneValue) {
+                  const rawPhone = String(row[header] || '');
+                  if (rawPhone.length > 0) phoneValue = rawPhone.replace(/\D/g, '');
                 }
+              }
             }
 
             if (!clientValue || !phoneValue || phoneValue.length < 10) return;
             if (existingPhones.has(phoneValue)) { duplicatesSkipped++; return; }
 
-            const consumoKwh = parseInt(String(processedRow.consumoKwh || '0').replace(/\D/g, ''));
-            const mediaFatura = parseFloat(String(processedRow.mediaFatura || '0').replace(',', '.'));
+            const consumoKwh = parseInt(consumoKwhValue?.replace(/\D/g, '') || '0', 10);
+            const mediaFatura = parseFloat(mediaFaturaValue?.replace(',', '.') || '0');
             
             const newLeadRef = doc(collection(adminDb, "crm_leads"));
             
             const leadData = {
-              name: clientValue, phone: phoneValue, stageId: 'para-atribuir' as StageId,
-              sellerName: 'Sistema', userId: 'unassigned',
+              name: clientValue,
+              phone: phoneValue,
+              stageId: 'para-atribuir' as StageId,
+              sellerName: 'Sistema',
+              userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
-              createdAt: new Date(), lastContact: new Date(),
+              createdAt: new Date(),
+              lastContact: new Date(),
               leadSource: 'Importação CSV' as const,
             };
 
             batch.set(newLeadRef, leadData);
-            existingPhones.add(phoneValue);
+            existingPhones.add(phoneValue); // Avoid duplicates within the same batch
             newLeadsCount++;
             leadsForDisplay.push({
-                id: newLeadRef.id, cliente: leadData.name, estagio: leadData.stageId,
-                telefone: leadData.phone, consumoKwh: leadData.kwh, mediaFatura: leadData.value,
+                id: newLeadRef.id,
+                cliente: leadData.name,
+                estagio: estagioValue || 'N/A',
+                telefone: leadData.phone,
+                consumoKwh: leadData.kwh,
+                mediaFatura: leadData.value,
             });
           });
 
@@ -224,6 +232,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           
           let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s).`;
           if (duplicatesSkipped > 0) { successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`; }
+          
           if (newLeadsCount === 0 && results.data.length > 0) {
               if (duplicatesSkipped > 0) { successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped} lead(s) já existia(m) no sistema.`; } 
               else { successMessage = "Nenhum lead válido encontrado no arquivo para importar. Verifique o conteúdo das colunas."; }
@@ -247,3 +256,5 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
     return { success: false, error: `Erro crítico no servidor: ${errorMessage}` };
   }
 }
+
+    
