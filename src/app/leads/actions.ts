@@ -42,28 +42,17 @@ function normalizeHeader(header: string): string {
 }
 
 /**
- * Maps possible CSV header names to our canonical field names.
+ * Maps our canonical field names to possible CSV header names.
  * This allows for flexibility in the imported spreadsheet.
  */
-const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData | 'celular')[]> = {
-    "negocio - pessoa de contato": ["cliente"],
-    "nome do contato": ["cliente"],
-    "cliente": ["cliente"],
-    "nome": ["cliente"],
-    "negocio - status": ["estagio"],
-    "estagio negociacao": ["estagio"],
-    "status": ["estagio"],
-    "estagio": ["estagio"],
-    "negocio - celular titular": ["telefone"],
-    "whatsapp": ["telefone"],
-    "telefone": ["telefone"],
-    "celular": ["telefone"],
-    "negocio - consumo medio mensal (kwh)": ["consumoKwh"],
-    "consumo (kwh)": ["consumoKwh"],
-    "consumo": ["consumoKwh"],
-    "media r$": ["mediaFatura"],
-    "media fatura": ["mediaFatura"],
-    "valor medio": ["mediaFatura"],
+const FIELD_TO_HEADER_ALIASES: Record<keyof LeadDisplayData | 'celular', string[]> = {
+    cliente: ["negocio - pessoa de contato", "nome do contato", "cliente", "nome"],
+    estagio: ["negocio - status", "estagio negociacao", "status", "estagio"],
+    telefone: ["negocio - celular titular", "whatsapp", "telefone", "celular"],
+    celular: ["negocio - celular titular", "whatsapp", "telefone", "celular"], // 'celular' is an alias for 'telefone'
+    consumoKwh: ["negocio - consumo medio mensal (kwh)", "consumo (kwh)", "consumo"],
+    mediaFatura: ["media r$", "media fatura", "valor medio"],
+    id: [] // Not expected from CSV
 };
 
 
@@ -107,44 +96,35 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               return;
           }
 
-          const headerToFieldMap: { [originalHeader: string]: (keyof LeadDisplayData | 'celular')[] } = {};
-          let hasClient = false;
-          let hasPhone = false;
+          const normalizedHeaders = results.meta.fields.map(normalizeHeader);
           
-          results.meta.fields.forEach(header => {
-              const normalized = normalizeHeader(header);
-              for (const mappingKey in HEADER_MAPPINGS) {
-                  if (normalized === mappingKey) {
-                      const fields = HEADER_MAPPINGS[mappingKey];
-                      headerToFieldMap[header] = fields;
-                      if (fields.includes('cliente')) hasClient = true;
-                      if (fields.includes('telefone') || fields.includes('celular')) hasPhone = true;
-                      break;
+          const findHeader = (aliases: string[]): string | undefined => {
+              for (const alias of aliases) {
+                  const index = normalizedHeaders.indexOf(alias);
+                  if (index !== -1) {
+                      return results.meta.fields![index];
                   }
               }
-          });
-          
-          console.log('[Leads Action] Header mapping created:', headerToFieldMap);
+              return undefined;
+          };
 
-          if (!hasClient || !hasPhone) {
-              const missingColumns = [!hasClient && "'Cliente'", !hasPhone && "'Telefone'"].filter(Boolean).join(' e ');
-              console.log(`[Leads Action] Missing required columns: ${missingColumns}.`);
-              resolve({ success: false, error: `A(s) coluna(s) ${missingColumns} (ou uma variação como 'Nome', 'WhatsApp') é/são obrigatória(s) e não foi/foram encontrada(s).`});
+          const clientHeader = findHeader(FIELD_TO_HEADER_ALIASES.cliente);
+          const phoneHeader = findHeader(FIELD_TO_HEADER_ALIASES.telefone);
+          const stageHeader = findHeader(FIELD_TO_HEADER_ALIASES.estagio);
+          const kwhHeader = findHeader(FIELD_TO_HEADER_ALIASES.consumoKwh);
+          const billHeader = findHeader(FIELD_TO_HEADER_ALIASES.mediaFatura);
+
+          if (!clientHeader || !phoneHeader) {
+              const missingColumns = [!clientHeader && "'Cliente'", !phoneHeader && "'Telefone'"].filter(Boolean).join(' e ');
+              const errorMessage = `A(s) coluna(s) obrigatória(s) ${missingColumns} (ou uma variação como 'Nome', 'WhatsApp') não foi/foram encontrada(s).`;
+              console.log(`[Leads Action] Missing required columns: ${errorMessage}`);
+              resolve({ success: false, error: errorMessage});
               return;
           }
 
           const allPhones = results.data
-            .map(row => {
-              for (const header in row) {
-                const fields = headerToFieldMap[header];
-                if (fields && (fields.includes('telefone') || fields.includes('celular'))) {
-                   const phoneValue = String(row[header] || '').replace(/\D/g, '');
-                   if (phoneValue.length >= 10) return phoneValue;
-                }
-              }
-              return null;
-            })
-            .filter((phone): phone is string => !!phone);
+            .map(row => String(row[phoneHeader] || '').replace(/\D/g, ''))
+            .filter(phone => phone.length >= 10);
           
           const uniquePhones = [...new Set(allPhones)];
           console.log(`[Leads Action] Found ${uniquePhones.length} unique phone numbers in CSV to check for duplicates.`);
@@ -170,31 +150,23 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const batch = writeBatch(adminDb);
 
           results.data.forEach(row => {
-            let phoneValue: string | null = null;
-            let clientValue: string | null = null;
-            let estagioValue: string | null = null;
-            let consumoKwhValue: string | null = null;
-            let mediaFaturaValue: string | null = null;
-            
-            for (const header in row) {
-              const fields = headerToFieldMap[header];
-              if (fields) {
-                if (fields.includes('cliente') && !clientValue) clientValue = String(row[header] || '');
-                if (fields.includes('estagio') && !estagioValue) estagioValue = String(row[header] || '');
-                if (fields.includes('consumoKwh') && !consumoKwhValue) consumoKwhValue = String(row[header] || '0');
-                if (fields.includes('mediaFatura') && !mediaFaturaValue) mediaFaturaValue = String(row[header] || '0');
-                if ((fields.includes('telefone') || fields.includes('celular')) && !phoneValue) {
-                  const rawPhone = String(row[header] || '');
-                  if (rawPhone.length > 0) phoneValue = rawPhone.replace(/\D/g, '');
-                }
-              }
+            const clientValue = String(row[clientHeader] || '').trim();
+            const phoneValue = String(row[phoneHeader] || '').replace(/\D/g, '');
+
+            if (!clientValue || !phoneValue || phoneValue.length < 10) {
+                return;
+            }
+            if (existingPhones.has(phoneValue)) { 
+                duplicatesSkipped++; 
+                return; 
             }
 
-            if (!clientValue || !phoneValue || phoneValue.length < 10) return;
-            if (existingPhones.has(phoneValue)) { duplicatesSkipped++; return; }
+            const estagioValue = stageHeader ? String(row[stageHeader] || '') : 'N/A';
+            const consumoKwhValue = kwhHeader ? String(row[kwhHeader] || '0') : '0';
+            const mediaFaturaValue = billHeader ? String(row[billHeader] || '0') : '0';
 
-            const consumoKwh = parseInt(consumoKwhValue?.replace(/\D/g, '') || '0', 10);
-            const mediaFatura = parseFloat(mediaFaturaValue?.replace(',', '.') || '0');
+            const consumoKwh = parseInt(consumoKwhValue.replace(/\D/g, ''), 10);
+            const mediaFatura = parseFloat(mediaFaturaValue.replace(',', '.'));
             
             const newLeadRef = doc(collection(adminDb, "crm_leads"));
             
@@ -217,7 +189,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             leadsForDisplay.push({
                 id: newLeadRef.id,
                 cliente: leadData.name,
-                estagio: estagioValue || 'N/A',
+                estagio: estagioValue,
                 telefone: leadData.phone,
                 consumoKwh: leadData.kwh,
                 mediaFatura: leadData.value,
