@@ -40,7 +40,6 @@ export default function LeadsPage() {
     setLeads([]);
     setUploadMessage("Iniciando processamento...");
     
-    // Simulate progress for user feedback
     const progressInterval = setInterval(() => {
         setUploadProgress(prev => (prev < 90 ? prev + 10 : 90));
     }, 200);
@@ -62,7 +61,6 @@ export default function LeadsPage() {
       toast({ title: "Erro na Importação", description: result.error, variant: "destructive" });
     }
     
-    // Keep results on screen for a moment before resetting
     setTimeout(() => {
         setIsUploading(false);
     }, 5000);
