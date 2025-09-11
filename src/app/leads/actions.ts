@@ -42,7 +42,7 @@ function normalizeHeader(header: string): string {
  * Maps possible CSV header names to our canonical field names.
  * This allows for flexibility in the imported spreadsheet.
  */
-const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData)[]> = {
+const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData | 'celular')[]> = {
     "negocio - pessoa do contato": ["cliente"],
     "nome do contato": ["cliente"],
     "cliente": ["cliente"],
@@ -54,7 +54,7 @@ const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData)[]> = {
     "negocio - celular titular": ["telefone"],
     "whatsapp": ["telefone"],
     "telefone": ["telefone"],
-    "celular": ["celular"],
+    "celular": ["celular"], // Keep celular for mapping logic
     "negocio - consumo medio mensal (kwh)": ["consumoKwh"],
     "consumo (kwh)": ["consumoKwh"],
     "consumo": ["consumoKwh"],
@@ -100,7 +100,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           }
 
           // Create a map from original header to canonical field name
-          const headerToFieldMap: { [originalHeader: string]: keyof LeadDisplayData } = {};
+          const headerToFieldMap: { [originalHeader: string]: (keyof LeadDisplayData | 'celular') } = {};
           let hasClient = false;
           results.meta.fields.forEach(header => {
               const normalized = normalizeHeader(header);
@@ -123,9 +123,10 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const allPhones = results.data
             .map(row => {
               for (const originalHeader in headerToFieldMap) {
-                if (headerToFieldMap[originalHeader] === 'telefone' && row[originalHeader]) {
-                  return String(row[originalHeader]).replace(/\D/g, '');
-                }
+                  const mappedField = headerToFieldMap[originalHeader];
+                  if ((mappedField === 'telefone' || mappedField === 'celular') && row[originalHeader]) {
+                      return String(row[originalHeader]).replace(/\D/g, '');
+                  }
               }
               return null;
             })
@@ -154,7 +155,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const batch = adminDb.batch();
 
           results.data.forEach(row => {
-            const processedRow: Partial<LeadDisplayData> = {};
+            const processedRow: Partial<LeadDisplayData & { celular?: string }> = {};
             for (const header in row) {
                 const field = headerToFieldMap[header];
                 if (field) {
@@ -163,7 +164,9 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             }
 
             const cliente = processedRow.cliente;
-            const telefone = processedRow.telefone?.replace(/\D/g, '');
+            // Get phone number from any of the possible mapped fields
+            const telefone = (processedRow.telefone || processedRow.celular || '').replace(/\D/g, '');
+
 
             if (!cliente || !telefone || telefone.length < 10) {
                 return; // Skip rows without essential data
@@ -213,9 +216,12 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           if (duplicatesSkipped > 0) {
             successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
           }
-          if (newLeadsCount === 0 && duplicatesSkipped === 0) {
+          if (newLeadsCount === 0 && duplicatesSkipped === 0 && results.data.length > 0) {
               successMessage = "Nenhum lead novo para importar. Verifique se os contatos já existem ou se o arquivo está preenchido corretamente.";
+          } else if (results.data.length === 0) {
+              successMessage = "O arquivo CSV estava vazio ou não continha dados válidos.";
           }
+
 
           resolve({
             success: true,
