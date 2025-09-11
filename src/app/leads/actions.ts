@@ -46,7 +46,7 @@ function normalizeHeader(header: string): string {
  * This allows for flexibility in the imported spreadsheet.
  */
 const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData | 'celular')[]> = {
-    "negocio - pessoa do contato": ["cliente"],
+    "negocio - pessoa de contato": ["cliente"],
     "nome do contato": ["cliente"],
     "cliente": ["cliente"],
     "nome": ["cliente"],
@@ -118,7 +118,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
                       const fields = HEADER_MAPPINGS[mappingKey];
                       headerToFieldMap[header] = fields;
                       if (fields.includes('cliente')) hasClient = true;
-                      if (fields.includes('telefone')) hasPhone = true;
+                      if (fields.includes('telefone') || fields.includes('celular')) hasPhone = true;
                       break;
                   }
               }
@@ -257,5 +257,3 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
     return { success: false, error: `Erro crítico no servidor: ${errorMessage}` };
   }
 }
-
-    
