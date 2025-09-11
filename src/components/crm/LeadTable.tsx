@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { LeadWithId, StageId } from '@/types/crm';
@@ -34,7 +35,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,8 +52,8 @@ interface LeadTableProps {
   onSort: (key: keyof LeadWithId) => void;
 }
 
-const formatCurrency = (value: number | undefined) => {
-    if (value === undefined) return "R$ 0,00";
+const formatCurrency = (value: number | undefined | null) => {
+    if (value === undefined || value === null || isNaN(value)) return "R$ 0,00";
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
@@ -67,13 +67,13 @@ export function LeadTable({ leads, onViewLeadDetails, userAppRole, onMoveLead, o
     return stageConfig ? `${stageConfig.colorClass} text-white` : 'bg-gray-500 text-white';
   };
   
-  const SortableHeader = ({ sortKey, label }: { sortKey: keyof LeadWithId; label: string }) => {
+  const SortableHeader = ({ sortKey, label, className }: { sortKey: keyof LeadWithId; label: string, className?: string }) => {
     const isSorted = sortConfig?.key === sortKey;
     const direction = isSorted ? sortConfig.direction : undefined;
     
     return (
-      <TableHead>
-        <Button variant="ghost" onClick={() => onSort(sortKey)} className="px-2 py-1 h-auto">
+      <TableHead className={className}>
+        <Button variant="ghost" onClick={() => onSort(sortKey)} className="px-2 py-1 h-auto -ml-2">
           {label}
           {isSorted && (direction === 'ascending' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />)}
         </Button>
@@ -90,8 +90,8 @@ export function LeadTable({ leads, onViewLeadDetails, userAppRole, onMoveLead, o
             <SortableHeader sortKey="name" label="Cliente" />
             <SortableHeader sortKey="sellerName" label="Vendedor" />
             <SortableHeader sortKey="stageId" label="Estágio" />
-            <SortableHeader sortKey="kwh" label="Consumo (kWh)" />
-            <SortableHeader sortKey="valueAfterDiscount" label="Valor c/ Desc." />
+            <SortableHeader sortKey="kwh" label="Consumo (kWh)" className="text-right" />
+            <SortableHeader sortKey="valueAfterDiscount" label="Valor c/ Desc." className="text-right" />
             <SortableHeader sortKey="lastContact" label="Último Contato" />
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
