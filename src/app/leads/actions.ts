@@ -72,13 +72,16 @@ const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData | 'celular')[]> = {
  * @returns An ActionResult object with the processing result.
  */
 export async function uploadAndProcessLeads(formData: FormData): Promise<ActionResult> {
+  console.log('[Leads Action] Received request to upload and process leads.');
   const file = formData.get('csvFile') as File | null;
 
   if (!file) {
+    console.log('[Leads Action] No file uploaded.');
     return { success: false, error: 'Nenhum arquivo enviado.' };
   }
 
   if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+    console.log(`[Leads Action] Invalid file format: ${file.type}`);
     return { success: false, error: 'Formato de arquivo inválido. Por favor, envie um arquivo .csv.' };
   }
 
@@ -91,36 +94,34 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
         header: true,
         skipEmptyLines: true,
         complete: async (results) => {
+          console.log(`[Leads Action] PapaParse finished. Found ${results.data.length} rows.`);
           if (results.errors.length > 0) {
-              console.error("PapaParse Errors:", results.errors);
-              // Even with errors, we might have valid data, so we continue but log it.
+              console.error("[Leads Action] PapaParse Errors:", results.errors);
           }
           if (!results.meta.fields || results.meta.fields.length === 0) {
+              console.log("[Leads Action] Could not detect headers.");
               resolve({ success: false, error: "Não foi possível detectar os cabeçalhos da planilha. Verifique o formato do arquivo." });
               return;
           }
 
-          // Create a map from original header to canonical field name
           const headerToFieldMap: { [originalHeader: string]: (keyof LeadDisplayData | 'celular') } = {};
           let hasClient = false;
           results.meta.fields.forEach(header => {
               const normalized = normalizeHeader(header);
               const fields = HEADER_MAPPINGS[normalized];
               if (fields) {
-                  // We just take the first match.
                   headerToFieldMap[header] = fields[0];
-                  if (fields.includes('cliente')) {
-                    hasClient = true;
-                  }
+                  if (fields.includes('cliente')) hasClient = true;
               }
           });
+          console.log('[Leads Action] Header mapping created:', headerToFieldMap);
 
           if (!hasClient) {
+              console.log("[Leads Action] 'Cliente' column is missing.");
               resolve({ success: false, error: "A coluna 'Cliente' (ou uma variação como 'Nome') é obrigatória e não foi encontrada."});
               return;
           }
 
-          // Dynamically find phone numbers using the map
           const allPhones = results.data
             .map(row => {
               for (const originalHeader in headerToFieldMap) {
@@ -134,9 +135,9 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             .filter((phone): phone is string => !!phone && phone.length >= 10);
           
           const uniquePhones = [...new Set(allPhones)];
+          console.log(`[Leads Action] Found ${uniquePhones.length} unique phone numbers in CSV to check for duplicates.`);
           const existingPhones = new Set<string>();
 
-          // Check for existing phones in Firestore in chunks of 30
           if (uniquePhones.length > 0) {
             const leadsRef = adminDb.collection("crm_leads");
             for (let i = 0; i < uniquePhones.length; i += 30) {
@@ -149,6 +150,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               });
             }
           }
+          console.log(`[Leads Action] Found ${existingPhones.size} existing phone numbers in Firestore.`);
 
           let newLeadsCount = 0;
           let duplicatesSkipped = 0;
@@ -159,24 +161,14 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             const processedRow: Partial<LeadDisplayData & { celular?: string }> = {};
             for (const header in row) {
                 const field = headerToFieldMap[header];
-                if (field) {
-                    (processedRow as any)[field] = row[header];
-                }
+                if (field) { (processedRow as any)[field] = row[header]; }
             }
 
             const cliente = processedRow.cliente;
-            // Get phone number from any of the possible mapped fields
             const telefone = (processedRow.telefone || processedRow.celular || '').replace(/\D/g, '');
 
-
-            if (!cliente || !telefone || telefone.length < 10) {
-                return; // Skip rows without essential data
-            }
-
-            if (existingPhones.has(telefone)) {
-              duplicatesSkipped++;
-              return; // Skip duplicate
-            }
+            if (!cliente || !telefone || telefone.length < 10) return;
+            if (existingPhones.has(telefone)) { duplicatesSkipped++; return; }
 
             const consumoKwh = parseInt(String(processedRow.consumoKwh || '0').replace(/\D/g, ''));
             const mediaFatura = parseFloat(String(processedRow.mediaFatura || '0').replace(',', '.'));
@@ -184,64 +176,51 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             const newLeadRef = adminDb.collection("crm_leads").doc();
             
             const leadData = {
-              name: cliente,
-              phone: telefone,
-              stageId: 'para-atribuir' as StageId,
-              sellerName: 'Sistema',
-              userId: 'unassigned',
+              name: cliente, phone: telefone, stageId: 'para-atribuir' as StageId,
+              sellerName: 'Sistema', userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
-              createdAt: new Date(),
-              lastContact: new Date(),
+              createdAt: new Date(), lastContact: new Date(),
               leadSource: 'Importação CSV' as const,
             };
 
             batch.set(newLeadRef, leadData);
-            existingPhones.add(telefone); // Add to set to avoid duplicates within the same file
+            existingPhones.add(telefone);
             newLeadsCount++;
             leadsForDisplay.push({
-                id: newLeadRef.id,
-                cliente: leadData.name,
-                estagio: leadData.stageId,
-                telefone: leadData.phone,
-                consumoKwh: leadData.kwh,
-                mediaFatura: leadData.value,
+                id: newLeadRef.id, cliente: leadData.name, estagio: leadData.stageId,
+                telefone: leadData.phone, consumoKwh: leadData.kwh, mediaFatura: leadData.value,
             });
           });
 
+          console.log(`[Leads Action] Processed all rows. New leads to create: ${newLeadsCount}. Duplicates skipped: ${duplicatesSkipped}.`);
+
           if (newLeadsCount > 0) {
             await batch.commit();
+            console.log(`[Leads Action] Firestore batch commit successful for ${newLeadsCount} leads.`);
           }
           
           let successMessage = `${newLeadsCount} novo(s) lead(s) importado(s).`;
-          if (duplicatesSkipped > 0) {
-            successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
-          }
+          if (duplicatesSkipped > 0) { successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`; }
           if (newLeadsCount === 0 && results.data.length > 0) {
-              if (duplicatesSkipped > 0) {
-                successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped} lead(s) já existia(m) no sistema.`;
-              } else {
-                successMessage = "Nenhum lead válido encontrado no arquivo para importar. Verifique o conteúdo das colunas.";
-              }
+              if (duplicatesSkipped > 0) { successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped} lead(s) já existia(m) no sistema.`; } 
+              else { successMessage = "Nenhum lead válido encontrado no arquivo para importar. Verifique o conteúdo das colunas."; }
           } else if (results.data.length === 0) {
               successMessage = "O arquivo CSV estava vazio ou não continha dados válidos.";
           }
-
-
-          resolve({
-            success: true,
-            leads: leadsForDisplay,
-            message: successMessage,
-          });
+          
+          console.log(`[Leads Action] Final message: ${successMessage}`);
+          resolve({ success: true, leads: leadsForDisplay, message: successMessage });
         },
         error: (error: Error) => {
+          console.error('[Leads Action] PapaParse critical error:', error.message);
           resolve({ success: false, error: `Erro ao processar o CSV: ${error.message}` });
         },
       });
     });
 
   } catch (err) {
-    console.error('Error in uploadAndProcessLeads action:', err);
+    console.error('[Leads Action] Critical error in uploadAndProcessLeads action:', err);
     const errorMessage = err instanceof Error ? err.message : 'Ocorreu um erro desconhecido.';
     return { success: false, error: `Erro crítico no servidor: ${errorMessage}` };
   }
