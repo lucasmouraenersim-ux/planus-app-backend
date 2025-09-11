@@ -35,36 +35,34 @@ function normalizeHeader(header: string): string {
         .toLowerCase()
         .trim()
         .normalize("NFD")
-        .replace(/[\u0000-\u036f]/g, "");
+        .replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
  * Maps possible CSV header names to our canonical field names.
  * This allows for flexibility in the imported spreadsheet.
  */
-const HEADER_MAPPINGS: Record<keyof LeadDisplayData, string[]> = {
-    id: [], // Not from CSV
-    cliente: ["negocio - pessoa do contato", "nome do contato", "cliente", "nome"],
-    estagio: ["negocio - status", "estagio negociacao", "status", "estagio"],
-    telefone: ["negocio - celular titular", "whatsapp", "telefone", "celular"],
-    consumoKwh: ["negocio - consumo medio mensal (kwh)", "consumo (kwh)", "consumo"],
-    mediaFatura: ["media r$", "media fatura", "valor medio"],
+const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData)[]> = {
+    "negocio - pessoa do contato": ["cliente"],
+    "nome do contato": ["cliente"],
+    "cliente": ["cliente"],
+    "nome": ["cliente"],
+    "negocio - status": ["estagio"],
+    "estagio negociacao": ["estagio"],
+    "status": ["estagio"],
+    "estagio": ["estagio"],
+    "negocio - celular titular": ["telefone"],
+    "whatsapp": ["telefone"],
+    "telefone": ["telefone"],
+    "celular": ["telefone"],
+    "negocio - consumo medio mensal (kwh)": ["consumoKwh"],
+    "consumo (kwh)": ["consumoKwh"],
+    "consumo": ["consumoKwh"],
+    "media r$": ["mediaFatura"],
+    "media fatura": ["mediaFatura"],
+    "valor medio": ["mediaFatura"],
 };
 
-/**
- * Finds the canonical field name for a given CSV header.
- * @param header The header from the CSV file.
- * @returns The canonical field name or null if not found.
- */
-function getCanonicalField(header: string): keyof LeadDisplayData | null {
-    const normalizedHeader = normalizeHeader(header);
-    for (const key in HEADER_MAPPINGS) {
-        if (HEADER_MAPPINGS[key as keyof LeadDisplayData].includes(normalizedHeader)) {
-            return key as keyof LeadDisplayData;
-        }
-    }
-    return null;
-}
 
 /**
  * A server action to upload a CSV file, process its content, check for duplicates in Firestore,
@@ -101,23 +99,36 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               return;
           }
 
-          const fieldMap: { [key: string]: keyof LeadDisplayData } = {};
+          // Create a map from original header to canonical field name
+          const headerToFieldMap: { [originalHeader: string]: keyof LeadDisplayData } = {};
+          let hasClient = false;
           results.meta.fields.forEach(header => {
-              const canonicalField = getCanonicalField(header);
-              if (canonicalField) {
-                  fieldMap[header] = canonicalField;
+              const normalized = normalizeHeader(header);
+              const fields = HEADER_MAPPINGS[normalized];
+              if (fields) {
+                  // We just take the first match.
+                  headerToFieldMap[header] = fields[0];
+                  if (fields.includes('cliente')) {
+                    hasClient = true;
+                  }
               }
           });
 
-          // Check if essential fields were found by their canonical name
-          const mappedFields = Object.values(fieldMap);
-          if (!mappedFields.includes('cliente')) {
-              resolve({ success: false, error: "A coluna 'Cliente' ('Nome', 'Nome do contato' ou 'Negócio - Pessoa do contato') é obrigatória e não foi encontrada."});
+          if (!hasClient) {
+              resolve({ success: false, error: "A coluna 'Cliente' (ou uma variação como 'Nome') é obrigatória e não foi encontrada."});
               return;
           }
 
+          // Dynamically find phone numbers using the map
           const allPhones = results.data
-            .map(row => (row.Telefone || row.WhatsApp || row['Negócio - Celular Titular'])?.replace(/\D/g, ''))
+            .map(row => {
+              for (const originalHeader in headerToFieldMap) {
+                if (headerToFieldMap[originalHeader] === 'telefone' && row[originalHeader]) {
+                  return String(row[originalHeader]).replace(/\D/g, '');
+                }
+              }
+              return null;
+            })
             .filter((phone): phone is string => !!phone && phone.length >= 10);
           
           const uniquePhones = [...new Set(allPhones)];
@@ -143,22 +154,16 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const batch = adminDb.batch();
 
           results.data.forEach(row => {
-            let cliente: string | undefined;
-            for (const header of HEADER_MAPPINGS.cliente) {
-                if (row[header]) {
-                    cliente = row[header];
-                    break;
+            const processedRow: Partial<LeadDisplayData> = {};
+            for (const header in row) {
+                const field = headerToFieldMap[header];
+                if (field) {
+                    (processedRow as any)[field] = row[header];
                 }
             }
 
-            let telefoneRaw: string | undefined;
-             for (const header of HEADER_MAPPINGS.telefone) {
-                if (row[header]) {
-                    telefoneRaw = row[header];
-                    break;
-                }
-            }
-            const telefone = telefoneRaw?.replace(/\D/g, '');
+            const cliente = processedRow.cliente;
+            const telefone = processedRow.telefone?.replace(/\D/g, '');
 
             if (!cliente || !telefone || telefone.length < 10) {
                 return; // Skip rows without essential data
@@ -169,8 +174,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               return; // Skip duplicate
             }
 
-            const consumoKwh = parseInt(row['Consumo (KWh)'] || row['Consumo'] || row['Negócio - Consumo Médio Mensal (Kwh)'] || '0');
-            const mediaFatura = parseFloat((row['Media R$'] || row['Media Fatura'] || '0').replace(',', '.'));
+            const consumoKwh = parseInt(String(processedRow.consumoKwh || '0').replace(/\D/g, ''));
+            const mediaFatura = parseFloat(String(processedRow.mediaFatura || '0').replace(',', '.'));
             
             const newLeadRef = adminDb.collection("crm_leads").doc();
             
