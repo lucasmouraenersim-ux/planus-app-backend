@@ -142,8 +142,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             const leadsRef = adminDb.collection("crm_leads");
             for (let i = 0; i < uniquePhones.length; i += 30) {
               const chunk = uniquePhones.slice(i, i + 30);
-              const q = leadsRef.where('phone', 'in', chunk);
-              const querySnapshot = await q.get();
+              const q = query(leadsRef, where('phone', 'in', chunk));
+              const querySnapshot = await getDocs(q);
               querySnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.phone) existingPhones.add(data.phone);
