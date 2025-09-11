@@ -6,6 +6,7 @@ import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
 import { getDocs, collection, query, where, writeBatch, doc } from 'firebase/firestore';
+import admin from 'firebase-admin';
 
 // Defines the structure of the data we want to display on the frontend table.
 export interface LeadDisplayData {
@@ -205,8 +206,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
-              createdAt: new Date(),
-              lastContact: new Date(),
+              createdAt: admin.firestore.Timestamp.now(),
+              lastContact: admin.firestore.Timestamp.now(),
               leadSource: 'Importação CSV' as const,
             };
 
