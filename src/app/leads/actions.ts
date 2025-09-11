@@ -5,7 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
-import { getDocs, collection, query, where, writeBatch, doc, Timestamp } from 'firebase/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import admin from 'firebase-admin';
 
 // Defines the structure of the data we want to display on the frontend table.
@@ -79,6 +79,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
   try {
     const adminDb = await initializeAdmin();
+    const firestore = getFirestore(admin.apps[0]!); // Use Admin Firestore
     const fileContent = await file.text();
     
     return new Promise((resolve) => {
@@ -131,11 +132,11 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const existingPhones = new Set<string>();
 
           if (uniquePhones.length > 0) {
-            const leadsRef = collection(adminDb, "crm_leads");
+            const leadsRef = firestore.collection("crm_leads");
             for (let i = 0; i < uniquePhones.length; i += 30) {
               const chunk = uniquePhones.slice(i, i + 30);
-              const q = query(leadsRef, where('phone', 'in', chunk));
-              const querySnapshot = await getDocs(q);
+              const q = leadsRef.where('phone', 'in', chunk);
+              const querySnapshot = await q.get();
               querySnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.phone) existingPhones.add(data.phone);
@@ -147,7 +148,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           let newLeadsCount = 0;
           let duplicatesSkipped = 0;
           const leadsForDisplay: LeadDisplayData[] = [];
-          const batch = writeBatch(adminDb);
+          const batch = firestore.batch();
 
           results.data.forEach(row => {
             const clientValue = String(row[clientHeader] || '').trim();
@@ -168,7 +169,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             const consumoKwh = parseInt(consumoKwhValue.replace(/\D/g, ''), 10);
             const mediaFatura = parseFloat(mediaFaturaValue.replace(',', '.'));
             
-            const newLeadRef = doc(collection(adminDb, "crm_leads"));
+            const newLeadRef = firestore.collection("crm_leads").doc();
             
             const leadData = {
               name: clientValue,
