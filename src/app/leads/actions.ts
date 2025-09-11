@@ -5,6 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
+import { getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
 
 // Defines the structure of the data we want to display on the frontend table.
 export interface LeadDisplayData {
@@ -54,7 +55,7 @@ const HEADER_MAPPINGS: Record<string, (keyof LeadDisplayData | 'celular')[]> = {
     "negocio - celular titular": ["telefone"],
     "whatsapp": ["telefone"],
     "telefone": ["telefone"],
-    "celular": ["celular"], // Keep celular for mapping logic
+    "celular": ["telefone"],
     "negocio - consumo medio mensal (kwh)": ["consumoKwh"],
     "consumo (kwh)": ["consumoKwh"],
     "consumo": ["consumoKwh"],
@@ -104,16 +105,25 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               return;
           }
 
-          const headerToFieldMap: { [originalHeader: string]: (keyof LeadDisplayData | 'celular') } = {};
+          const headerToFieldMap: { [originalHeader: string]: keyof LeadDisplayData | 'celular' } = {};
           let hasClient = false;
+          let phoneHeaderKey: string | null = null;
+          
           results.meta.fields.forEach(header => {
               const normalized = normalizeHeader(header);
-              const fields = HEADER_MAPPINGS[normalized];
-              if (fields) {
-                  headerToFieldMap[header] = fields[0];
-                  if (fields.includes('cliente')) hasClient = true;
+              for (const mappingKey in HEADER_MAPPINGS) {
+                  if (normalized === mappingKey) {
+                      const field = HEADER_MAPPINGS[mappingKey][0];
+                      headerToFieldMap[header] = field;
+                      if (field === 'cliente') hasClient = true;
+                      if (field === 'telefone' || field === 'celular') {
+                        phoneHeaderKey = header;
+                      }
+                      break;
+                  }
               }
           });
+
           console.log('[Leads Action] Header mapping created:', headerToFieldMap);
 
           if (!hasClient) {
@@ -124,13 +134,16 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
           const allPhones = results.data
             .map(row => {
-              for (const originalHeader in headerToFieldMap) {
-                  const mappedField = headerToFieldMap[originalHeader];
-                  if ((mappedField === 'telefone' || mappedField === 'celular') && row[originalHeader]) {
-                      return String(row[originalHeader]).replace(/\D/g, '');
-                  }
+              let phoneValue = null;
+              // Find phone by checking all possible keys
+              const phoneKeys = Object.keys(headerToFieldMap).filter(key => HEADER_MAPPINGS[normalizeHeader(key)]?.includes('telefone'));
+              for(const key of phoneKeys) {
+                if (row[key]) {
+                    phoneValue = String(row[key]).replace(/\D/g, '');
+                    break;
+                }
               }
-              return null;
+              return phoneValue;
             })
             .filter((phone): phone is string => !!phone && phone.length >= 10);
           
@@ -139,7 +152,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const existingPhones = new Set<string>();
 
           if (uniquePhones.length > 0) {
-            const leadsRef = adminDb.collection("crm_leads");
+            const leadsRef = collection(adminDb, "crm_leads");
             for (let i = 0; i < uniquePhones.length; i += 30) {
               const chunk = uniquePhones.slice(i, i + 30);
               const q = query(leadsRef, where('phone', 'in', chunk));
@@ -155,28 +168,37 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           let newLeadsCount = 0;
           let duplicatesSkipped = 0;
           const leadsForDisplay: LeadDisplayData[] = [];
-          const batch = adminDb.batch();
+          const batch = writeBatch(adminDb);
 
           results.data.forEach(row => {
-            const processedRow: Partial<LeadDisplayData & { celular?: string }> = {};
+            const processedRow: Partial<LeadDisplayData> = {};
+            let phoneValue: string | null = null;
+            let clientValue: string | null = null;
+            
             for (const header in row) {
-                const field = headerToFieldMap[header];
-                if (field) { (processedRow as any)[field] = row[header]; }
+                const normalizedHeader = normalizeHeader(header);
+                const field = HEADER_MAPPINGS[normalizedHeader]?.[0];
+                if (field) {
+                    (processedRow as any)[field] = row[header];
+                    if (field === 'telefone' && row[header]) {
+                        phoneValue = String(row[header]).replace(/\D/g, '');
+                    }
+                    if (field === 'cliente' && row[header]) {
+                        clientValue = String(row[header]);
+                    }
+                }
             }
 
-            const cliente = processedRow.cliente;
-            const telefone = (processedRow.telefone || processedRow.celular || '').replace(/\D/g, '');
-
-            if (!cliente || !telefone || telefone.length < 10) return;
-            if (existingPhones.has(telefone)) { duplicatesSkipped++; return; }
+            if (!clientValue || !phoneValue || phoneValue.length < 10) return;
+            if (existingPhones.has(phoneValue)) { duplicatesSkipped++; return; }
 
             const consumoKwh = parseInt(String(processedRow.consumoKwh || '0').replace(/\D/g, ''));
             const mediaFatura = parseFloat(String(processedRow.mediaFatura || '0').replace(',', '.'));
             
-            const newLeadRef = adminDb.collection("crm_leads").doc();
+            const newLeadRef = doc(collection(adminDb, "crm_leads"));
             
             const leadData = {
-              name: cliente, phone: telefone, stageId: 'para-atribuir' as StageId,
+              name: clientValue, phone: phoneValue, stageId: 'para-atribuir' as StageId,
               sellerName: 'Sistema', userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
@@ -185,7 +207,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             };
 
             batch.set(newLeadRef, leadData);
-            existingPhones.add(telefone);
+            existingPhones.add(phoneValue);
             newLeadsCount++;
             leadsForDisplay.push({
                 id: newLeadRef.id, cliente: leadData.name, estagio: leadData.stageId,
