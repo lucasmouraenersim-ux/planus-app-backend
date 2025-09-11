@@ -5,7 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
-import { getDocs, collection, query, where, writeBatch, doc } from 'firebase/firestore';
+import { getDocs, collection, query, where, writeBatch, doc, Timestamp } from 'firebase/firestore';
 import admin from 'firebase-admin';
 
 // Defines the structure of the data we want to display on the frontend table.
