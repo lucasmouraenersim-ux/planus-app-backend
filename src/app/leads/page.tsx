@@ -37,6 +37,7 @@ export default function LeadsPage() {
 
     setIsUploading(true);
     setUploadProgress(0);
+    setLeads([]);
     setUploadMessage("Iniciando processamento...");
     
     // Simulate progress for user feedback
@@ -128,17 +129,17 @@ export default function LeadsPage() {
             </CardContent>
             <CardFooter>
                  <p className="text-xs text-muted-foreground">
-                    O sistema buscará por colunas como 'Nome do contato', 'Estágio Negociacao', 'WhatsApp', 'Consumo Médio Mensal (Kwh)' e 'Media R$'.
+                    O sistema buscará por colunas como 'Nome do contato', 'Estágio Negociacao', 'WhatsApp', 'Consumo (Kwh)' e 'Media R$'.
                 </p>
             </CardFooter>
         </Card>
 
         <Card className="lg:col-span-2">
             <CardHeader>
-                <CardTitle>2. Lista de Contatos</CardTitle>
+                <CardTitle>2. Lista de Contatos Importados</CardTitle>
                 <CardDescription>
                     {leads.length > 0
-                    ? `${filteredLeads.length} de ${leads.length} leads encontrados.`
+                    ? `${filteredLeads.length} de ${leads.length} leads importados nesta sessão.`
                     : "Aguardando importação para exibir os leads."}
                 </CardDescription>
                 <div className="relative pt-2">

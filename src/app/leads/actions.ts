@@ -5,8 +5,7 @@ import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { StageId } from '@/types/crm';
-import { getFirestore } from 'firebase-admin/firestore';
-import admin from 'firebase-admin';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 // Defines the structure of the data we want to display on the frontend table.
 export interface LeadDisplayData {
@@ -79,7 +78,6 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
 
   try {
     const adminDb = await initializeAdmin();
-    const firestore = getFirestore(admin.apps[0]!); // Use Admin Firestore
     const fileContent = await file.text();
     
     return new Promise((resolve) => {
@@ -132,7 +130,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const existingPhones = new Set<string>();
 
           if (uniquePhones.length > 0) {
-            const leadsRef = firestore.collection("crm_leads");
+            const leadsRef = adminDb.collection("crm_leads");
             for (let i = 0; i < uniquePhones.length; i += 30) {
               const chunk = uniquePhones.slice(i, i + 30);
               const q = leadsRef.where('phone', 'in', chunk);
@@ -148,7 +146,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           let newLeadsCount = 0;
           let duplicatesSkipped = 0;
           const leadsForDisplay: LeadDisplayData[] = [];
-          const batch = firestore.batch();
+          const batch = adminDb.batch();
 
           results.data.forEach(row => {
             const clientValue = String(row[clientHeader] || '').trim();
@@ -169,7 +167,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             const consumoKwh = parseInt(consumoKwhValue.replace(/\D/g, ''), 10);
             const mediaFatura = parseFloat(mediaFaturaValue.replace(',', '.'));
             
-            const newLeadRef = firestore.collection("crm_leads").doc();
+            const newLeadRef = adminDb.collection("crm_leads").doc();
             
             const leadData = {
               name: clientValue,
@@ -179,8 +177,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
-              createdAt: admin.firestore.Timestamp.now(),
-              lastContact: admin.firestore.Timestamp.now(),
+              createdAt: Timestamp.now(),
+              lastContact: Timestamp.now(),
               leadSource: 'Importação CSV' as const,
             };
 
