@@ -24,7 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target, ListChecks } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -187,6 +187,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          </SidebarMenuItem>
                          {userAppRole === 'vendedor' && (<SidebarMenuItem><Link href="/dashboard/seller"><SidebarMenuButton isActive={currentPathname === '/dashboard/seller'} tooltip="Meu Painel"><LayoutDashboard />Meu Painel</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin' || appUser?.canViewCrm) && (<SidebarMenuItem><Link href="/crm"><SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}><UsersRound />CRM</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/leads"><SidebarMenuButton tooltip="Importar Leads" isActive={currentPathname === '/leads'}><ListChecks />Leads</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
