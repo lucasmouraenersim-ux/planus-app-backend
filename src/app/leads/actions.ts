@@ -216,8 +216,12 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           if (duplicatesSkipped > 0) {
             successMessage += ` ${duplicatesSkipped} duplicata(s) foram ignorada(s).`;
           }
-          if (newLeadsCount === 0 && duplicatesSkipped === 0 && results.data.length > 0) {
-              successMessage = "Nenhum lead novo para importar. Verifique se os contatos já existem ou se o arquivo está preenchido corretamente.";
+          if (newLeadsCount === 0 && results.data.length > 0) {
+              if (duplicatesSkipped > 0) {
+                successMessage = `Nenhum lead novo para importar. ${duplicatesSkipped} lead(s) já existia(m) no sistema.`;
+              } else {
+                successMessage = "Nenhum lead válido encontrado no arquivo para importar. Verifique o conteúdo das colunas.";
+              }
           } else if (results.data.length === 0) {
               successMessage = "O arquivo CSV estava vazio ou não continha dados válidos.";
           }
