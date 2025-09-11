@@ -35,7 +35,7 @@ function normalizeHeader(header: string): string {
         .toLowerCase()
         .trim()
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
+        .replace(/[\u0000-\u036f]/g, "");
 }
 
 /**
@@ -109,9 +109,10 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               }
           });
 
-          // Check if essential fields were found
-          if (!fieldMap['cliente'] && !Object.values(fieldMap).includes('cliente')) {
-              resolve({ success: false, error: "A coluna 'Cliente' ('Nome do contato' ou 'Negócio - Pessoa do contato') é obrigatória e não foi encontrada."});
+          // Check if essential fields were found by their canonical name
+          const mappedFields = Object.values(fieldMap);
+          if (!mappedFields.includes('cliente')) {
+              resolve({ success: false, error: "A coluna 'Cliente' ('Nome', 'Nome do contato' ou 'Negócio - Pessoa do contato') é obrigatória e não foi encontrada."});
               return;
           }
 
@@ -142,8 +143,21 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
           const batch = adminDb.batch();
 
           results.data.forEach(row => {
-            const cliente = row['Cliente'] || row['Nome do contato'] || row['Negócio - Pessoa do contato'];
-            const telefoneRaw = row['Telefone'] || row['WhatsApp'] || row['Negócio - Celular Titular'];
+            let cliente: string | undefined;
+            for (const header of HEADER_MAPPINGS.cliente) {
+                if (row[header]) {
+                    cliente = row[header];
+                    break;
+                }
+            }
+
+            let telefoneRaw: string | undefined;
+             for (const header of HEADER_MAPPINGS.telefone) {
+                if (row[header]) {
+                    telefoneRaw = row[header];
+                    break;
+                }
+            }
             const telefone = telefoneRaw?.replace(/\D/g, '');
 
             if (!cliente || !telefone || telefone.length < 10) {
@@ -186,7 +200,9 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
             });
           });
 
-          await batch.commit();
+          if (newLeadsCount > 0) {
+            await batch.commit();
+          }
           
           resolve({
             success: true,
