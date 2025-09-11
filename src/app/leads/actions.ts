@@ -93,8 +93,9 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
         complete: async (results) => {
           if (results.errors.length > 0) {
               console.error("PapaParse Errors:", results.errors);
+              // Even with errors, we might have valid data, so we continue but log it.
           }
-          if (!results.meta.fields) {
+          if (!results.meta.fields || results.meta.fields.length === 0) {
               resolve({ success: false, error: "Não foi possível detectar os cabeçalhos da planilha. Verifique o formato do arquivo." });
               return;
           }
