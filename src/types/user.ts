@@ -1,7 +1,7 @@
 // src/types/user.ts
 import type { Timestamp } from 'firebase/firestore';
 
-export type UserType = 'admin' | 'superadmin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup';
+export type UserType = 'admin' | 'superadmin' | 'vendedor' | 'user' | 'prospector' | 'pending_setup' | 'advogado';
 
 interface PersonalExpense {
   id: string;

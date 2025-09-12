@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -1206,6 +1205,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       case 'admin': return 'bg-red-500/20 text-red-400';
       case 'vendedor': return 'bg-blue-500/20 text-blue-400';
       case 'prospector': return 'bg-purple-500/20 text-purple-400';
+      case 'advogado': return 'bg-slate-500/20 text-slate-400';
       case 'user': return 'bg-green-500/20 text-green-400';
       case 'pending_setup': return 'bg-orange-500/20 text-orange-400';
       default: return 'bg-gray-500/20 text-gray-400';

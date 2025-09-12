@@ -17,7 +17,7 @@ const CreateUserInputSchema = z.object({
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
   phone: z.string().optional(),
   cpf: z.string().min(11, "CPF deve ter 11 dígitos.").max(14, "Formato de CPF inválido."),
-  type: z.enum(['admin', 'superadmin', 'vendedor', 'prospector']),
+  type: z.enum(['admin', 'superadmin', 'vendedor', 'prospector', 'advogado']),
 });
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
 
@@ -73,8 +73,8 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       personalBalance: 0,
       mlmBalance: 0,
       commissionRate: 40,
-      canViewLeadPhoneNumber: false,
-      canViewCrm: false,
+      canViewLeadPhoneNumber: input.type === 'advogado',
+      canViewCrm: input.type === 'advogado',
       canViewCareerPlan: false,
       assignmentLimit: 2, // Default limit for new users
     };

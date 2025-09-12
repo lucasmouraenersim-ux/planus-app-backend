@@ -170,7 +170,7 @@ function CrmPageContent() {
     const leadsCollection = collection(db, "crm_leads");
     let unsubscribe: () => void;
 
-    if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+    if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
       const q = query(leadsCollection, orderBy("lastContact", "desc"));
       unsubscribe = onSnapshot(q, (snapshot) => {
         const freshLeads = snapshot.docs.map(mapDocToLead);

@@ -17,7 +17,7 @@ interface AuthContextType {
   userAppRole: UserType | null;
   allFirestoreUsers: FirestoreUser[];
   isLoadingAllUsers: boolean;
-  updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string }) => Promise<void>;
+  updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string; personalFinance?: FirestoreUser['personalFinance'] }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
   acceptUserTerms: () => Promise<void>;
   refreshUsers: () => Promise<void>; 
@@ -45,6 +45,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
+        const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
+
         return {
           uid: user.uid,
           email: user.email,
@@ -64,8 +66,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           recurrenceRate: firestoreUserData.recurrenceRate,
           canViewLeadPhoneNumber: isSuperAdmin || firestoreUserData.canViewLeadPhoneNumber || false,
           canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,
-          canViewCrm: isSuperAdmin || firestoreUserData.canViewCrm || false,
+          canViewCrm: canViewCrm,
           assignmentLimit: firestoreUserData.assignmentLimit,
+          personalFinance: firestoreUserData.personalFinance,
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
@@ -89,7 +92,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
   
-  const updateAppUserProfile = async (data: { displayName?: string; photoFile?: File; phone?: string }) => {
+  const updateAppUserProfile = async (data: { displayName?: string; photoFile?: File; phone?: string, personalFinance?: FirestoreUser['personalFinance'] }) => {
     if (!firebaseUser) throw new Error("Usuário não autenticado.");
 
     let newPhotoURL: string | undefined = undefined;
@@ -115,6 +118,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (data.phone !== undefined && data.phone !== appUser?.phone) {
       updatesForFirestore.phone = data.phone.replace(/\D/g, ''); // Normalize phone number
+    }
+    
+    if (data.personalFinance) {
+        updatesForFirestore.personalFinance = data.personalFinance;
     }
 
     if (Object.keys(updatesForFirebaseAuth).length > 0) {
