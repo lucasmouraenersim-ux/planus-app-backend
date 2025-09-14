@@ -190,12 +190,18 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         const sellerNameLower = (lead.sellerName || '').toLowerCase();
         const isExcludedFromRecurrence = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
         let recorrenciaAtivaInitial = !isExcludedFromRecurrence;
-        // Fit specific recurrence logic
+        
+        // Corrected recurrence percentage logic
+        let recorrenciaPercInitial = 0;
         if (empresa === 'Fit Energia') {
           recorrenciaAtivaInitial = desagilInitial < 25;
+          if (recorrenciaAtivaInitial) {
+            recorrenciaPercInitial = 25 - desagilInitial;
+          }
+        } else if (empresa === 'Bowe') {
+           recorrenciaPercInitial = !isExcludedFromRecurrence ? 1 : 0;
         }
 
-        const recorrenciaPercInitial = !isExcludedFromRecurrence ? 1 : 0;
 
         // Comissão do Promotor
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
@@ -344,6 +350,21 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
               updatedRow.terceiraComissaoPerc = 0;
           }
           updatedRow.terceiraComissao = terceiraComissao;
+          
+          if ('desagil' in updates) {
+              const desagil = updates.desagil ?? 0;
+              if (updatedRow.empresa === 'Fit Energia') {
+                  const ativa = desagil < 25;
+                  updatedRow.recorrenciaAtiva = ativa;
+                  updatedRow.recorrenciaPerc = ativa ? 25 - desagil : 0;
+              }
+          }
+          if ('recorrenciaAtiva' in updates && updatedRow.empresa === 'Bowe') {
+              updatedRow.recorrenciaPerc = updates.recorrenciaAtiva ? (row.recorrenciaPerc > 0 ? row.recorrenciaPerc : 1) : 0;
+          }
+          if ('recorrenciaPerc' in updates && updatedRow.empresa === 'Bowe') {
+              updatedRow.recorrenciaAtiva = (updates.recorrenciaPerc ?? 0) > 0;
+          }
 
           const financials = calculateFinancials(updatedRow);
           return { ...updatedRow, ...financials };
@@ -443,6 +464,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableHead className="text-red-500">Comercializador (R$)</TableHead>
                     <TableHead className="text-red-500">Nota</TableHead>
                     <TableHead>Data.4</TableHead>
+                    <TableHead>% Recorrência</TableHead>
                     <TableHead>Recorrência Comissão (R$)</TableHead>
                     <TableHead>Recorrência Paga?</TableHead>
                     <TableHead>Status Financeiro</TableHead>
@@ -535,26 +557,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                         <TableCell className="text-red-500">{formatCurrency(row.nota)}</TableCell>
                         <TableCell></TableCell>
                         <TableCell>
-                        <div className="flex items-center space-x-2 w-[200px]">
-                            <Checkbox
-                            id={`recorrencia-${row.id}`}
-                            checked={row.recorrenciaAtiva}
-                            onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
-                            />
-                            {row.empresa === 'Bowe' && row.recorrenciaAtiva ? (
-                              <Input
-                                  type="number"
-                                  value={row.recorrenciaPerc}
-                                  onChange={(e) => updateRowData(row.id, { recorrenciaPerc: parseFloat(e.target.value) || 0 })}
-                                  className="h-8 w-20 text-right"
-                                  placeholder="%"
-                                />
-                            ) : (
-                              <div className="w-20"></div>
-                            )}
-                            <span>{formatCurrency(row.recorrenciaComissao)}</span>
-                        </div>
+                          <div className="flex items-center space-x-2 w-auto">
+                              <Checkbox
+                              id={`recorrencia-${row.id}`}
+                              checked={row.recorrenciaAtiva}
+                              onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
+                              />
+                              <span>{row.recorrenciaPerc.toFixed(1)}%</span>
+                          </div>
                         </TableCell>
+                        <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
                         <TableCell>
                             <Checkbox
                             id={`recorrencia-paga-${row.id}`}
@@ -679,7 +691,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableCell>{row.empresa}</TableCell>
                       <TableCell>{row.promotor}</TableCell>
                       <TableCell>{formatCurrency(row.proposta)}</TableCell>
-                      <TableCell>{row.recorrenciaPerc}%</TableCell>
+                      <TableCell>{row.recorrenciaPerc.toFixed(2)}%</TableCell>
                       <TableCell><Badge variant="outline" className={getFinancialStatusBadgeStyle(row.financialStatus)}>{row.financialStatus}</Badge></TableCell>
                       <TableCell className="font-semibold text-green-500">{formatCurrency(row.recorrenciaComissao)}</TableCell>
                     </TableRow>
