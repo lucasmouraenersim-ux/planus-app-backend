@@ -169,8 +169,11 @@ function CrmPageContent() {
 
     const leadsCollection = collection(db, "crm_leads");
     let unsubscribe: () => void;
+    
+    const isSpecialUser = appUser.displayName?.toLowerCase() === 'diogo rodrigo bottona';
+    const canViewAll = (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') && !isSpecialUser;
 
-    if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
+    if (canViewAll) {
       const q = query(leadsCollection, orderBy("lastContact", "desc"));
       unsubscribe = onSnapshot(q, (snapshot) => {
         const freshLeads = snapshot.docs.map(mapDocToLead);
@@ -180,7 +183,7 @@ function CrmPageContent() {
         toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
         setIsLoading(false);
       });
-    } else if (userAppRole === 'vendedor') {
+    } else if (userAppRole === 'vendedor' || isSpecialUser) {
         const q = query(leadsCollection, or(
             where("stageId", "==", "para-atribuir"),
             where("userId", "==", appUser.uid)
