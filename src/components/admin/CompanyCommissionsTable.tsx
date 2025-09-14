@@ -667,6 +667,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableHead>Empresa</TableHead>
                     <TableHead>Promotor</TableHead>
                     <TableHead>Valor da Proposta</TableHead>
+                    <TableHead>% Recorrência</TableHead>
                     <TableHead>Status Financeiro</TableHead>
                     <TableHead>Comissão Recorrente</TableHead>
                   </TableRow>
@@ -678,11 +679,12 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableCell>{row.empresa}</TableCell>
                       <TableCell>{row.promotor}</TableCell>
                       <TableCell>{formatCurrency(row.proposta)}</TableCell>
+                      <TableCell>{row.recorrenciaPerc}%</TableCell>
                       <TableCell><Badge variant="outline" className={getFinancialStatusBadgeStyle(row.financialStatus)}>{row.financialStatus}</Badge></TableCell>
                       <TableCell className="font-semibold text-green-500">{formatCurrency(row.recorrenciaComissao)}</TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

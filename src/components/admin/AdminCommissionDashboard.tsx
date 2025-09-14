@@ -153,6 +153,9 @@ interface Receivable {
   garantiaChurn: number;
   comercializador: number;
   nota: number;
+  // Recurrence
+  recorrenciaPaga: boolean;
+  recorrenciaComissao: number;
 }
 
 interface PersonalExpense {
@@ -198,7 +201,7 @@ const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number, pr
 
 
 // New component for Company Management
-function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
+function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], tableData: any[] }) {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const STORAGE_KEY = 'companyManagementSettings';
   const PAYROLL_STORAGE_KEY = 'companyPayroll';
@@ -355,18 +358,24 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       if (customDates?.second) secondPaymentDate = parseISO(customDates.second);
       if (customDates?.third) thirdPaymentDate = parseISO(customDates.third);
 
+      // From tableData
+      const tData = tableData.find(t => t.id === lead.id);
+      const recorrenciaPaga = tData ? tData.recorrenciaPaga : false;
+      const recorrenciaComissao = tData ? tData.recorrenciaComissao : 0;
+
       return {
         leadId: lead.id, clientName: lead.name, company: empresa, finalizationDate,
         immediateCommission, immediatePaymentDate,
         secondCommission, secondPaymentDate, isSecondPaymentDateEditable,
         thirdCommission, thirdPaymentDate, isThirdPaymentDateEditable,
         jurosRS, garantiaChurn, comercializador, nota,
+        recorrenciaPaga, recorrenciaComissao,
       };
     });
 
     setAllReceivables(calculatedReceivables.sort((a, b) => b.finalizationDate.getTime() - a.finalizationDate.getTime()));
 
-  }, [leads, receivableDates]);
+  }, [leads, receivableDates, tableData]);
   
   const handleReceivableDateChange = (leadId: string, commissionType: 'second' | 'third', newDate?: Date) => {
     if (!newDate) return;
@@ -414,6 +423,10 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       return companyMatch && promoterMatch && (immediatePaymentInMonth || secondPaymentInMonth || thirdPaymentInMonth);
     });
   }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, selectedMonth]);
+
+  const paidRecurrences = useMemo(() => {
+    return allReceivables.filter(r => r.recorrenciaPaga);
+  }, [allReceivables]);
   
   const promotersWithLeads = useMemo(() => {
       const promoterSet = new Set<string>();
@@ -537,116 +550,71 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
         </CardContent>
       </Card>
        
-      <Card>
+      <Tabs defaultValue="commissions">
         <CardHeader>
             <div className="flex justify-between items-center">
-                <div>
-                    <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle>
-                    <CardDescription>
-                        Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros para o mês selecionado.
-                    </CardDescription>
-                </div>
+                <TabsList>
+                    <TabsTrigger value="commissions">Comissões a Receber (Controle de Caixa)</TabsTrigger>
+                    <TabsTrigger value="recurrence">Recorrências Pagas</TabsTrigger>
+                </TabsList>
                 <div className="flex items-center space-x-2">
                     <Label htmlFor="monthly-dashboard-switch" className="text-sm font-medium">Visualizar Dashboard do Mês</Label>
                     <Switch id="monthly-dashboard-switch" checked={showMonthlyDashboard} onCheckedChange={setShowMonthlyDashboard} />
                 </div>
             </div>
-            <div className="flex flex-wrap gap-2 pt-2">
-                 <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}>
-                    <SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(allReceivables.map(r => r.company))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-                <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}>
-                    <SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                </Select>
-            </div>
         </CardHeader>
-        {showMonthlyDashboard && monthlyDashboardMetrics && (
-             <CardContent className="mb-4 space-y-4">
-                <div className="grid md:grid-cols-3 gap-4 text-center">
-                    <Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card>
-                    <Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card>
-                    <Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card>
-                </div>
-                 <div className="grid md:grid-cols-3 gap-4">
-                    <Card>
-                        <CardHeader className="p-3">
-                            <CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-3 text-sm space-y-1">
-                            <div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div>
-                            <div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div>
-                            <div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div>
-                            <div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div>
-                            <Separator className="my-1"/>
-                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader>
-                        <CardContent className="p-3 text-sm space-y-1">
-                            <div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div>
-                            <div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div>
-                            <div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div>
-                            <div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div>
-                            <Separator className="my-1"/>
-                            <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader>
-                        <CardContent className="p-3 text-sm space-y-1">
-                            <div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div>
-                            <div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div>
-                            <div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div>
-                            <div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div>
-                            <div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div>
-                            <Separator className="my-1"/>
-                             <div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </CardContent>
-        )}
-        <CardContent>
-            <Table>
-                <TableHeader><TableRow>
-                    <TableHead>Cliente</TableHead><TableHead>Empresa</TableHead>
-                    <TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
-                    <TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
-                    <TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead>
-                </TableRow></TableHeader>
+        <TabsContent value="commissions">
+            <Card>
+                <CardHeader>
+                    <CardDescription>Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros para o mês selecionado.</CardDescription>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                        <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(allReceivables.map(r => r.company))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                        <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                </CardHeader>
+                {showMonthlyDashboard && monthlyDashboardMetrics && ( <CardContent className="mb-4 space-y-4">
+                    <div className="grid md:grid-cols-3 gap-4 text-center"><Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card><Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card><Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card></div>
+                    <div className="grid md:grid-cols-3 gap-4"><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div><div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div><div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div><div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div><div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div><div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div><div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div><div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div><div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div><div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div><div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div></CardContent></Card></div>
+                </CardContent>)}
+                <CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Empresa</TableHead><TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead></TableRow></TableHeader><TableBody>{paginatedReceivables.map(r => (<TableRow key={r.leadId}><TableCell>{r.clientName}</TableCell><TableCell>{r.company}</TableCell><TableCell>{formatCurrency(r.immediateCommission)}</TableCell><TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.secondCommission)}</TableCell><TableCell>{r.isSecondPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>) : format(r.secondPaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.thirdCommission)}</TableCell><TableCell>{r.isThirdPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>) : format(r.thirdPaymentDate, 'dd/MM/yy')}</TableCell></TableRow>))}</TableBody></Table></CardContent>
+                <CardFooter className="flex justify-end items-center gap-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button></CardFooter>
+            </Card>
+        </TabsContent>
+        <TabsContent value="recurrence">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recorrências Pagas</CardTitle>
+              <CardDescription>Histórico de comissões recorrentes que já foram pagas.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Comissão de Recorrência</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                    {paginatedReceivables.map(r => (
-                        <TableRow key={r.leadId}>
-                            <TableCell>{r.clientName}</TableCell>
-                            <TableCell>{r.company}</TableCell>
-                            <TableCell>{formatCurrency(r.immediateCommission)}</TableCell>
-                            <TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell>
-                            <TableCell>{formatCurrency(r.secondCommission)}</TableCell>
-                            <TableCell>
-                              {r.isSecondPaymentDateEditable ? (
-                                <Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>
-                              ) : format(r.secondPaymentDate, 'dd/MM/yy')}
-                            </TableCell>
-                            <TableCell>{formatCurrency(r.thirdCommission)}</TableCell>
-                             <TableCell>
-                              {r.isThirdPaymentDateEditable ? (
-                                <Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>
-                              ) : format(r.thirdPaymentDate, 'dd/MM/yy')}
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                  {paidRecurrences.length > 0 ? (
+                    paidRecurrences.map(r => (
+                      <TableRow key={r.leadId}>
+                        <TableCell>{r.clientName}</TableCell>
+                        <TableCell>{r.company}</TableCell>
+                        <TableCell>{formatCurrency(r.recorrenciaComissao)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={3} className="h-24 text-center">Nenhuma recorrência paga encontrada.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
-            </Table>
-        </CardContent>
-        <CardFooter className="flex justify-end items-center gap-4">
-            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button>
-        </CardFooter>
-      </Card>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
        <Card>
         <CardHeader>
@@ -1413,7 +1381,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="management">
-            <CompanyManagementTab leads={allLeads} />
+            <CompanyManagementTab leads={allLeads} tableData={[]} />
         </TabsContent>
         
         {userAppRole === 'superadmin' && (
