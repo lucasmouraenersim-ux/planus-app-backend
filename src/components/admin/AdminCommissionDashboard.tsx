@@ -520,26 +520,38 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
             </div>
             <div>
               <Label htmlFor="monthlyRevenue" className="text-sm text-muted-foreground">Faturamento Previsto para o Mês Selecionado (R$)</Label>
-              <div className="text-3xl font-bold text-primary mt-1">
+              <div className="text-3xl font-bold text-green-500 mt-1">
                   <AnimatedNumber value={monthlyRevenue} prefix="R$ " />
               </div>
             </div>
           </div>
           <div className="grid md:grid-cols-5 gap-6">
             <div>
-              <Label>Pró-labore ({proLabore}%)</Label>
+              <div className="flex justify-between items-center mb-1">
+                <Label>Pró-labore ({proLabore}%)</Label>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(proLaboreValue)}</span>
+              </div>
               <Slider value={[proLabore]} onValueChange={(val) => setProLabore(val[0])} max={100} step={1} />
             </div>
             <div>
-              <Label>Impostos ({tax}%)</Label>
+              <div className="flex justify-between items-center mb-1">
+                <Label>Impostos ({tax}%)</Label>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(taxValue)}</span>
+              </div>
               <Slider value={[tax]} onValueChange={(val) => setTax(val[0])} max={100} step={1} />
             </div>
             <div>
-              <Label>Reinvestimento ({reinvest}%)</Label>
+              <div className="flex justify-between items-center mb-1">
+                <Label>Reinvestimento ({reinvest}%)</Label>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(reinvestValue)}</span>
+              </div>
               <Slider value={[reinvest]} onValueChange={(val) => setReinvest(val[0])} max={100} step={1} />
             </div>
             <div>
-              <Label>Ajuda Missionária ({missionaryHelp}%)</Label>
+              <div className="flex justify-between items-center mb-1">
+                <Label>Ajuda Missionária ({missionaryHelp}%)</Label>
+                <span className="text-sm font-semibold text-primary">{formatCurrency(missionaryHelpValue)}</span>
+              </div>
               <Slider value={[missionaryHelp]} onValueChange={(val) => setMissionaryHelp(val[0])} max={100} step={1} />
             </div>
             <div>
