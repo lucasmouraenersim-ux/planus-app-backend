@@ -214,9 +214,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
         // Segunda Comissão
         let segundaComissao = 0;
-        let segundaComissaoPerc = 45; // Default for BC
+        let segundaComissaoPerc = 35; // Default for BC
         if (empresa === 'BC') {
-            segundaComissao = proposta * 0.45;
+            segundaComissao = proposta * 0.35;
         } else if (empresa === 'Origo') {
             segundaComissaoPerc = 100; // Defaulting to 100% for Origo
             segundaComissao = proposta * (segundaComissaoPerc / 100);
@@ -318,8 +318,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
           let segundaComissao = 0;
           if (updatedRow.empresa === 'BC') {
-              segundaComissao = updatedRow.proposta * 0.45;
-              updatedRow.segundaComissaoPerc = 45;
+              segundaComissao = updatedRow.proposta * 0.35;
+              updatedRow.segundaComissaoPerc = 35;
           } else if (updatedRow.empresa === 'Origo') {
               segundaComissao = updatedRow.proposta * (updatedRow.segundaComissaoPerc / 100);
           } else if (updatedRow.empresa === 'Fit Energia') {

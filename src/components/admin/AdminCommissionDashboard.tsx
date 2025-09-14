@@ -302,7 +302,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
       // BC
       else if (empresa === 'BC') {
         immediateCommission = proposta * 0.50;
-        secondCommission = proposta * 0.45;
+        secondCommission = proposta * 0.35; // Changed from 0.45
         secondPaymentDate = setDateFn(addMonths(finalizationDate, 1), 20);
         thirdCommission = proposta * 0.60;
         thirdPaymentDate = addMonths(finalizationDate, 4);
