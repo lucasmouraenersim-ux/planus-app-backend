@@ -402,17 +402,16 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const filteredReceivables = useMemo(() => {
     const startOfSelectedMonth = startOfMonth(selectedMonth);
     const endOfSelectedMonth = endOfMonth(selectedMonth);
-
+  
     return allReceivables.filter(r => {
-        const companyMatch = receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter;
-        const promoterMatch = receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter;
-        
-        const paymentInMonth = 
-            isWithinInterval(r.immediatePaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) ||
-            isWithinInterval(r.secondPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) ||
-            isWithinInterval(r.thirdPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth });
-
-        return companyMatch && promoterMatch && paymentInMonth;
+      const companyMatch = receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter;
+      const promoterMatch = receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter;
+  
+      const immediatePaymentInMonth = isWithinInterval(r.immediatePaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) && r.immediateCommission > 0;
+      const secondPaymentInMonth = isWithinInterval(r.secondPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) && r.secondCommission > 0;
+      const thirdPaymentInMonth = isWithinInterval(r.thirdPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) && r.thirdCommission > 0;
+  
+      return companyMatch && promoterMatch && (immediatePaymentInMonth || secondPaymentInMonth || thirdPaymentInMonth);
     });
   }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, selectedMonth]);
   
