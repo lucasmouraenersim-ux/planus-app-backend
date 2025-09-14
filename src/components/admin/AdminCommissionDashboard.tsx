@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -216,7 +216,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const [allReceivables, setAllReceivables] = useState<Receivable[]>([]);
   const [receivableDates, setReceivableDates] = useState<Record<string, { second?: string; third?: string }>>({});
 
-  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   // New states for filtering and pagination
   const [receivableCompanyFilter, setReceivableCompanyFilter] = useState('all');
@@ -266,6 +266,20 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   useEffect(() => {
     localStorage.setItem(RECEIVABLE_DATES_KEY, JSON.stringify(receivableDates));
   }, [receivableDates]);
+  
+  const monthlyRevenue = useMemo(() => {
+    const startOfSelectedMonth = startOfMonth(selectedMonth);
+    const endOfSelectedMonth = endOfMonth(selectedMonth);
+
+    return allReceivables.reduce((total, r) => {
+      let monthTotal = 0;
+      if (isWithinInterval(r.immediatePaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) monthTotal += r.immediateCommission;
+      if (isWithinInterval(r.secondPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) monthTotal += r.secondCommission;
+      if (isWithinInterval(r.thirdPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) monthTotal += r.thirdCommission;
+      return total + monthTotal;
+    }, 0);
+  }, [allReceivables, selectedMonth]);
+
 
   // Calculate Receivables and Monthly Revenue
   useEffect(() => {
@@ -352,19 +366,6 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
 
     setAllReceivables(calculatedReceivables.sort((a, b) => b.finalizationDate.getTime() - a.finalizationDate.getTime()));
 
-    const now = new Date();
-    const startOfCurrentMonth = startOfMonth(now);
-    const endOfCurrentMonth = endOfMonth(now);
-
-    const revenue = calculatedReceivables.reduce((total, r) => {
-      let monthTotal = 0;
-      if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.immediateCommission;
-      if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.secondCommission;
-      if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) monthTotal += r.thirdCommission;
-      return total + monthTotal;
-    }, 0);
-
-    setMonthlyRevenue(revenue);
   }, [leads, receivableDates]);
   
   const handleReceivableDateChange = (leadId: string, commissionType: 'second' | 'third', newDate?: Date) => {
@@ -399,20 +400,21 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   };
   
   const filteredReceivables = useMemo(() => {
-    const now = new Date();
-    const startOfCurrentMonth = startOfMonth(now);
-    const endOfCurrentMonth = endOfMonth(now);
+    const startOfSelectedMonth = startOfMonth(selectedMonth);
+    const endOfSelectedMonth = endOfMonth(selectedMonth);
 
-    return allReceivables.filter(r => 
-        (receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter) &&
-        (receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter) &&
-        (!showMonthlyDashboard || (
-            isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth }) ||
-            isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth }) ||
-            isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })
-        ))
-    );
-  }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, showMonthlyDashboard]);
+    return allReceivables.filter(r => {
+        const companyMatch = receivableCompanyFilter === 'all' || r.company === receivableCompanyFilter;
+        const promoterMatch = receivablePromoterFilter === 'all' || leads.find(l => l.id === r.leadId)?.sellerName === receivablePromoterFilter;
+        
+        const paymentInMonth = 
+            isWithinInterval(r.immediatePaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) ||
+            isWithinInterval(r.secondPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth }) ||
+            isWithinInterval(r.thirdPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth });
+
+        return companyMatch && promoterMatch && paymentInMonth;
+    });
+  }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, selectedMonth]);
   
   const promotersWithLeads = useMemo(() => {
       const promoterSet = new Set<string>();
@@ -426,9 +428,8 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
   const monthlyDashboardMetrics = useMemo(() => {
     if (!showMonthlyDashboard) return null;
     
-    const now = new Date();
-    const startOfCurrentMonth = startOfMonth(now);
-    const endOfCurrentMonth = endOfMonth(now);
+    const startOfSelectedMonth = startOfMonth(selectedMonth);
+    const endOfSelectedMonth = endOfMonth(selectedMonth);
     
     const revenueByType = { immediate: 0, second: 0, third: 0, fourth: 0 };
     const operationCosts = { juros: 0, churn: 0, comercializador: 0, nota: 0 };
@@ -436,15 +437,15 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     allReceivables.forEach(r => {
         let commissionPaidThisMonth = 0;
 
-        if (isWithinInterval(r.immediatePaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        if (isWithinInterval(r.immediatePaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) {
             commissionPaidThisMonth += r.immediateCommission;
             revenueByType.immediate += r.immediateCommission;
         }
-        if (isWithinInterval(r.secondPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        if (isWithinInterval(r.secondPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) {
             commissionPaidThisMonth += r.secondCommission;
             revenueByType.second += r.secondCommission;
         }
-        if (isWithinInterval(r.thirdPaymentDate, { start: startOfCurrentMonth, end: endOfCurrentMonth })) {
+        if (isWithinInterval(r.thirdPaymentDate, { start: startOfSelectedMonth, end: endOfSelectedMonth })) {
             commissionPaidThisMonth += r.thirdCommission;
             revenueByType.third += r.thirdCommission;
         }
@@ -479,7 +480,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
     const netProfit = totalReceivable - totalOperationCosts - totalAdminCosts;
 
     return { totalReceivable, operationCosts, adminCosts, netProfit, revenueByType };
-  }, [showMonthlyDashboard, allReceivables, proLabore, tax, reinvest, missionaryHelp, totalPayroll, riskFund]);
+  }, [showMonthlyDashboard, allReceivables, proLabore, tax, reinvest, missionaryHelp, totalPayroll, riskFund, selectedMonth]);
 
 
   const totalPages = Math.ceil(filteredReceivables.length / rowsPerPage);
@@ -493,12 +494,24 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
           <CardDescription>Defina os percentuais e valores para a distribuição do faturamento mensal.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div>
-            <Label htmlFor="monthlyRevenue">Faturamento Previsto para o Mês (R$)</Label>
-            <div className="text-3xl font-bold text-primary mt-1">
-                <AnimatedNumber value={monthlyRevenue} prefix="R$ " />
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 p-4 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-4">
+                <Button variant="outline" size="icon" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+                    <CalendarIcon className="h-4 w-4" />
+                </Button>
+                <h2 className="text-2xl font-semibold text-center text-primary capitalize">
+                    {format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+                </h2>
+                <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+                    <CalendarIcon className="h-4 w-4" />
+                </Button>
             </div>
-            <p className="text-sm text-muted-foreground mt-1">Calculado com base nas datas de pagamento das comissões abaixo.</p>
+            <div>
+              <Label htmlFor="monthlyRevenue" className="text-sm text-muted-foreground">Faturamento Previsto para o Mês Selecionado (R$)</Label>
+              <div className="text-3xl font-bold text-primary mt-1">
+                  <AnimatedNumber value={monthlyRevenue} prefix="R$ " />
+              </div>
+            </div>
           </div>
           <div className="grid md:grid-cols-5 gap-6">
             <div>
@@ -531,7 +544,7 @@ function CompanyManagementTab({ leads }: { leads: LeadWithId[] }) {
                 <div>
                     <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5"/>Comissões a Receber (Controle de Caixa)</CardTitle>
                     <CardDescription>
-                        Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros.
+                        Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros para o mês selecionado.
                     </CardDescription>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -839,7 +852,7 @@ function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLa
                     <Separator/>
                     <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Ações:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.stocks/100))}</p></div>
                     <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Renda Fixa:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.fixedIncome/100))}</p></div>
-                    <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Cripto:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</p></div>
+                     <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Cripto:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.crypto/100))}</p></div>
                      <div className="flex justify-between items-center"><p className="text-muted-foreground">Alocado em Imóveis:</p><p className="font-semibold">{formatCurrency(personalCapital * (investmentAllocation.realEstate/100))}</p></div>
                     <Separator/>
                     <div className="flex justify-between items-center"><p className="text-muted-foreground">Total de Receitas Mensais Adicionais:</p><p className="font-semibold text-green-500">{formatCurrency(totalMonthlyRevenues)}</p></div>
