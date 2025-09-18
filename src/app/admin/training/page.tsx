@@ -11,9 +11,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion } from 'lucide-react';
+import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion, MoreHorizontal, RotateCcw } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { updateUser } from '@/lib/firebase/firestore';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +60,9 @@ export default function TrainingManagementPage() {
 
   const [prospectors, setProspectors] = useState<FirestoreUser[]>([]);
   const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
 
   // State for video management
   const [isEditingModule, setIsEditingModule] = useState<TrainingModule | null>(null);
@@ -215,6 +244,26 @@ export default function TrainingManagementPage() {
       setActivatingUserId(null);
     }
   };
+  
+  const handleResetTrainingClick = (user: FirestoreUser) => {
+    setResettingUserId(user.uid);
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmResetTraining = async () => {
+    if (!resettingUserId) return;
+    try {
+      await updateUser(resettingUserId, { trainingProgress: {} });
+      toast({ title: "Treinamento Resetado!", description: "O progresso do usuário foi apagado." });
+      await refreshUsers();
+    } catch (error) {
+      console.error("Failed to reset training:", error);
+      toast({ title: "Erro ao Resetar", description: "Não foi possível apagar o progresso do treinamento.", variant: "destructive" });
+    } finally {
+      setResettingUserId(null);
+      setIsResetConfirmOpen(false);
+    }
+  };
 
   if (isLoadingAllUsers || isLoadingConfig) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -244,8 +293,8 @@ export default function TrainingManagementPage() {
                 <TableHeader><TableRow><TableHead>Promotor</TableHead><TableHead>Progresso Vídeos</TableHead><TableHead>Resultado Quiz</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {prospectors.length > 0 ? prospectors.map(user => {
-                    const { videoPercentage, lastVideo, completedVideos } = calculateProgress(user);
-                    const mainModuleId = trainingModules[0]?.id; // Assuming one main module for now
+                    const { videoPercentage, completedVideos } = calculateProgress(user);
+                    const mainModuleId = trainingModules[0]?.id;
                     const latestAttempt = mainModuleId ? getLatestQuizAttempt(user, mainModuleId) : undefined;
                     const canBeActivated = latestAttempt && latestAttempt.score >= 80;
                     const isActivating = activatingUserId === user.uid;
@@ -268,13 +317,27 @@ export default function TrainingManagementPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          {canBeActivated ? (
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleActivatePromoter(user.uid)} disabled={isActivating}>
-                              {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Ativar Promotor
-                            </Button>
-                          ) : (
-                            <span className="text-sm text-muted-foreground italic">Em progresso...</span>
-                          )}
+                           <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                              {canBeActivated && (
+                                <DropdownMenuItem onClick={() => handleActivatePromoter(user.uid)} disabled={isActivating}>
+                                  {isActivating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4 text-green-600" />}
+                                  Ativar Promotor
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleResetTrainingClick(user)} className="text-destructive focus:bg-destructive focus:text-destructive-foreground">
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Resetar Treinamento
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     );
@@ -363,6 +426,24 @@ export default function TrainingManagementPage() {
           <DialogFooter><Button variant="outline" onClick={() => setEditingQuizModule(null)}>Cancelar</Button><Button onClick={handleSaveQuestion}>Salvar Pergunta</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Reset</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem certeza que deseja resetar todo o progresso de treinamento para este usuário? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setResettingUserId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmResetTraining} className="bg-destructive hover:bg-destructive/90">
+              Sim, Resetar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
