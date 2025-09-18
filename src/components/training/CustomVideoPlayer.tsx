@@ -133,7 +133,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
 
         if (!document.fullscreenElement) {
             container.requestFullscreen().catch(err => {
-                alert(`Error attempting to enable full-screen mode: ${'${err.message}'} (${'${err.name}'})`);
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
             });
         } else {
             document.exitFullscreen();
@@ -144,7 +144,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         if (isNaN(timeInSeconds)) return "00:00";
         const minutes = Math.floor(timeInSeconds / 60);
         const seconds = Math.floor(timeInSeconds % 60);
-        return `${'${String(minutes).padStart(2, '0')}'}:${'${String(seconds).padStart(2, '0')}'}`;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
 
     return (
