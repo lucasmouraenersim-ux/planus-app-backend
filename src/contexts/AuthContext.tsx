@@ -22,6 +22,7 @@ interface AuthContextType {
   acceptUserTerms: () => Promise<void>;
   refreshUsers: () => Promise<void>; 
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
+  updateAppUser: (user: AppUser | null) => void; // Function to update user state locally
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +69,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,
           canViewCrm: canViewCrm,
           assignmentLimit: firestoreUserData.assignmentLimit,
+          trainingProgress: firestoreUserData.trainingProgress, // Include training progress
           personalFinance: firestoreUserData.personalFinance,
         };
       } else {
@@ -243,8 +245,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [refreshUsers]);
 
 
+  const updateAppUser = (user: AppUser | null) => {
+    setAppUser(user);
+  };
+
+
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, fetchAllCrmLeadsGlobally }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, fetchAllCrmLeadsGlobally, updateAppUser }}>
       {children}
     </AuthContext.Provider>
   );

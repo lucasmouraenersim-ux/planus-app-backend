@@ -16,7 +16,7 @@ import { CustomVideoPlayer } from '@/components/training/CustomVideoPlayer';
 const TRAINING_CONFIG_DOC_ID = 'main-config';
 
 export default function TrainingPage() {
-  const { appUser, refreshUsers } = useAuth();
+  const { appUser, updateAppUser } = useAuth(); // Changed to use updateAppUser for local state update
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
@@ -44,11 +44,22 @@ export default function TrainingPage() {
   const handleVideoCompleted = async (moduleId: string, videoId: string) => {
     if (!appUser) return;
     const path = `trainingProgress.${moduleId}.${videoId}`;
-    const updates = { [`${path}.completed`]: true };
+    const newProgress = {
+        ...userProgress,
+        [moduleId]: {
+            ...(userProgress[moduleId] || {}),
+            [videoId]: {
+                completed: true
+            }
+        }
+    };
     
     const userDocRef = doc(db, 'users', appUser.uid);
-    await updateDoc(userDocRef, updates);
-    await refreshUsers(); // Force refresh of user data in context to update progress
+    // Update Firestore in the background
+    await updateDoc(userDocRef, { trainingProgress: newProgress });
+    
+    // Immediately update local state to reflect the change in the UI
+    updateAppUser({ ...appUser, trainingProgress: newProgress });
   };
   
   const handleSelectVideo = (module: TrainingModule, videoId: string, videoUrl: string) => {
