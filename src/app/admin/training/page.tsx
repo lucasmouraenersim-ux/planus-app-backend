@@ -342,12 +342,26 @@ CPF/CNPJ: ${promoterDocument}
 `;
 
     const doc = new jsPDF();
-    
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
-    doc.text(contractText, 15, 20, {
-        maxWidth: 180, // Define the max width of the text block
+    // Define margins e largura máxima
+    const margin = 15;
+    const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
+    const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+    let y = 20;
+
+    // Divide o texto em linhas que cabem na página
+    const lines = doc.splitTextToSize(contractText, maxWidth);
+
+    lines.forEach((line: string) => {
+        // Verifica se a próxima linha ultrapassará o limite da página
+        if (y + lineHeight > doc.internal.pageSize.getHeight() - margin) {
+            doc.addPage(); // Adiciona uma nova página
+            y = margin; // Reseta a posição Y para o topo da nova página
+        }
+        doc.text(line, margin, y);
+        y += lineHeight;
     });
 
     doc.save(`Contrato_Parceria_${promoterName.replace(/\s+/g, '_')}.pdf`);
