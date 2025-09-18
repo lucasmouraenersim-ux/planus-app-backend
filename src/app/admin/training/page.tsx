@@ -343,13 +343,12 @@ CPF/CNPJ: ${promoterDocument}
 
     const doc = new jsPDF();
     
-    // Configura a fonte e o tamanho
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-
-    // Adiciona o texto ao PDF, lidando com quebras de linha e margens
-    const lines = doc.splitTextToSize(contractText, 180); // 180mm de largura útil
-    doc.text(lines, 15, 20); // Margem de 15mm da esquerda e 20mm do topo
+    
+    doc.text(contractText, 15, 20, {
+        maxWidth: 180, // Define the max width of the text block
+    });
 
     doc.save(`Contrato_Parceria_${promoterName.replace(/\s+/g, '_')}.pdf`);
 
