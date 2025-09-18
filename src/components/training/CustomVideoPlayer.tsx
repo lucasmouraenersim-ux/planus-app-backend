@@ -55,16 +55,15 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         video.addEventListener('ended', handleEnded);
 
         // Attempt to play on mount only once
-        if (video.paused) {
-          video.play().catch(error => {
-            // Autoplay is often blocked, which is fine. The user can click play.
-            if (error.name !== 'NotAllowedError') {
-              console.error("Video play error:", error);
-            }
-          });
-        }
+        video.play().catch(error => {
+          // Autoplay is often blocked, which is fine. The user can click play.
+          if (error.name !== 'NotAllowedError') {
+            console.error("Video play error:", error);
+          }
+        });
 
 
+        // Cleanup function to remove event listeners
         return () => {
             video.removeEventListener('play', handlePlay);
             video.removeEventListener('pause', handlePause);
