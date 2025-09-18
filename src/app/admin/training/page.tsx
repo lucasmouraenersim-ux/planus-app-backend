@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import type { FirestoreUser, TrainingModule, TrainingVideo } from '@/types/user';
+import type { FirestoreUser, TrainingModule, TrainingVideo, TrainingQuizQuestion, QuizAttempt } from '@/types/user';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -13,13 +13,14 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit } from 'lucide-react';
+import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion } from 'lucide-react';
 import { updateUser } from '@/lib/firebase/firestore';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 
 const TRAINING_CONFIG_DOC_ID = 'main-config';
@@ -34,14 +35,21 @@ export default function TrainingManagementPage() {
   const [prospectors, setProspectors] = useState<FirestoreUser[]>([]);
   const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
 
+  // State for video management
   const [isEditingModule, setIsEditingModule] = useState<TrainingModule | null>(null);
-  const [isEditingVideo, setIsEditingVideo] = useState<{ module: TrainingModule; video: TrainingVideo } | null>(null);
   const [newModuleName, setNewModuleName] = useState('');
   const [newVideoTitle, setNewVideoTitle] = useState('');
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // State for quiz management
+  const [editingQuizModule, setEditingQuizModule] = useState<TrainingModule | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<Partial<TrainingQuizQuestion> | null>(null);
+  const [currentQuestionText, setCurrentQuestionText] = useState('');
+  const [currentOptions, setCurrentOptions] = useState<string[]>(['', '', '', '']);
+  const [currentCorrectAnswerIndex, setCurrentCorrectAnswerIndex] = useState<number>(0);
 
-  // Fetch training config
+
   useEffect(() => {
     const configDocRef = doc(db, 'training-config', TRAINING_CONFIG_DOC_ID);
     const unsubscribe = onSnapshot(configDocRef, (docSnap) => {
@@ -56,7 +64,6 @@ export default function TrainingManagementPage() {
     return () => unsubscribe();
   }, []);
 
-  // Filter prospectors
   useEffect(() => {
     if (!isLoadingAllUsers) {
       const prospectorUsers = allFirestoreUsers.filter(user => user.type === 'prospector');
@@ -65,7 +72,7 @@ export default function TrainingManagementPage() {
   }, [allFirestoreUsers, isLoadingAllUsers]);
 
   const totalTrainingVideos = useMemo(() => trainingModules.reduce((acc, module) => acc + module.videos.length, 0), [trainingModules]);
-
+  
   const saveTrainingConfig = useCallback(async (modules: TrainingModule[]) => {
     try {
       const configDocRef = doc(db, 'training-config', TRAINING_CONFIG_DOC_ID);
@@ -83,32 +90,26 @@ export default function TrainingManagementPage() {
       id: `module-${Date.now()}`,
       title: newModuleName.trim(),
       videos: [],
+      quiz: [],
     };
     saveTrainingConfig([...trainingModules, newModule]);
     setNewModuleName('');
   };
 
+  const handleDeleteModule = (moduleId: string) => {
+    const updatedModules = trainingModules.filter(m => m.id !== moduleId);
+    saveTrainingConfig(updatedModules);
+  };
+  
+  // --- Video Handlers ---
   const handleAddVideo = async () => {
     if (!newVideoTitle.trim() || !newVideoFile || !isEditingModule) return;
-    
     setIsUploading(true);
     try {
       const videoPath = `training_videos/${newVideoFile.name.replace(/\s+/g, '_')}`;
       const videoUrl = await uploadFile(newVideoFile, videoPath);
-      
-      const newVideo: TrainingVideo = {
-        id: `video-${Date.now()}`,
-        title: newVideoTitle,
-        videoUrl: videoUrl,
-        duration: 0, // Duration would need to be extracted from the video file
-      };
-
-      const updatedModules = trainingModules.map(m => {
-        if (m.id === isEditingModule.id) {
-          return { ...m, videos: [...m.videos, newVideo] };
-        }
-        return m;
-      });
+      const newVideo: TrainingVideo = { id: `video-${Date.now()}`, title: newVideoTitle, videoUrl, duration: 0 };
+      const updatedModules = trainingModules.map(m => m.id === isEditingModule.id ? { ...m, videos: [...m.videos, newVideo] } : m);
       await saveTrainingConfig(updatedModules);
       setNewVideoTitle('');
       setNewVideoFile(null);
@@ -121,27 +122,65 @@ export default function TrainingManagementPage() {
   };
   
   const handleDeleteVideo = (moduleId: string, videoId: string) => {
+    const updatedModules = trainingModules.map(m => m.id === moduleId ? { ...m, videos: m.videos.filter(v => v.id !== videoId) } : m);
+    saveTrainingConfig(updatedModules);
+  };
+  
+  // --- Quiz Handlers ---
+  const openQuestionModal = (module: TrainingModule, question: Partial<TrainingQuizQuestion> | null = null) => {
+    setEditingQuizModule(module);
+    if (question) {
+      setEditingQuestion(question);
+      setCurrentQuestionText(question.question || '');
+      setCurrentOptions(question.options || ['', '', '', '']);
+      setCurrentCorrectAnswerIndex(question.correctAnswerIndex ?? 0);
+    } else {
+      setEditingQuestion({});
+      setCurrentQuestionText('');
+      setCurrentOptions(['', '', '', '']);
+      setCurrentCorrectAnswerIndex(0);
+    }
+  };
+
+  const handleSaveQuestion = () => {
+    if (!editingQuizModule || !currentQuestionText.trim()) return;
+    const isNew = !editingQuestion?.id;
+    const questionToSave: TrainingQuizQuestion = {
+      id: editingQuestion?.id || `question-${Date.now()}`,
+      question: currentQuestionText,
+      options: currentOptions,
+      correctAnswerIndex: currentCorrectAnswerIndex,
+    };
+
+    const updatedModules = trainingModules.map(m => {
+      if (m.id === editingQuizModule.id) {
+        const quiz = m.quiz || [];
+        const newQuiz = isNew ? [...quiz, questionToSave] : quiz.map(q => q.id === questionToSave.id ? questionToSave : q);
+        return { ...m, quiz: newQuiz };
+      }
+      return m;
+    });
+
+    saveTrainingConfig(updatedModules);
+    setEditingQuizModule(null);
+  };
+  
+  const handleDeleteQuestion = (moduleId: string, questionId: string) => {
     const updatedModules = trainingModules.map(m => {
       if (m.id === moduleId) {
-        return { ...m, videos: m.videos.filter(v => v.id !== videoId) };
+        return { ...m, quiz: (m.quiz || []).filter(q => q.id !== questionId) };
       }
       return m;
     });
     saveTrainingConfig(updatedModules);
-  }
-  
-  const handleDeleteModule = (moduleId: string) => {
-    const updatedModules = trainingModules.filter(m => m.id !== moduleId);
-    saveTrainingConfig(updatedModules);
-  }
+  };
+
 
   const calculateProgress = (user: FirestoreUser) => {
-    const progress = user.trainingProgress;
-    if (!progress || totalTrainingVideos === 0) return { percentage: 0, completedVideos: 0, lastVideo: 'Nenhum vídeo iniciado' };
-
+    const progress = user.trainingProgress || {};
+    if (totalTrainingVideos === 0) return { videoPercentage: 0, completedVideos: 0, lastVideo: 'Nenhum vídeo' };
     let completedVideos = 0;
     let lastWatchedTitle = 'Nenhum vídeo iniciado';
-    
     trainingModules.forEach(module => {
       module.videos.forEach(video => {
         if (progress[module.id]?.[video.id]?.completed) {
@@ -150,27 +189,28 @@ export default function TrainingManagementPage() {
         }
       });
     });
-
-    const percentage = (completedVideos / totalTrainingVideos) * 100;
-    return { percentage, completedVideos, lastVideo: lastWatchedTitle };
+    return {
+      videoPercentage: (completedVideos / totalTrainingVideos) * 100,
+      completedVideos,
+      lastVideo: lastWatchedTitle
+    };
+  };
+  
+  const getLatestQuizAttempt = (user: FirestoreUser, moduleId: string): QuizAttempt | undefined => {
+      const attempts = user.trainingProgress?.[moduleId]?.quizAttempts;
+      if (!attempts || attempts.length === 0) return undefined;
+      return attempts[attempts.length - 1];
   };
 
   const handleActivatePromoter = async (userId: string) => {
     setActivatingUserId(userId);
     try {
       await updateUser(userId, { type: 'vendedor' });
-      toast({
-        title: "Promotor Ativado!",
-        description: "O usuário agora tem acesso completo como vendedor.",
-      });
+      toast({ title: "Promotor Ativado!", description: "O usuário agora tem acesso completo como vendedor." });
       await refreshUsers(); 
     } catch (error) {
       console.error("Failed to activate promoter:", error);
-      toast({
-        title: "Erro ao Ativar",
-        description: "Não foi possível alterar o tipo do usuário.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao Ativar", description: "Não foi possível alterar o tipo do usuário.", variant: "destructive" });
     } finally {
       setActivatingUserId(null);
     }
@@ -187,69 +227,50 @@ export default function TrainingManagementPage() {
   return (
     <div className="container mx-auto p-4 md:p-8">
       <Tabs defaultValue="progress">
-        <TabsList className="mb-4">
-          <TabsTrigger value="progress">Acompanhamento de Treinamento</TabsTrigger>
+        <TabsList className="mb-4 grid w-full grid-cols-3">
+          <TabsTrigger value="progress">Acompanhamento</TabsTrigger>
           <TabsTrigger value="management">Gerenciar Módulos e Vídeos</TabsTrigger>
+          <TabsTrigger value="quiz">Gerenciar Questionários</TabsTrigger>
         </TabsList>
+        
         <TabsContent value="progress">
            <Card>
             <CardHeader>
-              <CardTitle className="text-3xl text-primary flex items-center">
-                <GraduationCap className="mr-3 h-8 w-8" />
-                Acompanhamento de Treinamento
-              </CardTitle>
-              <CardDescription>
-                Monitore o progresso dos novos promotores e ative suas contas após a conclusão.
-              </CardDescription>
+              <CardTitle className="text-3xl text-primary flex items-center"><GraduationCap className="mr-3 h-8 w-8" /> Acompanhamento de Treinamento</CardTitle>
+              <CardDescription>Monitore o progresso e o resultado dos quizzes dos novos promotores.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Promotor</TableHead>
-                    <TableHead>Progresso</TableHead>
-                    <TableHead>Último Vídeo Assistido</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow><TableHead>Promotor</TableHead><TableHead>Progresso Vídeos</TableHead><TableHead>Resultado Quiz</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {prospectors.length > 0 ? prospectors.map(user => {
-                    const { percentage, lastVideo, completedVideos } = calculateProgress(user);
-                    const isCompleted = percentage >= 100;
+                    const { videoPercentage, lastVideo, completedVideos } = calculateProgress(user);
+                    const mainModuleId = trainingModules[0]?.id; // Assuming one main module for now
+                    const latestAttempt = mainModuleId ? getLatestQuizAttempt(user, mainModuleId) : undefined;
+                    const canBeActivated = latestAttempt && latestAttempt.score >= 80;
                     const isActivating = activatingUserId === user.uid;
 
                     return (
                       <TableRow key={user.uid}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'P'} />
-                              <AvatarFallback>{(user.displayName || 'P').charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p>{user.displayName}</p>
-                              <p className="text-xs text-muted-foreground">{user.email}</p>
-                            </div>
-                          </div>
-                        </TableCell>
+                        <TableCell className="font-medium"><div className="flex items-center gap-3"><Avatar className="h-9 w-9"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'P'} /><AvatarFallback>{(user.displayName || 'P').charAt(0)}</AvatarFallback></Avatar><div><p>{user.displayName}</p><p className="text-xs text-muted-foreground">{user.email}</p></div></div></TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={percentage} className="w-40 h-2" />
-                            <span className="text-sm font-semibold">{percentage.toFixed(0)}%</span>
-                          </div>
+                          <div className="flex items-center gap-2"><Progress value={videoPercentage} className="w-40 h-2" /><span className="text-sm font-semibold">{videoPercentage.toFixed(0)}%</span></div>
                           <p className="text-xs text-muted-foreground">{completedVideos} de {totalTrainingVideos} vídeos concluídos</p>
                         </TableCell>
-                        <TableCell>{lastVideo}</TableCell>
+                        <TableCell>
+                          {latestAttempt ? (
+                            <div className={`flex items-center gap-1.5 font-semibold ${latestAttempt.score >= 80 ? 'text-green-600' : 'text-red-600'}`}>
+                              {latestAttempt.score >= 80 ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                              {latestAttempt.score.toFixed(1)}%
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pendente</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
-                          {isCompleted ? (
-                            <Button 
-                              size="sm" 
-                              className="bg-green-600 hover:bg-green-700" 
-                              onClick={() => handleActivatePromoter(user.uid)}
-                              disabled={isActivating}
-                            >
-                              {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                              Ativar Promotor
+                          {canBeActivated ? (
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleActivatePromoter(user.uid)} disabled={isActivating}>
+                              {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Ativar Promotor
                             </Button>
                           ) : (
                             <span className="text-sm text-muted-foreground italic">Em progresso...</span>
@@ -258,48 +279,27 @@ export default function TrainingManagementPage() {
                       </TableRow>
                     );
                   }) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center h-24">
-                        Nenhum promotor em treinamento no momento.
-                      </TableCell>
-                    </TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center h-24">Nenhum promotor em treinamento no momento.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
+        
         <TabsContent value="management">
             <Card>
-                <CardHeader>
-                    <CardTitle>Gerenciador de Treinamento</CardTitle>
-                    <CardDescription>Adicione, edite ou remova módulos e vídeos do treinamento.</CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle>Gerenciador de Módulos e Vídeos</CardTitle><CardDescription>Adicione, edite ou remova módulos e vídeos do treinamento.</CardDescription></CardHeader>
                 <CardContent>
-                    <div className="mb-6 space-y-2">
-                        <Label htmlFor="new-module-name">Novo Módulo</Label>
-                        <div className="flex gap-2">
-                            <Input id="new-module-name" value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)} placeholder="Título do novo módulo" />
-                            <Button onClick={handleAddModule}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar Módulo</Button>
-                        </div>
-                    </div>
+                    <div className="mb-6 space-y-2"><Label htmlFor="new-module-name">Novo Módulo</Label><div className="flex gap-2"><Input id="new-module-name" value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)} placeholder="Título do novo módulo" /><Button onClick={handleAddModule}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar Módulo</Button></div></div>
                     <Accordion type="multiple" className="w-full">
                         {trainingModules.map(module => (
                             <AccordionItem key={module.id} value={module.id}>
                                 <AccordionTrigger className="font-semibold">{module.title}</AccordionTrigger>
                                 <AccordionContent>
                                     <div className="space-y-4">
-                                        {module.videos.map(video => (
-                                            <div key={video.id} className="flex items-center justify-between p-2 border rounded-md">
-                                                <span>{video.title}</span>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteVideo(module.id, video.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                            </div>
-                                        ))}
-                                         <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" className="w-full mt-2" onClick={() => setIsEditingModule(module)}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar Vídeo a este Módulo</Button>
-                                            </DialogTrigger>
-                                        </Dialog>
+                                        {module.videos.map(video => (<div key={video.id} className="flex items-center justify-between p-2 border rounded-md"><span>{video.title}</span><Button variant="ghost" size="icon" onClick={() => handleDeleteVideo(module.id, video.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>))}
+                                         <Dialog onOpenChange={(open) => {if (!open) setIsEditingModule(null)}}><DialogTrigger asChild><Button variant="outline" className="w-full mt-2" onClick={() => setIsEditingModule(module)}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar Vídeo</Button></DialogTrigger></Dialog>
                                         <Button variant="destructive" size="sm" className="w-full mt-2" onClick={() => handleDeleteModule(module.id)}><Trash2 className="mr-2 h-4 w-4" /> Excluir Módulo</Button>
                                     </div>
                                 </AccordionContent>
@@ -309,30 +309,58 @@ export default function TrainingManagementPage() {
                 </CardContent>
             </Card>
         </TabsContent>
+
+        <TabsContent value="quiz">
+           <Card>
+             <CardHeader><CardTitle>Gerenciador de Questionários</CardTitle><CardDescription>Crie e edite as perguntas para cada módulo do treinamento.</CardDescription></CardHeader>
+             <CardContent>
+               <Accordion type="multiple" className="w-full">
+                 {trainingModules.map(module => (
+                   <AccordionItem key={`quiz-${module.id}`} value={`quiz-${module.id}`}>
+                     <AccordionTrigger className="font-semibold">{module.title}</AccordionTrigger>
+                     <AccordionContent>
+                       <div className="space-y-4">
+                         {(module.quiz || []).map(q => (
+                           <div key={q.id} className="flex items-start justify-between p-3 border rounded-md">
+                             <div className="flex-1"><p className="font-medium">{q.question}</p><ul className="mt-2 text-sm text-muted-foreground list-disc pl-5">{q.options.map((opt, i) => <li key={i} className={i === q.correctAnswerIndex ? 'font-semibold text-green-600' : ''}>{opt}</li>)}</ul></div>
+                             <div className="flex gap-1"><Button variant="ghost" size="icon" onClick={() => openQuestionModal(module, q)}><Edit className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDeleteQuestion(module.id, q.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>
+                           </div>
+                         ))}
+                         <Button variant="outline" className="w-full mt-2" onClick={() => openQuestionModal(module)}><PlusCircle className="mr-2 h-4 w-4" /> Adicionar Pergunta</Button>
+                       </div>
+                     </AccordionContent>
+                   </AccordionItem>
+                 ))}
+               </Accordion>
+             </CardContent>
+           </Card>
+        </TabsContent>
       </Tabs>
       
+      {/* Video Dialog */}
       <Dialog onOpenChange={(open) => {if (!open) { setIsEditingModule(null); setNewVideoFile(null); setNewVideoTitle(''); }}} open={!!isEditingModule}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Adicionar Vídeo ao Módulo: {isEditingModule?.title}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-                <div>
-                    <Label htmlFor="video-title">Título do Vídeo</Label>
-                    <Input id="video-title" value={newVideoTitle} onChange={(e) => setNewVideoTitle(e.target.value)} placeholder="Título do vídeo" />
-                </div>
-                 <div>
-                    <Label htmlFor="video-file">Arquivo de Vídeo</Label>
-                    <Input id="video-file" type="file" accept="video/*" onChange={(e) => setNewVideoFile(e.target.files?.[0] || null)} />
-                </div>
+        <DialogContent><DialogHeader><DialogTitle>Adicionar Vídeo ao Módulo: {isEditingModule?.title}</DialogTitle></DialogHeader><div className="space-y-4 py-4"><div><Label htmlFor="video-title">Título do Vídeo</Label><Input id="video-title" value={newVideoTitle} onChange={(e) => setNewVideoTitle(e.target.value)} placeholder="Título do vídeo" /></div><div><Label htmlFor="video-file">Arquivo de Vídeo</Label><Input id="video-file" type="file" accept="video/*" onChange={(e) => setNewVideoFile(e.target.files?.[0] || null)} /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsEditingModule(null)} disabled={isUploading}>Cancelar</Button><Button onClick={handleAddVideo} disabled={isUploading || !newVideoFile || !newVideoTitle}>{isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Upload className="h-4 w-4 mr-2" />}{isUploading ? 'Enviando...' : 'Fazer Upload e Salvar'}</Button></DialogFooter></DialogContent>
+      </Dialog>
+      
+      {/* Quiz Dialog */}
+      <Dialog onOpenChange={(open) => {if (!open) setEditingQuizModule(null)}} open={!!editingQuizModule}>
+        <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{editingQuestion?.id ? 'Editar' : 'Adicionar'} Pergunta</DialogTitle><DialogDescription>Módulo: {editingQuizModule?.title}</DialogDescription></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div><Label htmlFor="question-text">Pergunta</Label><Input id="question-text" value={currentQuestionText} onChange={(e) => setCurrentQuestionText(e.target.value)} /></div>
+            <div>
+              <Label>Opções de Resposta</Label>
+              <RadioGroup value={String(currentCorrectAnswerIndex)} onValueChange={(val) => setCurrentCorrectAnswerIndex(Number(val))} className="mt-2 space-y-2">
+                {currentOptions.map((option, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <RadioGroupItem value={String(index)} id={`option-${index}`} />
+                    <Input value={option} onChange={(e) => { const newOpts = [...currentOptions]; newOpts[index] = e.target.value; setCurrentOptions(newOpts); }} placeholder={`Opção ${index + 1}`} />
+                  </div>
+                ))}
+              </RadioGroup>
+              <p className="text-xs text-muted-foreground mt-2">Selecione a bolinha ao lado da resposta correta.</p>
             </div>
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsEditingModule(null)} disabled={isUploading}>Cancelar</Button>
-                <Button onClick={handleAddVideo} disabled={isUploading || !newVideoFile || !newVideoTitle}>
-                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Upload className="h-4 w-4 mr-2" />}
-                    {isUploading ? 'Enviando...' : 'Fazer Upload e Salvar'}
-                </Button>
-            </DialogFooter>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEditingQuizModule(null)}>Cancelar</Button><Button onClick={handleSaveQuestion}>Salvar Pergunta</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

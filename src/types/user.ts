@@ -26,6 +26,13 @@ interface PersonalFinanceData {
   revenues: PersonalRevenue[];
 }
 
+export interface TrainingQuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswerIndex: number;
+}
+
 export interface TrainingVideo {
   id: string;
   title: string;
@@ -37,6 +44,13 @@ export interface TrainingModule {
   id: string;
   title: string;
   videos: TrainingVideo[];
+  quiz?: TrainingQuizQuestion[];
+}
+
+export interface QuizAttempt {
+  score: number; // Percentage
+  timestamp: string; // ISO Date String
+  answers: { [questionId: string]: number }; // questionId: selectedOptionIndex
 }
 
 // Represents the data structure for a user in Firestore
@@ -70,9 +84,9 @@ export type FirestoreUser = {
   trainingProgress?: {
     [moduleId: string]: {
       [videoId: string]: {
-        watchedSeconds: number;
         completed: boolean;
       };
+      quizAttempts?: QuizAttempt[];
     };
   };
 
@@ -111,9 +125,9 @@ export type AppUser = {
   trainingProgress?: {
     [moduleId: string]: {
       [videoId: string]: {
-        watchedSeconds: number;
         completed: boolean;
       };
+      quizAttempts?: QuizAttempt[];
     };
   };
   
