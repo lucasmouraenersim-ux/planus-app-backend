@@ -54,36 +54,45 @@ export default function TrainingPage() {
       if (playerRef.current && appUser) {
         const currentTime = await playerRef.current.getCurrentTime();
         const path = `trainingProgress.${moduleId}.${videoId}`;
-        const currentProgress = userProgress[moduleId]?.[videoId]?.watchedSeconds || 0;
+        const currentProgressInDb = userProgress[moduleId]?.[videoId]?.watchedSeconds || 0;
+        
+        let shouldUpdate = false;
 
-        if (currentTime > currentProgress) {
+        // Update watched seconds if there's significant progress
+        if (currentTime > currentProgressInDb) {
           await updateDoc(doc(db, 'users', appUser.uid), {
             [`${path}.watchedSeconds`]: currentTime,
           });
+          shouldUpdate = true;
         }
         
-        // Mark as completed a little before the end to avoid issues with buffering/ending events
-        if (currentTime >= duration - 2) {
-            if (!userProgress[moduleId]?.[videoId]?.completed) {
-                await updateDoc(doc(db, 'users', appUser.uid), {
-                    [`${path}.completed`]: true,
-                });
-            }
+        // Mark as completed a little before the end
+        if (currentTime >= duration - 2 && !userProgress[moduleId]?.[videoId]?.completed) {
+            await updateDoc(doc(db, 'users', appUser.uid), {
+                [`${path}.completed`]: true,
+            });
+            shouldUpdate = true; // Mark for UI refresh
             if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+        
+        // If any update happened, refresh the user data in the context to update UI
+        if (shouldUpdate) {
+            await refreshUsers(); 
         }
       }
     }, 2000);
   };
 
-  const handleEnd = (moduleId: string, videoId: string) => {
+  const handleEnd = async (moduleId: string, videoId: string) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
-     if(appUser) {
+     if(appUser && !userProgress[moduleId]?.[videoId]?.completed) {
         const path = `trainingProgress.${moduleId}.${videoId}`;
-        updateDoc(doc(db, 'users', appUser.uid), {
+        await updateDoc(doc(db, 'users', appUser.uid), {
             [`${path}.completed`]: true,
         });
+        await refreshUsers(); // Refresh UI after completion
      }
   };
 
