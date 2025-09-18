@@ -40,60 +40,71 @@ export default function TrainingPage() {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // This ensures we always have the latest progress data for UI checks
   const userProgress = appUser?.trainingProgress || {};
 
   const handleVideoReady = (event: { target: YouTubePlayer }) => {
     playerRef.current = event.target;
   };
 
-  const handlePlay = (moduleId: string, videoId: string, duration: number) => {
+  const stopProgressInterval = () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-    intervalRef.current = setInterval(async () => {
-      if (playerRef.current && appUser) {
-        const currentTime = await playerRef.current.getCurrentTime();
-        const path = `trainingProgress.${moduleId}.${videoId}`;
-        const currentProgressInDb = userProgress[moduleId]?.[videoId]?.watchedSeconds || 0;
-        
-        let shouldUpdate = false;
+  };
 
-        // Update watched seconds if there's significant progress
-        if (currentTime > currentProgressInDb) {
-          await updateDoc(doc(db, 'users', appUser.uid), {
-            [`${path}.watchedSeconds`]: currentTime,
-          });
-          shouldUpdate = true;
-        }
-        
-        // Mark as completed a little before the end
-        if (currentTime >= duration - 2 && !userProgress[moduleId]?.[videoId]?.completed) {
-            await updateDoc(doc(db, 'users', appUser.uid), {
-                [`${path}.completed`]: true,
-            });
-            shouldUpdate = true; // Mark for UI refresh
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-        
-        // If any update happened, refresh the user data in the context to update UI
-        if (shouldUpdate) {
-            await refreshUsers(); 
-        }
+  const handlePlay = (moduleId: string, videoId: string, duration: number) => {
+    stopProgressInterval(); // Clear any existing interval before starting a new one
+
+    intervalRef.current = setInterval(async () => {
+      if (!playerRef.current || !appUser) {
+        stopProgressInterval();
+        return;
+      }
+      
+      const currentTime = await playerRef.current.getCurrentTime();
+      const path = `trainingProgress.${moduleId}.${videoId}`;
+      
+      // Get the latest progress from the appUser context before writing
+      const currentProgressInDb = appUser.trainingProgress?.[moduleId]?.[videoId] || { watchedSeconds: 0, completed: false };
+
+      let shouldUpdate = false;
+
+      // Update watched seconds if there's significant progress
+      if (currentTime > currentProgressInDb.watchedSeconds) {
+        await updateDoc(doc(db, 'users', appUser.uid), {
+          [`${path}.watchedSeconds`]: currentTime,
+        });
+        shouldUpdate = true;
+      }
+      
+      // Mark as completed a little before the end
+      if (currentTime >= duration - 2 && !currentProgressInDb.completed) {
+        await updateDoc(doc(db, 'users', appUser.uid), {
+          [`${path}.completed`]: true,
+        });
+        shouldUpdate = true; // Mark for UI refresh
+        stopProgressInterval();
+      }
+      
+      // If any update happened, refresh the user data in the context to update UI
+      if (shouldUpdate) {
+        await refreshUsers(); 
       }
     }, 2000);
   };
 
   const handleEnd = async (moduleId: string, videoId: string) => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+    stopProgressInterval();
+
+    if (appUser && !userProgress[moduleId]?.[videoId]?.completed) {
+      const path = `trainingProgress.${moduleId}.${videoId}`;
+      await updateDoc(doc(db, 'users', appUser.uid), {
+        [`${path}.completed`]: true,
+      });
+      await refreshUsers(); // Refresh UI after completion
     }
-     if(appUser && !userProgress[moduleId]?.[videoId]?.completed) {
-        const path = `trainingProgress.${moduleId}.${videoId}`;
-        await updateDoc(doc(db, 'users', appUser.uid), {
-            [`${path}.completed`]: true,
-        });
-        await refreshUsers(); // Refresh UI after completion
-     }
   };
 
   const isVideoUnlocked = (moduleId: string, videoIndex: number): boolean => {
@@ -119,18 +130,17 @@ export default function TrainingPage() {
   };
 
   useEffect(() => {
+    // Cleanup interval on component unmount
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      stopProgressInterval();
     };
   }, []);
 
   if (!appUser) {
     return (
-        <div className="flex justify-center items-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+      <div className="flex justify-center items-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
   
@@ -142,23 +152,22 @@ export default function TrainingPage() {
   const totalProgressPercentage = (completedVideos / allVideos.length) * 100;
   const isTrainingComplete = totalProgressPercentage >= 100;
 
-
   return (
     <div className="container mx-auto p-4 md:p-8">
       <Card className="bg-card/80 backdrop-blur-lg">
         <CardHeader>
           <CardTitle className="text-3xl text-primary">Portal de Treinamento</CardTitle>
           <CardDescription>Bem-vindo, {appUser.displayName}! Complete os módulos para ativar sua conta de vendedor.</CardDescription>
-           <div className="pt-4">
+          <div className="pt-4">
             <Progress value={totalProgressPercentage} className="h-3" />
             <p className="text-sm text-muted-foreground text-right mt-1">
-                {completedVideos} de {allVideos.length} vídeos concluídos.
+              {completedVideos} de {allVideos.length} vídeos concluídos.
             </p>
           </div>
           {isTrainingComplete && (
             <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
-                <h3 className="font-semibold text-green-600">Treinamento Concluído!</h3>
-                <p className="text-sm text-muted-foreground">Parabéns! Você finalizou todos os módulos. Um administrador irá revisar seu progresso e ativar sua conta de vendedor em breve.</p>
+              <h3 className="font-semibold text-green-600">Treinamento Concluído!</h3>
+              <p className="text-sm text-muted-foreground">Parabéns! Você finalizou todos os módulos. Um administrador irá revisar seu progresso e ativar sua conta de vendedor em breve.</p>
             </div>
           )}
         </CardHeader>
@@ -177,41 +186,42 @@ export default function TrainingPage() {
 
                       return (
                         <div key={video.id} className="p-3 border rounded-md">
-                           <div className="flex justify-between items-center mb-2">
-                                <h4 className="font-semibold text-foreground">{video.title}</h4>
-                                {unlocked ? (
-                                    isCompleted ? (
-                                        <CheckCircle className="h-5 w-5 text-green-500" />
-                                    ) : (
-                                        <PlayCircle className="h-5 w-5 text-primary" />
-                                    )
-                                ) : (
-                                    <Lock className="h-5 w-5 text-muted-foreground" />
-                                )}
-                           </div>
-                           <Progress value={progressPercent} className="h-2 mb-2" />
-                           {activeVideoId === video.id && (
-                                <YouTube
-                                    videoId={video.id}
-                                    opts={{
-                                        height: '390',
-                                        width: '100%',
-                                        playerVars: {
-                                            autoplay: 1,
-                                            controls: 1,
-                                            disablekb: 1, // Disables keyboard controls
-                                            modestbranding: 1,
-                                            iv_load_policy: 3, // Hide video annotations
-                                        },
-                                    }}
-                                    onReady={handleVideoReady}
-                                    onPlay={() => handlePlay(module.id, video.id, video.duration)}
-                                    onEnd={() => handleEnd(module.id, video.id)}
-                                />
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-semibold text-foreground">{video.title}</h4>
+                            {unlocked ? (
+                              isCompleted ? (
+                                <CheckCircle className="h-5 w-5 text-green-500" />
+                              ) : (
+                                <PlayCircle className="h-5 w-5 text-primary" />
+                              )
+                            ) : (
+                              <Lock className="h-5 w-5 text-muted-foreground" />
                             )}
-                             <Button onClick={() => setActiveVideoId(video.id)} disabled={!unlocked || activeVideoId === video.id} size="sm">
-                                {activeVideoId === video.id ? "Assistindo..." : "Assistir Vídeo"}
-                             </Button>
+                          </div>
+                          <Progress value={progressPercent} className="h-2 mb-2" />
+                          {activeVideoId === video.id && (
+                            <YouTube
+                              videoId={video.id}
+                              opts={{
+                                height: '390',
+                                width: '100%',
+                                playerVars: {
+                                  autoplay: 1,
+                                  controls: 1,
+                                  disablekb: 1, // Disables keyboard controls
+                                  modestbranding: 1,
+                                  iv_load_policy: 3, // Hide video annotations
+                                },
+                              }}
+                              onReady={handleVideoReady}
+                              onPlay={() => handlePlay(module.id, video.id, video.duration)}
+                              onEnd={() => handleEnd(module.id, video.id)}
+                              onStateChange={(e) => { if (e.data === 0) handleEnd(module.id, video.id); }} // Handle end state more robustly
+                            />
+                          )}
+                          <Button onClick={() => setActiveVideoId(video.id)} disabled={!unlocked || activeVideoId === video.id} size="sm">
+                            {activeVideoId === video.id ? "Assistindo..." : "Assistir Vídeo"}
+                          </Button>
                         </div>
                       );
                     })}
