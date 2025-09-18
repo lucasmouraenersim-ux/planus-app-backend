@@ -5,6 +5,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Play, Pause, Maximize, Volume2, VolumeX, XSquare } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface CustomVideoPlayerProps {
     src: string;
@@ -15,13 +16,14 @@ interface CustomVideoPlayerProps {
 
 export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: CustomVideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
-    const hasSeeked = useRef(false);
-
+    
+    // This effect handles video events
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
@@ -42,29 +44,12 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             setIsPlaying(false);
             onVideoEnd();
         };
-        const handleSeeking = (e: Event) => {
-            if (!allowSeek && !hasSeeked.current && video) {
-                const targetTime = video.currentTime;
-                // A very small buffer to allow the initial play click
-                if (targetTime > 1) { 
-                    e.preventDefault();
-                    // This is a bit of a hack. We can't perfectly stop seeking,
-                    // but we can try to revert it.
-                    // This logic is tricky and might not be perfect.
-                    // For now, we'll just log it. A better approach is disabling the progress bar UI.
-                    console.log("Seeking is disabled for the first watch.");
-                    // video.currentTime = video.currentTime; // Re-setting to the same time can sometimes cancel the seek.
-                }
-            }
-        };
-
 
         video.addEventListener('play', handlePlay);
         video.addEventListener('pause', handlePause);
         video.addEventListener('timeupdate', handleTimeUpdate);
         video.addEventListener('durationchange', handleDurationChange);
         video.addEventListener('ended', handleEnded);
-        video.addEventListener('seeking', handleSeeking);
 
         return () => {
             video.removeEventListener('play', handlePlay);
@@ -72,9 +57,8 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             video.removeEventListener('timeupdate', handleTimeUpdate);
             video.removeEventListener('durationchange', handleDurationChange);
             video.removeEventListener('ended', handleEnded);
-            video.removeEventListener('seeking', handleSeeking);
         };
-    }, [allowSeek, onVideoEnd]);
+    }, [onVideoEnd]);
 
     const togglePlay = () => {
         if (videoRef.current) {
@@ -91,9 +75,14 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     
     const toggleMute = () => {
         if (videoRef.current) {
-            videoRef.current.muted = !isMuted;
-            setIsMuted(!isMuted);
-            if (!isMuted) setVolume(0); else setVolume(1);
+            const newMutedState = !isMuted;
+            videoRef.current.muted = newMutedState;
+            setIsMuted(newMutedState);
+            if(newMutedState) {
+                setVolume(0);
+            } else {
+                setVolume(videoRef.current.volume > 0 ? videoRef.current.volume : 1);
+            }
         }
     };
 
@@ -106,6 +95,19 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         }
     };
 
+    const toggleFullscreen = () => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => {
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    };
+
     const formatTime = (timeInSeconds: number) => {
         const minutes = Math.floor(timeInSeconds / 60);
         const seconds = Math.floor(timeInSeconds % 60);
@@ -113,7 +115,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     };
 
     return (
-        <div className="relative w-full max-w-3xl mx-auto group bg-black rounded-lg overflow-hidden">
+        <div ref={containerRef} className="relative w-full max-w-3xl mx-auto group bg-black rounded-lg overflow-hidden">
             <video
                 ref={videoRef}
                 src={src}
@@ -122,15 +124,13 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                 autoPlay
             />
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <div className={`flex items-center gap-4 ${!allowSeek ? 'pointer-events-none opacity-60' : ''}`}>
-                    <Slider
-                        value={[progress]}
-                        onValueChange={handleProgressChange}
-                        className="w-full"
-                        disabled={!allowSeek}
-                        aria-label="Video Progress"
-                    />
-                </div>
+                <Slider
+                    value={[progress]}
+                    onValueChange={handleProgressChange}
+                    className={cn("w-full", !allowSeek && "cursor-not-allowed")}
+                    disabled={!allowSeek}
+                    aria-label="Video Progress"
+                />
                  <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-3">
                         <Button variant="ghost" size="icon" onClick={togglePlay} className="text-white">
@@ -141,7 +141,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                                 {isMuted || volume === 0 ? <VolumeX /> : <Volume2 />}
                             </Button>
                              <Slider 
-                                value={[volume * 100]}
+                                value={[isMuted ? 0 : volume * 100]}
                                 onValueChange={handleVolumeChange}
                                 className="w-24"
                                 aria-label="Volume"
@@ -150,6 +150,9 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-white">{formatTime(videoRef.current?.currentTime || 0)} / {formatTime(duration)}</span>
+                        <Button variant="ghost" size="icon" onClick={toggleFullscreen} className="text-white">
+                            <Maximize />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={onClose} className="text-white">
                             <XSquare />
                         </Button>

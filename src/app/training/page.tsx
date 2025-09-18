@@ -65,7 +65,8 @@ export default function TrainingPage() {
     if (isLoadingConfig || !appUser) return false;
 
     // The very first video of the very first module is always unlocked.
-    if (trainingModules.length > 0 && moduleId === trainingModules[0].id && videoIndex === 0) {
+    const firstModule = trainingModules[0];
+    if (firstModule && moduleId === firstModule.id && videoIndex === 0) {
       return true;
     }
 
