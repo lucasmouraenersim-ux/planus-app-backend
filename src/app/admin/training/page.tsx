@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion, MoreHorizontal, RotateCcw, FileSignature } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -275,6 +275,87 @@ export default function TrainingManagementPage() {
     }
   };
 
+  const handleElaborateContract = (user: FirestoreUser) => {
+    const promoterName = user.displayName || '_________________________';
+    const promoterDocument = user.cpf || '[CPF/CNPJ]';
+
+    const contractText = `
+CONTRATO DE PARCERIA PARA INDICAÇÃO DE CLIENTES
+
+De um lado:
+SENT ENERGIA LTDA, pessoa jurídica de direito privado, com sede na Rua Comandante Costa, 1649, Centro-Sul, na cidade de Cuiabá, Estado do Mato Grosso, CEP 78.020-400, inscrita no CNPJ/ME sob o nº 61.287.384/0001-60, neste ato representada na forma dos seus documentos societários, doravante designada “CONTRATANTE”;
+
+E, de outro lado:
+${promoterName}, pessoa física, inscrita no CPF sob o nº ${promoterDocument}, com residência no(a) [Endereço Completo], doravante designado(a) “PROMOTOR”;
+
+CONTRATANTE e PROMOTOR também serão designados como "Partes" ou, individualmente, como "Parte”.
+
+CONSIDERANDO QUE:
+(i) a CONTRATANTE é empresa especializada em serviços de assessoria, consultoria e gestão na área de energia, incluindo o desenvolvimento e exploração de projetos de geração distribuída com a troca da energia gerada pelas unidades de geração por créditos junto às distribuidoras de energia elétrica;
+(ii) o PROMOTOR possui relacionamentos de mercado e o potencial conhecimento de uma base de clientes ("Clientes") os quais podem ter interesse em se cadastrar na CONTRATANTE para ter acesso ao Sistema de Compensação de Energia Elétrica ("SCEE"), nos termos da Lei 14.300/2022 e Resoluções Normativas ANEEL n° 1.000/2021 e n° 1.059/2023; e
+(iii) as Partes têm interesse em celebrar uma parceria de forma que o PROMOTOR ofereça aos seus Clientes a adesão ao SCEE através do cadastro na CONTRATANTE.
+
+RESOLVEM as PARTES celebrar o presente Contrato de Parceria para Indicação de Clientes (“CONTRATO"), que será regido pelas condições dispostas a seguir.
+
+I. OBJETO
+1.1. Constitui objeto do presente CONTRATO a divulgação pelo PROMOTOR para a sua base de Clientes sobre os benefícios em aderir à CONTRATANTE e ao SCEE, de forma que o PROMOTOR será remunerado pela quantidade de Clientes que efetivamente se cadastrarem na CONTRATANTE para acesso ao SCEE, através da troca de titularidade da unidade consumidora de energia elétrica dos Clientes ("Parceria").
+1.2. Para tanto, a CONTRATANTE poderá fornecer ao PROMOTOR um hiperlink de direcionamento dos Clientes para a sua plataforma com, por exemplo, conteúdos, banners, Call to Actions, widgets e/ou outras ações. Fica igualmente acordado que nenhum material será divulgado aos Clientes sem a prévia e expressa aprovação por escrito da CONTRATANTE.
+
+II. OBRIGAÇÕES DAS PARTES
+2.1. São obrigações do PROMOTOR:
+2.1.1. Contatar os Clientes para divulgação das condições para cadastro na CONTRATANTE e adesão ao SCEE;
+2.1.2. Observar as diretrizes e instruções da CONTRATANTE quanto ao conteúdo do material a ser divulgado aos Clientes;
+2.1.3. Arcar, por sua conta e risco exclusivos, com todas e quaisquer despesas e custos necessários à execução do objeto desta Parceria.
+2.2. São obrigações da CONTRATANTE:
+2.2.1. A CONTRATANTE obriga-se a efetuar o pagamento do preço estabelecido na Cláusula IV abaixo;
+2.2.2. Receber os Clientes dentro da sua infraestrutura para concluir os procedimentos de cadastro e adesão;
+2.2.3. Colaborar com o PROMOTOR para o bom andamento da Parceria.
+
+III. PRAZO DO CONTRATO E RESCISÃO
+3.1. O CONTRATO vigerá por prazo indeterminado, iniciando-se na data de assinatura do presente instrumento.
+
+IV. PREÇO E CONDIÇÕES DE PAGAMENTO
+4.1. Pela parceria, a CONTRATANTE pagará ao PROMOTOR uma comissão de 40% (quarenta por cento) sobre o valor da primeira proposta aceita pelo cliente.
+4.1.1. Entende-se como "proposta" o valor da conta de energia do cliente já com o desconto oferecido pela CONTRATANTE.
+4.1.2. A comissão será devida para cada Cliente único que efetuar o cadastro junto à CONTRATANTE e tiver a troca de titularidade da sua unidade consumidora efetivada.
+4.2. Os pagamentos devidos nos termos deste CONTRATO serão realizados por meio de depósito em conta bancária de titularidade do PROMOTOR, ou outra forma acordada entre as Partes.
+4.3. O pagamento será efetuado na primeira sexta-feira subsequente à semana de finalização da adesão do Cliente, entendida como a efetiva troca de titularidade.
+4.4. O preço estabelecido nesta Cláusula constituirá a única e completa remuneração do PROMOTOR pela execução deste CONTRATO, já incluindo a totalidade das despesas, ônus, tributos e custos de qualquer espécie.
+
+V. FORO
+5.1. As Partes elegem o foro da Comarca de Cuiabá/MT para dirimir quaisquer dúvidas ou ações oriundas do presente CONTRATO, renunciando a qualquer outro por mais privilegiado que seja.
+
+E, por estarem justas e contratadas, resolvem as Partes firmar o presente CONTRATO.
+
+Cuiabá, ${new Date().toLocaleDateString('pt-BR')}.
+
+
+___________________________________
+SENT ENERGIA LTDA
+CNPJ: 61.287.384/0001-60
+
+
+___________________________________
+${promoterName}
+CPF/CNPJ: ${promoterDocument}
+`;
+
+    const blob = new Blob([contractText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Contrato_Parceria_${promoterName.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Contrato Gerado",
+      description: `O contrato para ${promoterName} foi baixado.`,
+    });
+  };
+
   if (isLoadingAllUsers || isLoadingConfig) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -306,7 +387,8 @@ export default function TrainingManagementPage() {
                     const { videoPercentage, completedVideos } = calculateProgress(user);
                     const latestAttempt = getLatestQuizAttempt(user);
                     // A user can be activated if they passed the quiz OR if they are already a 'vendedor'
-                    const canBeActivated = (latestAttempt && latestAttempt.score >= 80) && user.type === 'prospector';
+                    const quizPassed = latestAttempt && latestAttempt.score >= 80;
+                    const canBeActivated = quizPassed && user.type === 'prospector';
                     const isActivating = activatingUserId === user.uid;
 
                     return (
@@ -318,8 +400,8 @@ export default function TrainingManagementPage() {
                         </TableCell>
                         <TableCell>
                           {latestAttempt ? (
-                            <div className={`flex items-center gap-1.5 font-semibold ${latestAttempt.score >= 80 ? 'text-green-600' : 'text-red-600'}`}>
-                              {latestAttempt.score >= 80 ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                            <div className={`flex items-center gap-1.5 font-semibold ${quizPassed ? 'text-green-600' : 'text-red-600'}`}>
+                              {quizPassed ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
                               {latestAttempt.score.toFixed(1)}%
                             </div>
                           ) : (
@@ -339,6 +421,12 @@ export default function TrainingManagementPage() {
                                 <DropdownMenuItem onClick={() => handleActivatePromoter(user.uid)} disabled={isActivating}>
                                   {isActivating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4 text-green-600" />}
                                   Ativar Promotor
+                                </DropdownMenuItem>
+                              )}
+                              {quizPassed && (
+                                <DropdownMenuItem onClick={() => handleElaborateContract(user)}>
+                                  <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
+                                  Elaborar Contrato
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
