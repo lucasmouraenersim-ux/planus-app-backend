@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Lock, PlayCircle, Loader2 } from 'lucide-react';
 import YouTube from 'react-youtube';
 import type { YouTubePlayer } from 'react-youtube';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import type { FirestoreUser } from '@/types/user';
 
 const trainingModules = [
   {
@@ -35,12 +36,11 @@ const trainingModules = [
 ];
 
 export default function TrainingPage() {
-  const { appUser, refreshUsers } = useAuth();
+  const { appUser, updateAppUserProfile } = useAuth(); // Use updateAppUserProfile to refresh state
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // This ensures we always have the latest progress data for UI checks
   const userProgress = appUser?.trainingProgress || {};
 
   const handleVideoReady = (event: { target: YouTubePlayer }) => {
@@ -54,8 +54,27 @@ export default function TrainingPage() {
     }
   };
 
+  // This function will now handle updating both Firestore and local state
+  const updateUserProgress = async (moduleId: string, videoId: string, updates: object) => {
+    if (!appUser) return;
+    const path = `trainingProgress.${moduleId}.${videoId}`;
+    const fullUpdatePath = { [`${path}`]: { ...userProgress[moduleId]?.[videoId], ...updates } };
+
+    await updateDoc(doc(db, 'users', appUser.uid), fullUpdatePath);
+
+    // After updating firestore, fetch the latest user data to refresh the context
+    const userDocRef = doc(db, 'users', appUser.uid);
+    const userDocSnap = await getDoc(userDocRef);
+    if (userDocSnap.exists()) {
+      const latestUserData = userDocSnap.data() as FirestoreUser;
+      // Use a dummy update to trigger a re-fetch and state update in the context
+      // This forces the UI to re-render with the new progress
+      await updateAppUserProfile({ personalFinance: latestUserData.personalFinance }); 
+    }
+  };
+
   const handlePlay = (moduleId: string, videoId: string, duration: number) => {
-    stopProgressInterval(); // Clear any existing interval before starting a new one
+    stopProgressInterval();
 
     intervalRef.current = setInterval(async () => {
       if (!playerRef.current || !appUser) {
@@ -64,33 +83,15 @@ export default function TrainingPage() {
       }
       
       const currentTime = await playerRef.current.getCurrentTime();
-      const path = `trainingProgress.${moduleId}.${videoId}`;
-      
-      // Get the latest progress from the appUser context before writing
-      const currentProgressInDb = appUser.trainingProgress?.[moduleId]?.[videoId] || { watchedSeconds: 0, completed: false };
+      const currentProgressInDb = userProgress[moduleId]?.[videoId] || { watchedSeconds: 0, completed: false };
 
-      let shouldUpdate = false;
-
-      // Update watched seconds if there's significant progress
       if (currentTime > currentProgressInDb.watchedSeconds) {
-        await updateDoc(doc(db, 'users', appUser.uid), {
-          [`${path}.watchedSeconds`]: currentTime,
-        });
-        shouldUpdate = true;
+        await updateUserProgress(moduleId, videoId, { watchedSeconds: currentTime });
       }
       
-      // Mark as completed a little before the end
       if (currentTime >= duration - 2 && !currentProgressInDb.completed) {
-        await updateDoc(doc(db, 'users', appUser.uid), {
-          [`${path}.completed`]: true,
-        });
-        shouldUpdate = true; // Mark for UI refresh
+        await updateUserProgress(moduleId, videoId, { completed: true });
         stopProgressInterval();
-      }
-      
-      // If any update happened, refresh the user data in the context to update UI
-      if (shouldUpdate) {
-        await refreshUsers(); 
       }
     }, 2000);
   };
@@ -99,11 +100,7 @@ export default function TrainingPage() {
     stopProgressInterval();
 
     if (appUser && !userProgress[moduleId]?.[videoId]?.completed) {
-      const path = `trainingProgress.${moduleId}.${videoId}`;
-      await updateDoc(doc(db, 'users', appUser.uid), {
-        [`${path}.completed`]: true,
-      });
-      await refreshUsers(); // Refresh UI after completion
+      await updateUserProgress(moduleId, videoId, { completed: true });
     }
   };
 
@@ -113,13 +110,11 @@ export default function TrainingPage() {
     const currentModuleIndex = trainingModules.findIndex(m => m.id === moduleId);
     if (currentModuleIndex === -1) return false;
 
-    // Check if previous video in the same module is complete
     if (videoIndex > 0) {
       const prevVideo = trainingModules[currentModuleIndex].videos[videoIndex - 1];
       return userProgress[moduleId]?.[prevVideo.id]?.completed === true;
     }
 
-    // Check if last video of previous module is complete
     if (currentModuleIndex > 0) {
       const prevModule = trainingModules[currentModuleIndex - 1];
       const lastVideoOfPrevModule = prevModule.videos[prevModule.videos.length - 1];
@@ -130,7 +125,6 @@ export default function TrainingPage() {
   };
 
   useEffect(() => {
-    // Cleanup interval on component unmount
     return () => {
       stopProgressInterval();
     };
@@ -208,15 +202,15 @@ export default function TrainingPage() {
                                 playerVars: {
                                   autoplay: 1,
                                   controls: 1,
-                                  disablekb: 1, // Disables keyboard controls
+                                  disablekb: 1,
                                   modestbranding: 1,
-                                  iv_load_policy: 3, // Hide video annotations
+                                  iv_load_policy: 3,
                                 },
                               }}
                               onReady={handleVideoReady}
                               onPlay={() => handlePlay(module.id, video.id, video.duration)}
                               onEnd={() => handleEnd(module.id, video.id)}
-                              onStateChange={(e) => { if (e.data === 0) handleEnd(module.id, video.id); }} // Handle end state more robustly
+                              onStateChange={(e) => { if (e.data === 0) handleEnd(module.id, video.id); }}
                             />
                           )}
                           <Button onClick={() => setActiveVideoId(video.id)} disabled={!unlocked || activeVideoId === video.id} size="sm">
