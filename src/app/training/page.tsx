@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,7 @@ export default function TrainingPage() {
   const handleStartQuiz = (moduleId: string) => {
     const module = trainingModules.find(m => m.id === moduleId);
     if (module?.quiz) {
+      setActiveModuleId(moduleId); // Set active module for quiz submission
       setCurrentQuiz(module.quiz);
       setQuizAnswers({});
       setShowQuiz(true);
