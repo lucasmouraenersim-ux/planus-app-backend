@@ -58,7 +58,7 @@ export default function TrainingManagementPage() {
   const [trainingModules, setTrainingModules] = useState<TrainingModule[]>([]);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
-  const [prospectors, setProspectors] = useState<FirestoreUser[]>([]);
+  const [usersInTraining, setUsersInTraining] = useState<FirestoreUser[]>([]);
   const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -95,8 +95,13 @@ export default function TrainingManagementPage() {
 
   useEffect(() => {
     if (!isLoadingAllUsers) {
-      const prospectorUsers = allFirestoreUsers.filter(user => user.type === 'prospector');
-      setProspectors(prospectorUsers);
+      // Show users who are either 'prospector' OR 'vendedor' but still have training progress.
+      // This keeps them on the list after being promoted.
+      const trainingUsers = allFirestoreUsers.filter(user => 
+        user.type === 'prospector' || 
+        (user.type === 'vendedor' && user.trainingProgress && Object.keys(user.trainingProgress).length > 0)
+      );
+      setUsersInTraining(trainingUsers);
     }
   }, [allFirestoreUsers, isLoadingAllUsers]);
 
@@ -226,15 +231,11 @@ export default function TrainingManagementPage() {
   };
   
   const getLatestQuizAttempt = (user: FirestoreUser): QuizAttempt | undefined => {
-      const allAttempts: QuizAttempt[] = [];
-      if (user.trainingProgress) {
-          for (const moduleId in user.trainingProgress) {
-              const attempts = user.trainingProgress[moduleId]?.quizAttempts;
-              if (attempts && attempts.length > 0) {
-                  allAttempts.push(...attempts);
-              }
-          }
-      }
+      if (!user.trainingProgress) return undefined;
+      const allAttempts: QuizAttempt[] = Object.values(user.trainingProgress)
+          .flatMap(moduleProgress => moduleProgress.quizAttempts || [])
+          .filter(attempt => attempt); // Ensure no null/undefined attempts
+
       if (allAttempts.length === 0) return undefined;
       // Sort by timestamp descending to get the latest one
       return allAttempts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
@@ -301,10 +302,11 @@ export default function TrainingManagementPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Promotor</TableHead><TableHead>Progresso Vídeos</TableHead><TableHead>Resultado Quiz</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {prospectors.length > 0 ? prospectors.map(user => {
+                  {usersInTraining.length > 0 ? usersInTraining.map(user => {
                     const { videoPercentage, completedVideos } = calculateProgress(user);
                     const latestAttempt = getLatestQuizAttempt(user);
-                    const canBeActivated = latestAttempt && latestAttempt.score >= 80;
+                    // A user can be activated if they passed the quiz OR if they are already a 'vendedor'
+                    const canBeActivated = (latestAttempt && latestAttempt.score >= 80) && user.type === 'prospector';
                     const isActivating = activatingUserId === user.uid;
 
                     return (
@@ -350,7 +352,7 @@ export default function TrainingManagementPage() {
                       </TableRow>
                     );
                   }) : (
-                    <TableRow><TableCell colSpan={4} className="text-center h-24">Nenhum promotor em treinamento no momento.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center h-24">Nenhum usuário em treinamento no momento.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
