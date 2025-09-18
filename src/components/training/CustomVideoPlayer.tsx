@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Play, Pause, Maximize, Volume2, VolumeX, XSquare } from 'lucide-react';
+import { Play, Pause, Maximize, Volume2, VolumeX, XSquare, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CustomVideoPlayerProps {
@@ -22,11 +22,17 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
+    const [hasEnded, setHasEnded] = useState(false); // New state to track if video has ended
     
     // This effect handles video events
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
+
+        // Reset state when src changes
+        setHasEnded(false);
+        setIsPlaying(false);
+        setProgress(0);
 
         const handlePlay = () => setIsPlaying(true);
         const handlePause = () => setIsPlaying(false);
@@ -45,6 +51,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         };
         const handleEnded = () => {
             setIsPlaying(false);
+            setHasEnded(true);
             onVideoEnd();
         };
 
@@ -55,13 +62,14 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         video.addEventListener('ended', handleEnded);
 
         // Attempt to play on mount only once
-        video.play().catch(error => {
-          // Autoplay is often blocked, which is fine. The user can click play.
-          if (error.name !== 'NotAllowedError') {
-            console.error("Video play error:", error);
-          }
-        });
-
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            if (error.name !== 'NotAllowedError') {
+              console.error("Video play error on mount:", error);
+            }
+          });
+        }
 
         // Cleanup function to remove event listeners
         return () => {
@@ -71,11 +79,15 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             video.removeEventListener('durationchange', handleDurationChange);
             video.removeEventListener('ended', handleEnded);
         };
-    }, [onVideoEnd, src]); // Depend on src to re-run if the video source changes
+    }, [src, onVideoEnd]); // Re-run effect if src changes
 
     const togglePlay = () => {
         if (videoRef.current) {
-            videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause();
+            if (videoRef.current.paused) {
+                videoRef.current.play();
+            } else {
+                videoRef.current.pause();
+            }
         }
     };
 
@@ -137,12 +149,24 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                 onClick={togglePlay}
                 playsInline // Important for mobile browsers
             />
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+
+            {hasEnded && (
+              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white z-20">
+                <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
+                <h3 className="text-2xl font-bold">Vídeo Concluído!</h3>
+                <p className="text-muted-foreground">Seu progresso foi salvo. Você pode fechar ou assistir novamente.</p>
+              </div>
+            )}
+
+            <div className={cn(
+              "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-300",
+              hasEnded ? "opacity-100" : "opacity-0 group-hover:opacity-100" // Always show controls after ending
+            )}>
                 <Slider
                     value={[progress]}
                     onValueChange={handleProgressChange}
-                    className={cn("w-full", !allowSeek && "cursor-not-allowed")}
-                    disabled={!allowSeek}
+                    className={cn("w-full", !allowSeek && !hasEnded && "cursor-not-allowed")} // Allow seek if ended
+                    disabled={!allowSeek && !hasEnded}
                     aria-label="Video Progress"
                 />
                  <div className="flex items-center justify-between mt-2">

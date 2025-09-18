@@ -8,9 +8,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Lock, Loader2 } from 'lucide-react';
-import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { FirestoreUser, TrainingModule } from '@/types/user';
+import type { TrainingModule } from '@/types/user';
 import { CustomVideoPlayer } from '@/components/training/CustomVideoPlayer';
 
 const TRAINING_CONFIG_DOC_ID = 'main-config';
@@ -46,13 +46,9 @@ export default function TrainingPage() {
     const path = `trainingProgress.${moduleId}.${videoId}`;
     const updates = { [`${path}.completed`]: true };
     
-    await updateDoc(doc(db, 'users', appUser.uid), updates);
-    await refreshUsers(); // Force refresh of user data in context
-    
-    // Close the player
-    setActiveVideoId(null);
-    setActiveVideoUrl(null);
-    setActiveModuleId(null);
+    const userDocRef = doc(db, 'users', appUser.uid);
+    await updateDoc(userDocRef, updates);
+    await refreshUsers(); // Force refresh of user data in context to update progress
   };
   
   const handleSelectVideo = (module: TrainingModule, videoId: string, videoUrl: string) => {
@@ -61,10 +57,15 @@ export default function TrainingPage() {
       setActiveVideoUrl(videoUrl);
   }
 
+  const handleClosePlayer = () => {
+    setActiveVideoId(null);
+    setActiveVideoUrl(null);
+    setActiveModuleId(null);
+  };
+
   const isVideoUnlocked = (moduleId: string, videoIndex: number): boolean => {
     if (isLoadingConfig || !appUser) return false;
 
-    // The very first video of the very first module is always unlocked.
     const firstModule = trainingModules[0];
     if (firstModule && moduleId === firstModule.id && videoIndex === 0) {
       return true;
@@ -75,23 +76,21 @@ export default function TrainingPage() {
     
     const currentModule = trainingModules[currentModuleIndex];
 
-    // Check if the PREVIOUS video in the SAME module is completed.
     if (videoIndex > 0) {
       const prevVideo = currentModule.videos[videoIndex - 1];
       return userProgress[moduleId]?.[prevVideo.id]?.completed === true;
     }
 
-    // Check if the LAST video of the PREVIOUS module is completed.
     if (currentModuleIndex > 0) {
       const prevModule = trainingModules[currentModuleIndex - 1];
-      if (prevModule.videos.length === 0) { // If prev module has no videos, check the one before it
+      if (prevModule.videos.length === 0) {
           return isVideoUnlocked(prevModule.id, 0); 
       }
       const lastVideoOfPrevModule = prevModule.videos[prevModule.videos.length - 1];
       return userProgress[prevModule.id]?.[lastVideoOfPrevModule.id]?.completed === true;
     }
     
-    return false; // Should not be reached if the first video logic is correct
+    return false;
   };
 
 
@@ -137,7 +136,7 @@ export default function TrainingPage() {
           {activeVideoUrl && activeVideoId && activeModuleId ? (
              <CustomVideoPlayer 
                 src={activeVideoUrl}
-                onClose={() => setActiveVideoUrl(null)}
+                onClose={handleClosePlayer}
                 onVideoEnd={() => handleVideoCompleted(activeModuleId, activeVideoId)}
                 allowSeek={userProgress[activeModuleId]?.[activeVideoId]?.completed || false}
              />
@@ -156,7 +155,10 @@ export default function TrainingPage() {
                             <div key={video.id} className="p-3 border rounded-md flex justify-between items-center">
                                 <h4 className="font-semibold text-foreground">{video.title}</h4>
                                 {isCompleted ? (
-                                    <CheckCircle className="h-5 w-5 text-green-500" />
+                                    <Button onClick={() => handleSelectVideo(module, video.id, video.videoUrl)} size="sm">
+                                      <CheckCircle className="h-4 w-4 mr-2 text-green-400" />
+                                      Assistir Novamente
+                                    </Button>
                                 ) : (
                                     <Button onClick={() => handleSelectVideo(module, video.id, video.videoUrl)} disabled={!unlocked} size="sm">
                                         {unlocked ? 'Assistir' : <Lock className="h-4 w-4"/>}
