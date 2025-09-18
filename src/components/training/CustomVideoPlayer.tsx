@@ -32,7 +32,10 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         const handlePause = () => setIsPlaying(false);
         const handleTimeUpdate = () => {
             if (video) {
-                setProgress((video.currentTime / video.duration) * 100);
+                const currentProgress = (video.currentTime / video.duration) * 100;
+                if (!isNaN(currentProgress)) {
+                  setProgress(currentProgress);
+                }
             }
         };
         const handleDurationChange = () => {
@@ -51,8 +54,16 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         video.addEventListener('durationchange', handleDurationChange);
         video.addEventListener('ended', handleEnded);
 
-        // Attempt to play on mount
-        video.play().catch(error => console.error("Autoplay failed:", error));
+        // Attempt to play on mount only once
+        if (video.paused) {
+          video.play().catch(error => {
+            // Autoplay is often blocked, which is fine. The user can click play.
+            if (error.name !== 'NotAllowedError') {
+              console.error("Video play error:", error);
+            }
+          });
+        }
+
 
         return () => {
             video.removeEventListener('play', handlePlay);
@@ -61,7 +72,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             video.removeEventListener('durationchange', handleDurationChange);
             video.removeEventListener('ended', handleEnded);
         };
-    }, [onVideoEnd]);
+    }, [onVideoEnd, src]); // Depend on src to re-run if the video source changes
 
     const togglePlay = () => {
         if (videoRef.current) {
@@ -78,16 +89,13 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     
     const toggleMute = () => {
         if (videoRef.current) {
-            const newMutedState = !isMuted;
+            const newMutedState = !videoRef.current.muted;
             videoRef.current.muted = newMutedState;
             setIsMuted(newMutedState);
             if(newMutedState) {
                 setVolume(0);
             } else {
-                // If unmuting, restore to a reasonable volume if it was 0
-                const previousVolume = videoRef.current.volume > 0 ? videoRef.current.volume : 1;
-                videoRef.current.volume = previousVolume;
-                setVolume(previousVolume);
+                setVolume(videoRef.current.volume);
             }
         }
     };
@@ -128,6 +136,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                 src={src}
                 className="w-full h-auto aspect-video"
                 onClick={togglePlay}
+                playsInline // Important for mobile browsers
             />
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <Slider
