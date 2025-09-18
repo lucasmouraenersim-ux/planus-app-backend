@@ -103,6 +103,8 @@ export default function TrainingPage() {
   }
   
   const allVideos = trainingModules.flatMap(m => m.videos);
+  const totalTrainingVideos = allVideos.length;
+
   const completedVideos = allVideos.filter(v => {
     const moduleId = trainingModules.find(m => m.videos.some(vid => vid.id === v.id))?.id;
     return moduleId && userProgress[moduleId]?.[v.id]?.completed === true;
@@ -110,7 +112,6 @@ export default function TrainingPage() {
   
   const totalProgressPercentage = totalTrainingVideos > 0 ? (completedVideos / totalTrainingVideos) * 100 : 0;
   const isTrainingComplete = totalProgressPercentage >= 100;
-  const totalTrainingVideos = allVideos.length;
 
   return (
     <div className="container mx-auto p-4 md:p-8">
