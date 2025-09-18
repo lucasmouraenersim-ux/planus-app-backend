@@ -51,6 +51,9 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         video.addEventListener('durationchange', handleDurationChange);
         video.addEventListener('ended', handleEnded);
 
+        // Attempt to play on mount
+        video.play().catch(error => console.error("Autoplay failed:", error));
+
         return () => {
             video.removeEventListener('play', handlePlay);
             video.removeEventListener('pause', handlePause);
@@ -81,7 +84,10 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             if(newMutedState) {
                 setVolume(0);
             } else {
-                setVolume(videoRef.current.volume > 0 ? videoRef.current.volume : 1);
+                // If unmuting, restore to a reasonable volume if it was 0
+                const previousVolume = videoRef.current.volume > 0 ? videoRef.current.volume : 1;
+                videoRef.current.volume = previousVolume;
+                setVolume(previousVolume);
             }
         }
     };
@@ -109,6 +115,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     };
 
     const formatTime = (timeInSeconds: number) => {
+        if (isNaN(timeInSeconds)) return "00:00";
         const minutes = Math.floor(timeInSeconds / 60);
         const seconds = Math.floor(timeInSeconds % 60);
         return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -121,7 +128,6 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                 src={src}
                 className="w-full h-auto aspect-video"
                 onClick={togglePlay}
-                autoPlay
             />
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <Slider
