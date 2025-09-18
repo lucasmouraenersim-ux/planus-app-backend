@@ -225,10 +225,19 @@ export default function TrainingManagementPage() {
     };
   };
   
-  const getLatestQuizAttempt = (user: FirestoreUser, moduleId: string): QuizAttempt | undefined => {
-      const attempts = user.trainingProgress?.[moduleId]?.quizAttempts;
-      if (!attempts || attempts.length === 0) return undefined;
-      return attempts[attempts.length - 1];
+  const getLatestQuizAttempt = (user: FirestoreUser): QuizAttempt | undefined => {
+      const allAttempts: QuizAttempt[] = [];
+      if (user.trainingProgress) {
+          for (const moduleId in user.trainingProgress) {
+              const attempts = user.trainingProgress[moduleId]?.quizAttempts;
+              if (attempts && attempts.length > 0) {
+                  allAttempts.push(...attempts);
+              }
+          }
+      }
+      if (allAttempts.length === 0) return undefined;
+      // Sort by timestamp descending to get the latest one
+      return allAttempts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
   };
 
   const handleActivatePromoter = async (userId: string) => {
@@ -294,8 +303,7 @@ export default function TrainingManagementPage() {
                 <TableBody>
                   {prospectors.length > 0 ? prospectors.map(user => {
                     const { videoPercentage, completedVideos } = calculateProgress(user);
-                    const mainModuleId = trainingModules[0]?.id;
-                    const latestAttempt = mainModuleId ? getLatestQuizAttempt(user, mainModuleId) : undefined;
+                    const latestAttempt = getLatestQuizAttempt(user);
                     const canBeActivated = latestAttempt && latestAttempt.score >= 80;
                     const isActivating = activatingUserId === user.uid;
 

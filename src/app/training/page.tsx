@@ -35,6 +35,7 @@ export default function TrainingPage() {
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [quizResult, setQuizResult] = useState<{ score: number; message: string } | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [cooldownTimeLeft, setCooldownTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
     const configDocRef = doc(db, 'training-config', TRAINING_CONFIG_DOC_ID);
@@ -63,17 +64,10 @@ export default function TrainingPage() {
         } 
     };
     
-    // Force a local update first for immediate UI feedback
+    // Update local state and Firestore
     updateAppUser({ ...appUser, trainingProgress: newProgress });
-
-    // Then update Firestore in the background
     const userDocRef = doc(db, 'users', appUser.uid);
-    try {
-        await updateDoc(userDocRef, { trainingProgress: newProgress });
-    } catch (error) {
-        console.error("Failed to save video progress to Firestore:", error);
-        // Optionally, revert the local state or show a toast
-    }
+    await updateDoc(userDocRef, { trainingProgress: newProgress });
   };
   
   const handleSelectVideo = (module: TrainingModule, videoId: string, videoUrl: string) => {
@@ -97,7 +91,7 @@ export default function TrainingPage() {
   }).length;
   
   const totalProgressPercentage = totalTrainingVideos > 0 ? (completedVideos / totalTrainingVideos) * 100 : 0;
-  const isTrainingComplete = completedVideos === totalTrainingVideos;
+  const isTrainingComplete = totalProgressPercentage >= 100;
 
   const isVideoUnlocked = (moduleId: string, videoIndex: number): boolean => {
     if (isLoadingConfig || !appUser) return false;
@@ -127,30 +121,27 @@ export default function TrainingPage() {
     return userProgress[prevModuleId]?.[prevVideoId]?.completed === true;
   };
   
-  const mainModule = trainingModules.length > 0 ? trainingModules[0] : null;
-  const mainModuleId = mainModule?.id;
-  const mainQuiz = mainModule?.quiz || [];
+  const allQuizQuestions = trainingModules.flatMap(m => m.quiz || []);
 
   const handleStartQuiz = () => {
-    if (mainQuiz.length > 0) {
-      setActiveModuleId(mainModuleId);
+    if (allQuizQuestions.length > 0) {
       setQuizAnswers({});
       setShowQuiz(true);
     }
   };
 
   const handleSubmitQuiz = async () => {
-    if (!appUser || !mainModuleId) return;
+    if (!appUser) return;
     setIsSubmittingQuiz(true);
 
     let correctCount = 0;
-    mainQuiz.forEach(q => {
+    allQuizQuestions.forEach(q => {
       if (quizAnswers[q.id] === q.correctAnswerIndex) {
         correctCount++;
       }
     });
     
-    const score = (correctCount / mainQuiz.length) * 100;
+    const score = (correctCount / allQuizQuestions.length) * 100;
 
     const newAttempt: QuizAttempt = {
         score,
@@ -158,8 +149,9 @@ export default function TrainingPage() {
         answers: quizAnswers,
     };
     
-    const existingAttempts = userProgress[mainModuleId]?.quizAttempts || [];
-    const newProgress = { ...userProgress, [mainModuleId]: { ...userProgress[mainModuleId], quizAttempts: [...existingAttempts, newAttempt] } };
+    const moduleIdForSaving = trainingModules[0]?.id || 'mainQuiz';
+    const existingAttempts = userProgress[moduleIdForSaving]?.quizAttempts || [];
+    const newProgress = { ...userProgress, [moduleIdForSaving]: { ...userProgress[moduleIdForSaving], quizAttempts: [...existingAttempts, newAttempt] } };
 
     const userDocRef = doc(db, 'users', appUser.uid);
 
@@ -184,26 +176,45 @@ export default function TrainingPage() {
       setTimeout(() => router.push('/dashboard'), 2000);
     }
   }
-  
-  const attempts = mainModuleId ? (userProgress[mainModuleId]?.quizAttempts || []) : [];
-  const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-  const quizPassed = lastAttempt && lastAttempt.score >= 80;
-  
-  let canTakeQuiz = true;
-  let cooldownMessage = "";
-  if (lastAttempt && !quizPassed) {
-      const lastAttemptTime = new Date(lastAttempt.timestamp).getTime();
-      const now = new Date().getTime();
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      if (now - lastAttemptTime < twentyFourHours) {
-          canTakeQuiz = false;
-          const timeLeft = twentyFourHours - (now - lastAttemptTime);
-          const hours = Math.floor(timeLeft / (60 * 60 * 1000));
-          const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-          cooldownMessage = `Aguarde ${hours}h ${minutes}m para tentar novamente.`;
-      }
-  }
 
+  const latestAttempt = userProgress[trainingModules[0]?.id || '']?.quizAttempts?.slice(-1)[0];
+  const quizPassed = latestAttempt && latestAttempt.score >= 80;
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    if (latestAttempt && !quizPassed) {
+      const lastAttemptTime = new Date(latestAttempt.timestamp).getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const cooldownEndTime = lastAttemptTime + twentyFourHours;
+
+      const updateCountdown = () => {
+        const now = new Date().getTime();
+        const timeLeft = cooldownEndTime - now;
+        if (timeLeft > 0) {
+          setCooldownTimeLeft(timeLeft);
+        } else {
+          setCooldownTimeLeft(null);
+          if (intervalId) clearInterval(intervalId);
+        }
+      };
+
+      updateCountdown();
+      intervalId = setInterval(updateCountdown, 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [latestAttempt, quizPassed]);
+  
+  const formatCountdown = (ms: number | null): string => {
+    if (ms === null || ms < 0) return "00h 00m 00s";
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+    return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+  };
+
+  const canTakeQuiz = cooldownTimeLeft === null;
 
   if (isLoadingConfig || !appUser) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -225,7 +236,7 @@ export default function TrainingPage() {
         <CardDescription>Responda as perguntas para validar seu conhecimento e ativar sua conta.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {mainQuiz.map((q, index) => (
+        {allQuizQuestions.map((q, index) => (
           <div key={q.id} className="p-4 border rounded-md">
             <p className="font-semibold mb-3">{index + 1}. {q.question}</p>
             <RadioGroup onValueChange={(val) => setQuizAnswers(prev => ({ ...prev, [q.id]: Number(val) }))}>
@@ -240,7 +251,7 @@ export default function TrainingPage() {
         ))}
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={handleSubmitQuiz} disabled={isSubmittingQuiz || Object.keys(quizAnswers).length < mainQuiz.length}>
+        <Button onClick={handleSubmitQuiz} disabled={isSubmittingQuiz || Object.keys(quizAnswers).length < allQuizQuestions.length}>
           {isSubmittingQuiz ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           Finalizar e Enviar Respostas
         </Button>
@@ -294,7 +305,7 @@ export default function TrainingPage() {
                 <Button onClick={handleStartQuiz} disabled={!canTakeQuiz}>
                   <FileQuestion className="mr-2 h-4 w-4" /> Iniciar Questionário Final
                 </Button>
-                {!canTakeQuiz && <p className="text-xs text-amber-600 mt-2">{cooldownMessage}</p>}
+                {!canTakeQuiz && <p className="text-sm text-amber-600 mt-2">Nova tentativa em: {formatCountdown(cooldownTimeLeft)}</p>}
               </div>
           )}
 
