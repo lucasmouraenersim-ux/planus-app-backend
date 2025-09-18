@@ -22,7 +22,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     const [duration, setDuration] = useState(0);
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
-    const [hasEnded, setHasEnded] = useState(false); // New state to track if video has ended
+    const [hasEnded, setHasEnded] = useState(false);
     
     // This effect handles video events
     useEffect(() => {
@@ -61,10 +61,12 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         video.addEventListener('durationchange', handleDurationChange);
         video.addEventListener('ended', handleEnded);
 
-        // Attempt to play on mount only once
+        // Attempt to play on mount
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise.catch(error => {
+            // Autoplay was prevented. This is a common browser policy.
+            // User will have to click play manually.
             if (error.name !== 'NotAllowedError') {
               console.error("Video play error on mount:", error);
             }
@@ -79,10 +81,15 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
             video.removeEventListener('durationchange', handleDurationChange);
             video.removeEventListener('ended', handleEnded);
         };
-    }, [src, onVideoEnd]); // Re-run effect if src changes
+    }, [src, onVideoEnd]);
 
     const togglePlay = () => {
         if (videoRef.current) {
+            // If the video has ended, reset it before playing again
+            if (hasEnded && videoRef.current.currentTime >= duration - 0.1) {
+                videoRef.current.currentTime = 0;
+                setHasEnded(false);
+            }
             if (videoRef.current.paused) {
                 videoRef.current.play();
             } else {
@@ -92,7 +99,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
     };
 
     const handleProgressChange = (value: number[]) => {
-        if (videoRef.current && allowSeek) {
+        if (videoRef.current && (allowSeek || hasEnded)) { // Allow seeking if completed
             const newTime = (value[0] / 100) * duration;
             videoRef.current.currentTime = newTime;
         }
@@ -126,7 +133,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
 
         if (!document.fullscreenElement) {
             container.requestFullscreen().catch(err => {
-                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                alert(`Error attempting to enable full-screen mode: ${'${err.message}'} (${'${err.name}'})`);
             });
         } else {
             document.exitFullscreen();
@@ -137,7 +144,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
         if (isNaN(timeInSeconds)) return "00:00";
         const minutes = Math.floor(timeInSeconds / 60);
         const seconds = Math.floor(timeInSeconds % 60);
-        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        return `${'${String(minutes).padStart(2, '0')}'}:${'${String(seconds).padStart(2, '0')}'}`;
     };
 
     return (
@@ -147,7 +154,7 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
                 src={src}
                 className="w-full h-auto aspect-video"
                 onClick={togglePlay}
-                playsInline // Important for mobile browsers
+                playsInline
             />
 
             {hasEnded && (
@@ -160,12 +167,12 @@ export function CustomVideoPlayer({ src, onClose, onVideoEnd, allowSeek }: Custo
 
             <div className={cn(
               "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-300",
-              hasEnded ? "opacity-100" : "opacity-0 group-hover:opacity-100" // Always show controls after ending
+              hasEnded ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             )}>
                 <Slider
                     value={[progress]}
                     onValueChange={handleProgressChange}
-                    className={cn("w-full", !allowSeek && !hasEnded && "cursor-not-allowed")} // Allow seek if ended
+                    className={cn("w-full", !allowSeek && !hasEnded && "cursor-not-allowed")}
                     disabled={!allowSeek && !hasEnded}
                     aria-label="Video Progress"
                 />
