@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import jsPDF from 'jspdf';
 import { useAuth } from '@/contexts/AuthContext';
 import type { FirestoreUser, TrainingModule, TrainingVideo, TrainingQuizQuestion, QuizAttempt } from '@/types/user';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -340,19 +341,21 @@ ${promoterName}
 CPF/CNPJ: ${promoterDocument}
 `;
 
-    const blob = new Blob([contractText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Contrato_Parceria_${promoterName.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const doc = new jsPDF();
+    
+    // Configura a fonte e o tamanho
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+
+    // Adiciona o texto ao PDF, lidando com quebras de linha e margens
+    const lines = doc.splitTextToSize(contractText, 180); // 180mm de largura útil
+    doc.text(lines, 15, 20); // Margem de 15mm da esquerda e 20mm do topo
+
+    doc.save(`Contrato_Parceria_${promoterName.replace(/\s+/g, '_')}.pdf`);
 
     toast({
       title: "Contrato Gerado",
-      description: `O contrato para ${promoterName} foi baixado.`,
+      description: `O PDF do contrato para ${promoterName} foi baixado.`,
     });
   };
 
