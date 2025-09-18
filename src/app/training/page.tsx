@@ -10,24 +10,26 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Lock, PlayCircle, Loader2 } from 'lucide-react';
 import YouTube from 'react-youtube';
 import type { YouTubePlayer } from 'react-youtube';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const trainingModules = [
   {
     id: 'module1',
-    title: 'Módulo 1: Boas-vindas e Introdução',
+    title: 'Módulo 1: A Oportunidade',
     videos: [
-      { id: 'qWpL2K_qY4Y', title: 'Introdução à Sent Energia', duration: 120 }, // Placeholder duration
-      { id: 'dQw4w9WgXcQ', title: 'Nosso Modelo de Negócio', duration: 180 },
+      { id: 'MTp7KkZhkJo', title: 'A Oportunidade do Mercado', duration: 183 },
+      { id: 'xR3dzreEUe0', title: 'O que é kWh e Crédito de Energia', duration: 161 },
+      { id: 'zTbuI8AH2LY', title: 'O que a Usina Ganha', duration: 93 },
     ],
   },
   {
     id: 'module2',
-    title: 'Módulo 2: Ferramentas e Processos',
+    title: 'Módulo 2: O Cliente e os Ganhos',
     videos: [
-      { id: '3tmd-ClpJxA', title: 'Usando o CRM', duration: 240 },
-      { id: 'o-YBDTqX_ZU', title: 'Como Gerar uma Proposta', duration: 200 },
+      { id: 'Elz4c7bpcO4', title: 'Benefícios para o Cliente', duration: 123 },
+      { id: 'WIMBnoZVfmo', title: 'Quem é o cliente ideal', duration: 125 },
+      { id: 'yGTEMOG1Jlo', title: 'Quanto Dá pra Ganhar', duration: 257 },
     ],
   },
 ];
@@ -60,10 +62,13 @@ export default function TrainingPage() {
           });
         }
         
-        if (currentTime >= duration - 1) {
-            await updateDoc(doc(db, 'users', appUser.uid), {
-                [`${path}.completed`]: true,
-            });
+        // Mark as completed a little before the end to avoid issues with buffering/ending events
+        if (currentTime >= duration - 2) {
+            if (!userProgress[moduleId]?.[videoId]?.completed) {
+                await updateDoc(doc(db, 'users', appUser.uid), {
+                    [`${path}.completed`]: true,
+                });
+            }
             if (intervalRef.current) clearInterval(intervalRef.current);
         }
       }
@@ -119,13 +124,34 @@ export default function TrainingPage() {
         </div>
     );
   }
+  
+  const allVideos = trainingModules.flatMap(m => m.videos);
+  const completedVideos = allVideos.filter(v => {
+    const moduleId = trainingModules.find(m => m.videos.some(vid => vid.id === v.id))?.id;
+    return moduleId && userProgress[moduleId]?.[v.id]?.completed === true;
+  }).length;
+  const totalProgressPercentage = (completedVideos / allVideos.length) * 100;
+  const isTrainingComplete = totalProgressPercentage >= 100;
+
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <Card className="bg-card/80 backdrop-blur-lg">
         <CardHeader>
           <CardTitle className="text-3xl text-primary">Portal de Treinamento</CardTitle>
-          <CardDescription>Bem-vindo, {appUser.displayName}! Complete os módulos para ativar sua conta.</CardDescription>
+          <CardDescription>Bem-vindo, {appUser.displayName}! Complete os módulos para ativar sua conta de vendedor.</CardDescription>
+           <div className="pt-4">
+            <Progress value={totalProgressPercentage} className="h-3" />
+            <p className="text-sm text-muted-foreground text-right mt-1">
+                {completedVideos} de {allVideos.length} vídeos concluídos.
+            </p>
+          </div>
+          {isTrainingComplete && (
+            <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+                <h3 className="font-semibold text-green-600">Treinamento Concluído!</h3>
+                <p className="text-sm text-muted-foreground">Parabéns! Você finalizou todos os módulos. Um administrador irá revisar seu progresso e ativar sua conta de vendedor em breve.</p>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Accordion type="single" collapsible className="w-full" defaultValue="module1">
@@ -137,14 +163,15 @@ export default function TrainingPage() {
                     {module.videos.map((video, index) => {
                       const unlocked = isVideoUnlocked(module.id, index);
                       const progress = userProgress[module.id]?.[video.id];
-                      const progressPercent = progress ? (progress.watchedSeconds / video.duration) * 100 : 0;
+                      const isCompleted = progress?.completed === true;
+                      const progressPercent = isCompleted ? 100 : (progress ? (progress.watchedSeconds / video.duration) * 100 : 0);
 
                       return (
                         <div key={video.id} className="p-3 border rounded-md">
                            <div className="flex justify-between items-center mb-2">
                                 <h4 className="font-semibold text-foreground">{video.title}</h4>
                                 {unlocked ? (
-                                    progress?.completed ? (
+                                    isCompleted ? (
                                         <CheckCircle className="h-5 w-5 text-green-500" />
                                     ) : (
                                         <PlayCircle className="h-5 w-5 text-primary" />
@@ -165,6 +192,7 @@ export default function TrainingPage() {
                                             controls: 1,
                                             disablekb: 1, // Disables keyboard controls
                                             modestbranding: 1,
+                                            iv_load_policy: 3, // Hide video annotations
                                         },
                                     }}
                                     onReady={handleVideoReady}
@@ -172,8 +200,8 @@ export default function TrainingPage() {
                                     onEnd={() => handleEnd(module.id, video.id)}
                                 />
                             )}
-                             <Button onClick={() => setActiveVideoId(video.id)} disabled={!unlocked || activeVideoId === video.id}>
-                                Assistir Vídeo
+                             <Button onClick={() => setActiveVideoId(video.id)} disabled={!unlocked || activeVideoId === video.id} size="sm">
+                                {activeVideoId === video.id ? "Assistindo..." : "Assistir Vídeo"}
                              </Button>
                         </div>
                       );

@@ -16,18 +16,20 @@ import { useToast } from '@/hooks/use-toast';
 const trainingModules = [
   {
     id: 'module1',
-    title: 'Módulo 1: Boas-vindas e Introdução',
+    title: 'Módulo 1: A Oportunidade',
     videos: [
-      { id: 'qWpL2K_qY4Y', title: 'Introdução à Planus Energia', duration: 120 },
-      { id: 'dQw4w9WgXcQ', title: 'Nosso Modelo de Negócio', duration: 180 },
+      { id: 'MTp7KkZhkJo', title: 'A Oportunidade do Mercado', duration: 183 },
+      { id: 'xR3dzreEUe0', title: 'O que é kWh e Crédito de Energia', duration: 161 },
+      { id: 'zTbuI8AH2LY', title: 'O que a Usina Ganha', duration: 93 },
     ],
   },
   {
     id: 'module2',
-    title: 'Módulo 2: Ferramentas e Processos',
+    title: 'Módulo 2: O Cliente e os Ganhos',
     videos: [
-      { id: '3tmd-ClpJxA', title: 'Usando o CRM', duration: 240 },
-      { id: 'o-YBDTqX_ZU', title: 'Como Gerar uma Proposta', duration: 200 },
+      { id: 'Elz4c7bpcO4', title: 'Benefícios para o Cliente', duration: 123 },
+      { id: 'WIMBnoZVfmo', title: 'Quem é o cliente ideal', duration: 125 },
+      { id: 'yGTEMOG1Jlo', title: 'Quanto Dá pra Ganhar', duration: 257 },
     ],
   },
 ];
@@ -59,7 +61,7 @@ export default function TrainingProgressPage() {
         if (progress[module.id]?.[video.id]?.completed) {
           completedVideos++;
           lastWatchedTitle = video.title;
-        } else if (progress[module.id]?.[video.id]?.watchedSeconds > 0) {
+        } else if ((progress[module.id]?.[video.id]?.watchedSeconds || 0) > 0) {
           lastWatchedTitle = video.title;
         }
       });
