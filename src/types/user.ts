@@ -1,3 +1,4 @@
+
 // src/types/user.ts
 import type { Timestamp } from 'firebase/firestore';
 
@@ -25,6 +26,18 @@ interface PersonalFinanceData {
   revenues: PersonalRevenue[];
 }
 
+export interface TrainingVideo {
+  id: string;
+  title: string;
+  videoUrl: string;
+  duration: number; // in seconds
+}
+
+export interface TrainingModule {
+  id: string;
+  title: string;
+  videos: TrainingVideo[];
+}
 
 // Represents the data structure for a user in Firestore
 export type FirestoreUser = {

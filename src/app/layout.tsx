@@ -24,7 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target, ListChecks } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target, ListChecks, BookOpen as TrainingIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -163,7 +163,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
 
     const formatUserRole = (role: UserType | null): string => {
         if (!role) return "Usuário";
-        const map: Record<UserType, string> = { admin: "Administrador", superadmin: "Super Admin", vendedor: "Vendedor", prospector: "Prospector", user: "Cliente", pending_setup: "Pendente" };
+        const map: Record<UserType, string> = { admin: "Administrador", superadmin: "Super Admin", vendedor: "Vendedor", prospector: "Prospector", user: "Cliente", pending_setup: "Pendente", advogado: "Advogado" };
         return map[role] || role.charAt(0).toUpperCase() + role.slice(1);
     };
 
@@ -192,7 +192,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training-progress"><SidebarMenuButton isActive={currentPathname === '/admin/training-progress'} tooltip="Progresso de Treinamento"><GraduationCap />Acompanhamento</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
