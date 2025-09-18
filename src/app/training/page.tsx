@@ -31,10 +31,10 @@ export default function TrainingPage() {
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
   const [showQuiz, setShowQuiz] = useState(false);
-  const [currentQuiz, setCurrentQuiz] = useState<TrainingQuizQuestion[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<{ [key: string]: number }>({});
   const [isSubmittingQuiz, setIsSubmittingQuiz] = useState(false);
   const [quizResult, setQuizResult] = useState<{ score: number; message: string } | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     const configDocRef = doc(db, 'training-config', TRAINING_CONFIG_DOC_ID);
@@ -53,12 +53,27 @@ export default function TrainingPage() {
   const userProgress = appUser?.trainingProgress || {};
 
   const handleVideoCompleted = async (moduleId: string, videoId: string) => {
-    if (!appUser) return;
-    const path = `trainingProgress.${moduleId}.${videoId}`;
-    const newProgress = { ...userProgress, [moduleId]: { ...(userProgress[moduleId] || {}), [videoId]: { completed: true } } };
-    const userDocRef = doc(db, 'users', appUser.uid);
-    await updateDoc(userDocRef, { trainingProgress: newProgress });
+    if (!appUser || userProgress[moduleId]?.[videoId]?.completed) return;
+    
+    const newProgress = { 
+        ...userProgress, 
+        [moduleId]: { 
+            ...(userProgress[moduleId] || {}), 
+            [videoId]: { completed: true } 
+        } 
+    };
+    
+    // Force a local update first for immediate UI feedback
     updateAppUser({ ...appUser, trainingProgress: newProgress });
+
+    // Then update Firestore in the background
+    const userDocRef = doc(db, 'users', appUser.uid);
+    try {
+        await updateDoc(userDocRef, { trainingProgress: newProgress });
+    } catch (error) {
+        console.error("Failed to save video progress to Firestore:", error);
+        // Optionally, revert the local state or show a toast
+    }
   };
   
   const handleSelectVideo = (module: TrainingModule, videoId: string, videoUrl: string) => {
@@ -72,49 +87,70 @@ export default function TrainingPage() {
     setActiveVideoUrl(null);
     setActiveModuleId(null);
   };
+  
+  const allVideos = trainingModules.flatMap(m => m.videos);
+  const totalTrainingVideos = allVideos.length;
+
+  const completedVideos = allVideos.filter(v => {
+    const moduleId = trainingModules.find(m => m.videos.some(vid => vid.id === v.id))?.id;
+    return moduleId && userProgress[moduleId]?.[v.id]?.completed === true;
+  }).length;
+  
+  const totalProgressPercentage = totalTrainingVideos > 0 ? (completedVideos / totalTrainingVideos) * 100 : 0;
+  const isTrainingComplete = completedVideos === totalTrainingVideos;
 
   const isVideoUnlocked = (moduleId: string, videoIndex: number): boolean => {
     if (isLoadingConfig || !appUser) return false;
-    const firstModule = trainingModules[0];
-    if (firstModule && moduleId === firstModule.id && videoIndex === 0) return true;
-    const currentModuleIndex = trainingModules.findIndex(m => m.id === moduleId);
-    if (currentModuleIndex === -1) return false;
-    const currentModule = trainingModules[currentModuleIndex];
-    if (videoIndex > 0) {
-      const prevVideo = currentModule.videos[videoIndex - 1];
-      return userProgress[moduleId]?.[prevVideo.id]?.completed === true;
-    }
-    if (currentModuleIndex > 0) {
-      const prevModule = trainingModules[currentModuleIndex - 1];
-      if (prevModule.videos.length === 0) return isVideoUnlocked(prevModule.id, 0); 
-      const lastVideoOfPrevModule = prevModule.videos[prevModule.videos.length - 1];
-      return userProgress[prevModule.id]?.[lastVideoOfPrevModule.id]?.completed === true;
-    }
-    return false;
-  };
+    const moduleIndex = trainingModules.findIndex(m => m.id === moduleId);
+    if (moduleIndex === -1) return false;
 
-  const handleStartQuiz = (moduleId: string) => {
-    const module = trainingModules.find(m => m.id === moduleId);
-    if (module?.quiz) {
-      setActiveModuleId(moduleId); // Set active module for quiz submission
-      setCurrentQuiz(module.quiz);
+    // First video of the first module is always unlocked
+    if (moduleIndex === 0 && videoIndex === 0) return true;
+
+    // Find the previous video
+    let prevModuleId: string;
+    let prevVideoId: string;
+
+    if (videoIndex > 0) {
+      // Previous video is in the same module
+      prevModuleId = moduleId;
+      prevVideoId = trainingModules[moduleIndex].videos[videoIndex - 1].id;
+    } else {
+      // Previous video is the last video of the previous module
+      if (moduleIndex === 0) return false; // Should not happen if check above is correct
+      const prevModule = trainingModules[moduleIndex - 1];
+      if (prevModule.videos.length === 0) return isVideoUnlocked(prevModule.id, 0); // Recursively check previous empty modules
+      prevModuleId = prevModule.id;
+      prevVideoId = prevModule.videos[prevModule.videos.length - 1].id;
+    }
+
+    return userProgress[prevModuleId]?.[prevVideoId]?.completed === true;
+  };
+  
+  const mainModule = trainingModules.length > 0 ? trainingModules[0] : null;
+  const mainModuleId = mainModule?.id;
+  const mainQuiz = mainModule?.quiz || [];
+
+  const handleStartQuiz = () => {
+    if (mainQuiz.length > 0) {
+      setActiveModuleId(mainModuleId);
       setQuizAnswers({});
       setShowQuiz(true);
     }
   };
 
   const handleSubmitQuiz = async () => {
-    if (!appUser || !activeModuleId) return;
+    if (!appUser || !mainModuleId) return;
     setIsSubmittingQuiz(true);
 
     let correctCount = 0;
-    currentQuiz.forEach(q => {
+    mainQuiz.forEach(q => {
       if (quizAnswers[q.id] === q.correctAnswerIndex) {
         correctCount++;
       }
     });
     
-    const score = (correctCount / currentQuiz.length) * 100;
+    const score = (correctCount / mainQuiz.length) * 100;
 
     const newAttempt: QuizAttempt = {
         score,
@@ -122,18 +158,18 @@ export default function TrainingPage() {
         answers: quizAnswers,
     };
     
-    const existingAttempts = userProgress[activeModuleId]?.quizAttempts || [];
-    const newProgress = { ...userProgress, [activeModuleId]: { ...userProgress[activeModuleId], quizAttempts: [...existingAttempts, newAttempt] } };
+    const existingAttempts = userProgress[mainModuleId]?.quizAttempts || [];
+    const newProgress = { ...userProgress, [mainModuleId]: { ...userProgress[mainModuleId], quizAttempts: [...existingAttempts, newAttempt] } };
 
     const userDocRef = doc(db, 'users', appUser.uid);
-    await updateDoc(userDocRef, { trainingProgress: newProgress });
-    updateAppUser({ ...appUser, trainingProgress: newProgress });
 
     if (score >= 80) {
-      setQuizResult({ score, message: "Parabéns! Você foi aprovado. O Gestor entrará em contato para dar continuidade ao seu processo! Vamos ganhar dinheiro!!!" });
-      await updateDoc(userDocRef, { type: 'vendedor' });
+      await updateDoc(userDocRef, { trainingProgress: newProgress, type: 'vendedor' });
       updateAppUser({ ...appUser, type: 'vendedor', trainingProgress: newProgress });
+      setQuizResult({ score, message: "Parabéns! O Gestor entrará em contato com você para dar continuidade ao seu processo! Vamos ganhar dinheiro!!!" });
     } else {
+      await updateDoc(userDocRef, { trainingProgress: newProgress });
+      updateAppUser({ ...appUser, trainingProgress: newProgress });
       setQuizResult({ score, message: "Sinto muito! Você precisa refazer o treinamento. Você poderá tentar o questionário novamente em 24 horas." });
     }
 
@@ -144,32 +180,52 @@ export default function TrainingPage() {
     setQuizResult(null);
     setShowQuiz(false);
     if (quizResult && quizResult.score >= 80) {
-      router.push('/dashboard');
+      setIsRedirecting(true);
+      setTimeout(() => router.push('/dashboard'), 2000);
     }
   }
+  
+  const attempts = mainModuleId ? (userProgress[mainModuleId]?.quizAttempts || []) : [];
+  const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+  const quizPassed = lastAttempt && lastAttempt.score >= 80;
+  
+  let canTakeQuiz = true;
+  let cooldownMessage = "";
+  if (lastAttempt && !quizPassed) {
+      const lastAttemptTime = new Date(lastAttempt.timestamp).getTime();
+      const now = new Date().getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (now - lastAttemptTime < twentyFourHours) {
+          canTakeQuiz = false;
+          const timeLeft = twentyFourHours - (now - lastAttemptTime);
+          const hours = Math.floor(timeLeft / (60 * 60 * 1000));
+          const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+          cooldownMessage = `Aguarde ${hours}h ${minutes}m para tentar novamente.`;
+      }
+  }
+
 
   if (isLoadingConfig || !appUser) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
   
-  const allVideos = trainingModules.flatMap(m => m.videos);
-  const totalTrainingVideos = allVideos.length;
-  const completedVideos = allVideos.filter(v => {
-    const moduleId = trainingModules.find(m => m.videos.some(vid => vid.id === v.id))?.id;
-    return moduleId && userProgress[moduleId]?.[v.id]?.completed === true;
-  }).length;
-  const totalProgressPercentage = totalTrainingVideos > 0 ? (completedVideos / totalTrainingVideos) * 100 : 0;
-  
-  const isTrainingComplete = completedVideos === totalTrainingVideos;
+  if (isRedirecting) {
+    return <div className="flex flex-col justify-center items-center h-full text-center">
+        <CheckCircle className="h-16 w-16 text-green-500 mb-4"/>
+        <h2 className="text-2xl font-bold text-primary">Aprovado!</h2>
+        <p className="text-muted-foreground">Redirecionando para o seu painel em 2 segundos...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-primary mt-4" />
+    </div>;
+  }
 
   const renderQuiz = () => (
     <Card className="bg-card/90">
       <CardHeader>
-        <CardTitle className="text-primary">Questionário do Módulo</CardTitle>
-        <CardDescription>Responda as perguntas para validar seu conhecimento.</CardDescription>
+        <CardTitle className="text-primary">Questionário Final</CardTitle>
+        <CardDescription>Responda as perguntas para validar seu conhecimento e ativar sua conta.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {currentQuiz.map((q, index) => (
+        {mainQuiz.map((q, index) => (
           <div key={q.id} className="p-4 border rounded-md">
             <p className="font-semibold mb-3">{index + 1}. {q.question}</p>
             <RadioGroup onValueChange={(val) => setQuizAnswers(prev => ({ ...prev, [q.id]: Number(val) }))}>
@@ -184,7 +240,7 @@ export default function TrainingPage() {
         ))}
       </CardContent>
       <CardFooter className="flex justify-end">
-        <Button onClick={handleSubmitQuiz} disabled={isSubmittingQuiz || Object.keys(quizAnswers).length < currentQuiz.length}>
+        <Button onClick={handleSubmitQuiz} disabled={isSubmittingQuiz || Object.keys(quizAnswers).length < mainQuiz.length}>
           {isSubmittingQuiz ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           Finalizar e Enviar Respostas
         </Button>
@@ -210,29 +266,6 @@ export default function TrainingPage() {
             <Accordion type="single" collapsible className="w-full" defaultValue={trainingModules[0]?.id}>
               {trainingModules.map((module) => {
                 const moduleVideos = module.videos || [];
-                const completedModuleVideos = moduleVideos.filter(v => userProgress[module.id]?.[v.id]?.completed).length;
-                const moduleComplete = moduleVideos.length > 0 && completedModuleVideos === moduleVideos.length;
-                
-                const attempts = userProgress[module.id]?.quizAttempts || [];
-                const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-                const quizTaken = !!lastAttempt;
-                const quizPassed = lastAttempt && lastAttempt.score >= 80;
-                
-                let canTakeQuiz = true;
-                let cooldownMessage = "";
-                if (lastAttempt && !quizPassed) {
-                    const lastAttemptTime = new Date(lastAttempt.timestamp).getTime();
-                    const now = new Date().getTime();
-                    const twentyFourHours = 24 * 60 * 60 * 1000;
-                    if (now - lastAttemptTime < twentyFourHours) {
-                        canTakeQuiz = false;
-                        const timeLeft = twentyFourHours - (now - lastAttemptTime);
-                        const hours = Math.floor(timeLeft / (60 * 60 * 1000));
-                        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
-                        cooldownMessage = `Aguarde ${hours}h ${minutes}m para tentar novamente.`;
-                    }
-                }
-
                 return (
                   <AccordionItem key={module.id} value={module.id}>
                     <AccordionTrigger>{module.title}</AccordionTrigger>
@@ -246,22 +279,6 @@ export default function TrainingPage() {
                               {isCompleted ? <Button onClick={() => handleSelectVideo(module, video.id, video.videoUrl)} size="sm"><CheckCircle className="h-4 w-4 mr-2 text-green-400" />Assistir Novamente</Button> : <Button onClick={() => handleSelectVideo(module, video.id, video.videoUrl)} disabled={!unlocked} size="sm">{unlocked ? 'Assistir' : <Lock className="h-4 w-4"/>}</Button>}
                           </div>);
                         })}
-                        {moduleComplete && (module.quiz || []).length > 0 && !quizPassed && (
-                          <div className="p-4 bg-primary/10 border border-primary/20 rounded-md text-center space-y-3">
-                            <h3 className="font-semibold">Parabéns por concluir os vídeos!</h3>
-                            <p className="text-sm text-muted-foreground">Agora, teste seu conhecimento para liberar o próximo passo.</p>
-                            <Button onClick={() => handleStartQuiz(module.id)} disabled={!canTakeQuiz}>
-                              <FileQuestion className="mr-2 h-4 w-4" /> Iniciar Questionário
-                            </Button>
-                            {!canTakeQuiz && <p className="text-xs text-amber-600 mt-2">{cooldownMessage}</p>}
-                          </div>
-                        )}
-                        {quizPassed && (
-                          <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
-                            <h3 className="font-semibold text-green-600">Questionário Concluído com Sucesso!</h3>
-                            <p className="text-sm text-muted-foreground">Um administrador irá revisar seu progresso e ativar sua conta de vendedor em breve.</p>
-                          </div>
-                        )}
                       </div>
                     </AccordionContent>
                   </AccordionItem>
@@ -269,6 +286,25 @@ export default function TrainingPage() {
               })}
             </Accordion>
           )}
+
+          {!showQuiz && !activeVideoUrl && isTrainingComplete && !quizPassed && (
+              <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-md text-center space-y-3">
+                <h3 className="font-semibold">Parabéns por concluir todos os vídeos!</h3>
+                <p className="text-sm text-muted-foreground">Agora, teste seu conhecimento para liberar o próximo passo.</p>
+                <Button onClick={handleStartQuiz} disabled={!canTakeQuiz}>
+                  <FileQuestion className="mr-2 h-4 w-4" /> Iniciar Questionário Final
+                </Button>
+                {!canTakeQuiz && <p className="text-xs text-amber-600 mt-2">{cooldownMessage}</p>}
+              </div>
+          )}
+
+          {quizPassed && (
+            <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+              <h3 className="font-semibold text-green-600">Treinamento Concluído com Sucesso!</h3>
+              <p className="text-sm text-muted-foreground">Sua conta de vendedor está ativa. Você será redirecionado para o painel principal.</p>
+            </div>
+          )}
+
         </CardContent>
       </Card>
       
