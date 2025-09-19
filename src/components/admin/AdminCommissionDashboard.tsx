@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart, TrendingUp as TrendingUpIcon, Landmark
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -1360,11 +1360,16 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                 <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
                                 <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
                                     <Edit2 className="h-4 w-4 mr-2" />
                                     Ver / Editar Detalhes
                                 </DropdownMenuItem>
+                                {user.signedContractUrl && (
+                                    <DropdownMenuItem onSelect={() => window.open(user.signedContractUrl, '_blank')}>
+                                        <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
+                                        Ver Contrato Assinado
+                                    </DropdownMenuItem>
+                                )}
                                 {canEdit && <DropdownMenuSeparator />}
                                 {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
                                     <ShieldAlert className="mr-2 h-4 w-4" />
