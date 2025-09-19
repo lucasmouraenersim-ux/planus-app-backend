@@ -92,6 +92,9 @@ export type FirestoreUser = {
 
   // Personal finance data for superadmin
   personalFinance?: PersonalFinanceData;
+
+  // New field for signed contract
+  signedContractUrl?: string;
 };
 
 // User object available in the auth context or passed as props
@@ -133,4 +136,7 @@ export type AppUser = {
   
   // Personal finance data for superadmin
   personalFinance?: PersonalFinanceData;
+
+  // New field for signed contract
+  signedContractUrl?: string;
 };

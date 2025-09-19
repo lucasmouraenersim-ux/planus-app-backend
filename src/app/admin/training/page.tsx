@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion, MoreHorizontal, RotateCcw, FileSignature } from 'lucide-react';
+import { Loader2, GraduationCap, CheckCircle, Upload, PlusCircle, Trash2, Edit, HelpCircle, Check, X, FileQuestion, MoreHorizontal, RotateCcw, FileSignature, FileUp } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,6 +79,11 @@ export default function TrainingManagementPage() {
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [currentOptions, setCurrentOptions] = useState<string[]>(['', '', '', '']);
   const [currentCorrectAnswerIndex, setCurrentCorrectAnswerIndex] = useState<number>(0);
+
+  // State for contract upload
+  const [userForContractUpload, setUserForContractUpload] = useState<FirestoreUser | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
+  const [isUploadingContract, setIsUploadingContract] = useState(false);
 
 
   useEffect(() => {
@@ -209,6 +214,28 @@ export default function TrainingManagementPage() {
       return m;
     });
     saveTrainingConfig(updatedModules);
+  };
+
+  const handleUploadContract = async () => {
+    if (!contractFile || !userForContractUpload) return;
+    setIsUploadingContract(true);
+    try {
+        const filePath = `signed_contracts/${userForContractUpload.uid}/contrato_parceria_assinado.pdf`;
+        const downloadURL = await uploadFile(contractFile, filePath);
+        await updateUser(userForContractUpload.uid, { signedContractUrl: downloadURL });
+        await refreshUsers(); // Refresh user list to reflect the change
+        toast({
+            title: "Contrato Enviado",
+            description: `O contrato de ${userForContractUpload.displayName} foi salvo com sucesso.`,
+        });
+        setUserForContractUpload(null);
+        setContractFile(null);
+    } catch (error) {
+        console.error("Error uploading contract:", error);
+        toast({ title: 'Erro de Upload', description: 'Não foi possível enviar o contrato.', variant: 'destructive' });
+    } finally {
+        setIsUploadingContract(false);
+    }
   };
 
 
@@ -372,11 +399,12 @@ CPF/CNPJ: ${promoterDocument}
     // Define margins e largura máxima
     const margin = 15;
     const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
-    const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
     let y = 20;
 
     // Divide o texto em linhas que cabem na página
     const lines = doc.splitTextToSize(contractText, maxWidth);
+    
+    const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
 
     lines.forEach((line: string) => {
         // Verifica se a próxima linha ultrapassará o limite da página
@@ -464,10 +492,16 @@ CPF/CNPJ: ${promoterDocument}
                                 </DropdownMenuItem>
                               )}
                               {quizPassed && (
-                                <DropdownMenuItem onClick={() => handleElaborateContract(user)}>
-                                  <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
-                                  Elaborar Contrato
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem onClick={() => handleElaborateContract(user)}>
+                                    <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
+                                    Elaborar Contrato
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setUserForContractUpload(user)}>
+                                    <FileUp className="mr-2 h-4 w-4 text-indigo-500" />
+                                    Upload de Termo Assinado
+                                  </DropdownMenuItem>
+                                </>
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleResetTrainingClick(user)} className="text-destructive focus:bg-destructive focus:text-destructive-foreground">
@@ -581,6 +615,34 @@ CPF/CNPJ: ${promoterDocument}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <Dialog open={!!userForContractUpload} onOpenChange={(open) => {if (!open) setUserForContractUpload(null)}}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload de Termo Assinado</DialogTitle>
+            <DialogDescription>
+              Faça o upload do contrato de parceria assinado para <strong>{userForContractUpload?.displayName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="contract-file">Arquivo do Contrato (PDF)</Label>
+            <Input id="contract-file" type="file" accept=".pdf" onChange={(e) => setContractFile(e.target.files?.[0] || null)} />
+            {userForContractUpload?.signedContractUrl && (
+                <p className="text-xs text-muted-foreground">
+                    Um contrato já existe. O envio de um novo arquivo irá substituí-lo.
+                    <a href={userForContractUpload.signedContractUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1">Ver atual</a>
+                </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserForContractUpload(null)} disabled={isUploadingContract}>Cancelar</Button>
+            <Button onClick={handleUploadContract} disabled={isUploadingContract || !contractFile}>
+                {isUploadingContract ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />}
+                Enviar Contrato
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
