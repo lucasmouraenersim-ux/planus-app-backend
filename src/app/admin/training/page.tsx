@@ -317,10 +317,15 @@ Para os estados de MT, GO, MG, BA, CE, PE, PI:
 - 50% de comissão para descontos ofertados entre 12.01% e 15%.
 - 40% de comissão para descontos ofertados entre 15.01% e 20%.
 
-Para os estados de MS, AL, TO:
+Para os estados de MS, AL:
 - 50% de comissão para descontos ofertados entre 10% e 12%.
 - 40% de comissão para descontos ofertados entre 12.01% e 15%.
-- 30% de comissão para descontos ofertados entre 15.01% e 20% (ou 18% para TO).
+- 30% de comissão para descontos ofertados entre 15.01% e 20%.
+
+Para o estado de TO:
+- 50% de comissão para descontos ofertados entre 10% e 12%.
+- 40% de comissão para descontos ofertados entre 12.01% e 15%.
+- 30% de comissão para descontos ofertados entre 15.01% e 18%.
 
 Para os estados de RN, RS, PR:
 - 40% de comissão para descontos ofertados de 10% a 12%.
@@ -329,12 +334,24 @@ Para o estado de SC:
 - 40% de comissão para desconto ofertado de 10%.
 - 30% de comissão para desconto ofertado de 12%.
 
+Para SP (CPFL Paulista e Elektro):
+- 40% de comissão para descontos ofertados de 10% a 12%.
+
 4.1.1. Entende-se como "proposta" o valor da conta de energia do cliente já com o desconto oferecido pela CONTRATANTE.
 4.1.2. A comissão será devida para cada Cliente único que efetuar o cadastro junto à CONTRATANTE e tiver a troca de titularidade da sua unidade consumidora efetivada.
 4.2. Se o valor total da comissão apurada for superior a 40%, o pagamento será fracionado: 40% serão pagos como primeira parcela, e o valor restante será pago juntamente com a primeira parcela de recorrência do cliente.
 4.3. Os pagamentos devidos nos termos deste CONTRATO serão realizados por meio de depósito em conta bancária de titularidade do PROMOTOR, ou outra forma acordada entre as Partes.
 4.4. O pagamento da primeira parcela (ou total, se até 40%) será efetuado na primeira sexta-feira subsequente à semana de finalização da adesão do Cliente, entendida como a efetiva troca de titularidade.
 4.5. O preço estabelecido nesta Cláusula constituirá a única e completa remuneração do PROMOTOR pela execução deste CONTRATO, já incluindo a totalidade das despesas, ônus, tributos e custos de qualquer espécie.
+`;
+    
+    const churnClause = `
+V. ESTORNO DE COMISSÃO (CHURN)
+5.1. O PROMOTOR concorda com o estorno da comissão recebida caso o Cliente indicado cancele o serviço com a CONTRATANTE, nas seguintes condições:
+5.1.1. Estorno integral (100%) da comissão se o cancelamento ocorrer antes da efetiva injeção de energia na unidade consumidora do Cliente, conforme os prazos da Lei 14.300/22.
+5.1.2. Estorno de 50% da comissão se o cancelamento ocorrer em até 6 (seis) meses após o início da injeção de energia.
+5.2. Nenhum estorno será devido caso o cancelamento ocorra após 6 (seis) meses do início da injeção de energia.
+5.3. O não cumprimento da devolução dos valores de estorno devidos nos prazos acordados entre as Partes poderá acarretar em medidas de cobrança judicial contra o PROMOTOR.
 `;
 
     const contractText = `
@@ -367,15 +384,17 @@ II. OBRIGAÇÕES DAS PARTES
 2.2. São obrigações da CONTRATANTE:
 2.2.1. A CONTRATANTE obriga-se a efetuar o pagamento do preço estabelecido na Cláusula IV abaixo;
 2.2.2. Receber os Clientes dentro da sua infraestrutura para concluir os procedimentos de cadastro e adesão;
-2_2.3. Colaborar com o PROMOTOR para o bom andamento da Parceria.
+2.2.3. Colaborar com o PROMOTOR para o bom andamento da Parceria.
 
 III. PRAZO DO CONTRATO E RESCISÃO
 3.1. O CONTRATO vigerá por prazo indeterminado, iniciando-se na data de assinatura do presente instrumento.
 
 ${commissionRules}
 
-V. FORO
-5.1. As Partes elegem o foro da Comarca de Cuiabá/MT para dirimir quaisquer dúvidas ou ações oriundas do presente CONTRATO, renunciando a qualquer outro por mais privilegiado que seja.
+${churnClause}
+
+VI. FORO
+6.1. As Partes elegem o foro da Comarca de Cuiabá/MT para dirimir quaisquer dúvidas ou ações oriundas do presente CONTRATO, renunciando a qualquer outro por mais privilegiado que seja.
 
 E, por estarem justas e contratadas, resolvem as Partes firmar o presente CONTRATO.
 
