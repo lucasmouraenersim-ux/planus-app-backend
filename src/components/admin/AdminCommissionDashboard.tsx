@@ -1353,8 +1353,8 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                     </DropdownMenuItem>
                                     {user.signedContractUrl && (
                                         <DropdownMenuItem onSelect={() => window.open(user.signedContractUrl, '_blank')}>
-                                            <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
-                                            Ver Contrato Assinado
+                                            <Download className="mr-2 h-4 w-4 text-blue-500" />
+                                            Baixar Contrato
                                         </DropdownMenuItem>
                                     )}
                                     {canEdit && <DropdownMenuSeparator />}
@@ -1555,3 +1555,4 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
+
