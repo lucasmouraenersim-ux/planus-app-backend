@@ -595,31 +595,58 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
         <TabsContent value="recurrence">
           <Card>
             <CardHeader>
-              <CardTitle>Recorrências Pagas</CardTitle>
-              <CardDescription>Histórico de comissões recorrentes que já foram pagas.</CardDescription>
+              <CardTitle>Recorrências a Receber</CardTitle>
+              <CardDescription>Visualize o fluxo de caixa futuro proveniente de comissões recorrentes.</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="flex flex-col md:flex-row justify-between gap-4 mb-4 p-4 border rounded-lg bg-muted/30">
+                 <div className="flex-1">
+                   <h4 className="text-sm font-semibold text-muted-foreground">Filtros</h4>
+                   <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                      <Select value={recurrenceCompanyFilter} onValueChange={setRecurrenceCompanyFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{['Fit Energia', 'Bowe'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                      <Select value={recurrencePromoterFilter} onValueChange={setRecurrencePromoterFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {recurrenceDateFilter?.from ? (recurrenceDateFilter.to ? (<>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>) : (format(recurrenceDateFilter.from, "LLL dd, y"))) : (<span>Filtrar por Finalização</span>)}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar initialFocus mode="range" defaultMonth={recurrenceDateFilter?.from} selected={recurrenceDateFilter} onSelect={setRecurrenceDateFilter} numberOfMonths={2} />
+                        </PopoverContent>
+                      </Popover>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setRecurrenceCompanyFilter('all'); setRecurrencePromoterFilter('all'); setRecurrenceDateFilter(undefined); }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                   </div>
+                 </div>
+                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50 text-center">
+                    <p className="text-sm font-medium text-green-600">Total de Recorrência (Filtro)</p>
+                    <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+                  </div>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Empresa</TableHead>
+                    <TableHead>Promotor</TableHead>
                     <TableHead>Comissão de Recorrência</TableHead>
+                    <TableHead>Status Financeiro</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paidRecurrences.length > 0 ? (
-                    paidRecurrences.map(r => (
-                      <TableRow key={r.leadId}>
-                        <TableCell>{r.clientName}</TableCell>
-                        <TableCell>{r.company}</TableCell>
-                        <TableCell>{formatCurrency(r.recorrenciaComissao)}</TableCell>
+                  {filteredRecurrenceData.length > 0 ? filteredRecurrenceData.map(row => (
+                      <TableRow key={row.id}>
+                        <TableCell>{row.cliente}</TableCell>
+                        <TableCell>{row.empresa}</TableCell>
+                        <TableCell>{row.promotor}</TableCell>
+                        <TableCell className="font-semibold text-green-500">{formatCurrency(row.recorrenciaComissao)}</TableCell>
+                        <TableCell><Badge variant="outline" className={getFinancialStatusBadgeStyle(row.financialStatus)}>{row.financialStatus}</Badge></TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center">Nenhuma recorrência paga encontrada.</TableCell>
-                    </TableRow>
+                  )) : (
+                     <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
