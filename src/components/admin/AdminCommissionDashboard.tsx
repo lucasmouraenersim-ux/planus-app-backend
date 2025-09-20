@@ -758,7 +758,7 @@ function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLa
                             <TableBody>{revenues.map(rev => (
                                 <TableRow key={rev.id}>
                                     <TableCell>{rev.description}</TableCell><TableCell>{formatCurrency(rev.amount)}</TableCell><TableCell>{rev.date}</TableCell>
-                                    <TableCell><Button size="icon" variant="ghost" onClick={() => setEditingRevenue(rev)}><Pencil className="h-4 w-4"/></Button><Button size="icon" variant="ghost" onClick={() => handleRemoveRevenue(rev.id)}><Trash className="h-4 w-4 text-destructive"/></Button></TableCell>
+                                    <TableCell><Button size="icon" variant="ghost" onClick={() => setEditingRevenue(rev)}><Pencil className="h-4 w-4"/></Button><Button size="icon" variant="ghost" onClick={() => handleRemoveRevenue(rev.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell>
                                 </TableRow>
                             ))}</TableBody>
                         </Table>
@@ -782,7 +782,7 @@ function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLa
                             <TableBody>{expenses.map(exp => (
                                 <TableRow key={exp.id}>
                                     <TableCell>{exp.description}</TableCell><TableCell>{formatCurrency(exp.amount)}</TableCell><TableCell>{exp.type}</TableCell>
-                                    <TableCell><Button size="icon" variant="ghost" onClick={() => handleRemoveExpense(exp.id)}><Trash className="h-4 w-4 text-destructive"/></Button></TableCell>
+                                    <TableCell><Button size="icon" variant="ghost" onClick={() => handleRemoveExpense(exp.id)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell>
                                 </TableRow>
                             ))}</TableBody>
                         </Table>
@@ -857,6 +857,26 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }
     loadLeads();
   }, [fetchAllCrmLeadsGlobally]);
+
+  const userKwhTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    if (!allLeads || allLeads.length === 0) {
+        return totals;
+    }
+
+    allLeads.forEach(lead => {
+        if (lead.userId && lead.kwh) {
+            totals.set(lead.userId, (totals.get(lead.userId) || 0) + lead.kwh);
+        } else if (lead.sellerName) { // Fallback to sellerName if userId is missing
+            const user = initialUsers.find(u => u.displayName === lead.sellerName);
+            if (user && user.uid && lead.kwh) {
+                totals.set(user.uid, (totals.get(user.uid) || 0) + lead.kwh);
+            }
+        }
+    });
+
+    return totals;
+  }, [allLeads, initialUsers]);
 
   const handleOpenEditModal = (user: FirestoreUser) => {
     setSelectedUser(user);
@@ -1311,47 +1331,49 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 </div>
                 {isLoadingUsersProp ? (<div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : filteredUsers.length === 0 ? (<p className="text-center text-muted-foreground py-4">Nenhum usuário encontrado com os filtros atuais.</p>) : (
                     <Table>
-                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>CPF</TableHead><TableHead>Telefone</TableHead><TableHead>Tipo</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Tipo</TableHead><TableHead>Total KWh Cadastrado</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                     <TableBody>
-                        {filteredUsers.map(user => (
-                        <TableRow key={user.uid}>
-                            <TableCell className="font-medium"><div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /><AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar>{user.displayName || user.email?.split('@')[0] || 'N/A'}</div></TableCell>
-                            <TableCell>{user.email}</TableCell>
-                            <TableCell>{user.cpf ? `${user.cpf.slice(0,3)}.${user.cpf.slice(3,6)}.${user.cpf.slice(6,9)}-${user.cpf.slice(9,11)}` : 'N/A'}</TableCell>
-                            <TableCell>{user.phone || 'N/A'}</TableCell>
-                            <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
-                            <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
-                            <TableCell className="text-right">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
-                                    <Edit2 className="h-4 w-4 mr-2" />
-                                    Ver / Editar Detalhes
-                                </DropdownMenuItem>
-                                {user.signedContractUrl && (
-                                    <DropdownMenuItem onSelect={() => window.open(user.signedContractUrl, '_blank')}>
-                                        <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
-                                        Ver Contrato Assinado
+                        {filteredUsers.map(user => {
+                          const totalKwh = userKwhTotals.get(user.uid) || 0;
+                          return (
+                            <TableRow key={user.uid}>
+                                <TableCell className="font-medium"><div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /><AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar>{user.displayName || user.email?.split('@')[0] || 'N/A'}</div></TableCell>
+                                <TableCell>{user.email}</TableCell>
+                                <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
+                                <TableCell>{totalKwh.toLocaleString('pt-BR')} kWh</TableCell>
+                                <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
+                                <TableCell className="text-right">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                    <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
+                                        <Edit2 className="h-4 w-4 mr-2" />
+                                        Ver / Editar Detalhes
                                     </DropdownMenuItem>
-                                )}
-                                {canEdit && <DropdownMenuSeparator />}
-                                {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
-                                    <ShieldAlert className="mr-2 h-4 w-4" />
-                                    Redefinir Senha
-                                </DropdownMenuItem>)}
-                                {canEdit && (
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}>
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Excluir Usuário
-                                    </DropdownMenuItem>
-                                )}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            </TableCell>
-                        </TableRow>
-                        ))}
+                                    {user.signedContractUrl && (
+                                        <DropdownMenuItem onSelect={() => window.open(user.signedContractUrl, '_blank')}>
+                                            <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
+                                            Ver Contrato Assinado
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canEdit && <DropdownMenuSeparator />}
+                                    {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
+                                        <ShieldAlert className="mr-2 h-4 w-4" />
+                                        Redefinir Senha
+                                    </DropdownMenuItem>)}
+                                    {canEdit && (
+                                        <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Excluir Usuário
+                                        </DropdownMenuItem>
+                                    )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                          );
+                        })}
                     </TableBody>
                     </Table>
                 )}
@@ -1533,4 +1555,3 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
-
