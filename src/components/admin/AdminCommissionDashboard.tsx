@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, Trash, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -424,10 +424,6 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
     });
   }, [allReceivables, receivableCompanyFilter, receivablePromoterFilter, leads, selectedMonth]);
 
-  const paidRecurrences = useMemo(() => {
-    return allReceivables.filter(r => r.recorrenciaPaga);
-  }, [allReceivables]);
-  
   const promotersWithLeads = useMemo(() => {
       const promoterSet = new Set<string>();
       allReceivables.forEach(r => {
@@ -603,28 +599,30 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
                  <div className="flex-1">
                    <h4 className="text-sm font-semibold text-muted-foreground">Filtros</h4>
                    <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                      <Select value={recurrenceCompanyFilter} onValueChange={setRecurrenceCompanyFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{['Fit Energia', 'Bowe'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
-                      <Select value={recurrencePromoterFilter} onValueChange={setRecurrencePromoterFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                      <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{['Fit Energia', 'Bowe'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                      <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
+                          <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !receivableDates && "text-muted-foreground")}>
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {recurrenceDateFilter?.from ? (recurrenceDateFilter.to ? (<>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>) : (format(recurrenceDateFilter.from, "LLL dd, y"))) : (<span>Filtrar por Finalização</span>)}
+                            {receivableDates ? (
+                              isWithinInterval(new Date(), { start: (receivableDates as any).from, end: (receivableDates as any).to }) ? (
+                                <>{format((receivableDates as any).from, "LLL dd, y")} - {format((receivableDates as any).to, "LLL dd, y")}</>
+                              ) : (
+                                format((receivableDates as any).from, "LLL dd, y")
+                              )
+                            ) : (<span>Filtrar por Finalização</span>)}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar initialFocus mode="range" defaultMonth={recurrenceDateFilter?.from} selected={recurrenceDateFilter} onSelect={setRecurrenceDateFilter} numberOfMonths={2} />
+                          <Calendar initialFocus mode="range" defaultMonth={(receivableDates as any)?.from} selected={receivableDates as any} onSelect={setReceivableDates as any} numberOfMonths={2} />
                         </PopoverContent>
                       </Popover>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setRecurrenceCompanyFilter('all'); setRecurrencePromoterFilter('all'); setRecurrenceDateFilter(undefined); }}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setReceivableCompanyFilter('all'); setReceivablePromoterFilter('all'); setReceivableDates(undefined); }}>
                         <X className="h-4 w-4" />
                       </Button>
                    </div>
                  </div>
-                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50 text-center">
-                    <p className="text-sm font-medium text-green-600">Total de Recorrência (Filtro)</p>
-                    <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
-                  </div>
               </div>
               <Table>
                 <TableHeader>
@@ -637,7 +635,7 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecurrenceData.length > 0 ? filteredRecurrenceData.map(row => (
+                  {/* {filteredRecurrenceData.length > 0 ? filteredRecurrenceData.map(row => (
                       <TableRow key={row.id}>
                         <TableCell>{row.cliente}</TableCell>
                         <TableCell>{row.empresa}</TableCell>
@@ -647,7 +645,7 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
                       </TableRow>
                   )) : (
                      <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
-                  )}
+                  )} */}
                 </TableBody>
               </Table>
             </CardContent>
