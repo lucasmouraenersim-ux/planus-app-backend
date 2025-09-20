@@ -652,7 +652,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                   </Select>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button id="date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
+                      <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {recurrenceDateFilter?.from ? (recurrenceDateFilter.to ? (<>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>) : (format(recurrenceDateFilter.from, "LLL dd, y"))) : (<span>Filtrar por Data de Finalização</span>)}
                       </Button>
