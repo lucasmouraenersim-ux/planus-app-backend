@@ -164,13 +164,13 @@ export default function TrainingPage() {
         const result = await sendFCMNotification({
             title,
             body,
-            targetRole: 'superadmin', // or 'admin' or an array ['admin', 'superadmin']
+            targetRole: 'superadmin',
         });
 
-        if (result.success) {
+        if (result.success && result.successCount > 0) {
             console.log(`${result.successCount} notificações enviadas com sucesso.`);
         } else {
-            console.error("Falha ao enviar notificações FCM:", result.error);
+            console.error("Falha ao enviar notificações FCM:", result.error || "Nenhum token encontrado.");
         }
 
     } catch (notificationError) {

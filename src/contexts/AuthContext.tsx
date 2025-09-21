@@ -42,14 +42,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const requestNotificationPermission = useCallback(async (userId: string) => {
     if (typeof window === 'undefined' || !messaging) return;
 
-    console.log('Requesting notification permission...');
+    console.log('Requesting notification permission for superadmin...');
     try {
       const permission = await Notification.requestPermission();
       
       if (permission === 'granted') {
         const currentToken = await getToken(messaging, { vapidKey: 'BD8brS2u1_e83n0c65jGkS6LwWbZ7oVz2Xm3X7s9H6j8oV8nZ7e5tY4q3K2y1vX0cW7fJ6sZ5dJ1kU' });
         if (currentToken) {
-          console.log('FCM Token:', currentToken);
+          console.log('FCM Token obtained:', currentToken);
           const userDocRef = doc(db, "users", userId);
           await updateDoc(userDocRef, { fcmToken: currentToken });
           console.log('FCM Token saved to Firestore.');
@@ -90,11 +90,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
         const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
-
-        // After fetching user data, if they are superadmin, request permission.
-        if (finalType === 'superadmin') {
-          await requestNotificationPermission(user.uid);
-        }
 
         return {
           uid: user.uid,
@@ -261,7 +256,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
           lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
           signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-          completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
+          completedAt: data.completedAt ? (data.completedAt as Timestamp).toISOString() : undefined,
         } as LeadWithId;
       });
     } catch (error) {
@@ -280,6 +275,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
         await refreshUsers();
+        // Forcefully request notification permission for superadmin on login
+        if (role === 'superadmin') {
+          await requestNotificationPermission(user.uid);
+        }
       } else {
         setFirebaseUser(null);
         setAppUser(null);
