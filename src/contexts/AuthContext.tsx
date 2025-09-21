@@ -39,29 +39,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoadingAllUsers, setIsLoadingAllUsers] = useState<boolean>(true);
 
   // --- FCM Logic ---
-  const requestNotificationPermission = useCallback(async (userId: string, role: UserType | null) => {
-    if (typeof window === 'undefined' || !messaging || role !== 'superadmin') return;
+  const requestNotificationPermission = useCallback(async (userId: string) => {
+    if (typeof window === 'undefined' || !messaging) return;
 
-    console.log('Requesting notification permission for superadmin...');
-    const permission = await Notification.requestPermission();
-    
-    if (permission === 'granted') {
-      try {
-        const currentToken = await getToken(messaging, { vapidKey: 'BD8brS2u1_e83n0c65jGkS6LwWbZ7oVz2Xm3X7s9H6j8oV8nZ7e5tY4q3K2y1vX0cW7fJ6sZ5dJ1kU' }); // Replace with your VAPID key
+    console.log('Requesting notification permission...');
+    try {
+      const permission = await Notification.requestPermission();
+      
+      if (permission === 'granted') {
+        const currentToken = await getToken(messaging, { vapidKey: 'BD8brS2u1_e83n0c65jGkS6LwWbZ7oVz2Xm3X7s9H6j8oV8nZ7e5tY4q3K2y1vX0cW7fJ6sZ5dJ1kU' });
         if (currentToken) {
           console.log('FCM Token:', currentToken);
-          // Save the token to the user's document in Firestore
           const userDocRef = doc(db, "users", userId);
           await updateDoc(userDocRef, { fcmToken: currentToken });
           console.log('FCM Token saved to Firestore.');
         } else {
           console.log('No registration token available. Request permission to generate one.');
         }
-      } catch (err) {
-        console.error('An error occurred while retrieving token. ', err);
+      } else {
+        console.log('Unable to get permission to show notifications.');
       }
-    } else {
-      console.log('Unable to get permission to show notifications.');
+    } catch (err) {
+      console.error('An error occurred while retrieving token or permission. ', err);
     }
   }, []);
 
@@ -91,6 +90,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
         const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
+
+        // After fetching user data, if they are superadmin, request permission.
+        if (finalType === 'superadmin') {
+          await requestNotificationPermission(user.uid);
+        }
 
         return {
           uid: user.uid,
@@ -276,10 +280,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
         await refreshUsers();
-        // Request notification permission for superadmin
-        if (role === 'superadmin') {
-            await requestNotificationPermission(user.uid, role);
-        }
       } else {
         setFirebaseUser(null);
         setAppUser(null);
