@@ -510,7 +510,7 @@ CPF/CNPJ: ${promoterDocument}
                                   Ativar Promotor
                                 </DropdownMenuItem>
                               )}
-                              {quizPassed && (
+                              {latestAttempt && (
                                 <>
                                   <DropdownMenuItem onClick={() => handleElaborateContract(user)}>
                                     <FileSignature className="mr-2 h-4 w-4 text-blue-500" />
