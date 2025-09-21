@@ -47,34 +47,34 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
   // 1. Normalize phone number
   let to = input.to.replace(/\D/g, ''); // Remove all non-digits
 
-  // 2. Handle numbers with country code already
-  if (to.startsWith('55')) {
-    if (to.length === 12) { // 55 + DD + 8 digits (Possible mobile needing '9')
+  // 2. Handle country code and 9th digit for Brazilian numbers
+  if (to.length === 11) { // Common format: DD + 9 digits (e.g., 65981390777)
+    to = `55${to}`;
+  } else if (to.length === 10) { // Old format: DD + 8 digits
+    const ddd = to.substring(0, 2);
+    const numberPart = to.substring(2);
+    if (/^[6-9]/.test(numberPart)) { // It's a mobile number
+      to = `55${ddd}9${numberPart}`;
+      console.log(`[WHATSAPP_API_FIX] Corrected 10-digit mobile from ${input.to} to ${to}`);
+    } else { // It's a landline
+      to = `55${to}`;
+    }
+  } else if (to.startsWith('55')) {
+    // If it already has country code, check for 9th digit if it looks like an old mobile number
+    if (to.length === 12) { // 55 + DD + 8 digits
       const ddd = to.substring(2, 4);
       const numberPart = to.substring(4);
-      // Only add the 9th digit if the number is mobile (starts with 6, 7, 8, or 9)
       if (/^[6-9]/.test(numberPart)) {
         to = `55${ddd}9${numberPart}`;
         console.log(`[WHATSAPP_API_FIX] Corrected 12-digit mobile from ${input.to} to ${to}`);
       }
     }
-    // if length is 13 (55 + DD + 9 digits), it's already correct.
-    // if length is 12 and not mobile, it's a landline and correct.
-  } 
-  // 3. Handle numbers without country code
-  else if (to.length === 11) { // DD + 9 digits
-    to = `55${to}`;
-  } 
-  else if (to.length === 10) { // DD + 8 digits
-    const ddd = to.substring(0, 2);
-    const numberPart = to.substring(2);
-    if (/^[6-9]/.test(numberPart)) { // It's a mobile number
-      to = `55${ddd}9${numberPart}`;
-       console.log(`[WHATSAPP_API_FIX] Corrected 10-digit mobile from ${input.to} to ${to}`);
-    } else { // It's a landline
-      to = `55${to}`;
-    }
+  } else if (to.length === 8 || to.length === 9) {
+    // Should not happen if DDD is always provided, but as a fallback, assume it's missing.
+    // This is less reliable. The ideal is to always have the DDD.
+    console.warn(`[WHATSAPP_API_WARN] Phone number ${input.to} provided without DDD. Assuming a default or context-specific DDD may be necessary.`);
   }
+
 
   // Using hardcoded values as a temporary measure to unblock the user.
   // Best practice is to use environment variables/secrets.
