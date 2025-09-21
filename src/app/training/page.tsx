@@ -9,14 +9,14 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Lock, Loader2, FileQuestion, Send, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { doc, updateDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { TrainingModule, QuizAttempt, TrainingQuizQuestion } from '@/types/user';
+import type { TrainingModule, QuizAttempt, TrainingQuizQuestion, FirestoreUser } from '@/types/user';
 import { CustomVideoPlayer } from '@/components/training/CustomVideoPlayer';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useRouter } from 'next/navigation';
-import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage'; // Import the action
+import { sendFCMNotification } from '@/actions/notifications/sendFCMNotification';
 
 const TRAINING_CONFIG_DOC_ID = 'main-config';
 
@@ -156,24 +156,28 @@ export default function TrainingPage() {
 
     const userDocRef = doc(db, 'users', appUser.uid);
     
-    // Send WhatsApp Notification
+    // --- FCM Notification Logic ---
     try {
-        const adminPhoneNumber = "65981014125";
-        if (adminPhoneNumber) {
-            const message = `🔔 *Alerta de Treinamento Concluído* 🔔\n\nO promotor *${appUser.displayName || appUser.email}* finalizou o questionário de treinamento com uma pontuação de *${score.toFixed(1)}%*.`;
+        const title = "Treinamento Concluído!";
+        const body = `O promotor ${appUser.displayName || appUser.email} finalizou o questionário com ${score.toFixed(1)}% de acerto.`;
+        
+        const result = await sendFCMNotification({
+            title,
+            body,
+            targetRole: 'superadmin', // or 'admin' or an array ['admin', 'superadmin']
+        });
 
-            await sendWhatsappMessage({
-                to: adminPhoneNumber,
-                message: { text: message }
-            });
-            console.log("Admin notification sent successfully.");
+        if (result.success) {
+            console.log(`${result.successCount} notificações enviadas com sucesso.`);
         } else {
-            console.warn("ADMIN_PHONE_NUMBER not set. Skipping notification.");
+            console.error("Falha ao enviar notificações FCM:", result.error);
         }
+
     } catch (notificationError) {
-        console.error("Failed to send admin notification:", notificationError);
-        // Do not block the flow if the notification fails, just log it.
+        console.error("Erro crítico ao tentar enviar notificação FCM:", notificationError);
+        // Do not block the user flow if notification fails, just log it.
     }
+    // --- End FCM Notification Logic ---
 
 
     if (score >= 80) {

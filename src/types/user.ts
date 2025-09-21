@@ -67,6 +67,7 @@ export type FirestoreUser = {
   personalBalance?: number; 
   mlmBalance?: number; 
   termsAcceptedAt?: Timestamp | string; // New field
+  fcmToken?: string; // For FCM notifications
   
   // New Commission Fields
   commissionRate?: number; // Direct commission percentage
@@ -111,6 +112,7 @@ export type AppUser = {
   createdAt?: Timestamp | string; 
   lastSignInTime?: string;
   termsAcceptedAt?: string; 
+  fcmToken?: string;
 
   // New Commission Fields
   commissionRate?: number;

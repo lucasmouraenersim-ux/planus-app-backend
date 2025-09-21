@@ -6,9 +6,11 @@ import type { AppUser, FirestoreUser, UserType } from '@/types/user';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc, query, orderBy } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, messaging } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import type { LeadWithId } from '@/types/crm';
+import { getToken, onMessage } from 'firebase/messaging';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -28,12 +30,54 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { toast } = useToast();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [userAppRole, setUserAppRole] = useState<AuthContextType['userAppRole']>(null);
   const [allFirestoreUsers, setAllFirestoreUsers] = useState<FirestoreUser[]>([]);
   const [isLoadingAllUsers, setIsLoadingAllUsers] = useState<boolean>(true);
+
+  // --- FCM Logic ---
+  const requestNotificationPermission = useCallback(async (userId: string, role: UserType | null) => {
+    if (typeof window === 'undefined' || !messaging || role !== 'superadmin') return;
+
+    console.log('Requesting notification permission for superadmin...');
+    const permission = await Notification.requestPermission();
+    
+    if (permission === 'granted') {
+      try {
+        const currentToken = await getToken(messaging, { vapidKey: 'BD8brS2u1_e83n0c65jGkS6LwWbZ7oVz2Xm3X7s9H6j8oV8nZ7e5tY4q3K2y1vX0cW7fJ6sZ5dJ1kU' }); // Replace with your VAPID key
+        if (currentToken) {
+          console.log('FCM Token:', currentToken);
+          // Save the token to the user's document in Firestore
+          const userDocRef = doc(db, "users", userId);
+          await updateDoc(userDocRef, { fcmToken: currentToken });
+          console.log('FCM Token saved to Firestore.');
+        } else {
+          console.log('No registration token available. Request permission to generate one.');
+        }
+      } catch (err) {
+        console.error('An error occurred while retrieving token. ', err);
+      }
+    } else {
+      console.log('Unable to get permission to show notifications.');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && messaging) {
+      const unsubscribeOnMessage = onMessage(messaging, (payload) => {
+        console.log('Message received. ', payload);
+        toast({
+          title: payload.notification?.title || "Nova Notificação",
+          description: payload.notification?.body || "",
+        });
+      });
+      return () => unsubscribeOnMessage();
+    }
+  }, [toast]);
+  // --- End FCM Logic ---
 
   const fetchFirestoreUser = async (user: FirebaseUser | null): Promise<AppUser | null> => {
     if (!user) return null;
@@ -232,6 +276,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
         await refreshUsers();
+        // Request notification permission for superadmin
+        if (role === 'superadmin') {
+            await requestNotificationPermission(user.uid, role);
+        }
       } else {
         setFirebaseUser(null);
         setAppUser(null);
@@ -242,7 +290,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [refreshUsers]);
+  }, [refreshUsers, requestNotificationPermission]);
 
 
   const updateAppUser = (user: AppUser | null) => {
