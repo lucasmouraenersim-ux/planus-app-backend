@@ -158,14 +158,18 @@ export default function TrainingPage() {
     
     // Send WhatsApp Notification
     try {
-        const adminPhoneNumber = "556599999999"; // TODO: Replace with the actual admin phone number from an environment variable
-        const message = `🔔 *Alerta de Treinamento Concluído* 🔔\n\nO promotor *${appUser.displayName || appUser.email}* finalizou o questionário de treinamento com uma pontuação de *${score.toFixed(1)}%*.`;
+        const adminPhoneNumber = process.env.NEXT_PUBLIC_ADMIN_PHONE_NUMBER;
+        if (adminPhoneNumber) {
+            const message = `🔔 *Alerta de Treinamento Concluído* 🔔\n\nO promotor *${appUser.displayName || appUser.email}* finalizou o questionário de treinamento com uma pontuação de *${score.toFixed(1)}%*.`;
 
-        await sendWhatsappMessage({
-            to: adminPhoneNumber,
-            message: { text: message }
-        });
-        console.log("Admin notification sent successfully.");
+            await sendWhatsappMessage({
+                to: adminPhoneNumber,
+                message: { text: message }
+            });
+            console.log("Admin notification sent successfully.");
+        } else {
+            console.warn("ADMIN_PHONE_NUMBER not set. Skipping notification.");
+        }
     } catch (notificationError) {
         console.error("Failed to send admin notification:", notificationError);
         // Do not block the flow if the notification fails, just log it.
