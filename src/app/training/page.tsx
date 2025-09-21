@@ -158,7 +158,7 @@ export default function TrainingPage() {
     
     // Send WhatsApp Notification
     try {
-        const adminPhoneNumber = "6591014125";
+        const adminPhoneNumber = "65981014125";
         if (adminPhoneNumber) {
             const message = `🔔 *Alerta de Treinamento Concluído* 🔔\n\nO promotor *${appUser.displayName || appUser.email}* finalizou o questionário de treinamento com uma pontuação de *${score.toFixed(1)}%*.`;
 
