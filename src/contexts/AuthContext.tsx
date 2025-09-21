@@ -47,7 +47,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const permission = await Notification.requestPermission();
       
       if (permission === 'granted') {
-        const currentToken = await getToken(messaging, { vapidKey: 'BD8brS2u1_e83n0c65jGkS6LwWbZ7oVz2Xm3X7s9H6j8oV8nZ7e5tY4q3K2y1vX0cW7fJ6sZ5dJ1kU' });
+        // Let Firebase SDK handle the VAPID key
+        const currentToken = await getToken(messaging);
         if (currentToken) {
           console.log('FCM Token obtained:', currentToken);
           const userDocRef = doc(db, "users", userId);
@@ -250,13 +251,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const leadsSnapshot = await getDocs(q);
       return leadsSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
+        // Helper to safely convert Timestamp to ISO string
+        const toISOString = (timestamp: any) => {
+            if (timestamp instanceof Timestamp) {
+                return timestamp.toDate().toISOString();
+            }
+            if (typeof timestamp === 'string') {
+                 // If it's already a string, just return it. Could add validation.
+                return timestamp;
+            }
+            return undefined; // Return undefined for invalid types
+        };
+        
         return {
           id: docSnap.id,
           ...data,
-          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-          lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
-          signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-          completedAt: data.completedAt ? (data.completedAt as Timestamp).toISOString() : undefined,
+          createdAt: toISOString(data.createdAt) || new Date().toISOString(), // Fallback to now if missing
+          lastContact: toISOString(data.lastContact) || new Date().toISOString(),
+          signedAt: toISOString(data.signedAt),
+          completedAt: toISOString(data.completedAt),
         } as LeadWithId;
       });
     } catch (error) {
