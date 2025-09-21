@@ -16,6 +16,7 @@ import { CustomVideoPlayer } from '@/components/training/CustomVideoPlayer';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useRouter } from 'next/navigation';
+import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage'; // Import the action
 
 const TRAINING_CONFIG_DOC_ID = 'main-config';
 
@@ -154,6 +155,22 @@ export default function TrainingPage() {
     const newProgress = { ...userProgress, [moduleIdForSaving]: { ...userProgress[moduleIdForSaving], quizAttempts: [...existingAttempts, newAttempt] } };
 
     const userDocRef = doc(db, 'users', appUser.uid);
+    
+    // Send WhatsApp Notification
+    try {
+        const adminPhoneNumber = "556599999999"; // TODO: Replace with the actual admin phone number from an environment variable
+        const message = `🔔 *Alerta de Treinamento Concluído* 🔔\n\nO promotor *${appUser.displayName || appUser.email}* finalizou o questionário de treinamento com uma pontuação de *${score.toFixed(1)}%*.`;
+
+        await sendWhatsappMessage({
+            to: adminPhoneNumber,
+            message: { text: message }
+        });
+        console.log("Admin notification sent successfully.");
+    } catch (notificationError) {
+        console.error("Failed to send admin notification:", notificationError);
+        // Do not block the flow if the notification fails, just log it.
+    }
+
 
     if (score >= 80) {
       await updateDoc(userDocRef, { trainingProgress: newProgress, type: 'vendedor' });
