@@ -11,7 +11,7 @@ async function testWhatsappNotification() {
   console.log("Iniciando teste de notificação do WhatsApp...");
 
   // O número de telefone para o qual a notificação será enviada.
-  const adminPhoneNumber = "6591014125"; 
+  const adminPhoneNumber = "65981014125"; 
   
   // Dados de exemplo para o teste
   const promoterName = "Usuário de Teste";
