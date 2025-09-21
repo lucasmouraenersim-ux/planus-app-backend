@@ -54,14 +54,12 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
 
   // 3. Handle the 9th digit for Brazilian mobile numbers
   // A typical Brazilian mobile number with DDD and 9th digit has 13 characters with country code (55 + DD + 9XXXXXXXX)
-  if (to.length === 12 && to.startsWith('55')) { // 55 + DD + 8 digits
+  if (to.length === 12 && to.startsWith('55')) { // 55 + DD + 8 digits without 9
     const ddd = to.substring(2, 4);
     const numberPart = to.substring(4);
-    // A simple heuristic: mobile numbers in Brazil often start with 6, 7, 8, or 9
-    if (/^[6-9]/.test(numberPart)) { 
-      to = `55${ddd}9${numberPart}`;
-      console.log(`[WHATSAPP_API_FIX] Corrected 12-digit mobile from ${input.to} to ${to}`);
-    }
+    // Add '9' to the beginning of the number part for mobile numbers
+    to = `55${ddd}9${numberPart}`;
+    console.log(`[WHATSAPP_API_FIX] Added 9th digit. Corrected 12-digit mobile from ${input.to} to ${to}`);
   }
 
 
@@ -129,13 +127,26 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
       }
     };
   } else if (input.message.text) {
+    // To initiate conversation, you MUST use a template. Plain text only works within 24h window.
+    // We create a generic template 'alerta_sistema' for this.
     requestBody = {
       messaging_product: "whatsapp",
       to: to,
-      type: "text",
-      text: {
-        preview_url: false, // Good practice for system messages
-        body: input.message.text
+      type: "template",
+      template: {
+        name: "alerta_sistema", // Generic template for system alerts
+        language: { "code": "pt_BR" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              {
+                type: "text",
+                text: input.message.text
+              }
+            ]
+          }
+        ]
       }
     };
   } else {
