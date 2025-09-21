@@ -68,10 +68,12 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
   { id: 'wd1', userId: 'user1', userEmail: 'vendedor1@example.com', userName: 'Vendedor Um', amount: 500, pixKeyType: 'CPF/CNPJ', pixKey: '111.111.111-11', status: 'pendente', requestedAt: new Date(Date.now() - 86400000).toISOString(), withdrawalType: 'personal' },
@@ -809,6 +811,29 @@ function PersonalFinanceTab({ monthlyProLabore, user, onUpdate }: { monthlyProLa
     );
 }
 
+const SortableHeader = ({
+  label,
+  sortKey,
+  sortConfig,
+  onSort,
+}: {
+  label: string;
+  sortKey: keyof FirestoreUser | 'totalKwh';
+  sortConfig: { key: keyof FirestoreUser | 'totalKwh'; direction: 'asc' | 'desc' } | null;
+  onSort: (key: keyof FirestoreUser | 'totalKwh') => void;
+}) => {
+  const isSorted = sortConfig?.key === sortKey;
+  const Icon = isSorted ? (sortConfig.direction === 'asc' ? ArrowUp : ArrowDown) : ArrowUp;
+  return (
+    <TableHead>
+      <Button variant="ghost" onClick={() => onSort(sortKey)}>
+        {label}
+        <Icon className={cn('ml-2 h-4 w-4', !isSorted && 'text-muted-foreground/50')} />
+      </Button>
+    </TableHead>
+  );
+};
+
 
 export default function AdminCommissionDashboard({ loggedInUser, initialUsers, isLoadingUsersProp, onUsersChange }: AdminCommissionDashboardProps) {
   const { toast } = useToast();
@@ -822,6 +847,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [userTypeFilter, setUserTypeFilter] = useState<UserType | 'all'>('all');
+  const [userSortConfig, setUserSortConfig] = useState<{ key: keyof FirestoreUser | 'totalKwh'; direction: 'asc' | 'desc' } | null>(null);
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isUpdateWithdrawalModalOpen, setIsUpdateWithdrawalModalOpen] = useState(false);
@@ -984,8 +1010,17 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }
   };
 
+  const handleSortUsers = (key: keyof FirestoreUser | 'totalKwh') => {
+    setUserSortConfig(current => {
+      if (current?.key === key && current.direction === 'asc') {
+        return { key, direction: 'desc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   const filteredUsers = useMemo(() => {
-    return initialUsers.filter(user => {
+    let users = initialUsers.filter(user => {
       const searchTermLower = userSearchTerm.toLowerCase();
       const matchesSearch = 
         (user.displayName?.toLowerCase().includes(searchTermLower)) ||
@@ -994,7 +1029,38 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       const matchesType = userTypeFilter === 'all' || user.type === userTypeFilter;
       return matchesSearch && matchesType;
     });
-  }, [initialUsers, userSearchTerm, userTypeFilter]);
+
+    if (userSortConfig) {
+      users.sort((a, b) => {
+        const { key, direction } = userSortConfig;
+        let valA, valB;
+
+        if (key === 'totalKwh') {
+          valA = userKwhTotals.get(a.uid) || 0;
+          valB = userKwhTotals.get(b.uid) || 0;
+        } else {
+          valA = a[key as keyof FirestoreUser];
+          valB = b[key as keyof FirestoreUser];
+        }
+
+        if (valA === undefined || valA === null) return 1;
+        if (valB === undefined || valB === null) return -1;
+        
+        let comparison = 0;
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          comparison = valA.localeCompare(valB, 'pt-BR');
+        } else if (valA < valB) {
+          comparison = -1;
+        } else if (valA > valB) {
+          comparison = 1;
+        }
+
+        return direction === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    return users;
+  }, [initialUsers, userSearchTerm, userTypeFilter, userSortConfig, userKwhTotals]);
 
   const handleAddUser = async (data: AddUserFormData) => {
     setIsSubmittingUser(true);
@@ -1330,7 +1396,17 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 </div>
                 {isLoadingUsersProp ? (<div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>) : filteredUsers.length === 0 ? (<p className="text-center text-muted-foreground py-4">Nenhum usuário encontrado com os filtros atuais.</p>) : (
                     <Table>
-                    <TableHeader><TableRow><TableHead>Nome</TableHead><TableHead>Email</TableHead><TableHead>Tipo</TableHead><TableHead>Total KWh Cadastrado</TableHead><TableHead>Último Acesso</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+                    <TableHeader>
+                        <TableRow>
+                            <SortableHeader label="Nome" sortKey="displayName" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <SortableHeader label="Email" sortKey="email" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <SortableHeader label="Tipo" sortKey="type" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <SortableHeader label="Total KWh" sortKey="totalKwh" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <SortableHeader label="Último Acesso" sortKey="lastSignInTime" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <TableHead>Contrato</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                    </TableHeader>
                     <TableBody>
                         {filteredUsers.map(user => {
                           const totalKwh = userKwhTotals.get(user.uid) || 0;
@@ -1341,21 +1417,41 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                 <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
                                 <TableCell>{totalKwh.toLocaleString('pt-BR')} kWh</TableCell>
                                 <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
+                                <TableCell>
+                                  {user.signedContractUrl ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a href={user.signedContractUrl} target="_blank" rel="noopener noreferrer">
+                                            <Button variant="ghost" size="icon"><FileSignature className="h-5 w-5 text-blue-500" /></Button>
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Visualizar Contrato</p></TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div>
+                                            <Button variant="ghost" size="icon" disabled><FileSignature className="h-5 w-5 text-muted-foreground/50" /></Button>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent><p>Usuário não tem contrato</p></TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </TableCell>
                                 <TableCell className="text-right">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}>
                                         <Edit2 className="h-4 w-4 mr-2" />
                                         Ver / Editar Detalhes
                                     </DropdownMenuItem>
-                                    {user.signedContractUrl && (
-                                        <DropdownMenuItem onSelect={() => window.open(user.signedContractUrl, '_blank')}>
-                                            <Download className="mr-2 h-4 w-4 text-blue-500" />
-                                            Baixar Contrato Assinado
-                                        </DropdownMenuItem>
-                                    )}
                                     {canEdit && <DropdownMenuSeparator />}
                                     {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}>
                                         <ShieldAlert className="mr-2 h-4 w-4" />
