@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "genkit": "genkit"
+    "genkit": "genkit",
+    "test:whatsapp": "tsx src/scripts/test-whatsapp-notification.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "latest",
