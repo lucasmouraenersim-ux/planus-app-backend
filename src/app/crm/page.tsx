@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, or, collectionGroup } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, or, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveFinalizedLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
@@ -150,34 +150,64 @@ function CrmPageContent() {
     }
 
     const leadsCollection = collection(db, "crm_leads");
-    let q;
-    
-    // Admins, Super Admins, and Lawyers see all leads.
+    let unsubscribe: () => void;
+
     if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
-        q = query(leadsCollection, orderBy("lastContact", "desc"));
-    } 
-    // Sellers see only the leads assigned to them.
-    else if (userAppRole === 'vendedor') {
-        q = query(leadsCollection, where("userId", "==", appUser.uid), orderBy("lastContact", "desc"));
-    } 
-    // Prospectors or other roles see no leads by default in the main CRM view.
-    else {
+        const q = query(leadsCollection, orderBy("lastContact", "desc"));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            setLeads(snapshot.docs.map(mapDocToLead));
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching leads for admin:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
+    } else if (userAppRole === 'vendedor') {
+        // For sellers, fetch their own leads AND leads "para-atribuir"
+        const fetchSellerAndUnassignedLeads = async () => {
+            setIsLoading(true);
+            try {
+                // Query 1: Leads assigned to the current seller
+                const userLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+                
+                // Query 2: Leads available for assignment
+                const unassignedLeadsQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+                
+                const [userLeadsSnapshot, unassignedLeadsSnapshot] = await Promise.all([
+                    getDocs(userLeadsQuery),
+                    getDocs(unassignedLeadsQuery)
+                ]);
+
+                const userLeads = userLeadsSnapshot.docs.map(mapDocToLead);
+                const unassignedLeads = unassignedLeadsSnapshot.docs.map(mapDocToLead);
+
+                // Combine and deduplicate
+                const combinedLeads = new Map<string, LeadWithId>();
+                userLeads.forEach(lead => combinedLeads.set(lead.id, lead));
+                unassignedLeads.forEach(lead => combinedLeads.set(lead.id, lead));
+                
+                setLeads(Array.from(combinedLeads.values()));
+            } catch (error) {
+                console.error("Error fetching leads for seller:", error);
+                toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar os dados do CRM. Verifique sua conexão ou contate o suporte.", variant: "destructive" });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchSellerAndUnassignedLeads();
+        // Create an empty unsubscribe function as we are not using onSnapshot here
+        unsubscribe = () => {}; 
+    } else {
         setLeads([]);
         setIsLoading(false);
-        return;
+        unsubscribe = () => {};
     }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const freshLeads = snapshot.docs.map(mapDocToLead);
-        setLeads(freshLeads);
-        setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching leads:", error);
-        toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar os dados do CRM.", variant: "destructive" });
-        setIsLoading(false);
-    });
-
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
 }, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
 
