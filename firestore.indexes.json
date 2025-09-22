@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "crm_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastContact",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ]
+}
