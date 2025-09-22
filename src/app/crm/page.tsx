@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, or, getCountFromServer } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveFinalizedLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
@@ -174,7 +174,7 @@ function CrmPageContent() {
                 
                 const [userLeadsSnapshot, unassignedLeadsSnapshot] = await Promise.all([
                     getDocs(userLeadsQuery),
-                    getDocs(unassignedLeadsQuery)
+                    getDocs(unassignedLeadsSnapshot)
                 ]);
 
                 const userLeads = userLeadsSnapshot.docs.map(mapDocToLead);
