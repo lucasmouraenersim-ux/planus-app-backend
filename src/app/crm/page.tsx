@@ -150,7 +150,7 @@ function CrmPageContent() {
     }
 
     const leadsCollection = collection(db, "crm_leads");
-    let unsubscribe: () => void;
+    let unsubscribe: () => void = () => {};
 
     if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
         const q = query(leadsCollection, orderBy("lastContact", "desc"));
@@ -163,7 +163,6 @@ function CrmPageContent() {
             setIsLoading(false);
         });
     } else if (userAppRole === 'vendedor') {
-        // For sellers, fetch their own leads AND leads "para-atribuir"
         const fetchSellerAndUnassignedLeads = async () => {
             setIsLoading(true);
             try {
@@ -195,18 +194,18 @@ function CrmPageContent() {
             }
         };
         fetchSellerAndUnassignedLeads();
-        // Create an empty unsubscribe function as we are not using onSnapshot here
+        // Since we are not using onSnapshot for sellers anymore, create an empty unsubscribe function
         unsubscribe = () => {}; 
     } else {
+        // For any other user type, show no leads.
         setLeads([]);
         setIsLoading(false);
         unsubscribe = () => {};
     }
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      // This will call the correct unsubscribe function.
+      unsubscribe();
     };
 }, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
