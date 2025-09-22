@@ -174,7 +174,7 @@ function CrmPageContent() {
                 
                 const [userLeadsSnapshot, unassignedLeadsSnapshot] = await Promise.all([
                     getDocs(userLeadsQuery),
-                    getDocs(unassignedLeadsSnapshot)
+                    getDocs(unassignedLeadsQuery)
                 ]);
 
                 const userLeads = userLeadsSnapshot.docs.map(mapDocToLead);
