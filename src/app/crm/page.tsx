@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React from 'react';
@@ -167,7 +166,7 @@ function CrmPageContent() {
         });
         return () => unsubscribe();
     } else if (userAppRole === 'vendedor' || isSpecialUser) {
-        const fetchSellerLeads = async () => {
+        const fetchSellerData = async () => {
             setIsLoading(true);
             try {
                 // Fetch unassigned leads
@@ -179,16 +178,16 @@ function CrmPageContent() {
                 const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
                 const myLeadsSnapshot = await getDocs(myLeadsQuery);
                 const myLeads = myLeadsSnapshot.docs.map(mapDocToLead);
-
+                
                 // Combine and remove duplicates
                 const combinedLeadsMap = new Map<string, LeadWithId>();
-                myLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
                 unassignedLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
+                myLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
                 
-                const sortedLeads = Array.from(combinedLeadsMap.values())
+                const finalLeads = Array.from(combinedLeadsMap.values())
                     .sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
                 
-                setLeads(sortedLeads);
+                setLeads(finalLeads);
             } catch (error) {
                 console.error("Error fetching seller-specific leads:", error);
                 toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar seus leads.", variant: "destructive" });
@@ -197,9 +196,10 @@ function CrmPageContent() {
             }
         };
 
-        fetchSellerLeads();
-        // This approach using getDocs doesn't provide real-time updates.
-        // A more complex setup would be needed for that, but this is more robust for correct data display.
+        fetchSellerData();
+        // This is a one-time fetch. For real-time, a more complex setup is needed.
+        // Returning an empty function to satisfy the useEffect cleanup requirement.
+        return () => {};
     } else {
         setIsLoading(false);
         setLeads([]);
@@ -769,7 +769,17 @@ function CrmPageContent() {
                   <Upload className="w-4 h-4 mr-2" />
                   Importar
                 </Button>
-                <Button onClick={handleExportLeadsCSV} size="sm" variant="outline">
+                <Button onClick={() => {
+                    const csv = Papa.unparse(leads);
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "leads.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }} size="sm" variant="outline">
                   <Download className="w-4 h-4 mr-2" />
                   Exportar
                 </Button>
