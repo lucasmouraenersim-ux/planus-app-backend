@@ -144,7 +144,7 @@ function CrmPageContent() {
     } as LeadWithId;
   }, []);
   
-  useEffect(() => {
+ useEffect(() => {
     if (isLoadingAllUsers || !appUser) {
         setIsLoading(true);
         return;
@@ -170,25 +170,22 @@ function CrmPageContent() {
         const fetchSellerLeads = async () => {
             setIsLoading(true);
             try {
+                // Fetch unassigned leads
                 const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+                const unassignedSnapshot = await getDocs(unassignedQuery);
+                const unassignedLeads = unassignedSnapshot.docs.map(mapDocToLead);
+
+                // Fetch leads assigned to the current user
                 const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+                const myLeadsSnapshot = await getDocs(myLeadsQuery);
+                const myLeads = myLeadsSnapshot.docs.map(mapDocToLead);
 
-                const [unassignedSnapshot, myLeadsSnapshot] = await Promise.all([
-                    getDocs(unassignedQuery),
-                    getDocs(myLeadsQuery)
-                ]);
-
-                const combinedLeads: Record<string, LeadWithId> = {};
-
-                unassignedSnapshot.forEach((doc) => {
-                    combinedLeads[doc.id] = mapDocToLead(doc);
-                });
-
-                myLeadsSnapshot.forEach((doc) => {
-                    combinedLeads[doc.id] = mapDocToLead(doc);
-                });
-
-                const sortedLeads = Object.values(combinedLeads)
+                // Combine and remove duplicates
+                const combinedLeadsMap = new Map<string, LeadWithId>();
+                myLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
+                unassignedLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
+                
+                const sortedLeads = Array.from(combinedLeadsMap.values())
                     .sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
                 
                 setLeads(sortedLeads);
@@ -201,8 +198,8 @@ function CrmPageContent() {
         };
 
         fetchSellerLeads();
-        // Note: This approach using getDocs doesn't provide real-time updates.
-        // A more complex solution with onSnapshot would be needed for that.
+        // This approach using getDocs doesn't provide real-time updates.
+        // A more complex setup would be needed for that, but this is more robust for correct data display.
     } else {
         setIsLoading(false);
         setLeads([]);
