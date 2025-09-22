@@ -150,60 +150,34 @@ function CrmPageContent() {
     }
 
     const leadsCollection = collection(db, "crm_leads");
-    const isSpecialUser = appUser.displayName?.toLowerCase() === 'diogo rodrigo bottona';
-    const canViewAll = (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') && !isSpecialUser;
-
-    if (canViewAll) {
-        const q = query(leadsCollection, orderBy("lastContact", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const freshLeads = snapshot.docs.map(mapDocToLead);
-            setLeads(freshLeads);
-            setIsLoading(false);
-        }, (error) => {
-            console.error("Error fetching all leads:", error);
-            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
-            setIsLoading(false);
-        });
-        return () => unsubscribe();
-    } else if (userAppRole === 'vendedor' || isSpecialUser) {
-        const fetchSellerData = async () => {
-            setIsLoading(true);
-            try {
-                // Fetch unassigned leads
-                const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
-                const unassignedSnapshot = await getDocs(unassignedQuery);
-                const unassignedLeads = unassignedSnapshot.docs.map(mapDocToLead);
-
-                // Fetch leads assigned to the current user
-                const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
-                const myLeadsSnapshot = await getDocs(myLeadsQuery);
-                const myLeads = myLeadsSnapshot.docs.map(mapDocToLead);
-                
-                // Combine and remove duplicates
-                const combinedLeadsMap = new Map<string, LeadWithId>();
-                unassignedLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
-                myLeads.forEach(lead => combinedLeadsMap.set(lead.id, lead));
-                
-                const finalLeads = Array.from(combinedLeadsMap.values())
-                    .sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
-                
-                setLeads(finalLeads);
-            } catch (error) {
-                console.error("Error fetching seller-specific leads:", error);
-                toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar seus leads.", variant: "destructive" });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchSellerData();
-        // This is a one-time fetch. For real-time, a more complex setup is needed.
-        // Returning an empty function to satisfy the useEffect cleanup requirement.
-        return () => {};
-    } else {
-        setIsLoading(false);
+    let q;
+    
+    // Admins, Super Admins, and Lawyers see all leads.
+    if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
+        q = query(leadsCollection, orderBy("lastContact", "desc"));
+    } 
+    // Sellers see only the leads assigned to them.
+    else if (userAppRole === 'vendedor') {
+        q = query(leadsCollection, where("userId", "==", appUser.uid), orderBy("lastContact", "desc"));
+    } 
+    // Prospectors or other roles see no leads by default in the main CRM view.
+    else {
         setLeads([]);
+        setIsLoading(false);
+        return;
     }
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const freshLeads = snapshot.docs.map(mapDocToLead);
+        setLeads(freshLeads);
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching leads:", error);
+        toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar os dados do CRM.", variant: "destructive" });
+        setIsLoading(false);
+    });
+
+    return () => unsubscribe();
 }, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
 
@@ -1031,5 +1005,3 @@ export default function CRMPage() {
     </Suspense>
   );
 }
-
-    
