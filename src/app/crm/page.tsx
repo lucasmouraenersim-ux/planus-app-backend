@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React from 'react';
@@ -142,100 +143,71 @@ function CrmPageContent() {
         completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
     } as LeadWithId;
   }, []);
-
-  const processAndSetLeads = useCallback((newLeads: LeadWithId[], isInitialLoad: boolean) => {
-    const sortedLeads = newLeads.sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
-    setLeads(sortedLeads);
-
-    if (isInitialLoad && !isLoading) {
-         const newLeadCount = sortedLeads.filter(l => !knownLeadIds.current.has(l.id)).length;
-         if (newLeadCount > 0) {
-             toast({ title: "Novos Leads!", description: `${newLeadCount} novo(s) lead(s) foram adicionados ou atualizados.` });
-         }
-    }
-    
-    sortedLeads.forEach(l => knownLeadIds.current.add(l.id));
-
-    if (isLoading) {
-        setIsLoading(false);
-    }
-  }, [isLoading, toast]);
-
+  
   useEffect(() => {
     if (isLoadingAllUsers || !appUser) {
-      setIsLoading(true);
-      return;
+        setIsLoading(true);
+        return;
     }
 
     const leadsCollection = collection(db, "crm_leads");
-    let unsubscribe: () => void;
-    
+    let unsubs: (() => void)[] = [];
+
     const isSpecialUser = appUser.displayName?.toLowerCase() === 'diogo rodrigo bottona';
     const canViewAll = (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') && !isSpecialUser;
 
-    let q;
+    const processAndSetLeads = (newLeads: Record<string, LeadWithId>) => {
+        const sortedLeads = Object.values(newLeads).sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+        setLeads(sortedLeads);
+        setIsLoading(false);
+    };
 
     if (canViewAll) {
-        q = query(leadsCollection, orderBy("lastContact", "desc"));
+        const q = query(leadsCollection, orderBy("lastContact", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const freshLeads: Record<string, LeadWithId> = {};
+            snapshot.docs.forEach(doc => {
+                freshLeads[doc.id] = mapDocToLead(doc);
+            });
+            processAndSetLeads(freshLeads);
+        }, (error) => {
+            console.error("Error fetching all leads:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
+        unsubs.push(unsubscribe);
+
     } else if (userAppRole === 'vendedor' || isSpecialUser) {
-        // Vendedor vê os leads 'para-atribuir' E os que são dele.
-        // A consulta 'or' do Firestore tem limitações, então fazemos duas e unimos no cliente,
-        // ou usamos uma estrutura que não precise de 'or' se possível.
-        // A melhor abordagem é ouvir duas queries e combinar os resultados.
-        const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
-        const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
-        
-        const unsubs: (()=>void)[] = [];
         let combinedLeads: Record<string, LeadWithId> = {};
 
-        const processSnapshot = (snapshot: any) => {
-            snapshot.docs.forEach((doc: any) => {
+        const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+        const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+
+        const unassignedUnsub = onSnapshot(unassignedQuery, (snapshot) => {
+            snapshot.docs.forEach((doc) => {
                 combinedLeads[doc.id] = mapDocToLead(doc);
             });
-            processAndSetLeads(Object.values(combinedLeads), !isLoading);
-        };
+            processAndSetLeads(combinedLeads);
+        }, (error) => console.error("Error fetching unassigned leads:", error));
 
-        unsubs.push(onSnapshot(unassignedQuery, processSnapshot, (error) => {
-             console.error("Error fetching unassigned leads:", error);
-             toast({ title: "Erro ao Carregar Leads", description: "Falha ao buscar os leads para atribuição.", variant: "destructive" });
-        }));
+        const myLeadsUnsub = onSnapshot(myLeadsQuery, (snapshot) => {
+            snapshot.docs.forEach((doc) => {
+                combinedLeads[doc.id] = mapDocToLead(doc);
+            });
+            processAndSetLeads(combinedLeads);
+        }, (error) => console.error("Error fetching seller leads:", error));
         
-        unsubs.push(onSnapshot(myLeadsQuery, processSnapshot, (error) => {
-             console.error("Error fetching seller leads:", error);
-             toast({ title: "Erro ao Carregar Leads", description: "Falha ao buscar os seus leads.", variant: "destructive" });
-        }));
-
-        unsubscribe = () => unsubs.forEach(unsub => unsub());
-
-        // This return is important to prevent the default logic from running
-        return () => {
-            if (unsubscribe) {
-              unsubscribe();
-            }
-        };
+        unsubs.push(unassignedUnsub, myLeadsUnsub);
 
     } else {
-        // Other user types see no leads by default
         setIsLoading(false);
         setLeads([]);
-        return;
     }
-    
-    unsubscribe = onSnapshot(q, (snapshot) => {
-        const freshLeads = snapshot.docs.map(mapDocToLead);
-        processAndSetLeads(freshLeads, !isLoading);
-    }, (error) => {
-        console.error("Error fetching leads:", error);
-        toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
-        setIsLoading(false);
-    });
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+        unsubs.forEach(unsub => unsub());
     };
-}, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers, mapDocToLead, processAndSetLeads]);
+}, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
 
   const handleSort = (key: keyof LeadWithId) => {
