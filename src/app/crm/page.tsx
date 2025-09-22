@@ -151,62 +151,62 @@ function CrmPageContent() {
     }
 
     const leadsCollection = collection(db, "crm_leads");
-    let unsubs: (() => void)[] = [];
-
     const isSpecialUser = appUser.displayName?.toLowerCase() === 'diogo rodrigo bottona';
     const canViewAll = (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') && !isSpecialUser;
-
-    const processAndSetLeads = (newLeads: Record<string, LeadWithId>) => {
-        const sortedLeads = Object.values(newLeads).sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
-        setLeads(sortedLeads);
-        setIsLoading(false);
-    };
 
     if (canViewAll) {
         const q = query(leadsCollection, orderBy("lastContact", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const freshLeads: Record<string, LeadWithId> = {};
-            snapshot.docs.forEach(doc => {
-                freshLeads[doc.id] = mapDocToLead(doc);
-            });
-            processAndSetLeads(freshLeads);
+            const freshLeads = snapshot.docs.map(mapDocToLead);
+            setLeads(freshLeads);
+            setIsLoading(false);
         }, (error) => {
             console.error("Error fetching all leads:", error);
             toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
             setIsLoading(false);
         });
-        unsubs.push(unsubscribe);
-
+        return () => unsubscribe();
     } else if (userAppRole === 'vendedor' || isSpecialUser) {
-        let combinedLeads: Record<string, LeadWithId> = {};
+        const fetchSellerLeads = async () => {
+            setIsLoading(true);
+            try {
+                const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+                const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
 
-        const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
-        const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+                const [unassignedSnapshot, myLeadsSnapshot] = await Promise.all([
+                    getDocs(unassignedQuery),
+                    getDocs(myLeadsQuery)
+                ]);
 
-        const unassignedUnsub = onSnapshot(unassignedQuery, (snapshot) => {
-            snapshot.docs.forEach((doc) => {
-                combinedLeads[doc.id] = mapDocToLead(doc);
-            });
-            processAndSetLeads(combinedLeads);
-        }, (error) => console.error("Error fetching unassigned leads:", error));
+                const combinedLeads: Record<string, LeadWithId> = {};
 
-        const myLeadsUnsub = onSnapshot(myLeadsQuery, (snapshot) => {
-            snapshot.docs.forEach((doc) => {
-                combinedLeads[doc.id] = mapDocToLead(doc);
-            });
-            processAndSetLeads(combinedLeads);
-        }, (error) => console.error("Error fetching seller leads:", error));
-        
-        unsubs.push(unassignedUnsub, myLeadsUnsub);
+                unassignedSnapshot.forEach((doc) => {
+                    combinedLeads[doc.id] = mapDocToLead(doc);
+                });
 
+                myLeadsSnapshot.forEach((doc) => {
+                    combinedLeads[doc.id] = mapDocToLead(doc);
+                });
+
+                const sortedLeads = Object.values(combinedLeads)
+                    .sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+                
+                setLeads(sortedLeads);
+            } catch (error) {
+                console.error("Error fetching seller-specific leads:", error);
+                toast({ title: "Erro ao Carregar Leads", description: "Não foi possível buscar seus leads.", variant: "destructive" });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchSellerLeads();
+        // Note: This approach using getDocs doesn't provide real-time updates.
+        // A more complex solution with onSnapshot would be needed for that.
     } else {
         setIsLoading(false);
         setLeads([]);
     }
-
-    return () => {
-        unsubs.forEach(unsub => unsub());
-    };
 }, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
 
