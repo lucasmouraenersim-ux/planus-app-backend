@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, or } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp, where, getDocs, or, collectionGroup } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createCrmLead, updateCrmLeadDetails, approveFinalizedLead, requestCrmLeadCorrection, updateCrmLeadStage, deleteCrmLead, assignLeadToSeller } from '@/lib/firebase/firestore';
 import { type LeadDocumentData } from '@/types/crm';
@@ -173,42 +173,69 @@ function CrmPageContent() {
     const isSpecialUser = appUser.displayName?.toLowerCase() === 'diogo rodrigo bottona';
     const canViewAll = (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') && !isSpecialUser;
 
-    if (canViewAll) {
-      const q = query(leadsCollection, orderBy("lastContact", "desc"));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const freshLeads = snapshot.docs.map(mapDocToLead);
-        processAndSetLeads(freshLeads, !isLoading);
-      }, (error) => {
-        console.error("Error fetching admin leads:", error);
-        toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
-        setIsLoading(false);
-      });
-    } else if (userAppRole === 'vendedor' || isSpecialUser) {
-        const q = query(leadsCollection, or(
-            where("stageId", "==", "para-atribuir"),
-            where("userId", "==", appUser.uid)
-        ));
+    let q;
 
-        unsubscribe = onSnapshot(q, (snapshot) => {
-            const freshLeads = snapshot.docs.map(mapDocToLead);
-            processAndSetLeads(freshLeads, !isLoading);
-        }, (error) => {
-            console.error("Error fetching seller leads:", error);
-            toast({ title: "Erro ao Carregar Leads", description: "Falha ao buscar os leads. Verifique os índices do Firestore.", variant: "destructive" });
-            setIsLoading(false);
-        });
+    if (canViewAll) {
+        q = query(leadsCollection, orderBy("lastContact", "desc"));
+    } else if (userAppRole === 'vendedor' || isSpecialUser) {
+        // Vendedor vê os leads 'para-atribuir' E os que são dele.
+        // A consulta 'or' do Firestore tem limitações, então fazemos duas e unimos no cliente,
+        // ou usamos uma estrutura que não precise de 'or' se possível.
+        // A melhor abordagem é ouvir duas queries e combinar os resultados.
+        const unassignedQuery = query(leadsCollection, where("stageId", "==", "para-atribuir"));
+        const myLeadsQuery = query(leadsCollection, where("userId", "==", appUser.uid));
+        
+        const unsubs: (()=>void)[] = [];
+        let combinedLeads: Record<string, LeadWithId> = {};
+
+        const processSnapshot = (snapshot: any) => {
+            snapshot.docs.forEach((doc: any) => {
+                combinedLeads[doc.id] = mapDocToLead(doc);
+            });
+            processAndSetLeads(Object.values(combinedLeads), !isLoading);
+        };
+
+        unsubs.push(onSnapshot(unassignedQuery, processSnapshot, (error) => {
+             console.error("Error fetching unassigned leads:", error);
+             toast({ title: "Erro ao Carregar Leads", description: "Falha ao buscar os leads para atribuição.", variant: "destructive" });
+        }));
+        
+        unsubs.push(onSnapshot(myLeadsQuery, processSnapshot, (error) => {
+             console.error("Error fetching seller leads:", error);
+             toast({ title: "Erro ao Carregar Leads", description: "Falha ao buscar os seus leads.", variant: "destructive" });
+        }));
+
+        unsubscribe = () => unsubs.forEach(unsub => unsub());
+
+        // This return is important to prevent the default logic from running
+        return () => {
+            if (unsubscribe) {
+              unsubscribe();
+            }
+        };
+
     } else {
+        // Other user types see no leads by default
         setIsLoading(false);
         setLeads([]);
         return;
     }
+    
+    unsubscribe = onSnapshot(q, (snapshot) => {
+        const freshLeads = snapshot.docs.map(mapDocToLead);
+        processAndSetLeads(freshLeads, !isLoading);
+    }, (error) => {
+        console.error("Error fetching leads:", error);
+        toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+        setIsLoading(false);
+    });
 
     return () => {
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers, mapDocToLead, processAndSetLeads]);
+}, [appUser, userAppRole, toast, isLoading, isLoadingAllUsers, mapDocToLead, processAndSetLeads]);
 
 
   const handleSort = (key: keyof LeadWithId) => {
@@ -1056,3 +1083,5 @@ export default function CRMPage() {
     </Suspense>
   );
 }
+
+    
