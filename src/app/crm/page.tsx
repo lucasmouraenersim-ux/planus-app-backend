@@ -137,8 +137,8 @@ function CrmPageContent() {
     return {
         id: doc.id,
         ...data,
-        createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-        lastContact: (data.lastContact as Timestamp).toDate().toISOString(),
+        createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
+        lastContact: (data.lastContact as Timestamp)?.toDate().toISOString(),
         signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
         completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
     } as LeadWithId;
@@ -523,37 +523,6 @@ function CrmPageContent() {
     document.body.removeChild(link);
   };
 
-  const handleExportLeadsCSV = () => {
-    if (leads.length === 0) {
-      toast({ title: "Nenhum lead para exportar." });
-      return;
-    }
-    const dataToExport = leads.map(lead => ({
-      'Cliente': lead.name,
-      'Vendedor': lead.sellerName,
-      'Documento': lead.cpf || lead.cnpj || '',
-      'Instalação': lead.codigoClienteInstalacao || '',
-      'Concessionária': lead.concessionaria || '',
-      'Plano': lead.plano || '',
-      'Consumo (KWh)': lead.kwh,
-      'Valor (R$)': lead.value,
-      'Status': lead.stageId.toUpperCase(),
-      'Assinado em': lead.signedAt ? format(parseISO(lead.signedAt), 'dd/MM/yyyy HH:mm') : '',
-      'Finalizado em': lead.completedAt ? format(parseISO(lead.completedAt as string), 'dd/MM/yyyy HH:mm') : '',
-      'Data Referencia Venda': lead.saleReferenceDate || '',
-      'Criado em': format(parseISO(lead.createdAt), 'dd/MM/yyyy HH:mm'),
-      'Atualizado em': format(parseISO(lead.lastContact), 'dd/MM/yyyy HH:mm'),
-    }));
-    const csv = Papa.unparse(dataToExport);
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `leads_sent_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    toast({ title: "Exportação de Leads Iniciada", description: `${leads.length} leads exportados.` });
-  };
-  
   const handleCheckDuplicates = () => {
     const docMap = new Map<string, LeadWithId[]>();
     
