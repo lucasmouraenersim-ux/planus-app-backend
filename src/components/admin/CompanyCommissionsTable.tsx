@@ -77,10 +77,10 @@ interface TableRowData {
   dataTerceiraComissao: Date;
   quartaComissao: number;
   dataQuartaComissao: Date;
-  comissaoTotalBruta: number; // Renamed for clarity
+  comissaoTotalBruta: number; 
   comissaoPromotor: number;
-  lucroBrutoEmpresa: number; // Renamed for clarity
-  lucroLiquidoEmpresa: number; // Renamed for clarity
+  lucroBrutoEmpresa: number; 
+  lucroLiquidoEmpresa: number; 
   jurosPerc: string;
   jurosRS: number;
   garantiaChurn: number;
@@ -97,7 +97,6 @@ interface TableRowData {
   financialStatus: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
   completedAt: string | undefined;
 
-  // Recurrence control
   dataReferenciaVenda?: string;
   parcelasEsperadas: number;
   paidRecurrenceMonths?: string[];
@@ -110,11 +109,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
-  // Filters for Main Commissions Tab
   const [commissionCompanyFilter, setCommissionCompanyFilter] = useState('all');
   const [commissionPromoterFilter, setCommissionPromoterFilter] = useState('all');
   
-  // Filters for Recurrence Tab
   const [recurrenceCompanyFilter, setRecurrenceCompanyFilter] = useState('all');
   const [recurrencePromoterFilter, setRecurrencePromoterFilter] = useState('all');
   const [selectedRecurrenceMonth, setSelectedRecurrenceMonth] = useState(new Date());
@@ -122,6 +119,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
   const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
   
+  const [receivableDates, setReceivableDates] = useState<Record<string, { immediate?: string; second?: string; third?: string }>>({});
 
   const calculateCommission = (
     proposta: number, 
@@ -193,7 +191,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     };
   }, []);
 
-  // Initialize table data
   useEffect(() => {
     const stagesToInclude: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
     const leadsForCommission = leads.filter(lead => stagesToInclude.includes(lead.stageId));
@@ -211,7 +208,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         
         let recorrenciaPercInitial = 0;
         if (empresa === 'Fit Energia') {
-          recorrenciaAtivaInitial = desagilInitial < 25;
+          recorrenciaAtivaInitial = desagilInitial < 25 && !isExcludedFromRecurrence;
           if (recorrenciaAtivaInitial) {
             recorrenciaPercInitial = 25 - desagilInitial;
           }
@@ -220,29 +217,31 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         }
 
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
+        
+        const customDates = receivableDates[lead.id] || {};
 
         let comissaoImediata = 0;
-        let dataComissaoImediata = nextFriday(baseDate);
+        let dataComissaoImediata = customDates.immediate ? parseISO(customDates.immediate) : nextFriday(baseDate);
         if (empresa === 'Bowe' || empresa === 'Matrix') comissaoImediata = proposta * 0.60;
         else if (empresa === 'Origo' || empresa === 'BC') comissaoImediata = proposta * 0.50;
         else if (empresa === 'Fit Energia') comissaoImediata = 0;
 
         let segundaComissao = 0;
         let segundaComissaoPerc = 35;
-        let dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 20); // Default for BC
+        let dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 20); // Default for BC
         if (empresa === 'BC') segundaComissao = proposta * 0.35;
         else if (empresa === 'Origo') {
             segundaComissaoPerc = 100;
             segundaComissao = proposta * (segundaComissaoPerc / 100);
-            dataSegundaComissao = setDateFn(addMonths(baseDate, 2), 15);
+            dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 2), 15);
         } else if (empresa === 'Fit Energia') {
           segundaComissao = proposta * 0.40;
-          dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 15);
+          dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 15);
         }
 
         let terceiraComissao = 0;
         let terceiraComissaoPerc = 60;
-        let dataTerceiraComissao = addMonths(baseDate, 4);
+        let dataTerceiraComissao = customDates.third ? parseISO(customDates.third) : addMonths(baseDate, 4);
         if (empresa === 'BC') terceiraComissao = proposta * 0.60;
         else if (empresa === 'Origo') {
             if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) terceiraComissaoPerc = 30;
@@ -304,7 +303,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         return { ...partialRow, ...financials };
     });
     setTableData(initialData);
-  }, [leads, userMap, totalKwhFinalizadoNoMes, calculateFinancials]);
+  }, [leads, userMap, totalKwhFinalizadoNoMes, calculateFinancials, receivableDates]);
 
   const updateRowData = (leadId: string, updates: Partial<TableRowData>) => {
     const firestoreUpdates: Partial<LeadWithId> = {};
@@ -323,7 +322,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         if (row.id === leadId) {
           let updatedRow: TableRowData = { ...row, ...updates };
           
-          // Recalculate everything based on the change (e.g., new company)
           const baseDate = parseISO(updatedRow.completedAt || new Date().toISOString());
           const empresa = updatedRow.empresa;
           const proposta = updatedRow.proposta;
@@ -375,12 +373,20 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           }
           updatedRow.dataTerceiraComissao = addMonths(baseDate, 4);
 
-          const financials = calculateFinancials(updatedRow as any); // Cast as any to bypass circular dependency for a moment
+          const financials = calculateFinancials(updatedRow as any);
           return { ...updatedRow, ...financials };
         }
         return row;
       })
     );
+  };
+
+  const handleReceivableDateChange = (leadId: string, commissionType: 'immediate' | 'second' | 'third', newDate?: Date) => {
+    if (!newDate) return;
+    setReceivableDates(prev => ({
+      ...prev,
+      [leadId]: { ...prev[leadId], [commissionType]: newDate.toISOString() }
+    }));
   };
     
   const getStageBadgeStyle = (stageId: string) => {
@@ -530,10 +536,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead>3ª Com. (R$)</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>Comissão Total Bruta (R$)</TableHead>
-                      <TableHead>Juros (R$)</TableHead>
-                      <TableHead>Garantia Churn (R$)</TableHead>
-                      <TableHead>Comercializador (R$)</TableHead>
-                      <TableHead>Nota Fiscal (R$)</TableHead>
                       <TableHead>Lucro Líquido (R$)</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -556,23 +558,31 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                           </TableCell>
                           <TableCell>{row.kwh.toLocaleString('pt-BR')}</TableCell>
                           <TableCell>{formatCurrency(row.proposta)}</TableCell>
-                          <TableCell>{row.desagil.toFixed(2)}%</TableCell>
+                          <TableCell className='w-[100px]'>
+                              <Input
+                                type="number"
+                                value={row.desagil.toFixed(2)}
+                                onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
+                                className="h-8 text-xs"
+                              />
+                          </TableCell>
                           <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
-                          <TableCell>{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</TableCell>
+                           <TableCell>
+                               <Popover>
+                                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8">{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</Button></PopoverTrigger>
+                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={row.dataComissaoImediata} onSelect={(date) => handleReceivableDateChange(row.id, 'immediate', date)} initialFocus /></PopoverContent>
+                               </Popover>
+                           </TableCell>
                           <TableCell>{formatCurrency(row.segundaComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataSegundaComissao, 'dd/MM/yy')}</TableCell>
                           <TableCell>{formatCurrency(row.terceiraComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataTerceiraComissao, 'dd/MM/yy')}</TableCell>
                           <TableCell className="font-semibold">{formatCurrency(row.comissaoTotalBruta)}</TableCell>
-                          <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
-                          <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
-                          <TableCell>{formatCurrency(row.comercializador)}</TableCell>
-                          <TableCell>{formatCurrency(row.nota)}</TableCell>
                           <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiquidoEmpresa)}</TableCell>
                       </TableRow>
                       )) : (
                           <TableRow>
-                              <TableCell colSpan={18} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                              <TableCell colSpan={14} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
