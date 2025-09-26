@@ -15,6 +15,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, L
 import { STAGES_CONFIG } from '@/config/crm-stages';
 import CompanyCommissionsTable from './CompanyCommissionsTable';
 import { Textarea } from '../ui/textarea';
+import { importRecurrenceStatusFromCSV } from '@/actions/admin/commissionActions';
 
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -56,7 +57,6 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
   DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -68,7 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -854,6 +854,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
+  const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
+
   
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<WithdrawalRequestWithId | null>(null);
@@ -1152,6 +1155,30 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     // For this example, we'll just show the toast.
     setIsProcessingWithdrawals(false);
   };
+
+  const handleImportRecurrence = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const fileInput = event.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
+
+    if (!fileInput?.files?.length) {
+      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo CSV.", variant: "destructive" });
+      return;
+    }
+    setIsUploadingRecurrence(true);
+    const result = await importRecurrenceStatusFromCSV(formData);
+    toast({
+      title: result.success ? "Importação Concluída" : "Erro na Importação",
+      description: result.message,
+      variant: result.success ? "default" : "destructive"
+    });
+    if (result.success) {
+      await onUsersChange(); // Re-fetch all data to ensure UI is up-to-date
+      setIsImportRecurrenceModalOpen(false);
+    }
+    setIsUploadingRecurrence(false);
+  };
+
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
@@ -1477,7 +1504,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="commissions">
-            <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
+            <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} onDataRefreshNeeded={onUsersChange} />
         </TabsContent>
 
         <TabsContent value="management">
