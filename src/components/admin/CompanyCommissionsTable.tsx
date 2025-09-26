@@ -529,6 +529,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead>kWh</TableHead>
                       <TableHead>Proposta (R$)</TableHead>
                       <TableHead>Deságio (%)</TableHead>
+                      <TableHead>Comissão Total Bruta (R$)</TableHead>
+                      <TableHead>Lucro Líquido (R$)</TableHead>
                       <TableHead>1ª Com. (R$)</TableHead>
                       <TableHead>Data</TableHead>
                       <TableHead>2ª Com. (R$)</TableHead>
@@ -539,8 +541,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead>Garantia Churn</TableHead>
                       <TableHead>Comercializador</TableHead>
                       <TableHead>Nota</TableHead>
-                      <TableHead>Comissão Total Bruta (R$)</TableHead>
-                      <TableHead>Lucro Líquido (R$)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -567,15 +567,21 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 type="number"
                                 value={row.desagil.toFixed(2)}
                                 onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
-                                className="h-8 text-xs"
+                                className="h-8 text-xs bg-muted/50"
                               />
                           </TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(row.comissaoTotalBruta)}</TableCell>
+                          <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiquidoEmpresa)}</TableCell>
                           <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
                           <TableCell>
-                                <Popover>
-                                <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8">{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</Button></PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={row.dataComissaoImediata} onSelect={(date) => handleReceivableDateChange(row.id, 'immediate', date)} initialFocus /></PopoverContent>
-                                </Popover>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8">{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar mode="single" selected={row.dataComissaoImediata} onSelect={(date) => handleReceivableDateChange(row.id, 'immediate', date)} initialFocus />
+                              </PopoverContent>
+                            </Popover>
                           </TableCell>
                           <TableCell>{formatCurrency(row.segundaComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataSegundaComissao, 'dd/MM/yy')}</TableCell>
@@ -585,8 +591,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                           <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
                           <TableCell>{formatCurrency(row.comercializador)}</TableCell>
                           <TableCell>{formatCurrency(row.nota)}</TableCell>
-                          <TableCell className="font-semibold">{formatCurrency(row.comissaoTotalBruta)}</TableCell>
-                          <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiquidoEmpresa)}</TableCell>
                       </TableRow>
                       )) : (
                           <TableRow>
