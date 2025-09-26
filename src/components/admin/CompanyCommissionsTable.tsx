@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, differenceInDays, addMonths, subMonths, format as formatDateFns } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, differenceInDays, addMonths, subMonths, format as formatDateFns, nextFriday, setDate as setDateFn } from 'date-fns';
 import { AlertTriangle, Calendar as CalendarIcon, X, Upload, Loader2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
@@ -70,13 +70,13 @@ interface TableRowData {
   proposta: number;
   desagil: number;
   comissaoImediata: number;
-  dataComissaoImediata: string;
+  dataComissaoImediata: Date;
   segundaComissao: number;
-  dataSegundaComissao: string;
+  dataSegundaComissao: Date;
   terceiraComissao: number;
-  dataTerceiraComissao: string;
+  dataTerceiraComissao: Date;
   quartaComissao: number;
-  dataQuartaComissao: string;
+  dataQuartaComissao: Date;
   comissaoTotal: number;
   comissaoPromotor: number;
   lucroBruto: number;
@@ -199,9 +199,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const leadsForCommission = leads.filter(lead => stagesToInclude.includes(lead.stageId));
 
     const initialData = leadsForCommission.map(lead => {
+        const baseDate = parseISO(lead.completedAt || lead.signedAt || lead.createdAt);
         const desagilInitial = lead.discountPercentage || 0;
         const proposta = lead.valueAfterDiscount || 0;
-        const empresa = EMPRESA_OPTIONS.includes(lead.empresa || '') ? lead.empresa : 'Bowe';
+        const empresa = EMPRESA_OPTIONS.includes(lead.empresa || '') ? lead.empresa! : 'Bowe';
         const promotorId = lead.userId;
 
         const sellerNameLower = (lead.sellerName || '').toLowerCase();
@@ -221,20 +222,27 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         const comissaoPromotorInitial = calculateCommission(proposta, desagilInitial, promotorId);
 
         let comissaoImediata = 0;
+        let dataComissaoImediata = nextFriday(baseDate);
         if (empresa === 'Bowe' || empresa === 'Matrix') comissaoImediata = proposta * 0.60;
         else if (empresa === 'Origo' || empresa === 'BC') comissaoImediata = proposta * 0.50;
         else if (empresa === 'Fit Energia') comissaoImediata = 0;
 
         let segundaComissao = 0;
-        let segundaComissaoPerc = 35; 
+        let segundaComissaoPerc = 35;
+        let dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 20); // Default for BC
         if (empresa === 'BC') segundaComissao = proposta * 0.35;
         else if (empresa === 'Origo') {
             segundaComissaoPerc = 100;
             segundaComissao = proposta * (segundaComissaoPerc / 100);
-        } else if (empresa === 'Fit Energia') segundaComissao = proposta * 0.40;
+            dataSegundaComissao = setDateFn(addMonths(baseDate, 2), 15);
+        } else if (empresa === 'Fit Energia') {
+          segundaComissao = proposta * 0.40;
+          dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 15);
+        }
 
         let terceiraComissao = 0;
         let terceiraComissaoPerc = 60;
+        let dataTerceiraComissao = addMonths(baseDate, 4);
         if (empresa === 'BC') terceiraComissao = proposta * 0.60;
         else if (empresa === 'Origo') {
             if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) terceiraComissaoPerc = 30;
@@ -271,13 +279,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             proposta: proposta,
             desagil: desagilInitial,
             comissaoImediata: comissaoImediata,
-            dataComissaoImediata: "3 dias depois",
+            dataComissaoImediata: dataComissaoImediata,
             segundaComissao: segundaComissao,
-            dataSegundaComissao: "45 dias depois",
+            dataSegundaComissao: dataSegundaComissao,
             terceiraComissao: terceiraComissao,
-            dataTerceiraComissao: "4 meses depois",
+            dataTerceiraComissao: dataTerceiraComissao,
             quartaComissao: 0,
-            dataQuartaComissao: "6 meses depois",
+            dataQuartaComissao: new Date(),
             comissaoPromotor: comissaoPromotorInitial,
             recorrenciaAtiva: recorrenciaAtivaInitial,
             recorrenciaPerc: recorrenciaPercInitial,
@@ -314,9 +322,58 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       currentData.map(row => {
         if (row.id === leadId) {
           let updatedRow: TableRowData = { ...row, ...updates };
-          const comissaoPromotor = calculateCommission(updatedRow.proposta, updatedRow.desagil, updatedRow.promotorId);
-          updatedRow.comissaoPromotor = comissaoPromotor;
-          // ... (rest of the recalculation logic) ...
+          
+          // Recalculate everything based on the change (e.g., new company)
+          const baseDate = parseISO(updatedRow.completedAt || new Date().toISOString());
+          const empresa = updatedRow.empresa;
+          const proposta = updatedRow.proposta;
+          const desagil = updatedRow.desagil;
+
+          const sellerNameLower = (updatedRow.promotor || '').toLowerCase();
+          const isExcludedFromRecurrence = sellerNameLower.includes('eduardo') || sellerNameLower.includes('diogo');
+          updatedRow.recorrenciaAtiva = !isExcludedFromRecurrence;
+          
+          if (empresa === 'Fit Energia') {
+            updatedRow.recorrenciaAtiva = desagil < 25 && !isExcludedFromRecurrence;
+            updatedRow.recorrenciaPerc = updatedRow.recorrenciaAtiva ? 25 - desagil : 0;
+          } else if (empresa === 'Bowe') {
+             updatedRow.recorrenciaPerc = !isExcludedFromRecurrence ? 1 : 0;
+          }
+
+          updatedRow.comissaoPromotor = calculateCommission(proposta, desagil, updatedRow.promotorId);
+
+          if (empresa === 'Bowe' || empresa === 'Matrix') updatedRow.comissaoImediata = proposta * 0.60;
+          else if (empresa === 'Origo' || empresa === 'BC') updatedRow.comissaoImediata = proposta * 0.50;
+          else if (empresa === 'Fit Energia') updatedRow.comissaoImediata = 0;
+          updatedRow.dataComissaoImediata = nextFriday(baseDate);
+
+          if (empresa === 'BC') {
+              updatedRow.segundaComissao = proposta * 0.35;
+              updatedRow.dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 20);
+          } else if (empresa === 'Origo') {
+              updatedRow.segundaComissao = proposta;
+              updatedRow.dataSegundaComissao = setDateFn(addMonths(baseDate, 2), 15);
+          } else if (empresa === 'Fit Energia') {
+              updatedRow.segundaComissao = proposta * 0.40;
+              updatedRow.dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 15);
+          } else {
+              updatedRow.segundaComissao = 0;
+          }
+          
+          if (empresa === 'BC') {
+              updatedRow.terceiraComissao = proposta * 0.60;
+          } else if (empresa === 'Origo') {
+            let perc = 0;
+            if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) perc = 30;
+            else if (totalKwhFinalizadoNoMes > 40000) perc = 50;
+            updatedRow.terceiraComissao = proposta * (perc / 100);
+          } else if (empresa === 'Fit Energia') {
+              updatedRow.terceiraComissao = proposta * 0.60;
+          } else {
+              updatedRow.terceiraComissao = 0;
+          }
+          updatedRow.dataTerceiraComissao = addMonths(baseDate, 4);
+
           const financials = calculateFinancials(updatedRow);
           return { ...updatedRow, ...financials };
         }
@@ -352,8 +409,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const filteredRecurrenceData = useMemo(() => {
     const monthStart = startOfMonth(selectedRecurrenceMonth);
     const monthEnd = endOfMonth(selectedRecurrenceMonth);
-    const selectedMonthKey = format(selectedRecurrenceMonth, 'yyyy-MM');
-
+    
     return tableData.filter(row => {
         const isRelevantCompany = ['Fit Energia', 'Bowe'].includes(row.empresa);
         if (!isRelevantCompany || row.recorrenciaComissao <= 0) return false;
@@ -367,16 +423,15 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 const [mes, ano] = row.dataReferenciaVenda.split('/').map(Number);
                 if(mes && ano) {
                     const recurrenceStartDate = addMonths(new Date(ano, mes - 1, 1), 4);
-                    // Check if the selected month is on or after the recurrence start date
                     if (monthStart < recurrenceStartDate) {
                         dateMatch = false;
                     }
                 } else {
-                    dateMatch = false; // Invalid date format
+                    dateMatch = false;
                 }
             } catch { dateMatch = false; }
         } else {
-            dateMatch = false; // No reference date
+            dateMatch = false;
         }
 
         return companyMatch && promoterMatch && dateMatch;
@@ -464,14 +519,17 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead className="sticky left-0 bg-card z-10">Promotor</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Empresa</TableHead>
-                      <TableHead>Proposta (R$)</TableHead>
-                      <TableHead>Comissão Total (R$)</TableHead>
+                      <TableHead>1ª Com. (R$)</TableHead>
+                      <TableHead>Data Pagto.</TableHead>
+                      <TableHead>2ª Com. (R$)</TableHead>
+                      <TableHead>Data Pagto.</TableHead>
+                      <TableHead>3ª Com. (R$)</TableHead>
+                      <TableHead>Data Pagto.</TableHead>
                       <TableHead>Juros (R$)</TableHead>
                       <TableHead>Garantia Churn (R$)</TableHead>
                       <TableHead>Comercializador (R$)</TableHead>
                       <TableHead>Nota Fiscal (R$)</TableHead>
                       <TableHead>Lucro Líquido (R$)</TableHead>
-                      <TableHead>Status Financeiro</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -479,38 +537,33 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableRow key={row.id}>
                           <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.promotor}</TableCell>
                           <TableCell>{row.cliente}</TableCell>
-                          <TableCell>{row.empresa}</TableCell>
-                          <TableCell>{formatCurrency(row.proposta)}</TableCell>
-                          <TableCell className="font-bold">{formatCurrency(row.comissaoTotal)}</TableCell>
+                          <TableCell>
+                            <Select value={row.empresa} onValueChange={(value) => updateRowData(row.id, { empresa: value })}>
+                                <SelectTrigger className="w-[120px] h-8 text-xs">
+                                    <SelectValue placeholder="Empresa" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {EMPRESA_OPTIONS.map(opt => (
+                                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
+                          <TableCell>{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</TableCell>
+                          <TableCell>{formatCurrency(row.segundaComissao)}</TableCell>
+                          <TableCell>{formatDateFns(row.dataSegundaComissao, 'dd/MM/yy')}</TableCell>
+                          <TableCell>{formatCurrency(row.terceiraComissao)}</TableCell>
+                          <TableCell>{formatDateFns(row.dataTerceiraComissao, 'dd/MM/yy')}</TableCell>
                           <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
                           <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
                           <TableCell>{formatCurrency(row.comercializador)}</TableCell>
                           <TableCell>{formatCurrency(row.nota)}</TableCell>
                           <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
-                          <TableCell>
-                              <Select
-                                  value={row.financialStatus}
-                                  onValueChange={(value) => updateRowData(row.id, { financialStatus: value as TableRowData['financialStatus'] })}
-                              >
-                                  <SelectTrigger className={cn("w-[150px] h-8", getFinancialStatusBadgeStyle(row.financialStatus))}>
-                                      <SelectValue placeholder="Definir" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                      {FINANCIAL_STATUS_OPTIONS.map(option => (
-                                          <SelectItem key={option.value} value={option.value}>
-                                              <div className="flex items-center">
-                                                  {option.value === 'Nunca pagou' && <AlertTriangle className="h-4 w-4 mr-2 text-red-500" />}
-                                                  {option.label}
-                                              </div>
-                                          </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                          </TableCell>
                       </TableRow>
                       )) : (
                           <TableRow>
-                              <TableCell colSpan={11} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                              <TableCell colSpan={14} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
