@@ -1,3 +1,4 @@
+
 // src/components/admin/CompanyCommissionsTable.tsx
 "use client";
 
@@ -567,7 +568,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 type="number"
                                 value={row.desagil.toFixed(2)}
                                 onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
-                                className="h-8 text-xs bg-muted/50"
+                                className="h-8 text-xs bg-black text-white"
                               />
                           </TableCell>
                           <TableCell className="font-semibold">{formatCurrency(row.comissaoTotalBruta)}</TableCell>
