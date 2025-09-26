@@ -60,6 +60,13 @@ const getFinancialStatusBadgeStyle = (status?: string) => {
     }
 };
 
+interface CostSettings {
+  juros: boolean;
+  garantiaChurn: boolean;
+  comercializador: boolean;
+  nota: boolean;
+}
+
 interface TableRowData {
   id: string;
   promotor: string;
@@ -70,14 +77,6 @@ interface TableRowData {
   kwh: number;
   proposta: number;
   desagil: number;
-  comissaoImediata: number;
-  dataComissaoImediata: Date;
-  segundaComissao: number;
-  dataSegundaComissao: Date;
-  terceiraComissao: number;
-  dataTerceiraComissao: Date;
-  quartaComissao: number;
-  dataQuartaComissao: Date;
   comissaoTotalBruta: number; 
   comissaoPromotor: number;
   lucroBrutoEmpresa: number; 
@@ -93,14 +92,22 @@ interface TableRowData {
   recorrenciaComissao: number;
   recorrenciaPaga: boolean;
 
-  segundaComissaoPerc: number;
-  terceiraComissaoPerc: number;
+  comissaoImediata: number;
+  dataComissaoImediata: Date;
+  segundaComissao: number;
+  dataSegundaComissao: Date;
+  terceiraComissao: number;
+  dataTerceiraComissao: Date;
+  quartaComissao: number;
+  dataQuartaComissao: Date;
+
   financialStatus: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
   completedAt: string | undefined;
 
   dataReferenciaVenda?: string;
   parcelasEsperadas: number;
   paidRecurrenceMonths?: string[];
+  costSettings: CostSettings;
 }
 
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
@@ -153,15 +160,15 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     let garantiaChurn = 0;
     let comercializador = 0;
     let nota = 0;
+    let jurosRS = 0;
+    let jurosPerc = "0%";
 
     if (rowData.empresa !== 'Fit Energia') {
         garantiaChurn = comissaoTotalBruta * 0.10;
         comercializador = comissaoTotalBruta * 0.10;
         nota = comissaoTotalBruta * 0.12;
     }
-
-    let jurosRS = 0;
-    let jurosPerc = "0%";
+    
     if (rowData.empresa === 'BC') {
         jurosRS = rowData.comissaoImediata * 0.12;
         jurosPerc = "12%";
@@ -177,7 +184,12 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         recorrenciaComissao = rowData.proposta * (rowData.recorrenciaPerc / 100);
     }
 
-    const lucroLiquidoEmpresa = lucroBrutoEmpresa - garantiaChurn - comercializador - nota - jurosRS;
+    let lucroLiquidoEmpresa = lucroBrutoEmpresa;
+    if (rowData.costSettings.garantiaChurn) lucroLiquidoEmpresa -= garantiaChurn;
+    if (rowData.costSettings.comercializador) lucroLiquidoEmpresa -= comercializador;
+    if (rowData.costSettings.nota) lucroLiquidoEmpresa -= nota;
+    if (rowData.costSettings.juros) lucroLiquidoEmpresa -= jurosRS;
+
 
     return {
       comissaoTotalBruta,
@@ -228,27 +240,24 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         else if (empresa === 'Fit Energia') comissaoImediata = 0;
 
         let segundaComissao = 0;
-        let segundaComissaoPerc = 35;
-        let dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 20); // Default for BC
-        if (empresa === 'BC') segundaComissao = proposta * 0.35;
+        let dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 20);
+        if (empresa === 'BC') segundaComissao = proposta * 0.45; // Changed from 0.35
         else if (empresa === 'Origo') {
-            segundaComissaoPerc = 100;
-            segundaComissao = proposta * (segundaComissaoPerc / 100);
-            dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 2), 15);
+            segundaComissao = proposta;
+            dataSegundaComissao = setDateFn(addMonths(baseDate, 2), 15);
         } else if (empresa === 'Fit Energia') {
           segundaComissao = proposta * 0.40;
-          dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 15);
+          dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 15);
         }
 
         let terceiraComissao = 0;
-        let terceiraComissaoPerc = 60;
         let dataTerceiraComissao = customDates.third ? parseISO(customDates.third) : addMonths(baseDate, 4);
         if (empresa === 'BC') terceiraComissao = proposta * 0.60;
         else if (empresa === 'Origo') {
-            if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) terceiraComissaoPerc = 30;
-            else if (totalKwhFinalizadoNoMes > 40000) terceiraComissaoPerc = 50;
-            else terceiraComissaoPerc = 0;
-            terceiraComissao = proposta * (terceiraComissaoPerc / 100);
+            let perc = 0;
+            if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) perc = 30;
+            else if (totalKwhFinalizadoNoMes > 40000) perc = 50;
+            terceiraComissao = proposta * (perc / 100);
         } else if (empresa === 'Fit Energia') terceiraComissao = proposta * 0.60;
         
         let recorrenciaPagaInitial = lead.recorrenciaPaga || false;
@@ -267,6 +276,8 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                 }
             } catch (e) { console.error("Error parsing saleReferenceDate", e); }
         }
+
+        const initialCostSettings = { juros: true, garantiaChurn: true, comercializador: true, nota: true };
 
         const partialRow = {
             id: lead.id,
@@ -289,14 +300,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             comissaoPromotor: comissaoPromotorInitial,
             recorrenciaAtiva: recorrenciaAtivaInitial,
             recorrenciaPerc: recorrenciaPercInitial,
-            segundaComissaoPerc: segundaComissaoPerc,
-            terceiraComissaoPerc: terceiraComissaoPerc,
             recorrenciaPaga: recorrenciaPagaInitial,
             financialStatus: financialStatusInitial,
             completedAt: lead.completedAt,
             dataReferenciaVenda: lead.saleReferenceDate,
             parcelasEsperadas,
             paidRecurrenceMonths: lead.paidRecurrenceMonths || [],
+            costSettings: initialCostSettings,
         };
         
         const financials = calculateFinancials(partialRow as any);
@@ -323,6 +333,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         if (row.id === leadId) {
           let updatedRow: TableRowData = { ...row, ...updates };
           
+          if (updates.costSettings) {
+            updatedRow.costSettings = { ...row.costSettings, ...updates.costSettings };
+          }
+          
           const baseDate = parseISO(updatedRow.completedAt || new Date().toISOString());
           const empresa = updatedRow.empresa;
           const proposta = updatedRow.proposta;
@@ -347,7 +361,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           updatedRow.dataComissaoImediata = nextFriday(baseDate);
 
           if (empresa === 'BC') {
-              updatedRow.segundaComissao = proposta * 0.35;
+              updatedRow.segundaComissao = proposta * 0.45;
               updatedRow.dataSegundaComissao = setDateFn(addMonths(baseDate, 1), 20);
           } else if (empresa === 'Origo') {
               updatedRow.segundaComissao = proposta;
@@ -365,7 +379,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             let perc = 0;
             if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) perc = 30;
             else if (totalKwhFinalizadoNoMes > 40000) perc = 50;
-            else perc = 0;
             updatedRow.terceiraComissao = proposta * (perc / 100);
           } else if (empresa === 'Fit Energia') {
               updatedRow.terceiraComissao = proposta * 0.60;
@@ -486,6 +499,33 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     setIsUploadingRecurrence(false);
   };
 
+  const CostCell = ({ leadId, costKey, value }: { leadId: string, costKey: keyof CostSettings, value: number }) => {
+    const row = tableData.find(r => r.id === leadId);
+    if (!row) return <TableCell>{formatCurrency(value)}</TableCell>;
+
+    const isChecked = row.costSettings[costKey];
+
+    const handleCheckedChange = (checked: boolean) => {
+        updateRowData(leadId, { costSettings: { ...row.costSettings, [costKey]: checked } });
+    };
+
+    return (
+        <TableCell>
+            <div className="flex items-center justify-end gap-2">
+                <Checkbox
+                    checked={isChecked}
+                    onCheckedChange={handleCheckedChange}
+                    id={`cb-${leadId}-${costKey}`}
+                />
+                <Label htmlFor={`cb-${leadId}-${costKey}`} className={cn(isChecked ? 'text-foreground' : 'text-muted-foreground line-through')}>
+                    {formatCurrency(value)}
+                </Label>
+            </div>
+        </TableCell>
+    );
+};
+
+
   return (
     <>
       <Card>
@@ -588,10 +628,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                           <TableCell>{formatDateFns(row.dataSegundaComissao, 'dd/MM/yy')}</TableCell>
                           <TableCell>{formatCurrency(row.terceiraComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataTerceiraComissao, 'dd/MM/yy')}</TableCell>
-                          <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
-                          <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
-                          <TableCell>{formatCurrency(row.comercializador)}</TableCell>
-                          <TableCell>{formatCurrency(row.nota)}</TableCell>
+                          <CostCell leadId={row.id} costKey="juros" value={row.jurosRS} />
+                          <CostCell leadId={row.id} costKey="garantiaChurn" value={row.garantiaChurn} />
+                          <CostCell leadId={row.id} costKey="comercializador" value={row.comercializador} />
+                          <CostCell leadId={row.id} costKey="nota" value={row.nota} />
                       </TableRow>
                       )) : (
                           <TableRow>
