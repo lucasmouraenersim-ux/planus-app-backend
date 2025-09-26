@@ -81,7 +81,6 @@ interface TableRowData {
   comissaoPromotor: number;
   lucroBrutoEmpresa: number; 
   lucroLiquidoEmpresa: number; 
-  jurosPerc: string;
   jurosRS: number;
   garantiaChurn: number;
   comercializador: number;
@@ -98,8 +97,6 @@ interface TableRowData {
   dataSegundaComissao: Date;
   terceiraComissao: number;
   dataTerceiraComissao: Date;
-  quartaComissao: number;
-  dataQuartaComissao: Date;
 
   financialStatus: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
   completedAt: string | undefined;
@@ -153,29 +150,15 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = useCallback((rowData: Omit<TableRowData, 'comissaoTotalBruta' | 'lucroBrutoEmpresa' | 'lucroLiquidoEmpresa' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' | 'recorrenciaComissao'>) => {
-    const comissaoTotalBruta = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
+  const calculateFinancials = useCallback((rowData: Omit<TableRowData, 'comissaoTotalBruta' | 'lucroBrutoEmpresa' | 'lucroLiquidoEmpresa' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'recorrenciaComissao'>) => {
+    const comissaoTotalBruta = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao;
     const lucroBrutoEmpresa = comissaoTotalBruta - rowData.comissaoPromotor;
     
-    let garantiaChurn = 0;
-    let comercializador = 0;
-    let nota = 0;
-    let jurosRS = 0;
-    let jurosPerc = "0%";
-
-    if (rowData.empresa !== 'Fit Energia') {
-        garantiaChurn = comissaoTotalBruta * 0.10;
-        comercializador = comissaoTotalBruta * 0.10;
-        nota = comissaoTotalBruta * 0.12;
-    }
-    
-    if (rowData.empresa === 'BC') {
-        jurosRS = rowData.comissaoImediata * 0.12;
-        jurosPerc = "12%";
-    } else if (rowData.empresa === 'Origo') {
-        jurosRS = rowData.comissaoImediata * 0.17;
-        jurosPerc = "17%";
-    }
+    // New calculation rules
+    const jurosRS = rowData.comissaoImediata * 0.12;
+    const garantiaChurn = comissaoTotalBruta * 0.10;
+    const comercializador = comissaoTotalBruta * 0.10;
+    const nota = comissaoTotalBruta * 0.06;
     
     let recorrenciaComissao = 0;
     if (rowData.empresa === 'Fit Energia' && rowData.recorrenciaAtiva && rowData.desagil < 25) {
@@ -198,8 +181,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       garantiaChurn,
       comercializador,
       nota,
-      jurosRS: jurosRS,
-      jurosPerc: jurosPerc,
+      jurosRS,
       recorrenciaComissao,
     };
   }, []);
@@ -241,7 +223,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
         let segundaComissao = 0;
         let dataSegundaComissao = customDates.second ? parseISO(customDates.second) : setDateFn(addMonths(baseDate, 1), 20);
-        if (empresa === 'BC') segundaComissao = proposta * 0.45; // Changed from 0.35
+        if (empresa === 'BC') segundaComissao = proposta * 0.45;
         else if (empresa === 'Origo') {
             segundaComissao = proposta;
             dataSegundaComissao = setDateFn(addMonths(baseDate, 2), 15);
@@ -295,8 +277,6 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             dataSegundaComissao: dataSegundaComissao,
             terceiraComissao: terceiraComissao,
             dataTerceiraComissao: dataTerceiraComissao,
-            quartaComissao: 0,
-            dataQuartaComissao: new Date(),
             comissaoPromotor: comissaoPromotorInitial,
             recorrenciaAtiva: recorrenciaAtivaInitial,
             recorrenciaPerc: recorrenciaPercInitial,
@@ -578,10 +558,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead>Data</TableHead>
                       <TableHead>3ª Com. (R$)</TableHead>
                       <TableHead>Data</TableHead>
-                      <TableHead>Juros (R$)</TableHead>
-                      <TableHead>Garantia Churn</TableHead>
-                      <TableHead>Comercializador</TableHead>
-                      <TableHead>Nota</TableHead>
+                      <TableHead className="text-right">Juros (R$)</TableHead>
+                      <TableHead className="text-right">Garantia Churn</TableHead>
+                      <TableHead className="text-right">Comercializador</TableHead>
+                      <TableHead className="text-right">Nota</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
