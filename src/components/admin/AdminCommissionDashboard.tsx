@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -1507,6 +1506,24 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
         <TabsContent value="commissions">
             <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
+            <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Importar Status de Recorrência</CardTitle>
+                    <CardDescription>
+                        Faça o upload de um arquivo CSV para atualizar o status de pagamento das recorrências. O arquivo deve conter colunas 'Cliente' ou 'Documento' e 'Parcelas pagas'.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleImportRecurrence} className="flex items-center gap-4">
+                        <Label htmlFor="recurrenceCsvFile" className="sr-only">Arquivo CSV</Label>
+                        <Input id="recurrenceCsvFile" name="csvFile" type="file" accept=".csv" className="flex-1" />
+                        <Button type="submit" disabled={isUploadingRecurrence}>
+                            {isUploadingRecurrence ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                            Importar Recorrências
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
         </TabsContent>
 
         <TabsContent value="management">
@@ -1680,4 +1697,3 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   );
 }
 
-    

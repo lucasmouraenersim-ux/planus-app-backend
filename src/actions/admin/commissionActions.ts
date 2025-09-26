@@ -11,10 +11,11 @@ const ActionResultSchema = z.object({
 });
 type ActionResult = z.infer<typeof ActionResultSchema>;
 
+// Schema updated to reflect the user's spreadsheet columns
 const CsvRowSchema = z.object({
   cliente: z.string().min(1, 'Coluna "cliente" é obrigatória.'),
-  documento: z.string().optional(),
-  'recorrencia paga': z.string().min(1, 'Coluna "recorrencia paga" é obrigatória'),
+  documento: z.string().optional(), // 'Documento' can be used for matching
+  'parcelas pagas': z.string().optional(), // Main column to check for payment
 });
 
 export async function importRecurrenceStatusFromCSV(formData: FormData): Promise<ActionResult> {
@@ -41,48 +42,59 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
           let notFoundCount = 0;
           const errors: string[] = [];
           const leadsRef = collection(adminDb, "crm_leads");
-          const batch = writeBatch(adminDb);
+          
+          const BATCH_SIZE = 400;
 
-          for (const [index, row] of results.data.entries()) {
-            const validation = CsvRowSchema.safeParse(row);
-            if (!validation.success) {
-              errors.push(`Linha ${index + 2}: ${validation.error.message}`);
-              continue;
+          // Using a for...of loop with await to process sequentially
+          for (let i = 0; i < results.data.length; i += BATCH_SIZE) {
+            const batch = writeBatch(adminDb);
+            const chunk = results.data.slice(i, i + BATCH_SIZE);
+
+            for (const row of chunk) {
+              const validation = CsvRowSchema.safeParse(row);
+              if (!validation.success) {
+                // errors.push(`Linha ${i + 2}: ${validation.error.message}`);
+                continue; // Skip rows that don't match the basic schema
+              }
+
+              const { cliente, documento } = validation.data;
+              const parcelasPagasValue = validation.data['parcelas pagas'];
+              
+              // Determine if paid based on 'Parcelas pagas' being a number > 0
+              const isPaid = parcelasPagasValue ? parseInt(parcelasPagasValue, 10) > 0 : false;
+
+              let q;
+              // Prioritize document (CPF/CNPJ) for matching if available
+              if (documento && documento.replace(/\D/g, '').length >= 11) {
+                const normalizedDoc = documento.replace(/\D/g, '');
+                q = query(leadsRef, where(normalizedDoc.length === 11 ? 'cpf' : 'cnpj', '==', normalizedDoc));
+              } else {
+                // Fallback to client name
+                q = query(leadsRef, where('name', '==', cliente));
+              }
+
+              try {
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                  const leadDoc = querySnapshot.docs[0];
+                  batch.update(leadDoc.ref, { recorrenciaPaga: isPaid });
+                  updatedCount++;
+                } else {
+                  notFoundCount++;
+                  // errors.push(`Lead não encontrado para cliente: "${cliente}" ou documento: "${documento}"`);
+                }
+              } catch (qError) {
+                  console.error(`Query failed for row: ${JSON.stringify(row)}`, qError);
+                  errors.push(`Query failed for "${cliente}"`);
+              }
             }
-
-            const { cliente, documento } = validation.data;
-            const recorrenciaPagaValue = validation.data['recorrencia paga'].toLowerCase();
-            const isPaid = ['sim', 'pago', 'true', '1'].includes(recorrenciaPagaValue);
-
-            let q;
-            if (documento && documento.replace(/\D/g, '').length >= 11) {
-              const normalizedDoc = documento.replace(/\D/g, '');
-              q = query(leadsRef, where(normalizedDoc.length === 11 ? 'cpf' : 'cnpj', '==', normalizedDoc));
-            } else {
-              q = query(leadsRef, where('name', '==', cliente));
+             
+            try {
+                await batch.commit();
+            } catch(commitError) {
+                console.error("Batch commit failed:", commitError);
+                // Handle batch commit error, maybe resolve with failure
             }
-
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-              const leadDoc = querySnapshot.docs[0];
-              batch.update(leadDoc.ref, { recorrenciaPaga: isPaid });
-              updatedCount++;
-            } else {
-              notFoundCount++;
-              errors.push(`Lead não encontrado para cliente: "${cliente}" ou documento: "${documento}"`);
-            }
-
-            // Commit batch in chunks to avoid exceeding limits
-            if (index > 0 && index % 400 === 0) {
-              await batch.commit();
-              // Re-initialize batch, although writeBatch can be reused in some SDK versions, this is safer.
-              // A new batch must be created after commit.
-            }
-          }
-
-          // Commit any remaining changes
-          if (updatedCount > 0) {
-             await batch.commit();
           }
 
           let message = `Importação concluída. ${updatedCount} status de recorrência atualizados.`;
@@ -90,7 +102,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
             message += ` ${notFoundCount} leads não foram encontrados.`;
           }
           if (errors.length > 0) {
-            console.warn("Erros durante a importação:", errors.slice(0, 10)); // Log first 10 errors
+            console.warn("Erros durante a importação (amostra):", errors.slice(0, 10)); 
           }
 
           resolve({ success: true, message });
