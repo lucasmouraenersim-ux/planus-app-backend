@@ -110,13 +110,18 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
+  // Filters for Main Commissions Tab
+  const [commissionCompanyFilter, setCommissionCompanyFilter] = useState('all');
+  const [commissionPromoterFilter, setCommissionPromoterFilter] = useState('all');
+  
+  // Filters for Recurrence Tab
   const [recurrenceCompanyFilter, setRecurrenceCompanyFilter] = useState('all');
   const [recurrencePromoterFilter, setRecurrencePromoterFilter] = useState('all');
-  const [recurrenceDateFilter, setRecurrenceDateFilter] = useState<DateRange | undefined>();
-  const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
-  const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
   const [selectedRecurrenceMonth, setSelectedRecurrenceMonth] = useState(new Date());
 
+  const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
+  const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
+  
 
   const calculateCommission = (
     proposta: number, 
@@ -324,17 +329,25 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
     return stageConfig ? `${stageConfig.colorClass} text-white` : 'bg-gray-500 text-white';
   };
-
-  const totalPages = Math.ceil(tableData.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const paginatedData = tableData.slice(startIndex, endIndex);
-
+  
+  const filteredCommissionData = useMemo(() => {
+    return tableData.filter(row => {
+      const companyMatch = commissionCompanyFilter === 'all' || row.empresa === commissionCompanyFilter;
+      const promoterMatch = commissionPromoterFilter === 'all' || row.promotor === commissionPromoterFilter;
+      return companyMatch && promoterMatch;
+    });
+  }, [tableData, commissionCompanyFilter, commissionPromoterFilter]);
+  
   const promotersWithLeads = useMemo(() => {
     const promoters = new Set<string>();
     tableData.forEach(row => promoters.add(row.promotor));
     return Array.from(promoters).sort();
   }, [tableData]);
+
+  const totalPages = Math.ceil(filteredCommissionData.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedData = filteredCommissionData.slice(startIndex, endIndex);
 
   const filteredRecurrenceData = useMemo(() => {
     const monthStart = startOfMonth(selectedRecurrenceMonth);
@@ -433,6 +446,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
 
           <TabsContent value="commissions">
             <CardContent>
+              <div className="flex flex-col md:flex-row gap-2 mb-4">
+                  <Select value={commissionCompanyFilter} onValueChange={setCommissionCompanyFilter}>
+                      <SelectTrigger className="h-8 text-xs w-full md:w-[180px]"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(tableData.map(r => r.empresa))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select value={commissionPromoterFilter} onValueChange={setCommissionPromoterFilter}>
+                      <SelectTrigger className="h-8 text-xs w-full md:w-[180px]"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                  </Select>
+              </div>
               <ScrollArea className="w-full whitespace-nowrap rounded-md border">
                 <Table>
                   <TableCaption>Esta tabela fornece uma visão abrangente das propostas e comissões.</TableCaption>
@@ -440,10 +463,13 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     <TableRow>
                       <TableHead className="sticky left-0 bg-card z-10">Promotor</TableHead>
                       <TableHead>Cliente</TableHead>
-                      {/* Simplified for brevity */}
                       <TableHead>Empresa</TableHead>
                       <TableHead>Proposta (R$)</TableHead>
                       <TableHead>Comissão Total (R$)</TableHead>
+                      <TableHead>Juros (R$)</TableHead>
+                      <TableHead>Garantia Churn (R$)</TableHead>
+                      <TableHead>Comercializador (R$)</TableHead>
+                      <TableHead>Nota Fiscal (R$)</TableHead>
                       <TableHead>Lucro Líquido (R$)</TableHead>
                       <TableHead>Status Financeiro</TableHead>
                     </TableRow>
@@ -456,6 +482,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                           <TableCell>{row.empresa}</TableCell>
                           <TableCell>{formatCurrency(row.proposta)}</TableCell>
                           <TableCell className="font-bold">{formatCurrency(row.comissaoTotal)}</TableCell>
+                          <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
+                          <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
+                          <TableCell>{formatCurrency(row.comercializador)}</TableCell>
+                          <TableCell>{formatCurrency(row.nota)}</TableCell>
                           <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
                           <TableCell>
                               <Select
@@ -480,7 +510,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       </TableRow>
                       )) : (
                           <TableRow>
-                              <TableCell colSpan={7} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                              <TableCell colSpan={11} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
@@ -490,7 +520,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             </CardContent>
             <CardFooter className="flex items-center justify-between py-4">
               <div className="text-sm text-muted-foreground">
-                {tableData.length} propostas encontradas.
+                {filteredCommissionData.length} propostas encontradas.
               </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
