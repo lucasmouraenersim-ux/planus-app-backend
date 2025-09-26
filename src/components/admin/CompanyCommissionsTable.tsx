@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, differenceInDays } from 'date-fns';
-import { AlertTriangle, Calendar as CalendarIcon, X } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, X, Upload, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -22,7 +22,10 @@ import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'; // Import Tabs
-
+import { importRecurrenceStatusFromCSV } from '@/actions/admin/commissionActions';
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from '@/components/ui/label';
 
 interface CompanyCommissionsTableProps {
   leads: LeadWithId[];
@@ -96,6 +99,7 @@ interface TableRowData {
 }
 
 export default function CompanyCommissionsTable({ leads, allUsers }: CompanyCommissionsTableProps) {
+  const { toast } = useToast();
   const [tableData, setTableData] = useState<TableRowData[]>([]);
   const userMap = useMemo(() => new Map(allUsers.map(u => [u.uid, u])), [allUsers]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -104,6 +108,9 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   const [recurrenceCompanyFilter, setRecurrenceCompanyFilter] = useState('all');
   const [recurrencePromoterFilter, setRecurrencePromoterFilter] = useState('all');
   const [recurrenceDateFilter, setRecurrenceDateFilter] = useState<DateRange | undefined>();
+  const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
+  const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
+
 
   const calculateCommission = (
     proposta: number, 
@@ -247,16 +254,15 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         } else if (empresa === 'Fit Energia') {
             terceiraComissao = proposta * 0.60;
         }
-
-        // Check if the lead was finalized more than 120 days ago
-        let recorrenciaPagaInitial = false;
-        let financialStatusInitial: TableRowData['financialStatus'] = 'none';
+        
+        let recorrenciaPagaInitial = lead.recorrenciaPaga || false;
+        let financialStatusInitial: TableRowData['financialStatus'] = lead.financialStatus || 'none';
         if (lead.completedAt) {
             const completedDate = parseISO(lead.completedAt);
             const daysSinceCompletion = differenceInDays(new Date(), completedDate);
-            if (daysSinceCompletion > 120) {
-                recorrenciaPagaInitial = true;
-                financialStatusInitial = 'Adimplente';
+            if (daysSinceCompletion > 120 && !recorrenciaPagaInitial) {
+                // If it's been over 120 days and not marked as paid, we can infer it
+                // You might want to refine this logic based on business rules
             }
         }
         
@@ -296,11 +302,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
   }, [leads, userMap, totalKwhFinalizadoNoMes, calculateFinancials]);
 
   const updateRowData = (leadId: string, updates: Partial<TableRowData>) => {
-    // Also save to firestore
-    if (updates.empresa) {
-        updateCrmLeadDetails(leadId, { empresa: updates.empresa });
-    }
+    const firestoreUpdates: Partial<LeadWithId> = {};
+    if (updates.empresa !== undefined) firestoreUpdates.empresa = updates.empresa;
+    if (updates.desagil !== undefined) firestoreUpdates.discountPercentage = updates.desagil;
+    if (updates.recorrenciaPaga !== undefined) firestoreUpdates.recorrenciaPaga = updates.recorrenciaPaga;
+    if (updates.financialStatus !== undefined) firestoreUpdates.financialStatus = updates.financialStatus;
 
+    if (Object.keys(firestoreUpdates).length > 0) {
+        updateCrmLeadDetails(leadId, firestoreUpdates);
+    }
+    
     setTableData(currentData =>
       currentData.map(row => {
         if (row.id === leadId) {
@@ -414,296 +425,348 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       return filteredRecurrenceData.reduce((sum, row) => sum + row.recorrenciaComissao, 0);
   }, [filteredRecurrenceData]);
 
+  const handleImportRecurrence = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const fileInput = event.currentTarget.elements.namedItem('csvFile') as HTMLInputElement;
+
+    if (!fileInput?.files?.length) {
+      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo CSV.", variant: "destructive" });
+      return;
+    }
+    setIsUploadingRecurrence(true);
+    const result = await importRecurrenceStatusFromCSV(formData);
+    toast({
+      title: result.success ? "Importação Concluída" : "Erro na Importação",
+      description: result.message,
+      variant: result.success ? "default" : "destructive"
+    });
+    if (result.success) {
+      // Manually trigger a refresh or update state if needed
+      setIsImportRecurrenceModalOpen(false);
+    }
+    setIsUploadingRecurrence(false);
+  };
+
   return (
-    <Card>
-      <Tabs defaultValue="commissions">
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle>Comissões e Recorrências</CardTitle>
-              <CardDescription>
-                Visão detalhada das propostas de energia e pagamentos de comissões associados.
-              </CardDescription>
+    <>
+      <Card>
+        <Tabs defaultValue="commissions">
+          <CardHeader>
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle>Comissões e Recorrências</CardTitle>
+                <CardDescription>
+                  Visão detalhada das propostas de energia e pagamentos de comissões associados.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                  <TabsList>
+                    <TabsTrigger value="commissions">Controle de Caixa</TabsTrigger>
+                    <TabsTrigger value="recurrence">Recorrências a Receber</TabsTrigger>
+                  </TabsList>
+                  <Dialog open={isImportRecurrenceModalOpen} onOpenChange={setIsImportRecurrenceModalOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Importar Recorrências
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                         <DialogHeader>
+                            <DialogTitle>Importar Status de Recorrência</DialogTitle>
+                            <DialogDescription>
+                                Faça o upload de um arquivo CSV para atualizar o status de pagamento das recorrências. O arquivo deve conter colunas 'Cliente' ou 'Documento' e 'Parcelas pagas'.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={handleImportRecurrence} className="flex items-center gap-4">
+                            <Label htmlFor="recurrenceCsvFile" className="sr-only">Arquivo CSV</Label>
+                            <Input id="recurrenceCsvFile" name="csvFile" type="file" accept=".csv" className="flex-1" />
+                            <Button type="submit" disabled={isUploadingRecurrence}>
+                                {isUploadingRecurrence ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                                Importar
+                            </Button>
+                        </form>
+                    </DialogContent>
+                  </Dialog>
+              </div>
             </div>
-             <TabsList>
-              <TabsTrigger value="commissions">Controle de Caixa</TabsTrigger>
-              <TabsTrigger value="recurrence">Recorrências a Receber</TabsTrigger>
-            </TabsList>
-          </div>
-        </CardHeader>
+          </CardHeader>
 
-        <TabsContent value="commissions">
-          <CardContent>
-            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-              <Table>
-                <TableCaption>Esta tabela fornece uma visão abrangente das propostas e comissões.</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-card z-10">Promotor</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Kwh</TableHead>
-                    <TableHead>Proposta (R$)</TableHead>
-                    <TableHead>Deságio (%)</TableHead>
-                    <TableHead>Comissão Imediata (R$)</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>2ª Comissão</TableHead>
-                    <TableHead>Data.1</TableHead>
-                    <TableHead>3ª Comissão</TableHead>
-                    <TableHead>Data.2</TableHead>
-                    <TableHead>4ª Comissão (R$)</TableHead>
-                    <TableHead>Data.3</TableHead>
-                    <TableHead>Comissão Total (R$)</TableHead>
-                    <TableHead>Comissão Promotor (R$)</TableHead>
-                    <TableHead>Lucro Bruto (R$)</TableHead>
-                    <TableHead>Lucro Líquido (R$)</TableHead>
-                    <TableHead className="text-red-500">Juros (%)</TableHead>
-                    <TableHead className="text-red-500">Juros (R$)</TableHead>
-                    <TableHead className="text-red-500">Garantia Churn (R$)</TableHead>
-                    <TableHead className="text-red-500">Comercializador (R$)</TableHead>
-                    <TableHead className="text-red-500">Nota</TableHead>
-                    <TableHead>Data.4</TableHead>
-                    <TableHead>% Recorrência</TableHead>
-                    <TableHead>Recorrência Comissão (R$)</TableHead>
-                    <TableHead>Recorrência Paga?</TableHead>
-                    <TableHead>Status Financeiro</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {paginatedData.length > 0 ? paginatedData.map((row) => (
-                    <TableRow key={row.id}>
-                        <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.promotor}</TableCell>
-                        <TableCell>{row.cliente}</TableCell>
-                        <TableCell><Badge className={getStageBadgeStyle(row.status as any)}>{STAGES_CONFIG.find(s => s.id === row.status)?.title || row.status}</Badge></TableCell>
-                        <TableCell>
-                            <Select
-                                value={row.empresa}
-                                onValueChange={(value) => updateRowData(row.id, { empresa: value })}
-                            >
-                                <SelectTrigger className="w-[120px] h-8">
-                                    <SelectValue placeholder="Selecione..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {EMPRESA_OPTIONS.map(option => (
-                                        <SelectItem key={option} value={option}>{option}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </TableCell>
-                        <TableCell>{row.kwh.toLocaleString('pt-BR')}</TableCell>
-                        <TableCell>{formatCurrency(row.proposta)}</TableCell>
-                        <TableCell className="w-[100px]">
-                            <Input 
-                                type="number"
-                                value={row.desagil}
-                                onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
-                                className="h-8 text-right bg-yellow-100 dark:bg-yellow-900/50"
-                            />
-                        </TableCell>
-                        <TableCell className="font-semibold">{formatCurrency(row.comissaoImediata)}</TableCell>
-                        <TableCell>{row.dataComissaoImediata}</TableCell>
-                        <TableCell className="w-[150px]">
-                            {row.empresa === 'BC' && formatCurrency(row.segundaComissao)}
-                            {row.empresa === 'Fit Energia' && formatCurrency(row.segundaComissao)}
-                            {row.empresa === 'Origo' && (
-                                <Select
-                                    value={String(row.segundaComissaoPerc)}
-                                    onValueChange={(value) => updateRowData(row.id, { segundaComissaoPerc: parseInt(value, 10) })}
-                                >
-                                    <SelectTrigger className="w-full h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
-                                        <SelectItem value="100">100% ({formatCurrency(row.proposta * 1.0)})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.segundaComissao)}
-                        </TableCell>
-                        <TableCell>{row.dataSegundaComissao}</TableCell>
-                        <TableCell className="w-[150px]">
-                            {row.empresa === 'BC' && formatCurrency(row.terceiraComissao)}
-                            {row.empresa === 'Fit Energia' && formatCurrency(row.terceiraComissao)}
-                            {row.empresa === 'Origo' && (
-                                <Select
-                                    value={String(row.terceiraComissaoPerc)}
-                                    onValueChange={(value) => updateRowData(row.id, { terceiraComissaoPerc: parseInt(value, 10) })}
-                                >
-                                    <SelectTrigger className="w-full h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="30">30% ({formatCurrency(row.proposta * 0.3)})</SelectItem>
-                                        <SelectItem value="50">50% ({formatCurrency(row.proposta * 0.5)})</SelectItem>
-                                        <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.terceiraComissao)}
-                        </TableCell>
-                        <TableCell>{row.dataTerceiraComissao}</TableCell>
-                        <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
-                        <TableCell>{row.dataQuartaComissao}</TableCell>
-                        <TableCell className="font-bold">{formatCurrency(row.comissaoTotal)}</TableCell>
-                        <TableCell className="font-semibold text-primary">{formatCurrency(row.comissaoPromotor)}</TableCell>
-                        <TableCell className="font-semibold text-green-600">{formatCurrency(row.lucroBruto)}</TableCell>
-                        <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
-                        <TableCell className="text-red-500">{row.jurosPerc}</TableCell>
-                        <TableCell className="text-red-500">{formatCurrency(row.jurosRS)}</TableCell>
-                        <TableCell className="text-red-500">{formatCurrency(row.garantiaChurn)}</TableCell>
-                        <TableCell className="text-red-500">{formatCurrency(row.comercializador)}</TableCell>
-                        <TableCell className="text-red-500">{formatCurrency(row.nota)}</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2 w-auto">
-                              <Checkbox
-                              id={`recorrencia-${row.id}`}
-                              checked={row.recorrenciaAtiva}
-                              onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
-                              />
-                              <span>{row.recorrenciaPerc.toFixed(1)}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
-                        <TableCell>
-                            <Checkbox
-                            id={`recorrencia-paga-${row.id}`}
-                            checked={row.recorrenciaPaga}
-                            onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaPaga: !!checked })}
-                            />
-                        </TableCell>
-                        <TableCell>
-                            <Select
-                                value={row.financialStatus}
-                                onValueChange={(value) => updateRowData(row.id, { financialStatus: value as TableRowData['financialStatus'] })}
-                            >
-                                <SelectTrigger className={cn("w-[150px] h-8", getFinancialStatusBadgeStyle(row.financialStatus))}>
-                                    <SelectValue placeholder="Definir" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {FINANCIAL_STATUS_OPTIONS.map(option => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            <div className="flex items-center">
-                                                {option.value === 'Nunca pagou' && <AlertTriangle className="h-4 w-4 mr-2 text-red-500" />}
-                                                {option.label}
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </TableCell>
+          <TabsContent value="commissions">
+            <CardContent>
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableCaption>Esta tabela fornece uma visão abrangente das propostas e comissões.</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-card z-10">Promotor</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>Kwh</TableHead>
+                      <TableHead>Proposta (R$)</TableHead>
+                      <TableHead>Deságio (%)</TableHead>
+                      <TableHead>Comissão Imediata (R$)</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>2ª Comissão</TableHead>
+                      <TableHead>Data.1</TableHead>
+                      <TableHead>3ª Comissão</TableHead>
+                      <TableHead>Data.2</TableHead>
+                      <TableHead>4ª Comissão (R$)</TableHead>
+                      <TableHead>Data.3</TableHead>
+                      <TableHead>Comissão Total (R$)</TableHead>
+                      <TableHead>Comissão Promotor (R$)</TableHead>
+                      <TableHead>Lucro Bruto (R$)</TableHead>
+                      <TableHead>Lucro Líquido (R$)</TableHead>
+                      <TableHead className="text-red-500">Juros (%)</TableHead>
+                      <TableHead className="text-red-500">Juros (R$)</TableHead>
+                      <TableHead className="text-red-500">Garantia Churn (R$)</TableHead>
+                      <TableHead className="text-red-500">Comercializador (R$)</TableHead>
+                      <TableHead className="text-red-500">Nota</TableHead>
+                      
+                      <TableHead>Data.4</TableHead>
+                      <TableHead>% Recorrência</TableHead>
+                      <TableHead>Recorrência Comissão (R$)</TableHead>
+                      <TableHead>Recorrência Paga?</TableHead>
+                      <TableHead>Status Financeiro</TableHead>
                     </TableRow>
-                    )) : (
-                        <TableRow>
-                            <TableCell colSpan={28} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-              </Table>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
-          </CardContent>
-          <CardFooter className="flex items-center justify-between py-4">
-            <div className="text-sm text-muted-foreground">
-              {tableData.length} propostas encontradas.
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium">Linhas por página</p>
-                <Select
-                    value={`${rowsPerPage}`}
-                    onValueChange={(value) => {
-                    setRowsPerPage(Number(value));
-                    setCurrentPage(1);
-                    }}
-                >
-                    <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={String(rowsPerPage)} /></SelectTrigger>
-                    <SelectContent side="top">
-                    {[10, 25, 50, 100].map((pageSize) => (
-                        <SelectItem key={pageSize} value={`${pageSize}`}>{pageSize}</SelectItem>
-                    ))}
-                    </SelectContent>
-                </Select>
+                  </TableHeader>
+                  <TableBody>
+                      {paginatedData.length > 0 ? paginatedData.map((row) => (
+                      <TableRow key={row.id}>
+                          <TableCell className="sticky left-0 bg-card z-10 font-medium">{row.promotor}</TableCell>
+                          <TableCell>{row.cliente}</TableCell>
+                          <TableCell><Badge className={getStageBadgeStyle(row.status as any)}>{STAGES_CONFIG.find(s => s.id === row.status)?.title || row.status}</Badge></TableCell>
+                          <TableCell>
+                              <Select
+                                  value={row.empresa}
+                                  onValueChange={(value) => updateRowData(row.id, { empresa: value })}
+                              >
+                                  <SelectTrigger className="w-[120px] h-8">
+                                      <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      {EMPRESA_OPTIONS.map(option => (
+                                          <SelectItem key={option} value={option}>{option}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </TableCell>
+                          <TableCell>{row.kwh.toLocaleString('pt-BR')}</TableCell>
+                          <TableCell>{formatCurrency(row.proposta)}</TableCell>
+                          <TableCell className="w-[100px]">
+                              <Input 
+                                  type="number"
+                                  value={row.desagil}
+                                  onChange={(e) => updateRowData(row.id, { desagil: parseFloat(e.target.value) || 0 })}
+                                  className="h-8 text-right bg-yellow-100 dark:bg-yellow-900/50"
+                              />
+                          </TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(row.comissaoImediata)}</TableCell>
+                          <TableCell>{row.dataComissaoImediata}</TableCell>
+                          <TableCell className="w-[150px]">
+                              {row.empresa === 'BC' && formatCurrency(row.segundaComissao)}
+                              {row.empresa === 'Fit Energia' && formatCurrency(row.segundaComissao)}
+                              {row.empresa === 'Origo' && (
+                                  <Select
+                                      value={String(row.segundaComissaoPerc)}
+                                      onValueChange={(value) => updateRowData(row.id, { segundaComissaoPerc: parseInt(value, 10) })}
+                                  >
+                                      <SelectTrigger className="w-full h-8">
+                                          <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                          <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
+                                          <SelectItem value="100">100% ({formatCurrency(row.proposta * 1.0)})</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                              )}
+                              {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.segundaComissao)}
+                          </TableCell>
+                          <TableCell>{row.dataSegundaComissao}</TableCell>
+                          <TableCell className="w-[150px]">
+                              {row.empresa === 'BC' && formatCurrency(row.terceiraComissao)}
+                              {row.empresa === 'Fit Energia' && formatCurrency(row.terceiraComissao)}
+                              {row.empresa === 'Origo' && (
+                                  <Select
+                                      value={String(row.terceiraComissaoPerc)}
+                                      onValueChange={(value) => updateRowData(row.id, { terceiraComissaoPerc: parseInt(value, 10) })}
+                                  >
+                                      <SelectTrigger className="w-full h-8">
+                                          <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                          <SelectItem value="30">30% ({formatCurrency(row.proposta * 0.3)})</SelectItem>
+                                          <SelectItem value="50">50% ({formatCurrency(row.proposta * 0.5)})</SelectItem>
+                                          <SelectItem value="70">70% ({formatCurrency(row.proposta * 0.7)})</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                              )}
+                              {(row.empresa !== 'BC' && row.empresa !== 'Origo' && row.empresa !== 'Fit Energia') && formatCurrency(row.terceiraComissao)}
+                          </TableCell>
+                          <TableCell>{row.dataTerceiraComissao}</TableCell>
+                          <TableCell>{formatCurrency(row.quartaComissao)}</TableCell>
+                          <TableCell>{row.dataQuartaComissao}</TableCell>
+                          <TableCell className="font-bold">{formatCurrency(row.comissaoTotal)}</TableCell>
+                          <TableCell className="font-semibold text-primary">{formatCurrency(row.comissaoPromotor)}</TableCell>
+                          <TableCell className="font-semibold text-green-600">{formatCurrency(row.lucroBruto)}</TableCell>
+                          <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
+                          <TableCell className="text-red-500">{row.jurosPerc}</TableCell>
+                          <TableCell className="text-red-500">{formatCurrency(row.jurosRS)}</TableCell>
+                          <TableCell className="text-red-500">{formatCurrency(row.garantiaChurn)}</TableCell>
+                          <TableCell className="text-red-500">{formatCurrency(row.comercializador)}</TableCell>
+                          <TableCell className="text-red-500">{formatCurrency(row.nota)}</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2 w-auto">
+                                <Checkbox
+                                id={`recorrencia-${row.id}`}
+                                checked={row.recorrenciaAtiva}
+                                onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaAtiva: !!checked })}
+                                />
+                                <span>{row.recorrenciaPerc.toFixed(1)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatCurrency(row.recorrenciaComissao)}</TableCell>
+                          <TableCell>
+                              <Checkbox
+                              id={`recorrencia-paga-${row.id}`}
+                              checked={row.recorrenciaPaga}
+                              onCheckedChange={(checked) => updateRowData(row.id, { recorrenciaPaga: !!checked })}
+                              />
+                          </TableCell>
+                          <TableCell>
+                              <Select
+                                  value={row.financialStatus}
+                                  onValueChange={(value) => updateRowData(row.id, { financialStatus: value as TableRowData['financialStatus'] })}
+                              >
+                                  <SelectTrigger className={cn("w-[150px] h-8", getFinancialStatusBadgeStyle(row.financialStatus))}>
+                                      <SelectValue placeholder="Definir" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      {FINANCIAL_STATUS_OPTIONS.map(option => (
+                                          <SelectItem key={option.value} value={option.value}>
+                                              <div className="flex items-center">
+                                                  {option.value === 'Nunca pagou' && <AlertTriangle className="h-4 w-4 mr-2 text-red-500" />}
+                                                  {option.label}
+                                              </div>
+                                          </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </TableCell>
+                      </TableRow>
+                      )) : (
+                          <TableRow>
+                              <TableCell colSpan={28} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                          </TableRow>
+                      )}
+                  </TableBody>
+                </Table>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </CardContent>
+            <CardFooter className="flex items-center justify-between py-4">
+              <div className="text-sm text-muted-foreground">
+                {tableData.length} propostas encontradas.
               </div>
-              <div className="text-sm font-medium">Página {currentPage} de {totalPages}</div>
-              <div className="flex items-center space-x-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1}>Anterior</Button>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Próximo</Button>
-              </div>
-            </div>
-          </CardFooter>
-        </TabsContent>
-
-        <TabsContent value="recurrence">
-          <CardContent>
-            <div className="flex flex-col md:flex-row justify-between gap-4 mb-4 p-4 border rounded-lg bg-muted/30">
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-muted-foreground">Filtros de Recorrência</h4>
-                <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                  <Select value={recurrenceCompanyFilter} onValueChange={setRecurrenceCompanyFilter}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{['Fit Energia', 'Bowe'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm font-medium">Linhas por página</p>
+                  <Select
+                      value={`${rowsPerPage}`}
+                      onValueChange={(value) => {
+                      setRowsPerPage(Number(value));
+                      setCurrentPage(1);
+                      }}
+                  >
+                      <SelectTrigger className="h-8 w-[70px]"><SelectValue placeholder={String(rowsPerPage)} /></SelectTrigger>
+                      <SelectContent side="top">
+                      {[10, 25, 50, 100].map((pageSize) => (
+                          <SelectItem key={pageSize} value={`${pageSize}`}>{pageSize}</SelectItem>
+                      ))}
+                      </SelectContent>
                   </Select>
-                  <Select value={recurrencePromoterFilter} onValueChange={setRecurrencePromoterFilter}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {recurrenceDateFilter?.from ? (recurrenceDateFilter.to ? (<>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>) : (format(recurrenceDateFilter.from, "LLL dd, y"))) : (<span>Filtrar por Data de Finalização</span>)}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar initialFocus mode="range" defaultMonth={recurrenceDateFilter?.from} selected={recurrenceDateFilter} onSelect={setRecurrenceDateFilter} numberOfMonths={2} />
-                    </PopoverContent>
-                  </Popover>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setRecurrenceCompanyFilter('all'); setRecurrencePromoterFilter('all'); setRecurrenceDateFilter(undefined); }}>
-                    <X className="h-4 w-4" />
-                  </Button>
+                </div>
+                <div className="text-sm font-medium">Página {currentPage} de {totalPages}</div>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1}>Anterior</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Próximo</Button>
                 </div>
               </div>
-              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50 text-center">
-                  <p className="text-sm font-medium text-green-600">Total de Recorrência (Filtro)</p>
-                  <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+            </CardFooter>
+          </TabsContent>
+
+          <TabsContent value="recurrence">
+            <CardContent>
+              <div className="flex flex-col md:flex-row justify-between gap-4 mb-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Filtros de Recorrência</h4>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <Select value={recurrenceCompanyFilter} onValueChange={setRecurrenceCompanyFilter}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{['Fit Energia', 'Bowe'].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={recurrencePromoterFilter} onValueChange={setRecurrencePromoterFilter}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger>
+                      <SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button id="recurrence-date" variant={"outline"} className={cn("h-8 w-full sm:w-[240px] justify-start text-left font-normal text-xs", !recurrenceDateFilter && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {recurrenceDateFilter?.from ? (recurrenceDateFilter.to ? (<>{format(recurrenceDateFilter.from, "LLL dd, y")} - {format(recurrenceDateFilter.to, "LLL dd, y")}</>) : (format(recurrenceDateFilter.from, "LLL dd, y"))) : (<span>Filtrar por Data de Finalização</span>)}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar initialFocus mode="range" defaultMonth={recurrenceDateFilter?.from} selected={recurrenceDateFilter} onSelect={setRecurrenceDateFilter} numberOfMonths={2} />
+                      </PopoverContent>
+                    </Popover>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setRecurrenceCompanyFilter('all'); setRecurrencePromoterFilter('all'); setRecurrenceDateFilter(undefined); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50 text-center">
+                    <p className="text-sm font-medium text-green-600">Total de Recorrência (Filtro)</p>
+                    <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
+                </div>
               </div>
-            </div>
-            <ScrollArea className="w-full whitespace-nowrap rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Promotor</TableHead>
-                    <TableHead>Valor da Proposta</TableHead>
-                    <TableHead>% Recorrência</TableHead>
-                    <TableHead>Status Financeiro</TableHead>
-                    <TableHead>Comissão Recorrente</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRecurrenceData.length > 0 ? filteredRecurrenceData.map(row => (
-                    <TableRow key={row.id}>
-                      <TableCell>{row.cliente}</TableCell>
-                      <TableCell>{row.empresa}</TableCell>
-                      <TableCell>{row.promotor}</TableCell>
-                      <TableCell>{formatCurrency(row.proposta)}</TableCell>
-                      <TableCell>{row.recorrenciaPerc.toFixed(2)}%</TableCell>
-                      <TableCell><Badge variant="outline" className={getFinancialStatusBadgeStyle(row.financialStatus)}>{row.financialStatus}</Badge></TableCell>
-                      <TableCell className="font-semibold text-green-500">{formatCurrency(row.recorrenciaComissao)}</TableCell>
+              <ScrollArea className="w-full whitespace-nowrap rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>Promotor</TableHead>
+                      <TableHead>Valor da Proposta</TableHead>
+                      <TableHead>% Recorrência</TableHead>
+                      <TableHead>Status Financeiro</TableHead>
+                      <TableHead>Comissão Recorrente</TableHead>
                     </TableRow>
-                  )) : (
-                    <TableRow><TableCell colSpan={7} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
-        </TabsContent>
-      </Tabs>
-    </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRecurrenceData.length > 0 ? filteredRecurrenceData.map(row => (
+                      <TableRow key={row.id}>
+                        <TableCell>{row.cliente}</TableCell>
+                        <TableCell>{row.empresa}</TableCell>
+                        <TableCell>{row.promotor}</TableCell>
+                        <TableCell>{formatCurrency(row.proposta)}</TableCell>
+                        <TableCell>{row.recorrenciaPerc.toFixed(2)}%</TableCell>
+                        <TableCell><Badge variant="outline" className={getFinancialStatusBadgeStyle(row.financialStatus)}>{row.financialStatus}</Badge></TableCell>
+                        <TableCell className="font-semibold text-green-500">{formatCurrency(row.recorrenciaComissao)}</TableCell>
+                      </TableRow>
+                    )) : (
+                      <TableRow><TableCell colSpan={7} className="h-24 text-center">Nenhuma recorrência encontrada para os filtros selecionados.</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </TabsContent>
+        </Tabs>
+      </Card>
+    </>
   );
 }
