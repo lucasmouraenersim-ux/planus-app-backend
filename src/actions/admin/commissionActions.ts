@@ -1,9 +1,12 @@
+
 'use server';
 
 import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
-import { updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
+
 
 const ActionResultSchema = z.object({
   success: z.boolean(),
@@ -32,7 +35,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
   }
   
   try {
-    const adminDb = await initializeAdmin();
+    const adminDb: Firestore = await initializeAdmin();
     const fileContent = await file.text();
     
     return new Promise((resolve) => {
