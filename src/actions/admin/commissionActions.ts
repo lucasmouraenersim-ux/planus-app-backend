@@ -13,10 +13,13 @@ type ActionResult = z.infer<typeof ActionResultSchema>;
 
 // Schema updated to reflect the user's spreadsheet columns
 const CsvRowSchema = z.object({
-  cliente: z.string().min(1, 'Coluna "cliente" é obrigatória.'),
+  cliente: z.string().optional(),
   documento: z.string().optional(), // 'Documento' can be used for matching
   'parcelas pagas': z.string().optional(), // Main column to check for payment
+}).refine(data => data.cliente || data.documento, {
+  message: 'Pelo menos "cliente" ou "documento" deve ser fornecido.',
 });
+
 
 export async function importRecurrenceStatusFromCSV(formData: FormData): Promise<ActionResult> {
   const file = formData.get('csvFile') as File | null;
@@ -40,6 +43,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
         complete: async (results) => {
           let updatedCount = 0;
           let notFoundCount = 0;
+          let invalidRowCount = 0;
           const errors: string[] = [];
           const leadsRef = collection(adminDb, "crm_leads");
           
@@ -53,8 +57,8 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
             for (const row of chunk) {
               const validation = CsvRowSchema.safeParse(row);
               if (!validation.success) {
-                // errors.push(`Linha ${i + 2}: ${validation.error.message}`);
-                continue; // Skip rows that don't match the basic schema
+                invalidRowCount++;
+                continue; 
               }
 
               const { cliente, documento } = validation.data;
@@ -68,20 +72,23 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
               if (documento && documento.replace(/\D/g, '').length >= 11) {
                 const normalizedDoc = documento.replace(/\D/g, '');
                 q = query(leadsRef, where(normalizedDoc.length === 11 ? 'cpf' : 'cnpj', '==', normalizedDoc));
-              } else {
+              } else if (cliente) {
                 // Fallback to client name
                 q = query(leadsRef, where('name', '==', cliente));
+              } else {
+                 invalidRowCount++;
+                 continue; // Skip if no identifier is present
               }
 
               try {
                 const querySnapshot = await getDocs(q);
                 if (!querySnapshot.empty) {
                   const leadDoc = querySnapshot.docs[0];
+                  // Update 'recorrenciaPaga' field
                   batch.update(leadDoc.ref, { recorrenciaPaga: isPaid });
                   updatedCount++;
                 } else {
                   notFoundCount++;
-                  // errors.push(`Lead não encontrado para cliente: "${cliente}" ou documento: "${documento}"`);
                 }
               } catch (qError) {
                   console.error(`Query failed for row: ${JSON.stringify(row)}`, qError);
@@ -100,6 +107,9 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
           let message = `Importação concluída. ${updatedCount} status de recorrência atualizados.`;
           if (notFoundCount > 0) {
             message += ` ${notFoundCount} leads não foram encontrados.`;
+          }
+           if (invalidRowCount > 0) {
+            message += ` ${invalidRowCount} linhas foram ignoradas por dados inválidos.`;
           }
           if (errors.length > 0) {
             console.warn("Erros durante a importação (amostra):", errors.slice(0, 10)); 
