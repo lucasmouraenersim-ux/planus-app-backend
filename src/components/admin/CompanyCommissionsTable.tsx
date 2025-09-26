@@ -77,10 +77,10 @@ interface TableRowData {
   dataTerceiraComissao: Date;
   quartaComissao: number;
   dataQuartaComissao: Date;
-  comissaoTotal: number;
+  comissaoTotalBruta: number; // Renamed for clarity
   comissaoPromotor: number;
-  lucroBruto: number;
-  lucroLiq: number;
+  lucroBrutoEmpresa: number; // Renamed for clarity
+  lucroLiquidoEmpresa: number; // Renamed for clarity
   jurosPerc: string;
   jurosRS: number;
   garantiaChurn: number;
@@ -147,18 +147,18 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
       .reduce((sum, lead) => sum + (lead.kwh || 0), 0);
   }, [leads]);
   
-  const calculateFinancials = useCallback((rowData: Omit<TableRowData, 'comissaoTotal' | 'lucroBruto' | 'lucroLiq' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' | 'recorrenciaComissao'>) => {
-    const comissaoTotal = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
-    const lucroBruto = comissaoTotal - rowData.comissaoPromotor;
+  const calculateFinancials = useCallback((rowData: Omit<TableRowData, 'comissaoTotalBruta' | 'lucroBrutoEmpresa' | 'lucroLiquidoEmpresa' | 'garantiaChurn' | 'comercializador' | 'nota' | 'jurosRS' | 'jurosPerc' | 'recorrenciaComissao'>) => {
+    const comissaoTotalBruta = rowData.comissaoImediata + rowData.segundaComissao + rowData.terceiraComissao + rowData.quartaComissao;
+    const lucroBrutoEmpresa = comissaoTotalBruta - rowData.comissaoPromotor;
     
     let garantiaChurn = 0;
     let comercializador = 0;
     let nota = 0;
 
     if (rowData.empresa !== 'Fit Energia') {
-        garantiaChurn = comissaoTotal * 0.10;
-        comercializador = comissaoTotal * 0.10;
-        nota = comissaoTotal * 0.12;
+        garantiaChurn = comissaoTotalBruta * 0.10;
+        comercializador = comissaoTotalBruta * 0.10;
+        nota = comissaoTotalBruta * 0.12;
     }
 
     let jurosRS = 0;
@@ -178,12 +178,12 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
         recorrenciaComissao = rowData.proposta * (rowData.recorrenciaPerc / 100);
     }
 
-    const lucroLiq = lucroBruto - garantiaChurn - comercializador - nota - jurosRS;
+    const lucroLiquidoEmpresa = lucroBrutoEmpresa - garantiaChurn - comercializador - nota - jurosRS;
 
     return {
-      comissaoTotal,
-      lucroBruto,
-      lucroLiq,
+      comissaoTotalBruta,
+      lucroBrutoEmpresa,
+      lucroLiquidoEmpresa,
       garantiaChurn,
       comercializador,
       nota,
@@ -366,6 +366,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
             let perc = 0;
             if (totalKwhFinalizadoNoMes >= 30000 && totalKwhFinalizadoNoMes <= 40000) perc = 30;
             else if (totalKwhFinalizadoNoMes > 40000) perc = 50;
+            else perc = 0;
             updatedRow.terceiraComissao = proposta * (perc / 100);
           } else if (empresa === 'Fit Energia') {
               updatedRow.terceiraComissao = proposta * 0.60;
@@ -374,7 +375,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           }
           updatedRow.dataTerceiraComissao = addMonths(baseDate, 4);
 
-          const financials = calculateFinancials(updatedRow);
+          const financials = calculateFinancials(updatedRow as any); // Cast as any to bypass circular dependency for a moment
           return { ...updatedRow, ...financials };
         }
         return row;
@@ -519,12 +520,16 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                       <TableHead className="sticky left-0 bg-card z-10">Promotor</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Empresa</TableHead>
+                      <TableHead>kWh</TableHead>
+                      <TableHead>Proposta (R$)</TableHead>
+                      <TableHead>Deságio (%)</TableHead>
                       <TableHead>1ª Com. (R$)</TableHead>
-                      <TableHead>Data Pagto.</TableHead>
+                      <TableHead>Data</TableHead>
                       <TableHead>2ª Com. (R$)</TableHead>
-                      <TableHead>Data Pagto.</TableHead>
+                      <TableHead>Data</TableHead>
                       <TableHead>3ª Com. (R$)</TableHead>
-                      <TableHead>Data Pagto.</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Comissão Total Bruta (R$)</TableHead>
                       <TableHead>Juros (R$)</TableHead>
                       <TableHead>Garantia Churn (R$)</TableHead>
                       <TableHead>Comercializador (R$)</TableHead>
@@ -549,21 +554,25 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 </SelectContent>
                             </Select>
                           </TableCell>
+                          <TableCell>{row.kwh.toLocaleString('pt-BR')}</TableCell>
+                          <TableCell>{formatCurrency(row.proposta)}</TableCell>
+                          <TableCell>{row.desagil.toFixed(2)}%</TableCell>
                           <TableCell>{formatCurrency(row.comissaoImediata)}</TableCell>
                           <TableCell>{formatDateFns(row.dataComissaoImediata, 'dd/MM/yy')}</TableCell>
                           <TableCell>{formatCurrency(row.segundaComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataSegundaComissao, 'dd/MM/yy')}</TableCell>
                           <TableCell>{formatCurrency(row.terceiraComissao)}</TableCell>
                           <TableCell>{formatDateFns(row.dataTerceiraComissao, 'dd/MM/yy')}</TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(row.comissaoTotalBruta)}</TableCell>
                           <TableCell>{formatCurrency(row.jurosRS)}</TableCell>
                           <TableCell>{formatCurrency(row.garantiaChurn)}</TableCell>
                           <TableCell>{formatCurrency(row.comercializador)}</TableCell>
                           <TableCell>{formatCurrency(row.nota)}</TableCell>
-                          <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiq)}</TableCell>
+                          <TableCell className="font-bold text-green-500">{formatCurrency(row.lucroLiquidoEmpresa)}</TableCell>
                       </TableRow>
                       )) : (
                           <TableRow>
-                              <TableCell colSpan={14} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
+                              <TableCell colSpan={18} className="h-24 text-center">Nenhum lead finalizado encontrado para exibir.</TableCell>
                           </TableRow>
                       )}
                   </TableBody>
@@ -628,6 +637,10 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                     </Select>
                   </div>
                 </div>
+                 <Button onClick={() => setIsImportRecurrenceModalOpen(true)} variant="outline" size="sm" className="h-8">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar CSV de Recorrência
+                </Button>
                 <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/50 text-center">
                     <p className="text-sm font-medium text-green-600">Total de Recorrência (Mês)</p>
                     <p className="text-2xl font-bold text-green-500">{formatCurrency(totalRecorrenciaEmCaixa)}</p>
@@ -679,6 +692,25 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
           </TabsContent>
         </Tabs>
       </Card>
+      
+      <Dialog open={isImportRecurrenceModalOpen} onOpenChange={setIsImportRecurrenceModalOpen}>
+        <DialogContent className="sm:max-w-md bg-card/70 backdrop-blur-lg border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Importar Status de Recorrência</DialogTitle>
+            <DialogDescription>
+              Faça o upload de um arquivo CSV para atualizar o status de pagamento das recorrências. O arquivo deve conter colunas 'Cliente' ou 'Documento' e 'Parcelas pagas'.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleImportRecurrence} className="flex flex-col items-center gap-4 py-4">
+              <Label htmlFor="recurrenceCsvFile" className="sr-only">Arquivo CSV</Label>
+              <Input id="recurrenceCsvFile" name="csvFile" type="file" accept=".csv" className="flex-1 w-full" />
+              <Button type="submit" disabled={isUploadingRecurrence} className="w-full">
+                  {isUploadingRecurrence ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Importar e Atualizar Status
+              </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
