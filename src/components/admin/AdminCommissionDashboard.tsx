@@ -1,3 +1,4 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -58,6 +59,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -1504,7 +1506,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
 
         <TabsContent value="commissions">
-            <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} onDataRefreshNeeded={onUsersChange} />
+            <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
         </TabsContent>
 
         <TabsContent value="management">
@@ -1677,3 +1679,5 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
+
+    
