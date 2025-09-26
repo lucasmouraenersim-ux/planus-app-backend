@@ -24,7 +24,7 @@ import { updateCrmLeadDetails } from '@/lib/firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'; // Import Tabs
 import { importRecurrenceStatusFromCSV } from '@/actions/admin/commissionActions';
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 
 interface CompanyCommissionsTableProps {
@@ -479,7 +479,7 @@ export default function CompanyCommissionsTable({ leads, allUsers }: CompanyComm
                                 Faça o upload de um arquivo CSV para atualizar o status de pagamento das recorrências. O arquivo deve conter colunas 'Cliente' ou 'Documento' e 'Parcelas pagas'.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleImportRecurrence} className="flex items-center gap-4">
+                        <form onSubmit={handleImportRecurrence} className="flex items-center gap-4 py-4">
                             <Label htmlFor="recurrenceCsvFile" className="sr-only">Arquivo CSV</Label>
                             <Input id="recurrenceCsvFile" name="csvFile" type="file" accept=".csv" className="flex-1" />
                             <Button type="submit" disabled={isUploadingRecurrence}>
