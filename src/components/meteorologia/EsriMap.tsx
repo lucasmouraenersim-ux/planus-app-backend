@@ -1,4 +1,3 @@
-
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -62,21 +61,6 @@ export function EsriMap() {
                 });
 
 
-                // --- Camadas (Layers) ---
-                const rainViewerLayer = new TileLayer({
-                    url: "https://tilecache.rainviewer.com/v2/radar/nowcast/0/256/{level}/{col}/{row}/2/1_1.png",
-                    title: "Radar RainViewer",
-                    visible: true
-                });
-
-                const groupLayer = new GroupLayer({
-                    title: "Sobreposições",
-                    visible: true,
-                    layers: [rainViewerLayer],
-                    opacity: 0.75
-                });
-                map.add(groupLayer);
-
                 // --- Galeria de Mapas Base ---
                 basemapGallery = new BasemapGallery({
                     view: view,
@@ -100,7 +84,7 @@ export function EsriMap() {
                         if (item.layer.type !== "group") {
                             item.panel = {
                                 content: "legend",
-                                open: item.layer.title === "Radar RainViewer"
+                                open: false // Default to closed
                             };
                         }
                     }
@@ -133,11 +117,6 @@ export function EsriMap() {
                 });
                 view.ui.add(sketchExpand, "top-right");
 
-
-                // -- Atualização automática da camada RainViewer ---
-                setInterval(() => {
-                    rainViewerLayer.refresh();
-                }, 300 * 1000);
 
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
