@@ -116,7 +116,7 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
-                    WebTileLayer, webMercatorUtils
+                    WebTileLayer, webMercatorUtils, Polygon
                 ] = await loadScript();
 
                 const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
@@ -149,9 +149,7 @@ export function EsriMap() {
                 graphicsLayerRef.current = graphicsLayer;
 
                 const map = new Map({
-                    basemap: new Basemap({
-                        baseLayers: [new TileLayer({ url: "https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer" })]
-                    }),
+                    basemap: "dark-gray-vector",
                     layers: [groupLayer, graphicsLayer]
                 });
 
@@ -236,14 +234,20 @@ export function EsriMap() {
                         const geographicGeom = webMercatorUtils.webMercatorToGeographic(event.graphic.geometry);
                         const turfPolygon = turf.polygon(geographicGeom.rings);
                         const clipped = turf.intersect(turfPolygon, brazilBoundary);
-
-                        if (!clipped) {
+                        
+                        if (!clipped || !clipped.geometry) {
                             alert("O polígono desenhado está fora dos limites do Brasil.");
                             graphicsLayer.remove(event.graphic);
                             return;
                         }
                         
-                        event.graphic.geometry = webMercatorUtils.geographicToWebMercator(clipped.geometry);
+                        const esriPolygon = new Polygon({
+                            rings: clipped.geometry.coordinates,
+                            spatialReference: view.spatialReference
+                        });
+
+                        event.graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon) as __esri.Geometry;
+
 
                         const drawingInfo = (sketch as any)._activeDrawingInfo;
                         if (drawingInfo) {
