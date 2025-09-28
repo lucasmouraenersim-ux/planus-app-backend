@@ -36,7 +36,7 @@ type EsriModules = [
     typeof __esri.SimpleLineSymbol,
     typeof __esri.Color,
     typeof __esri.Graphic,
-    typeof __esri.geometry.webMercatorUtils,
+    typeof import ("esri/geometry/support/webMercatorUtils"),
 ];
 
 // Helper to require modules
@@ -59,7 +59,7 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/symbols/SimpleLineSymbol",
         "esri/Color",
         "esri/Graphic",
-        "esri/geometry/webMercatorUtils",
+        "esri/geometry/support/webMercatorUtils",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
