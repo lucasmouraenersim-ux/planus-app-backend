@@ -38,6 +38,31 @@ export function EsriMap() {
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer
                 ] = await loadScript();
 
+                // --- RainViewer API Fetch ---
+                const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                const data = await response.json();
+                const host = data.host;
+                // Get the most recent radar image path
+                const radarPath = data.radar.nowcast[0].path; 
+                const rainViewerUrl = `${host}${radarPath}/{level}/{col}/{row}/2/1_1.png`;
+
+                // --- Camada de Radar Dinâmica ---
+                const rainViewerLayer = new TileLayer({
+                    urlTemplate: rainViewerUrl,
+                    title: "Radar RainViewer",
+                    visible: true,
+                    opacity: 0.7
+                });
+
+                // Grupo de Camadas de Sobreposição
+                const groupLayer = new GroupLayer({
+                    title: "Sobreposições",
+                    visible: true,
+                    layers: [rainViewerLayer], // Adiciona a camada de radar ao grupo
+                    opacity: 0.8
+                });
+
+
                 // Configuração do mapa e da visualização
                 const map = new Map({
                     basemap: new Basemap({
@@ -46,7 +71,8 @@ export function EsriMap() {
                                 url: "https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer"
                             })
                         ]
-                    })
+                    }),
+                    layers: [groupLayer] // Adiciona o grupo de camadas ao mapa
                 });
 
                 view = new MapView({
