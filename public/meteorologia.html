@@ -1,5 +1,4 @@
-
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -16,21 +15,9 @@
     html, body, #outerPane {
       width:100%; height:100%; margin:0; padding:0;
     }
-    #outerPane { position:relative; }
-    #sidebar {
-      position:absolute; top:0; left:0; bottom:0;
-      width:300px; background:#fff; overflow:auto;
-      border-right:1px solid #ccc; padding:10px;
-      box-sizing:border-box;
-    }
     #mapDiv {
-      position:absolute; top:60px; right:0; bottom:0; left:300px;
+      position:absolute; top:60px; right:0; bottom:0; left:0px; /* Changed left to 0 */
     }
-
-    .section { margin-bottom:20px; }
-    .section h3 { margin:0 0 8px 0; font-family:Segoe UI, sans-serif; color:#1f4059; }
-    #layersDiv input { margin-right:4px; }
-    .esriPrint { margin-top:10px; }
 
     #topbar {
       position: fixed; top: 0; left: 0; right: 0;
@@ -68,7 +55,7 @@
     #customTools {
       position: fixed;
       top: 150px;
-      left: 320px;
+      left: 20px;
       z-index: 9999;
       display: flex;
       flex-direction: column;
@@ -196,9 +183,21 @@
       font-size: 12px;
     }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    /* Loading animation styles */
+    @keyframes bar-pulse {
+      0%, 100% { transform: scaleY(0.5); opacity: 0.5; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+    .loading-bars {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+    }
+    .loading-bar {
+        width: 8px;
+        background-color: white;
+        animation: bar-pulse 1.2s infinite ease-in-out;
     }
 
     /* Estilo para tela cheia */
@@ -234,10 +233,13 @@
 
 <body class="claro">
   <!-- Loading Overlay -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 51, 102, 0.95); display: flex; justify-content: center; align-items: center; z-index: 99999;">
-      <div style="text-align: center;">
-          <div style="border: 4px solid #f3f3f3; border-top: 4px solid #00cfff; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
-          <div style="font-family: Arial, sans-serif; font-size: 24px; color: white;">Carregando...</div>
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #4A90E2; display: flex; justify-content: center; align-items: center; z-index: 99999;">
+      <div class="loading-bars">
+          <div class="loading-bar" style="height: 16px; animation-delay: 0s;"></div>
+          <div class="loading-bar" style="height: 24px; animation-delay: 0.1s;"></div>
+          <div class="loading-bar" style="height: 32px; animation-delay: 0.2s;"></div>
+          <div class="loading-bar" style="height: 24px; animation-delay: 0.3s;"></div>
+          <div class="loading-bar" style="height: 16px; animation-delay: 0.4s;"></div>
       </div>
   </div>
 
@@ -366,56 +368,9 @@
     <button onclick="activatePolygonDraw()" title="Desenhar Polígono">⬢</button>
   </div>
 
-  <!-- Painel lateral NOAA -->
-  <div id="outerPane">
-    <div id="sidebar">
-      <div class="section">
-        <h3>Filtro Temporal</h3>
-        <div id="timeSliderDiv"></div>
-      </div>
-      <div class="section">
-        <h3>Camadas</h3>
-        <div id="layersDiv">
-          <label><input type="checkbox" id="chkPoints" checked> Pontos</label><br>
-          <label><input type="checkbox" id="chkLines" checked> Linhas</label><br>
-          <label><input type="checkbox" id="chkPolygons" checked> Polígonos</label>
-        </div>
-      </div>
-      <div class="section">
-        <h3>Legenda</h3>
-        <div id="legendDiv"></div>
-      </div>
-      <div class="section">
-        <h3>Mapas Base</h3>
-        <div id="basemapGalleryDiv"></div>
-      </div>
-      <div class="section">
-        <h3>Visão Geral</h3>
-        <div id="overviewMapDiv" style="height:150px;"></div>
-      </div>
-      <div class="section">
-        <div id="homeButtonDiv"></div>
-        <div id="printDiv"></div>
-      </div>
-    </div>
-    <div id="mapDiv"></div>
-  </div>
-  <div id="legendRisk" style="
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(255,255,255,0.95);
-    padding: 10px 14px;
-    font-size: 13px;
-    border-radius: 6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    font-family: sans-serif;
-    z-index: 9999;
-  ">
-    <b>Legenda por risco</b>
-    <div id="legendItems"></div>
-  </div>
-
+  <!-- Painel lateral removido -->
+  <div id="mapDiv"></div>
+  
   <!-- Painel lateral Adicionar Dados -->
   <div id="addDataPanel" class="panel">
     <div class="panel-header">
@@ -431,32 +386,10 @@
     </div>
   </div>
  
-  <!-- Legenda de ícones dos relatos -->
-  <div id="legendReports" style="
-    position: fixed;
-    bottom: 95px;
-    left: 320px;
-    background: rgba(255,255,255,0.95);
-    padding: 10px 14px;
-    font-size: 13px;
-    border-radius: 6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    font-family: sans-serif;
-    z-index: 9999;
-  ">
-    <b>Relatos</b><br>
-    <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16"> Vento 80–100km/h</div>
-    <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16"> Vento >100km/h</div>
-    <div><img src="https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png" width="16"> Granizo < 4cm</div>
-    <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16"> Granizo > 4cm</div>
-    <div><img src="https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png" width="16"> Tornado < EF2</div>
-    <div><img src="https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png" width="16"> Tornado ≥ EF2</div>
-  </div>
-
   <div id="hudOverlay" style="
     position: fixed;
     bottom: 8px;
-    left: 320px;
+    left: 20px; /* Adjusted left position */
     background: rgba(0,0,0,0.7);
     color: white;
     font-family: monospace;
@@ -711,8 +644,6 @@
     "esri/dijit/TimeSlider",
     "esri/dijit/Scalebar",
     "esri/layers/ArcGISDynamicMapServiceLayer",
-    "esri/dijit/Basemap",
-    "esri/dijit/BasemapLayer",
     "esri/geometry/Point",
     "esri/SpatialReference",
     "esri/symbols/SimpleMarkerSymbol",
@@ -732,7 +663,7 @@
   ], function(
     Map, Polygon, webMercatorUtils, Extent, HomeButton, WebTiledLayer, WMSLayer,
     TiledMapServiceLayer, edit, Print, Legend, BasemapGallery, OverviewMap, TimeSlider,
-    Scalebar, ArcGISDynamicMapServiceLayer, Basemap, BasemapLayer, Point, SpatialReference,
+    Scalebar, ArcGISDynamicMapServiceLayer, Point, SpatialReference,
     SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
     Color, Graphic, Draw, MapImage, MapImageLayer, esriConfig,
     dom, on, domConstruct, declare
@@ -1015,7 +946,7 @@
     scalebarDiv.style.cssText = `
       position: fixed;
       bottom: 80px;
-      left: 320px;
+      left: 20px; /* Adjusted left position */
       background: rgba(255,255,255,0.9);
       padding: 4px 10px;
       font-family: sans-serif;
@@ -1045,146 +976,69 @@
           console.warn("⚠️ Função addCPTECControls não encontrada");
         }
         
-        // Inicializa a legenda
-        new Legend({
-          map: window.map,
-          layerInfos: [{
-            layer: damageLayer,
-            title: "NOAA Damage Viewer"
-          }]
-        }, "legendDiv").startup();
+        // Inicializa a galeria de mapas base personalizada
+        var basemapGallery = new BasemapGallery({
+            showArcGISBasemaps: false, // Desativamos os mapas padrão
+            map: window.map,
+            basemaps: [
+                {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer")],
+                    id: "satellite",
+                    title: "Satélite",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/10df2279f9684e4a9f6a7f08febac2a9/info/thumbnail/ago_downloaded.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer")],
+                    id: "topo",
+                    title: "Topográfico",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/30e5fe3149c34df1ba922e6f5bbf808f/info/thumbnail/ago_downloaded.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer")],
+                    id: "streets",
+                    title: "Ruas",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/d8855ee4d3d74413babfb0f41203b168/info/thumbnail/ago_downloaded.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Ocean_Basemap/MapServer")],
+                    id: "oceans",
+                    title: "Oceanos",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/48b8cec7ebf04b5f8a3180c128537c22/info/thumbnail/ago_downloaded.jpg"
+                },
+                 {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"), new TiledMapServiceLayer("https://services.arcgisonline.com/Reference/World_Boundaries_and_Places/MapServer")],
+                    id: "hybrid",
+                    title: "Híbrido",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/413fd05bbd7342f5991d5ec96f4f8b18/info/thumbnail/imagery_labels.jpg"
+                },
+                {
+                    layers: [new WebTiledLayer("https://{subDomain}.tile.openstreetmap.org/{level}/{col}/{row}.png", { "subDomains": ["a", "b", "c"] })],
+                    id: "osm",
+                    title: "OpenStreetMap",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/5d2bfa736f8448b3a1708e1f6be23eed/info/thumbnail/temposm.jpg"
+                }
+            ]
+        }, domConstruct.create("div"));
 
-        // Custom Basemaps
-        var esriImagery = new Basemap({
-            layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-            })],
-            id: "esriImagery",
-            title: "Imagery",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/10df2279f9684e4a9f6a7f08febac2a9/info/thumbnail/ago_downloaded.jpg"
-        });
-        var esriImageryWithLabels = new Basemap({
-            layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-            }), new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer"
-            })],
-            id: "esriImageryWithLabels",
-            title: "Imagery with Labels",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/413fd05bbd7342f5991d5ec96f4e4b10/info/thumbnail/imagery_labels.jpg"
-        });
-        var esriStreets = new Basemap({
-            layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
-            })],
-            id: "esriStreets",
-            title: "Streets",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/d8855ee4d3d74413babfb0f41203b168/info/thumbnail/world_street_map.jpg"
-        });
-        var esriTopo = new Basemap({
-            layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer"
-            })],
-            id: "esriTopo",
-            title: "Topographic",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/30e5fe3149c34df1ba922e6f5bbf808f/info/thumbnail/topo_map_2.jpg"
-        });
-        var esriDarkGray = new Basemap({
-             layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer"
-            })],
-            id: "esriDarkGray",
-            title: "Dark Gray Canvas",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/a284a9b99b3446a3910d4325e8c61582/info/thumbnail/dark_gray_canvas_2.jpg"
-        });
-        var esriOceans = new Basemap({
-             layers: [new BasemapLayer({
-                url: "https://services.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer"
-            })],
-            id: "esriOceans",
-            title: "Oceans",
-            thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/c9b7e98059534a7894d334585c36398f/info/thumbnail/Oceans_Basemap_6_7.png"
-        });
+        // Adiciona a galeria a um painel ou diretamente ao mapa
+        var basemapContainer = document.createElement("div");
+        basemapContainer.id = "basemapGalleryDiv";
+        basemapContainer.style.position = "absolute";
+        basemapContainer.style.top = "80px";
+        basemapContainer.style.left = "20px";
+        basemapContainer.style.zIndex = "40";
+        document.getElementById('mapDiv').appendChild(basemapContainer);
+        basemapContainer.appendChild(basemapGallery.domNode);
+        basemapGallery.startup();
 
-        // Inicializa galeria de mapas base
-        new BasemapGallery({
-          showArcGISBasemaps: false,
-          basemaps: [esriImagery, esriImageryWithLabels, esriStreets, esriTopo, esriDarkGray, esriOceans],
-          map: window.map
-        }, "basemapGalleryDiv").startup();
 
         // Atualiza legenda de riscos
         updateRiskLegend();
-
-        // Inicializa mapa de visão geral
-        new OverviewMap({
-          map: window.map,
-          visible: true
-        }, "overviewMapDiv").startup();
-
-        // Inicializa botão home
-        new HomeButton({
-          map: window.map
-        }, "homeButtonDiv").startup();
-
-        // Inicializa impressão
-        new Print({
-          map: window.map,
-          url: "https://utility.arcgisonline.com/arcgis/rest/services/Utilities/PrintingTools/GPServer/Export%20Web%20Map%20Task"
-        }, "printDiv").startup();
-
-        // Inicializa os handlers dos botões do modal
-        window.initModalButtons();
-
+        
         console.log("✅ Todos os componentes do mapa inicializados");
       } catch (err) {
         console.error("❌ Erro ao inicializar componentes:", err);
       }
-    });
-
-    // Inicializa os event listeners dos checkboxes
-    function initCheckboxListeners() {
-      console.log("🔄 Inicializando event listeners dos checkboxes...");
-      
-      const checkboxes = ["chkPoints", "chkLines", "chkPolygons"];
-      checkboxes.forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-          element.addEventListener("change", updateVis);
-          console.log(`✅ Listener adicionado para ${id}`);
-        } else {
-          console.warn(`⚠️ Elemento ${id} não encontrado`);
-        }
-      });
-    }
-
-    // Função para atualizar visibilidade das camadas
-    function updateVis() {
-      console.log("🔄 Atualizando visibilidade das camadas...");
-      
-      try {
-        const arr = [];
-        const elements = {
-          chkPoints: document.getElementById("chkPoints"),
-          chkLines: document.getElementById("chkLines"),
-          chkPolygons: document.getElementById("chkPolygons")
-        };
-
-        if (elements.chkPoints?.checked) arr.push(0);
-        if (elements.chkLines?.checked) arr.push(1);
-        if (elements.chkPolygons?.checked) arr.push(2);
-
-        damageLayer.setVisibleLayers(arr);
-        console.log("✅ Visibilidade atualizada:", arr);
-      } catch (err) {
-        console.error("❌ Erro ao atualizar visibilidade:", err);
-      }
-    }
-
-    // Inicializa os listeners quando o documento estiver pronto
-    document.addEventListener("DOMContentLoaded", function() {
-      console.log("📄 Documento carregado, inicializando listeners...");
-      initCheckboxListeners();
     });
 
     let brazilBoundary = null;
@@ -1454,29 +1308,12 @@
       { 
         id: "damageLayer",
         opacity: 0.7,
-        visible: true
+        visible: false
       }
     );
 
     window.map.addLayer(damageLayer);
-
-    window.map.on("layers-add-result", function(evt){
-      var info = evt.layers[0].layer.timeInfo;
-      if (!info) return;
-      var slider = new TimeSlider({ style: "width:100%;" }, "timeSliderDiv");
-      window.map.setTimeSlider(slider);
-      slider.setThumbCount(2);
-      slider.createTimeStopsByTimeInterval(info.timeExtent, 1, "days");
-      slider.setThumbMovingRate(2000);
-      slider.startup();
-      on(slider, "time-extent-change", function(evt){
-        damageLayer.setTimeDefinition(evt.startTime, evt.endTime);
-      });
-    });
-
-    var visible = [0,1,2];
-    damageLayer.setVisibleLayers(visible);
-
+    
     // 🔍 Busca por endereço
     var searchMarker = null;
     var input = document.getElementById("searchInput");
@@ -1938,30 +1775,7 @@
         window.municipiosLayer.setVisibility(e.target.checked);
       }
     });
-
-    document.getElementById("chkPoints").addEventListener("change", function(e) {
-      if (e.target.checked) {
-        carregarRelatosHoje();
-        relatosLayer.setVisibility(true);
-      } else {
-        relatosLayer.setVisibility(false);
-      }
-    });
-
-    document.getElementById("submitDate").addEventListener("click", function () {
-      const dateISO = document.getElementById("startDate").value;
-      if (!dateISO) {
-        alert("Selecione uma data para buscar relatos.");
-        return;
-      }
-
-      // Envia solicitação para o parent (Wix)
-      window.parent.postMessage({
-        action: "fetchReports",
-        data: { dateISO }
-      }, "*");
-    });
-
+    
     document.getElementById("btnSubmitForecast").addEventListener("click", function () {
       sendForecast();
     });
@@ -1977,9 +1791,7 @@
       } else {
         // ❌ Apaga gráficos, mostra legendas normais
         clearForecastPolygons();
-        document.getElementById("legendPrevots").style.display = "none";
-        document.getElementById("legendRisk").style.display = "block";
-
+        
         // 🔄 Reativa relatos do dia
         const dateISO = document.getElementById("startDate").value || new Date().toISOString().slice(0, 10);
         window.parent.postMessage({
@@ -2203,7 +2015,7 @@
         // Se falhar, configura um observer para tentar novamente quando os elementos existirem
         const observer = new MutationObserver(function(mutations) {
           if (initImageHandlers()) {
-            console.log("✅ Handlers dos botões inicializados com sucesso via observer!");
+            console.log("✅ Handlers inicializados com sucesso via observer!");
             observer.disconnect();
           }
         });
@@ -2847,8 +2659,6 @@
       try {
         console.log("✅ Todos os elementos encontrados, inicializando...");
         
-        // Inicializa os listeners
-        initCheckboxListeners();
         initModalButtons();
         
         // Inicializa handlers de arquivo

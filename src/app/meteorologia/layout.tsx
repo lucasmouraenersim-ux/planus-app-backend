@@ -3,8 +3,18 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
+
+const LoadingSpinner = () => (
+    <div className="flex items-center justify-center space-x-1">
+        <div className="w-2 h-4 bg-white animate-pulse" style={{ animationDelay: '0s' }}></div>
+        <div className="w-2 h-6 bg-white animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+        <div className="w-2 h-8 bg-white animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+        <div className="w-2 h-6 bg-white animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+        <div className="w-2 h-4 bg-white animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+    </div>
+);
+
 
 const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
     const { firebaseUser, isLoadingAuth } = useAuth();
@@ -26,9 +36,8 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
 
     if (isLoadingAuth) {
         return (
-            <div className="flex flex-col justify-center items-center h-screen bg-gray-900 text-white">
-                <Loader2 className="animate-spin h-12 w-12 text-blue-400 mb-4" />
-                <p>Carregando...</p>
+            <div className="flex flex-col justify-center items-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
+                <LoadingSpinner />
             </div>
         );
     }
@@ -36,9 +45,9 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
     // Allow rendering login page or children for authenticated users
     if (!firebaseUser && pathname !== '/meteorologia/login') {
        return (
-            <div className="flex flex-col justify-center items-center h-screen bg-gray-900 text-white">
-                <Loader2 className="animate-spin h-12 w-12 text-blue-400 mb-4" />
-                <p>Redirecionando para login...</p>
+            <div className="flex flex-col justify-center items-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
+                <LoadingSpinner />
+                <p className="text-white mt-4">Redirecionando para login...</p>
             </div>
         );
     }
@@ -58,10 +67,10 @@ export default function MeteorologiaLayout({
             <title>Sent Meteorologia</title>
         </head>
       <body>
-          <AuthProvider>
+        <AuthProvider>
             <MeteorologiaLayoutContent>{children}</MeteorologiaLayoutContent>
             <Toaster />
-          </AuthProvider>
+        </AuthProvider>
       </body>
     </html>
   )
