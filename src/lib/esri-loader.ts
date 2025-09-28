@@ -32,6 +32,12 @@ type EsriModules = [
     typeof __esri.Sketch,
     typeof __esri.GraphicsLayer,
     typeof __esri.WebTileLayer,
+    typeof __esri.Draw,
+    typeof __esri.SimpleFillSymbol,
+    typeof __esri.SimpleLineSymbol,
+    typeof __esri.Color,
+    typeof __esri.Graphic,
+    typeof __esri.geometry.webMercatorUtils,
 ];
 
 // Helper to require modules
@@ -50,6 +56,12 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/widgets/Sketch",
         "esri/layers/GraphicsLayer",
         "esri/layers/WebTileLayer",
+        "esri/toolbars/Draw",
+        "esri/symbols/SimpleFillSymbol",
+        "esri/symbols/SimpleLineSymbol",
+        "esri/Color",
+        "esri/graphic",
+        "esri/geometry/webMercatorUtils",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
