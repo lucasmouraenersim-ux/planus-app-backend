@@ -1,4 +1,3 @@
-
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -116,7 +115,7 @@ export function EsriMap() {
                 loadCss();
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
-                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
+                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, FeatureLayer,
                     webMercatorUtils
                 ] = await loadScript();
 
@@ -125,12 +124,9 @@ export function EsriMap() {
                 const host = data.host;
                 const latestFrame = data.radar.nowcast.find((frame: any) => frame.path === '/v2/radar/nowcast/0.png');
                 const path = latestFrame ? latestFrame.path : data.radar.nowcast[0].path;
-
-                const color = 5; 
-                const opts = '0_0'; 
-
+                
                 const rainViewerLayer = new WebTileLayer({
-                    urlTemplate: `${host}${path}/256/{level}/{col}/{row}/${color}/${opts}.png`,
+                    urlTemplate: `${host}${path}/256/{level}/{col}/{row}/5/0_0.png`,
                     title: "Radar RainViewer",
                     visible: true,
                     opacity: 0.7,
@@ -201,7 +197,7 @@ export function EsriMap() {
                 // Use ReactDOM.createRoot to render React component into the container
                 const root = createRoot(drawContainer);
                 root.render(
-                    <div className="bg-white p-3 rounded-md shadow-md text-black">
+                    <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
                         <h3 className="font-bold mb-2">Desenhar Polígono de Risco</h3>
                         <div className="space-y-2">
                              <div>
@@ -315,14 +311,6 @@ export function EsriMap() {
                     `;
                 };
                 updateLegend();
-                
-                // Re-render legend when hazard changes
-                const hazardSelect = document.getElementById("hazard-select-in-react-component"); // This is a bit of a hack, would be better to manage state
-                if(hazardSelect) {
-                    hazardSelect.addEventListener('change', updateLegend);
-                }
-
-
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
                 setIsLoading(false);
