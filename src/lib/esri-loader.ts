@@ -24,7 +24,6 @@ type EsriModules = [
     typeof __esri.MapView,
     typeof __esri.Basemap,
     typeof __esri.TileLayer,
-    typeof __esri.MapImageLayer,
     typeof __esri.GroupLayer,
     typeof __esri.BasemapGallery,
     typeof __esri.Expand,
@@ -32,10 +31,6 @@ type EsriModules = [
     typeof __esri.Sketch,
     typeof __esri.GraphicsLayer,
     typeof __esri.WebTileLayer,
-    typeof __esri.SimpleFillSymbol,
-    typeof __esri.SimpleLineSymbol,
-    typeof __esri.Color,
-    typeof __esri.Graphic,
     typeof import ("esri/geometry/support/webMercatorUtils"),
 ];
 
@@ -47,7 +42,6 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/views/MapView",
         "esri/Basemap",
         "esri/layers/TileLayer",
-        "esri/layers/MapImageLayer",
         "esri/layers/GroupLayer",
         "esri/widgets/BasemapGallery",
         "esri/widgets/Expand",
@@ -55,10 +49,6 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/widgets/Sketch",
         "esri/layers/GraphicsLayer",
         "esri/layers/WebTileLayer",
-        "esri/symbols/SimpleFillSymbol",
-        "esri/symbols/SimpleLineSymbol",
-        "esri/Color",
-        "esri/Graphic",
         "esri/geometry/support/webMercatorUtils",
     ], (...modules: EsriModules) => {
         resolve(modules);
