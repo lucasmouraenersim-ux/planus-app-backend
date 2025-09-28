@@ -95,7 +95,7 @@ export function EsriMap() {
     
     // New state for weather models
     const [weatherModels, setWeatherModels] = useState<any[]>([]);
-    const [selectedModel, setSelectedModel] = useState<string>('radar');
+    const [selectedModel, setSelectedModel] = useState<string>('radar.nowcast');
     const [modelGroupLayer, setModelGroupLayer] = useState<__esri.GroupLayer | null>(null);
 
 
@@ -164,22 +164,33 @@ export function EsriMap() {
                 const data = await response.json();
                 const host = data.host;
                 
-                const models = Object.keys(data).filter(key => key !== 'host').flatMap(key => {
-                    if (Array.isArray(data[key]?.nowcast)) {
-                        return { type: key, path: data[key].nowcast[0].path, name: `Radar de Chuva` };
-                    } else if (data[key]?.satellite && Array.isArray(data[key].satellite.nowcast)) {
-                        return { type: key, path: data[key].satellite.nowcast[0].path, name: 'Satélite' };
-                    }
-                    return [];
-                });
+                const models = Object.keys(data)
+                  .filter(key => key !== 'host')
+                  .flatMap(key => {
+                      if (key === 'radar' && data.radar.nowcast) {
+                          return { id: 'radar.nowcast', path: data.radar.nowcast[0].path, name: 'Radar de Chuva' };
+                      }
+                      if (key === 'satellite' && data.satellite.nowcast) {
+                          return { id: 'satellite.nowcast', path: data.satellite.nowcast[0].path, name: 'Satélite' };
+                      }
+                      if (typeof data[key] === 'object' && data[key] !== null) {
+                          return Object.keys(data[key]).map(subKey => ({
+                              id: `${key}.${subKey}`,
+                              path: data[key][subKey][0].path,
+                              name: `${key.toUpperCase()} - ${subKey.replace(/\.2m|\.10m/g, '')}`
+                          }));
+                      }
+                      return [];
+                  });
                 setWeatherModels(models);
+
 
                 // Create a GroupLayer for all weather models
                 const modelLayers = models.map(model => new WebTileLayer({
-                    id: model.type, // Use type as a unique ID
+                    id: model.id,
                     urlTemplate: `${host}${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
                     title: model.name,
-                    visible: model.type === selectedModel, // Only the default is visible
+                    visible: model.id === selectedModel, 
                     opacity: 0.7,
                 }));
                 
@@ -254,7 +265,7 @@ export function EsriMap() {
                 const menuExpand = new Expand({
                     view: view,
                     content: menuContainer,
-                    expandIconClass: "menu", // Correct icon name
+                    expandIconClass: "menu",
                     group: "top-right",
                 });
                 view.ui.add(menuExpand, "top-right");
@@ -270,7 +281,7 @@ export function EsriMap() {
                                 <Select value={selectedModel} onValueChange={setSelectedModel}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {models.map(model => <SelectItem key={model.type} value={model.type}>{model.name}</SelectItem>)}
+                                        {models.map(model => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
