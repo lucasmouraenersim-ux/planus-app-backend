@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -62,8 +63,11 @@ export function EsriMap() {
                 const host = data.host;
                 const radarPath = data.radar.nowcast[0].path;
 
+                const color = 5; // NEXRAD color scheme
+                const opts = '0_0'; // No smoothing, no snow
+
                 const rainViewerLayer = new WebTileLayer({
-                    urlTemplate: `${host}${radarPath}/256/{level}/{col}/{row}/2/1_1.png`,
+                    urlTemplate: `${host}${radarPath}/256/{level}/{col}/{row}/${color}/${opts}.png`,
                     title: "Radar RainViewer",
                     visible: true,
                     opacity: 0.7,
