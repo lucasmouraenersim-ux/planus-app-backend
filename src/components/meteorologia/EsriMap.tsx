@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil } from 'lucide-react';
+import { Pencil, Menu } from 'lucide-react';
 
 
 const LoadingSpinner = () => (
@@ -54,6 +54,32 @@ const levelOf = (prob: number, type: HazardType): number => {
         wind: { 5: 2, 15: 3, 30: 4, 45: 5 },
     };
     return rules[type]?.[prob] || 0;
+};
+
+const SideMenu = () => {
+    const menuItems = [
+        "Modelos Meteorologico",
+        "Placar",
+        "Galeria de tornados no Brasil",
+        "Relatos de Tempo Severo",
+        "Galeria Storm Chaser BR",
+        "Perfil",
+        "Patrocine-nos"
+    ];
+
+    return (
+        <div className="bg-gray-800 p-3 rounded-md shadow-md text-white w-56">
+            <ul className="space-y-2">
+                {menuItems.map(item => (
+                    <li key={item}>
+                        <a href="#" className="block px-3 py-2 text-sm rounded-md hover:bg-gray-700 transition-colors">
+                            {item}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 };
 
 
@@ -174,6 +200,19 @@ export function EsriMap() {
                     });
                 });
 
+                // --- Menu Button ---
+                const menuContainer = document.createElement("div");
+                const menuExpand = new Expand({
+                    view: view,
+                    content: menuContainer,
+                    expandIcon: "menu",
+                    group: "top-left",
+                });
+                view.ui.add(menuExpand, "top-left");
+                const menuRoot = createRoot(menuContainer);
+                menuRoot.render(<SideMenu />);
+                
+                // --- Existing Widgets ---
                 const basemapGallery = new BasemapGallery({ view });
                 view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
 
@@ -192,7 +231,6 @@ export function EsriMap() {
                 });
                 view.ui.add(sketchExpand, "top-right");
                 
-                // Use ReactDOM.createRoot to render React component into the container
                 const root = createRoot(drawContainer);
                 root.render(
                     <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
@@ -232,7 +270,7 @@ export function EsriMap() {
                         }
 
                         const geographicGeom = webMercatorUtils.webMercatorToGeographic(event.graphic.geometry);
-                        const turfPolygon = turf.polygon(geographicGeom.rings);
+                        const turfPolygon = turf.polygon((geographicGeom as any).rings);
                         const clipped = turf.intersect(turfPolygon, brazilBoundary);
                         
                         if (!clipped || !clipped.geometry) {
@@ -241,12 +279,12 @@ export function EsriMap() {
                             return;
                         }
                         
-                        const esriPolygon = new Polygon({
-                            rings: clipped.geometry.coordinates,
-                            spatialReference: view.spatialReference
+                         const esriPolygon = new Polygon({
+                            rings: (clipped.geometry as any).coordinates,
+                            spatialReference: { wkid: 4326 }
                         });
-
-                        event.graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon) as __esri.Geometry;
+                        
+                        event.graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
 
 
                         const drawingInfo = (sketch as any)._activeDrawingInfo;
