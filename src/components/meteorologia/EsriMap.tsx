@@ -175,15 +175,18 @@ export function EsriMap() {
                           if (key === 'satellite' && data.satellite.infrared) {
                               return { id: 'satellite.infrared', path: data.satellite.infrared[0].path, name: 'Satélite (Infravermelho)' };
                           }
-                          if (typeof data[key] === 'object' && data[key] !== null && key !== 'radar' && key !== 'satellite') {
-                              return Object.keys(data[key]).map(subKey => ({
+                          // GFS and other models
+                          if (key === 'gfs' || key === 'ecmwf' || key === 'meteofrance') {
+                             if (typeof data[key] === 'object' && data[key] !== null) {
+                                return Object.keys(data[key]).map(subKey => ({
                                   id: `${key}.${subKey}`,
                                   path: data[key][subKey][0].path,
-                                  name: `${key.toUpperCase()} - ${subKey.replace(/\./g, ' ')}`
-                              }));
+                                  name: `${key.toUpperCase()} - ${subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}`
+                                }));
+                             }
                           }
                           return [];
-                      }).filter(model => model.path);
+                      }).filter(model => model && model.path);
                     setWeatherModels(models);
                 } catch(e) {
                     console.error("Failed to fetch weather models, proceeding without them", e);

@@ -33,6 +33,10 @@ type EsriModules = [
     typeof __esri.WebTileLayer,
     typeof import ("esri/geometry/support/webMercatorUtils"),
     typeof __esri.Polygon,
+    typeof __esri.Color,
+    typeof __esri.Graphic,
+    typeof __esri.symbols.SimpleFillSymbol,
+    typeof __esri.symbols.SimpleLineSymbol,
 ];
 
 // Helper to require modules
@@ -52,6 +56,10 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/layers/WebTileLayer",
         "esri/geometry/support/webMercatorUtils",
         "esri/geometry/Polygon",
+        "esri/Color",
+        "esri/Graphic",
+        "esri/symbols/SimpleFillSymbol",
+        "esri/symbols/SimpleLineSymbol",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
