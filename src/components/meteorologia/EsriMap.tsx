@@ -156,40 +156,44 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
-                    WebTileLayer, webMercatorUtils, Polygon
+                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol, SimpleLineSymbol
                 ] = await loadScript();
 
                 // Fetch weather models data
-                const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-                const data = await response.json();
-                const host = data.host;
-                
-                const models = Object.keys(data)
-                  .filter(key => key !== 'host')
-                  .flatMap(key => {
-                      if (key === 'radar' && data.radar.nowcast) {
-                          return { id: 'radar.nowcast', path: data.radar.nowcast[0].path, name: 'Radar de Chuva' };
-                      }
-                      if (key === 'satellite' && data.satellite.infrared) { // Changed to infrared as it is more standard than nowcast for satellite
-                          return { id: 'satellite.infrared', path: data.satellite.infrared[0].path, name: 'Satélite (Infravermelho)' };
-                      }
-                      // Flattening other models like gfs, ecmwf
-                      if (typeof data[key] === 'object' && data[key] !== null && key !== 'radar' && key !== 'satellite') {
-                          return Object.keys(data[key]).map(subKey => ({
-                              id: `${key}.${subKey}`,
-                              path: data[key][subKey][0].path,
-                              name: `${key.toUpperCase()} - ${subKey.replace(/\./g, ' ')}`
-                          }));
-                      }
-                      return [];
-                  }).filter(model => model.path); // Ensure only models with a path are included
-                setWeatherModels(models);
+                let models: any[] = [];
+                try {
+                    const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                    const data = await response.json();
+                    const host = data.host;
+                    
+                    models = Object.keys(data)
+                      .filter(key => key !== 'host')
+                      .flatMap(key => {
+                          if (key === 'radar' && data.radar.nowcast) {
+                              return { id: 'radar.nowcast', path: data.radar.nowcast[0].path, name: 'Radar de Chuva' };
+                          }
+                          if (key === 'satellite' && data.satellite.infrared) {
+                              return { id: 'satellite.infrared', path: data.satellite.infrared[0].path, name: 'Satélite (Infravermelho)' };
+                          }
+                          if (typeof data[key] === 'object' && data[key] !== null && key !== 'radar' && key !== 'satellite') {
+                              return Object.keys(data[key]).map(subKey => ({
+                                  id: `${key}.${subKey}`,
+                                  path: data[key][subKey][0].path,
+                                  name: `${key.toUpperCase()} - ${subKey.replace(/\./g, ' ')}`
+                              }));
+                          }
+                          return [];
+                      }).filter(model => model.path);
+                    setWeatherModels(models);
+                } catch(e) {
+                    console.error("Failed to fetch weather models, proceeding without them", e);
+                }
 
 
                 // Create a GroupLayer for all weather models
                 const modelLayers = models.map(model => new WebTileLayer({
                     id: model.id,
-                    urlTemplate: `${host}${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
+                    urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
                     title: model.name,
                     visible: model.id === selectedModel, 
                     opacity: 0.7,
@@ -202,11 +206,33 @@ export function EsriMap() {
                 });
                 setModelGroupLayer(newModelGroupLayer);
                 
-                const municipiosLayer = new TileLayer({
-                    url: "https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer",
+                const municipiosLayer = new GraphicsLayer({
+                    id: "municipios",
                     title: "Municípios",
                     visible: false,
                 });
+                
+                // Fetch and render municipality boundaries
+                fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
+                    .then(res => res.json())
+                    .then(data => {
+                        const municipioGraphics = data.features.map((f: any) => new Graphic({
+                            geometry: new Polygon({
+                                rings: f.geometry.coordinates,
+                                spatialReference: { wkid: 4326 }
+                            }),
+                            symbol: new SimpleFillSymbol({
+                                style: "null",
+                                outline: new SimpleLineSymbol({
+                                    style: "solid",
+                                    color: new Color([0, 0, 0, 0.3]),
+                                    width: 1
+                                })
+                            })
+                        }));
+                        municipiosLayer.addMany(municipioGraphics);
+                        console.log("✅ Municípios carregados na camada de gráficos.");
+                    }).catch(err => console.error("❌ Erro ao carregar GeoJSON dos municípios:", err));
 
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
@@ -260,7 +286,6 @@ export function EsriMap() {
                     expandIconClass: "esri-icon-edit",
                     group: "top-left",
                 });
-                view.ui.add(sketchExpand, "top-left");
                 
                 const menuContainer = document.createElement("div");
                 const menuExpand = new Expand({
@@ -269,7 +294,10 @@ export function EsriMap() {
                     expandIconClass: "menu",
                     group: "top-left",
                 });
+
+                view.ui.add(sketchExpand, "top-left");
                 view.ui.add(menuExpand, "top-left");
+                
                 const menuRoot = createRoot(menuContainer);
                 menuRoot.render(<SideMenu />);
                 
