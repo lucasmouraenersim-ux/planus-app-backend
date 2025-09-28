@@ -4,9 +4,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { loadCss, loadScript } from '@/lib/esri-loader';
 import * as turf from '@turf/turf';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const LoadingSpinner = () => (
     <div className="absolute inset-0 z-50 flex h-full w-full flex-col items-center justify-center bg-gray-900 bg-opacity-70 text-white">
@@ -36,11 +33,11 @@ const probabilityOptions: Record<HazardType, number[]> = {
 };
 
 const catColor: Record<number, string> = {
-    0: "#00FF00",
-    1: "#FFFF00",
-    2: "#FFA500",
-    3: "#FF0000",
-    4: "#800080",
+    0: "#00FF00", // PREV 1
+    1: "#00FF00", // PREV 1
+    2: "#FFFF00", // PREV 2
+    3: "#FFA500", // PREV 3
+    4: "#FF0000", // PREV 4
 };
 
 const levelOf = (prob: number, type: HazardType): number => {
@@ -56,12 +53,9 @@ const levelOf = (prob: number, type: HazardType): number => {
 export function EsriMap() {
     const mapDivRef = useRef<HTMLDivElement>(null);
     const sketchRef = useRef<__esri.Sketch | null>(null);
+    const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
-
-    const [isDrawMenuOpen, setIsDrawMenuOpen] = useState(false);
-    const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
-    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
 
     useEffect(() => {
         // Fetch Brazil boundary
@@ -80,48 +74,10 @@ export function EsriMap() {
             })
             .catch(err => console.error("❌ Erro ao carregar contorno do Brasil:", err));
     }, []);
-
-    const startDrawing = (hazard: HazardType, prob: number) => {
-        if (sketchRef.current) {
-            const level = levelOf(prob, hazard);
-            const colorHex = catColor[level] || "#999999";
-            
-            const r = parseInt(colorHex.slice(1, 3), 16);
-            const g = parseInt(colorHex.slice(3, 5), 16);
-            const b = parseInt(colorHex.slice(5, 7), 16);
-
-            const symbol = {
-                type: "simple-fill",
-                color: [r, g, b, 0.25],
-                outline: {
-                    color: [r, g, b, 1],
-                    width: 2
-                }
-            };
-            
-            if (sketchRef.current.viewModel) {
-              sketchRef.current.viewModel.polygonSymbol = symbol as any;
-            }
-            
-            // Associate data for when the drawing completes
-            (sketchRef.current as any)._activeDrawingInfo = {
-                hazard,
-                prob,
-                level,
-            };
-            
-            sketchRef.current.create("polygon");
-            setIsDrawMenuOpen(false);
-        }
-    };
-
-    const handleHazardChange = (v: HazardType) => {
-        setSelectedHazard(v);
-        setSelectedProb(probabilityOptions[v][0]);
-    };
     
     useEffect(() => {
         let view: __esri.MapView;
+        let editToolbar: __esri.Edit;
         
         const initMap = async () => {
             if (!mapDivRef.current || !brazilBoundary) return;
@@ -131,7 +87,7 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
-                    webMercatorUtils
+                    webMercatorUtils, Color, SimpleFillSymbol, SimpleLineSymbol, Graphic
                 ] = await loadScript();
 
                 const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
@@ -157,12 +113,14 @@ export function EsriMap() {
                     opacity: 0.8
                 });
 
+                const graphicsLayer = new GraphicsLayer();
+                graphicsLayerRef.current = graphicsLayer;
 
                 const map = new Map({
                     basemap: new Basemap({
                         baseLayers: [new TileLayer({ url: "https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer" })]
                     }),
-                    layers: [groupLayer]
+                    layers: [groupLayer, graphicsLayer]
                 });
 
                 view = new MapView({
@@ -174,88 +132,98 @@ export function EsriMap() {
                 
                 view.when(() => setIsLoading(false));
                 
-                const basemapGalleryEl = document.createElement("div");
-                const basemapGallery = new BasemapGallery({ view, container: basemapGalleryEl });
-                view.ui.add(new Expand({ view, content: basemapGalleryEl, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
+                view.popup.autoOpenEnabled = false; // Disable default popups
+                view.on("click", (event) => {
+                    view.hitTest(event).then((response) => {
+                        const graphic = response.results.find(result => result.graphic.layer === graphicsLayer);
+                        if (graphic) {
+                            showPolygonPopup(graphic.graphic);
+                        } else {
+                            view.closePopup();
+                        }
+                    });
+                });
 
-                const layerListEl = document.createElement("div");
-                const layerList = new LayerList({ view, container: layerListEl });
-                view.ui.add(new Expand({ view, content: layerListEl, expandIconClass: "esri-icon-layers", group: "top-right" }), "top-right");
+                const basemapGallery = new BasemapGallery({ view });
+                view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
+
+                const layerList = new LayerList({ view });
+                view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-right" }), "top-right");
                 
-                const graphicsLayer = new GraphicsLayer();
-                map.add(graphicsLayer);
-
                 const sketch = new Sketch({ layer: graphicsLayer, view, creationMode: "update" });
                 sketchRef.current = sketch;
+
+                // --- Drawing Menu Implementation ---
+                const drawDiv = document.createElement('div');
+                drawDiv.className = 'p-4 bg-gray-800 text-white rounded-md w-64 space-y-4';
                 
-                const sketchButton = document.createElement('button');
-                sketchButton.className = 'esri-widget--button esri-icon-edit';
-                sketchButton.title = 'Desenhar polígono de risco';
-                
-                const drawPopoverRoot = document.createElement('div');
-                const sketchExpand = new Expand({
-                    view,
-                    content: drawPopoverRoot,
-                    expandIconClass: 'esri-icon-edit',
-                    group: 'top-right'
+                const hazardSelect = document.createElement('select');
+                hazardSelect.className = 'w-full p-2 bg-gray-700 border-gray-600 rounded';
+                hazardOptions.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    hazardSelect.appendChild(option);
                 });
-                view.ui.add(sketchExpand, 'top-right');
+
+                const probSelect = document.createElement('select');
+                probSelect.className = 'w-full p-2 bg-gray-700 border-gray-600 rounded mt-2';
+
+                const startDrawButton = document.createElement('button');
+                startDrawButton.textContent = 'Iniciar Desenho';
+                startDrawButton.className = 'w-full p-2 mt-4 bg-blue-500 text-white rounded hover:bg-blue-600';
+
+                const updateProbabilities = () => {
+                    const selectedHazard = hazardSelect.value as HazardType;
+                    probSelect.innerHTML = '';
+                    probabilityOptions[selectedHazard].forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = String(p);
+                        option.textContent = `${p}%`;
+                        probSelect.appendChild(option);
+                    });
+                };
                 
-                // This is a workaround to use React component inside Esri's UI
-                const DrawMenu = () => {
-                    const [hazard, setHazard] = useState<HazardType>('hail');
-                    const [prob, setProb] = useState<number>(probabilityOptions.hail[0]);
+                hazardSelect.onchange = updateProbabilities;
+                updateProbabilities();
+                
+                startDrawButton.onclick = () => {
+                    if (sketchRef.current) {
+                        const hazard = hazardSelect.value as HazardType;
+                        const prob = Number(probSelect.value);
+                        const level = levelOf(prob, hazard);
+                        const colorHex = catColor[level] || "#999999";
+                        const [r, g, b] = hexToRgb(colorHex);
 
-                    const handleHazardSelect = (value: HazardType) => {
-                        setHazard(value);
-                        setProb(probabilityOptions[value][0]);
-                    };
-
-                    return (
-                        <div className="p-4 bg-gray-800 text-white rounded-md w-64 space-y-4">
-                             <div>
-                                <label className="text-sm font-medium">Tipo de Risco</label>
-                                <Select onValueChange={(v) => handleHazardSelect(v as HazardType)} value={hazard}>
-                                    <SelectTrigger className="bg-gray-700 border-gray-600 mt-1">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
-                                        {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium">Probabilidade (%)</label>
-                                <Select onValueChange={(v) => startDrawing(hazard, Number(v))} value={String(prob)}>
-                                    <SelectTrigger className="bg-gray-700 border-gray-600 mt-1">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
-                                        {probabilityOptions[hazard].map(p => <SelectItem key={p} value={String(p)}>{p}%</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    );
+                        const symbol = {
+                            type: "simple-fill",
+                            color: [r, g, b, 0.25],
+                            outline: { color: [r, g, b, 1], width: 2 }
+                        };
+                        
+                        sketchRef.current.viewModel.polygonSymbol = symbol as any;
+                        
+                        (sketchRef.current as any)._activeDrawingInfo = { hazard, prob, level };
+                        
+                        sketchRef.current.create("polygon");
+                    }
                 };
 
-                // The Esri Expand widget's content can be a simple DOM node.
-                // We are creating a button that, when clicked, toggles a React-managed Popover.
-                // This is a bit of a hack but avoids complex ReactDOM.createPortal logic for this use case.
-                // The actual popover is part of the main React tree.
-                const drawButtonPlaceholder = document.createElement('button');
-                drawButtonPlaceholder.innerText = 'Desenhar Polígono';
-                drawButtonPlaceholder.className = 'w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600';
-                drawButtonPlaceholder.onclick = () => {
-                    // This will be overridden by the Popover logic in the main return statement.
-                    // This is just a placeholder action if the Popover isn't mounted correctly.
-                    console.log('Draw button placeholder clicked');
-                };
-                drawPopoverRoot.appendChild(drawButtonPlaceholder);
-                
+                drawDiv.innerHTML = `
+                    <div><label class="text-sm font-medium">Tipo de Risco</label></div>`;
+                drawDiv.appendChild(hazardSelect);
+                drawDiv.innerHTML += `
+                    <div class="mt-4"><label class="text-sm font-medium">Probabilidade (%)</label></div>`;
+                drawDiv.appendChild(probSelect);
+                drawDiv.appendChild(startDrawButton);
+
+                const drawExpand = new Expand({ view, content: drawDiv, expandIconClass: 'esri-icon-edit', group: 'top-right' });
+                view.ui.add(drawExpand, "top-right");
+
+
                 sketch.on("create", (event) => {
                     if (event.state === "complete") {
-                         if (!brazilBoundary) {
+                        if (!brazilBoundary) {
                             alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
                             graphicsLayer.remove(event.graphic);
                             return;
@@ -280,6 +248,7 @@ export function EsriMap() {
 
                         const mercatorGeom = webMercatorUtils.geographicToWebMercator(clippedPolygonForEsri);
                         
+                        // Modify the original graphic instead of creating a new one
                         event.graphic.geometry = mercatorGeom;
 
                         const drawingInfo = (sketch as any)._activeDrawingInfo;
@@ -293,64 +262,71 @@ export function EsriMap() {
                     }
                 });
 
+                function hexToRgb(hex: string): [number, number, number] {
+                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                    return result ? [
+                        parseInt(result[1], 16),
+                        parseInt(result[2], 16),
+                        parseInt(result[3], 16)
+                    ] : [0, 0, 0];
+                }
+
+                function showPolygonPopup(graphic: __esri.Graphic) {
+                    const popupData = graphic.attributes || {};
+                    const content = document.createElement("div");
+                    content.innerHTML = `
+                        <b>Tipo:</b> ${popupData.hazard || 'N/A'}<br>
+                        <b>Nível:</b> ${popupData.level || 'N/A'}<br>
+                        <b>Probabilidade:</b> ${popupData.prob || 'N/A'}%
+                    `;
+
+                    const editButton = document.createElement('button');
+                    editButton.textContent = '✏️ Editar';
+                    editButton.className = 'p-1 mt-2 mr-2 bg-blue-500 text-white rounded';
+                    editButton.onclick = () => {
+                        sketchRef.current?.update([graphic], { tool: "reshape" });
+                        view.closePopup();
+                    };
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = '🗑️ Excluir';
+                    deleteButton.className = 'p-1 mt-2 bg-red-500 text-white rounded';
+                    deleteButton.onclick = () => {
+                        graphicsLayerRef.current?.remove(graphic);
+                        view.closePopup();
+                    };
+                    
+                    content.appendChild(editButton);
+                    content.appendChild(deleteButton);
+
+                    view.openPopup({
+                        title: "Polígono de Risco",
+                        content: content,
+                        location: graphic.geometry.extent.center
+                    });
+                }
+
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
                 setIsLoading(false);
             }
         };
 
-        initMap();
+        if (brazilBoundary) {
+            initMap();
+        }
 
         return () => {
             if (view) {
                 view.destroy();
             }
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [brazilBoundary]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             {isLoading && <LoadingSpinner />}
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
-             <div id="draw-menu-container" className="absolute top-20 right-20 z-10">
-                <Popover open={isDrawMenuOpen} onOpenChange={setIsDrawMenuOpen}>
-                    <PopoverTrigger asChild>
-                         <Button
-                            variant="outline"
-                            className="p-2 bg-gray-900 text-white rounded hover:bg-gray-800"
-                        >
-                            Desenhar Polígono
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-60 bg-gray-800 text-white border-gray-700">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-sm">Tipo de Risco</label>
-                                <Select onValueChange={(v) => handleHazardChange(v as HazardType)} value={selectedHazard}>
-                                    <SelectTrigger className="bg-gray-700 border-gray-600">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
-                                        {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <label className="text-sm">Probabilidade (%)</label>
-                                <Select onValueChange={(v) => startDrawing(selectedHazard, Number(v))} value={String(selectedProb)}>
-                                    <SelectTrigger className="bg-gray-700 border-gray-600">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
-                                        {probabilityOptions[selectedHazard].map(p => <SelectItem key={p} value={String(p)}>{p}%</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </PopoverContent>
-                </Popover>
-            </div>
         </div>
     );
 }
