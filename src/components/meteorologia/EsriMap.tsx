@@ -35,7 +35,7 @@ export function EsriMap() {
                 // Carregar módulos da API da Esri
                 const [
                     Map, MapView, Basemap, TileLayer, MapImageLayer, GroupLayer,
-                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer
+                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer
                 ] = await loadScript();
 
                 // --- RainViewer API Fetch ---
@@ -44,15 +44,15 @@ export function EsriMap() {
                 const host = data.host;
                 // Get the most recent radar image path
                 const radarPath = data.radar.nowcast[0].path; 
-                const rainViewerUrl = `${host}${radarPath}/{level}/{col}/{row}/2/1_1.png`;
 
                 // --- Camada de Radar Dinâmica ---
-                const rainViewerLayer = new TileLayer({
-                    urlTemplate: rainViewerUrl,
+                const rainViewerLayer = new WebTileLayer({
+                    urlTemplate: `${host}${radarPath}/{level}/{col}/{row}/2/1_1.png`,
                     title: "Radar RainViewer",
                     visible: true,
-                    opacity: 0.7
+                    opacity: 0.7,
                 });
+
 
                 // Grupo de Camadas de Sobreposição
                 const groupLayer = new GroupLayer({

@@ -31,6 +31,7 @@ type EsriModules = [
     typeof __esri.LayerList,
     typeof __esri.Sketch,
     typeof __esri.GraphicsLayer,
+    typeof __esri.WebTileLayer,
 ];
 
 // Helper to require modules
@@ -47,7 +48,8 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/widgets/Expand",
         "esri/widgets/LayerList",
         "esri/widgets/Sketch",
-        "esri/layers/GraphicsLayer"
+        "esri/layers/GraphicsLayer",
+        "esri/layers/WebTileLayer",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
@@ -59,7 +61,6 @@ export function loadScript(): Promise<EsriModules> {
     const scriptUrl = `https://js.arcgis.com/${esriVersion}/`;
 
     return new Promise((resolve, reject) => {
-        // Check if the script is already loaded and the require function is available
         // @ts-ignore
         if (window.require) {
             requireModules(resolve);
