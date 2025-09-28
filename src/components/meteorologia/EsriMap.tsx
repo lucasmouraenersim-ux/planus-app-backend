@@ -1,7 +1,8 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { loadCss, loadScript } from '@/lib/esri-loader';
 import * as turf from '@turf/turf';
