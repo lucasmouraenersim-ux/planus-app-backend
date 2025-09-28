@@ -237,9 +237,9 @@ export function EsriMap() {
                     view: view,
                     content: menuContainer,
                     expandIcon: "menu",
-                    group: "top-left",
+                    group: "top-right",
                 });
-                view.ui.add(menuExpand, "top-left");
+                view.ui.add(menuExpand, "top-right");
                 const menuRoot = createRoot(menuContainer);
                 menuRoot.render(<SideMenu />);
                 
