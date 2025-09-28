@@ -1,4 +1,3 @@
-
 "use client";
 
 // import type { Metadata } from 'next'; // Metadata can be an issue with "use client"
@@ -37,8 +36,10 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter();
     const { appUser, isLoadingAuth, userAppRole } = useAuth();
 
-    // If the path is under /meteorologia, let its specific layout handle it.
-    if (pathname.startsWith('/meteorologia')) {
+    // The /meteorologia/* routes now use this root AuthProvider, so they need to be handled
+    // as public-like pages here, but their own layout will manage auth state internally.
+    const isMeteorologiaPage = pathname.startsWith('/meteorologia');
+    if (isMeteorologiaPage) {
         return <>{children}</>;
     }
 
@@ -261,8 +262,8 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <AuthProvider>
             <AppLayoutContent>{children}</AppLayoutContent>
+            <Toaster />
         </AuthProvider>
-        <Toaster />
       </body>
     </html>
   );

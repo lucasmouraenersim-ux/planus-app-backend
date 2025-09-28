@@ -4,14 +4,12 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
 import { Toaster } from '@/components/ui/toaster';
+import { Loader2 } from 'lucide-react';
 
 const LoadingSpinner = () => (
-    <div className="flex items-center justify-center space-x-1">
-        <div className="w-2 h-4 bg-white animate-pulse" style={{ animationDelay: '0s' }}></div>
-        <div className="w-2 h-6 bg-white animate-pulse" style={{ animationDelay: '0.1s' }}></div>
-        <div className="w-2 h-8 bg-white animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-        <div className="w-2 h-6 bg-white animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-        <div className="w-2 h-4 bg-white animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+    <div className="flex flex-col items-center justify-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
+        <Loader2 className="w-10 h-10 text-white animate-spin" />
+        <p className="text-white mt-4">Carregando...</p>
     </div>
 );
 
@@ -35,21 +33,12 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
     }, [isLoadingAuth, firebaseUser, pathname, router]);
 
     if (isLoadingAuth) {
-        return (
-            <div className="flex flex-col justify-center items-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
-                <LoadingSpinner />
-            </div>
-        );
+        return <LoadingSpinner />;
     }
     
-    // Allow rendering login page or children for authenticated users
+    // Allow rendering login page for non-logged in users, or children for authenticated users
     if (!firebaseUser && pathname !== '/meteorologia/login') {
-       return (
-            <div className="flex flex-col justify-center items-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
-                <LoadingSpinner />
-                <p className="text-white mt-4">Redirecionando para login...</p>
-            </div>
-        );
+       return <LoadingSpinner />;
     }
 
     return <>{children}</>;
@@ -62,11 +51,9 @@ export default function MeteorologiaLayout({
   children: React.ReactNode
 }) {
   return (
+    // AuthProvider has been removed from here. It's now only in the root layout.
     <section>
-        <AuthProvider>
-            <MeteorologiaLayoutContent>{children}</MeteorologiaLayoutContent>
-            <Toaster />
-        </AuthProvider>
+        {children}
     </section>
   )
 }
