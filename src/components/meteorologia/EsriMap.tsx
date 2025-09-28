@@ -63,18 +63,19 @@ export function EsriMap() {
                 const radarPath = data.radar.nowcast[0].path;
 
                 const rainViewerLayer = new WebTileLayer({
-                    urlTemplate: `${host}${radarPath}/{level}/{col}/{row}/2/1_1.png`,
+                    urlTemplate: `${host}${radarPath}/256/{level}/{col}/{row}/2/1_1.png`,
                     title: "Radar RainViewer",
                     visible: true,
                     opacity: 0.7,
                 });
-
+                
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
                     layers: [rainViewerLayer],
                     opacity: 0.8
                 });
+
 
                 const map = new Map({
                     basemap: new Basemap({
@@ -110,33 +111,21 @@ export function EsriMap() {
                     if (event.state === "complete") {
                          if (!brazilBoundary) {
                             alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
-                            graphicsLayer.remove(event.graphic); // Remove the original graphic
+                            graphicsLayer.remove(event.graphic);
                             return;
                         }
 
-                        // Convert geometry to geographic coordinates for turf
                         const geographicGeom = webMercatorUtils.webMercatorToGeographic(event.graphic.geometry) as __esri.Polygon;
                         const turfPolygon = turf.polygon(geographicGeom.rings);
 
                         const clipped = turf.intersect(turfPolygon, brazilBoundary);
 
-                        graphicsLayer.remove(event.graphic); // Always remove the original graphic
-
                         if (!clipped) {
                             alert("O polígono desenhado está fora dos limites do Brasil.");
+                            graphicsLayer.remove(event.graphic);
                             return;
                         }
 
-                        const symbol = new SimpleFillSymbol({
-                           style: "solid",
-                           color: new Color([0, 207, 255, 0.3]),
-                           outline: new SimpleLineSymbol({
-                               style: "solid",
-                               color: new Color([0, 207, 255, 0.8]),
-                               width: 2,
-                           })
-                        });
-                        
                         const clippedPolygonForEsri = {
                             type: "polygon",
                             rings: clipped.geometry.coordinates,
@@ -144,12 +133,9 @@ export function EsriMap() {
                         };
 
                         const mercatorGeom = webMercatorUtils.geographicToWebMercator(clippedPolygonForEsri);
-
-                        const graphic = new Graphic({
-                            geometry: mercatorGeom,
-                            symbol: symbol
-                        });
-                        graphicsLayer.add(graphic);
+                        
+                        // Update the geometry of the existing graphic instead of creating a new one
+                        event.graphic.geometry = mercatorGeom;
                     }
                 });
 
