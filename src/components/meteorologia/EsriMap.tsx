@@ -170,18 +170,19 @@ export function EsriMap() {
                       if (key === 'radar' && data.radar.nowcast) {
                           return { id: 'radar.nowcast', path: data.radar.nowcast[0].path, name: 'Radar de Chuva' };
                       }
-                      if (key === 'satellite' && data.satellite.nowcast) {
-                          return { id: 'satellite.nowcast', path: data.satellite.nowcast[0].path, name: 'Satélite' };
+                      if (key === 'satellite' && data.satellite.infrared) { // Changed to infrared as it is more standard than nowcast for satellite
+                          return { id: 'satellite.infrared', path: data.satellite.infrared[0].path, name: 'Satélite (Infravermelho)' };
                       }
-                      if (typeof data[key] === 'object' && data[key] !== null) {
+                      // Flattening other models like gfs, ecmwf
+                      if (typeof data[key] === 'object' && data[key] !== null && key !== 'radar' && key !== 'satellite') {
                           return Object.keys(data[key]).map(subKey => ({
                               id: `${key}.${subKey}`,
                               path: data[key][subKey][0].path,
-                              name: `${key.toUpperCase()} - ${subKey.replace(/\.2m|\.10m/g, '')}`
+                              name: `${key.toUpperCase()} - ${subKey.replace(/\./g, ' ')}`
                           }));
                       }
                       return [];
-                  });
+                  }).filter(model => model.path); // Ensure only models with a path are included
                 setWeatherModels(models);
 
 
@@ -244,10 +245,10 @@ export function EsriMap() {
                 });
 
                 const basemapGallery = new BasemapGallery({ view });
-                view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
+                view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-left" }), "top-left");
 
                 const layerList = new LayerList({ view });
-                view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-right" }), "top-right");
+                view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
                 const sketch = new Sketch({ layer: graphicsLayer, view, creationMode: "update" });
                 sketchRef.current = sketch;
@@ -257,18 +258,18 @@ export function EsriMap() {
                     view: view,
                     content: drawContainer,
                     expandIconClass: "esri-icon-edit",
-                    group: "top-right",
+                    group: "top-left",
                 });
-                view.ui.add(sketchExpand, "top-right");
+                view.ui.add(sketchExpand, "top-left");
                 
                 const menuContainer = document.createElement("div");
                 const menuExpand = new Expand({
                     view: view,
                     content: menuContainer,
                     expandIconClass: "menu",
-                    group: "top-right",
+                    group: "top-left",
                 });
-                view.ui.add(menuExpand, "top-right");
+                view.ui.add(menuExpand, "top-left");
                 const menuRoot = createRoot(menuContainer);
                 menuRoot.render(<SideMenu />);
                 
