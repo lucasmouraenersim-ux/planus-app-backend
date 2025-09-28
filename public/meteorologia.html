@@ -695,6 +695,8 @@
 
   require([
     "esri/map",
+    "esri/dijit/Basemap",
+    "esri/dijit/BasemapLayer",
     "esri/geometry/Polygon",
     "esri/geometry/webMercatorUtils",
     "esri/geometry/Extent",
@@ -727,7 +729,7 @@
     "dojo/_base/declare",
     "dojo/domReady!"
   ], function(
-    Map, Polygon, webMercatorUtils, Extent, HomeButton, WebTiledLayer, WMSLayer,
+    Map, Basemap, BasemapLayer, Polygon, webMercatorUtils, Extent, HomeButton, WebTiledLayer, WMSLayer,
     TiledMapServiceLayer, edit, Print, Legend, BasemapGallery, OverviewMap, TimeSlider,
     Scalebar, ArcGISDynamicMapServiceLayer, Point, SpatialReference,
     SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
@@ -1050,10 +1052,65 @@
             title: "NOAA Damage Viewer"
           }]
         }, "legendDiv").startup();
+        
+        // Define basemaps customizados
+        const basemaps = [];
+        
+        const streets = new Basemap({
+          layers: [new BasemapLayer({
+            url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
+          })],
+          id: "streets",
+          title: "Ruas",
+          thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/54802e3c0205422e86b3a0a3845963a5/info/thumbnail/street_map.jpg"
+        });
+        basemaps.push(streets);
 
+        const satellite = new Basemap({
+          layers: [new BasemapLayer({
+            url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
+          })],
+          id: "satellite",
+          title: "Satélite",
+          thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/10df2279f9684e4a9f6a7f08febac2a9/info/thumbnail/imagery_labels.jpg"
+        });
+        basemaps.push(satellite);
+
+        const hybrid = new Basemap({
+          layers: [
+            new BasemapLayer({ url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" }),
+            new BasemapLayer({ url: "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer", isReference: true })
+          ],
+          id: "hybrid",
+          title: "Híbrido",
+          thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/413fd05bbd7342f5991d5ec96f4f8b18/info/thumbnail/imagery_hybrid.jpg"
+        });
+        basemaps.push(hybrid);
+
+        const topo = new Basemap({
+          layers: [new BasemapLayer({
+            url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer"
+          })],
+          id: "topo",
+          title: "Topográfico",
+          thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/6e03e8c26aad4b9c92a87c1063ddb0e3/info/thumbnail/topo_map_2.jpg"
+        });
+        basemaps.push(topo);
+
+        const gray = new Basemap({
+          layers: [new BasemapLayer({
+            url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer"
+          })],
+          id: "gray",
+          title: "Cinza Claro",
+          thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/8b3b470883a744aeb60e5fff0a3194e5/info/thumbnail/light_gray_canvas.jpg"
+        });
+        basemaps.push(gray);
+        
         // Inicializa galeria de mapas base
         new BasemapGallery({
-          showArcGISBasemaps: true,
+          showArcGISBasemaps: false,
+          basemaps: basemaps,
           map: window.map
         }, "basemapGalleryDiv").startup();
 
