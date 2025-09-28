@@ -69,16 +69,10 @@ export function EsriMap() {
                     visible: true
                 });
 
-                const municipiosLayer = new TileLayer({
-                    url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/BR_Municipios_2022_UF/FeatureServer",
-                    title: "Municípios",
-                    visible: false
-                });
-
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
-                    layers: [rainViewerLayer, municipiosLayer],
+                    layers: [rainViewerLayer],
                     opacity: 0.75
                 });
                 map.add(groupLayer);
@@ -106,7 +100,7 @@ export function EsriMap() {
                         if (item.layer.type !== "group") {
                             item.panel = {
                                 content: "legend",
-                                open: item.layer.title === "Radares CPTEC/REDEMET"
+                                open: item.layer.title === "Radar RainViewer"
                             };
                         }
                     }
