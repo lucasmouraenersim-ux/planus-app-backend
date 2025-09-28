@@ -92,6 +92,11 @@ export function EsriMap() {
 
     const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions["hail"][0]);
+    
+    // New state for weather models
+    const [weatherModels, setWeatherModels] = useState<any[]>([]);
+    const [selectedModel, setSelectedModel] = useState<string>('radar');
+    const [modelGroupLayer, setModelGroupLayer] = useState<__esri.GroupLayer | null>(null);
 
 
     useEffect(() => {
@@ -112,6 +117,7 @@ export function EsriMap() {
     
     const handleStartDrawing = useCallback(() => {
         if (sketchRef.current) {
+            graphicsLayerRef.current?.removeAll(); // Limpa os desenhos anteriores
             const hazard = selectedHazard;
             const prob = selectedProb;
             const level = levelOf(prob, hazard);
@@ -131,6 +137,14 @@ export function EsriMap() {
         }
     }, [selectedHazard, selectedProb]);
 
+    // Handle changing the visible weather model
+    useEffect(() => {
+        if (!modelGroupLayer) return;
+        modelGroupLayer.layers.forEach((layer: any) => {
+            layer.visible = (layer.id === selectedModel);
+        });
+    }, [selectedModel, modelGroupLayer]);
+
     useEffect(() => {
         let view: __esri.MapView;
         
@@ -145,18 +159,36 @@ export function EsriMap() {
                     WebTileLayer, webMercatorUtils, Polygon
                 ] = await loadScript();
 
+                // Fetch weather models data
                 const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
                 const data = await response.json();
                 const host = data.host;
-                const latestFrame = data.radar.nowcast.find((frame: any) => frame.path === '/v2/radar/nowcast/0.png');
-                const path = latestFrame ? latestFrame.path : data.radar.nowcast[0].path;
                 
-                const rainViewerLayer = new WebTileLayer({
-                    urlTemplate: `${host}${path}/256/{level}/{col}/{row}/5/0_0.png`,
-                    title: "Radar RainViewer",
-                    visible: true,
-                    opacity: 0.7,
+                const models = Object.keys(data).filter(key => key !== 'host').flatMap(key => {
+                    if (Array.isArray(data[key]?.nowcast)) {
+                        return { type: key, path: data[key].nowcast[0].path, name: `Radar de Chuva` };
+                    } else if (data[key]?.satellite && Array.isArray(data[key].satellite.nowcast)) {
+                        return { type: key, path: data[key].satellite.nowcast[0].path, name: 'Satélite' };
+                    }
+                    return [];
                 });
+                setWeatherModels(models);
+
+                // Create a GroupLayer for all weather models
+                const modelLayers = models.map(model => new WebTileLayer({
+                    id: model.type, // Use type as a unique ID
+                    urlTemplate: `${host}${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
+                    title: model.name,
+                    visible: model.type === selectedModel, // Only the default is visible
+                    opacity: 0.7,
+                }));
+                
+                const newModelGroupLayer = new GroupLayer({
+                    title: "Modelos Meteorológicos",
+                    visible: true,
+                    layers: modelLayers,
+                });
+                setModelGroupLayer(newModelGroupLayer);
                 
                 const municipiosLayer = new TileLayer({
                     url: "https://services.arcgisonline.com/arcgis/rest/services/Reference/World_Boundaries_and_Places/MapServer",
@@ -167,7 +199,7 @@ export function EsriMap() {
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
-                    layers: [rainViewerLayer, municipiosLayer],
+                    layers: [newModelGroupLayer, municipiosLayer],
                     opacity: 0.8
                 });
 
@@ -200,7 +232,6 @@ export function EsriMap() {
                     });
                 });
 
-                // --- Menu Button ---
                 const menuContainer = document.createElement("div");
                 const menuExpand = new Expand({
                     view: view,
@@ -212,7 +243,6 @@ export function EsriMap() {
                 const menuRoot = createRoot(menuContainer);
                 menuRoot.render(<SideMenu />);
                 
-                // --- Existing Widgets ---
                 const basemapGallery = new BasemapGallery({ view });
                 view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
 
@@ -234,8 +264,18 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
-                        <h3 className="font-bold mb-2">Desenhar Polígono de Risco</h3>
-                        <div className="space-y-2">
+                        <div className="space-y-4">
+                             <div>
+                                <Label>Modelo Meteorológico</Label>
+                                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {models.map(model => <SelectItem key={model.type} value={model.type}>{model.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <hr className="border-gray-600"/>
+                            <h3 className="font-bold">Desenhar Polígono de Risco</h3>
                              <div>
                                 <Label>Tipo de Risco</Label>
                                 <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
@@ -368,11 +408,14 @@ export function EsriMap() {
                 view.destroy();
             }
         };
-    }, [brazilBoundary, handleStartDrawing, selectedHazard, selectedProb]);
+    }, [brazilBoundary, handleStartDrawing, selectedHazard, selectedProb, selectedModel]);
     
     // Effect to update probability options when hazard changes
     useEffect(() => {
         setSelectedProb(probabilityOptions[selectedHazard][0]);
+        if(graphicsLayerRef.current) {
+            graphicsLayerRef.current.removeAll(); // Clear drawings on hazard change
+        }
     }, [selectedHazard]);
 
 
