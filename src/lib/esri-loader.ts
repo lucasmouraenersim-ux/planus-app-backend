@@ -1,5 +1,3 @@
-"use client";
-
 // src/lib/esri-loader.ts
 
 // Flag to ensure CSS is loaded only once
@@ -35,63 +33,46 @@ type EsriModules = [
     typeof __esri.GraphicsLayer,
 ];
 
+// Helper to require modules
+function requireModules(resolve: (modules: EsriModules) => void) {
+    // @ts-ignore
+    window.require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/Basemap",
+        "esri/layers/TileLayer",
+        "esri/layers/MapImageLayer",
+        "esri/layers/GroupLayer",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/Expand",
+        "esri/widgets/LayerList",
+        "esri/widgets/Sketch",
+        "esri/layers/GraphicsLayer"
+    ], (...modules: EsriModules) => {
+        resolve(modules);
+    });
+}
+
 // Function to load the Esri JavaScript modules
 export function loadScript(): Promise<EsriModules> {
     const esriVersion = "4.29";
     const scriptUrl = `https://js.arcgis.com/${esriVersion}/`;
 
     return new Promise((resolve, reject) => {
-        // Check if the script is already loaded
-        const existingScript = document.querySelector(`script[src^="${scriptUrl}"]`);
-        if (existingScript) {
-            // @ts-ignore
-            window.require([
-                "esri/Map",
-                "esri/views/MapView",
-                "esri/Basemap",
-                "esri/layers/TileLayer",
-                "esri/layers/MapImageLayer",
-                "esri/layers/GroupLayer",
-                "esri/widgets/BasemapGallery",
-                "esri/widgets/Expand",
-                "esri/widgets/LayerList",
-                "esri/widgets/Sketch",
-                "esri/layers/GraphicsLayer"
-            ], (...modules: EsriModules) => {
-                resolve(modules);
-            });
+        // Check if the script is already loaded and the require function is available
+        // @ts-ignore
+        if (window.require) {
+            requireModules(resolve);
             return;
         }
 
-        // If not loaded, create and append the script tag
         const script = document.createElement("script");
         script.src = scriptUrl;
         script.async = true;
         document.head.appendChild(script);
 
         script.onload = () => {
-             // @ts-ignore
-            window.require.config({
-                paths: {
-                    "esri": `${scriptUrl}esri`
-                }
-            });
-            // @ts-ignore
-            window.require([
-                "esri/Map",
-                "esri/views/MapView",
-                "esri/Basemap",
-                "esri/layers/TileLayer",
-                "esri/layers/MapImageLayer",
-                "esri/layers/GroupLayer",
-                "esri/widgets/BasemapGallery",
-                "esri/widgets/Expand",
-                "esri/widgets/LayerList",
-                "esri/widgets/Sketch",
-                "esri/layers/GraphicsLayer"
-            ], (...modules: EsriModules) => {
-                resolve(modules);
-            });
+            requireModules(resolve);
         };
 
         script.onerror = (error) => {
