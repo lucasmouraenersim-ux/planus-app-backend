@@ -75,23 +75,10 @@ export function EsriMap() {
                     visible: false
                 });
 
-                const cptecLayer = new MapImageLayer({
-                    url: "https://redemet.decea.mil.br/geoserver/wms",
-                    title: "Radares CPTEC/REDEMET",
-                    sublayers: [
-                        {
-                            name: "radar_rmaxx",
-                            title: "Radar MaxCAP",
-                            visible: true
-                        }
-                    ],
-                    visible: false
-                });
-
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
-                    layers: [rainViewerLayer, municipiosLayer, cptecLayer],
+                    layers: [rainViewerLayer, municipiosLayer],
                     opacity: 0.75
                 });
                 map.add(groupLayer);
