@@ -13,7 +13,7 @@
 
   <style>
     html, body {
-      width:100%; height:100%; margin:0; padding:0; overflow:hidden;
+      width:100%; height:100%; margin:0; padding:0; overflow: hidden;
     }
     #mapDiv {
       width:100%; height:100%;
@@ -21,8 +21,6 @@
 
     .section { margin-bottom:20px; }
     .section h3 { margin:0 0 8px 0; font-family:Segoe UI, sans-serif; color:#1f4059; }
-    #layersDiv input { margin-right:4px; }
-    .esriPrint { margin-top:10px; }
 
     #topbar {
       position: fixed; top: 0; left: 0; right: 0;
@@ -39,8 +37,7 @@
     #topbar .right { display: flex; align-items: center; gap: 8px; }
     .top-btn {
       background: none; border: none; color: white;
-      font-size: 20px; cursor: pointer;
-      padding: 4px;
+      font-size: 20px; cursor: pointer; padding: 4px;
     }
     .top-btn:hover {
       background-color: rgba(255, 255, 255, 0.1);
@@ -62,7 +59,7 @@
       position: fixed;
       top: 150px;
       left: 20px;
-      z-index: 1000;
+      z-index: 999;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -92,7 +89,7 @@
       border:1px solid #ccc;
       border-radius:8px;
       box-shadow:0 4px 10px rgba(0,0,0,0.2);
-      z-index:99999;
+      z-index:10001;
       font-family:sans-serif;
     }
     #forecastModal h3 { margin-top:0; }
@@ -147,63 +144,43 @@
       background: #ccc;
       margin-right: 10px;
     }
-
+    
     #riskControls {
       position: fixed;
       top: 70px;
       right: 20px;
-      z-index: 1000;
+      z-index: 999;
       background: rgba(0,0,0,0.8);
       color: white;
       padding: 8px 12px;
       border-radius: 6px;
       font-size: 14px;
-      font-family: sans-serif;
-    }
-    .risk-options {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    #overlayHeader {
-        cursor: pointer;
-        padding-top: 8px;
-        margin-top: 8px;
-        border-top: 1px solid #555;
-    }
-    #overlayHeader b::after {
-        content: ' ▼';
-        font-size: 10px;
-        display: inline-block;
-        margin-left: 5px;
-    }
-    #overlayHeader.collapsed b::after {
-        content: ' ▶';
-    }
-    #overlayContent {
-        padding-top: 8px;
-        max-height: 300px;
-        overflow: hidden;
-        transition: max-height 0.3s ease-out;
-    }
-     #overlayContent.collapsed {
-        max-height: 0;
-        padding-top: 0;
-        overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    #overlayControls input[type="range"] {
-      width: 100px;
-      margin-top: 5px;
+    #riskControls .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #overlayControls h3 {
+      cursor: pointer;
+      margin: 10px 0 5px;
+      padding: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+    }
+    #overlayControls-content {
+      padding-left: 10px;
+      border-left: 2px solid #555;
+      display: none; /* Initially hidden */
     }
 
     .radar-controls {
-      background: rgba(255,255,255,0.9);
-      padding: 10px;
-      border-radius: 5px;
-      margin-top: 10px;
-      color: #333;
+      padding-top: 5px;
     }
     .radar-controls h4 {
       margin: 0 0 10px 0;
@@ -217,27 +194,14 @@
       margin-bottom: 10px;
     }
     .radar-group label {
-      display: inline-block;
-      margin-right: 10px;
+      display: block; /* Changed to block for better layout */
+      margin-bottom: 5px;
       font-size: 12px;
     }
 
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
-    }
-    .loading-spinner {
-        border: 4px solid #f3f3f3; 
-        border-top: 4px solid #00cfff; 
-        border-radius: 50%;
-        width: 60px; height: 60px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 20px;
-    }
-    .loading-text {
-        font-family: Arial, sans-serif;
-        font-size: 24px;
-        color: white;
     }
 
     /* Estilo para tela cheia */
@@ -253,11 +217,13 @@
       height: 100vh !important;
       background: white;
     }
+
     :-moz-full-screen {
       width: 100vw !important;
       height: 100vh !important;
       background: white;
     }
+
     :-ms-fullscreen {
       width: 100vw !important;
       height: 100vh !important;
@@ -271,134 +237,143 @@
 
 <body class="claro">
   <!-- Loading Overlay -->
-  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 51, 102, 0.95); display: flex; justify-content: center; align-items: center; z-index: 99999;">
-      <div style="text-align: center;">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">Carregando...</div>
+  <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #4A90E2; display: flex; justify-content: center; align-items: center; z-index: 99999;">
+      <div style="text-align: center; display: flex; align-items: center; justify-content: center; gap: 4px;">
+        <div class="w-2 h-4 bg-white animate-pulse" style="width: 8px; height: 16px; background-color: white; animation: pulse 1.2s infinite ease-in-out;"></div>
+        <div class="w-2 h-6 bg-white animate-pulse" style="width: 8px; height: 24px; background-color: white; animation: pulse 1.2s infinite ease-in-out; animation-delay: 0.1s;"></div>
+        <div class="w-2 h-8 bg-white animate-pulse" style="width: 8px; height: 32px; background-color: white; animation: pulse 1.2s infinite ease-in-out; animation-delay: 0.2s;"></div>
+        <div class="w-2 h-6 bg-white animate-pulse" style="width: 8px; height: 24px; background-color: white; animation: pulse 1.2s infinite ease-in-out; animation-delay: 0.3s;"></div>
+        <div class="w-2 h-4 bg-white animate-pulse" style="width: 8px; height: 16px; background-color: white; animation: pulse 1.2s infinite ease-in-out; animation-delay: 0.4s;"></div>
       </div>
   </div>
-
-  <script>
-    function forceFullscreen() {
-        const elem = document.documentElement;
-        try {
-            if (elem.requestFullscreen) {
-                elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) {
-                elem.msRequestFullscreen();
-            } else if (elem.mozRequestFullScreen) {
-                elem.mozRequestFullScreen();
-            }
-        } catch (err) {
-            console.warn("⚠️ Não foi possível ativar tela cheia:", err);
-        }
+  <style>
+    @keyframes pulse {
+      0%, 80%, 100% {
+        transform: scaleY(0.4);
+        opacity: 0.5;
+      }
+      40% {
+        transform: scaleY(1.0);
+        opacity: 1;
+      }
     }
+  </style>
 
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            var loadingOverlay = document.getElementById('loadingOverlay');
-            loadingOverlay.style.opacity = '0';
-            loadingOverlay.style.transition = 'opacity 1s';
-            setTimeout(function() {
-                loadingOverlay.style.display = 'none';
-                // forceFullscreen(); // A tela cheia automática pode ser bloqueada, melhor ser iniciada pelo usuário.
-            }, 1000);
-        }, 3000); // Reduzido para 3 segundos
-    });
-  </script>
-
+  <!-- Input de arquivo (movido para o início do body) -->
   <input type="file" id="geoImageInput" accept=".jpg,.jpeg,.png,.tif,.tiff" style="display:none">
 
+  <!-- Topbar NOAA -->
   <div id="topbar">
     <div class="left">
       <h1>Tempo Severo no Hemisfério Sul</h1>
-      <input type="text" id="searchInput" placeholder="Buscar endereço ou local..." />
+      <input type="text" id="searchInput" placeholder="Find address or place..." />
     </div>
 
+    <!-- Controles do tipo de risco e probabilidade -->
+    <div id="riskControls">
+      <div class="control-row">
+        <label>
+          Tipo:
+          <select id="hazardSel">
+            <option value="hail">Granizo</option>
+            <option value="wind">Vento</option>
+            <option value="tornado">Tornado</option>
+          </select>
+        </label>
+
+        <label>
+          Prob(%):
+          <select id="probSel"></select>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="chkForecastView">
+          <span>Ver previsão feita</span>
+        </label>
+      </div>
+
+      <div id="overlayControls">
+          <h3 onclick="toggleOverlayContent()">▾ Sobreposições</h3>
+          <div id="overlayControls-content">
+            <label><input type="checkbox" id="toggleRainviewer"> Radar (RainViewer)</label><br>
+            <label><input type="checkbox" id="toggleMunicipios"> Municípios</label>
+            <div id="cptecControlsContainer"></div>
+          </div>
+      </div>
+    </div>
+
+
     <div class="right">
-      <button class="top-btn" id="btn-search" title="Filtro">🔍</button>
       <button class="top-btn" id="btn-add-data" title="Adicionar Dados">➕</button>
-      <button class="top-btn" id="btn-legend" title="Legenda">📋</button>
-      <button class="top-btn" onclick="resetMap()" title="Resetar Visualização">🔄</button>
-      <button class="top-btn" onclick="triggerImageUpload()" title="Carregar Imagem de Satélite">🖼️</button>
+      <button class="top-btn" id="btn-fullscreen" title="Tela Cheia">⛶</button>
+      <button class="top-btn" onclick="resetMap()" title="Reset View">🔄</button>
+      <button class="top-btn" onclick="triggerImageUpload()" title="Carregar Imagem">🖼️</button>
       <button class="date-btn" id="btnSubmitForecast">Enviar previsão</button>
       <div class="date-controls">
         <label>De: <input type="date" id="startDate" /></label>
         <label>Até: <input type="date" id="endDate" /></label>
         <button class="date-btn" id="submitDate">Buscar</button>
-        <button class="date-btn" id="resetDate">Resetar</button>
+        <button class="date-btn">Resetar</button>
       </div>
     </div>
   </div>
 
-  <div id="riskControls">
-      <div class="risk-options">
-        <label>Tipo:
-            <select id="hazardSel">
-            <option value="hail">Granizo</option>
-            <option value="wind">Vento</option>
-            <option value="tornado">Tornado</option>
-            </select>
-        </label>
-        <label>Prob(%):
-            <select id="probSel"></select>
-        </label>
-        <label style="display: flex; align-items: center; gap: 4px;">
-            <input type="checkbox" id="chkForecastView">
-            <span>Ver previsão feita</span>
-        </label>
-      </div>
-      <div id="overlayControls">
-          <div id="overlayHeader"><b>Sobreposições</b></div>
-          <div id="overlayContent" class="collapsed">
-            <label><input type="checkbox" id="toggleRainviewer"> Radar (RainViewer)</label><br>
-            <label><input type="checkbox" id="toggleMunicipios"> Municípios</label><br>
-            <div id="imageControls" style="display: none;">
-                <label><input type="checkbox" id="toggleOverlay"> Mostrar Imagem</label><br>
-                <div id="opacityControl" style="margin-left: 20px; display: none;">
-                    Opacidade: <span id="opacityValue">100%</span><br>
-                    <input type="range" id="opacitySlider" min="0" max="100" value="100" style="width: 100%;">
-                </div>
-            </div>
-            <div id="cptecControlsContainer"></div>
-          </div>
-      </div>
-  </div>
-
-  <div id="legendPrevots" style="display: none; position: fixed; bottom: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 10px 14px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif; z-index: 9999;">
-      <b>Níveis PREVOTS</b>
-      <div>
-        <div><span style="display:inline-block;width:14px;height:14px;background:#00FF00;margin-right:6px;border-radius:2px;"></span>PREV 1</div>
-        <div><span style="display:inline-block;width:14px;height:14px;background:#FFFF00;margin-right:6px;border-radius:2px;"></span>PREV 2</div>
-        <div><span style="display:inline-block;width:14px;height:14px;background:#FFA500;margin-right:6px;border-radius:2px;"></span>PREV 3</div>
-        <div><span style="display:inline-block;width:14px;height:14px;background:#FF0000;margin-right:6px;border-radius:2px;"></span>PREV 4</div>
-      </div>
-  </div>
-
+  <!-- Botões flutuantes -->
   <div id="customTools">
-    <button onclick="toggleFullscreen()" title="Tela Cheia">⛶</button>
     <button onclick="activatePolygonDraw()" title="Desenhar Polígono">⬢</button>
   </div>
 
   <div id="mapDiv"></div>
-  
-  <div id="legendRisk" style="position: fixed; bottom: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 10px 14px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif; z-index: 9999;">
-    <b>Legenda por risco</b>
-    <div id="legendItems"></div>
+
+  <!-- Painel lateral Adicionar Dados -->
+  <div id="addDataPanel" class="panel">
+    <div class="panel-header">
+      <strong>Adicionar Dados</strong>
+      <button class="panel-close" onclick="closeAddDataPanel()">✖</button>
+    </div>
+    <div class="panel-content">
+      <div class="search-bar">
+        <input type="text" id="searchArcGIS" placeholder="Buscar camadas públicas..." />
+        <button onclick="searchArcGIS()">🔍</button>
+      </div>
+      <div id="searchResults"></div>
+    </div>
   </div>
 
-  <div id="hudOverlay" style="position: fixed; bottom: 8px; left: 20px; background: rgba(0,0,0,0.7); color: white; font-family: monospace; font-size: 12px; padding: 4px 8px; border-radius: 4px; z-index: 1000; pointer-events: none;">
+  <div id="hudOverlay" style="
+    position: fixed;
+    bottom: 8px;
+    left: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    z-index: 999;
+    pointer-events: none;
+  ">
     📍 --,-- °
   </div>
 
-  <div id="statsPanel" style="position: fixed; bottom: 180px; right: 20px; background: rgba(255,255,255,0.95); padding: 10px 14px; font-size: 13px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif; z-index: 1000;">
+  <!-- Painel de Estatísticas -->
+  <div id="statsPanel" style="
+    position: fixed;
+    bottom: 180px;
+    right: 20px;
+    background: rgba(255,255,255,0.95);
+    padding: 10px 14px;
+    font-size: 13px;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    font-family: sans-serif;
+    z-index: 999;
+  ">
     <div id="statsContent">Carregando...</div>
   </div>
 
   <!-- Modal para salvar previsão -->
-  <div id="forecastModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:300px; background:#fff; padding:20px; border:1px solid #ccc; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.2); z-index:99999; font-family:sans-serif;">
+  <div id="forecastModal">
     <h3>Salvar Previsão</h3>
     <label>Dia:
       <select id="dayType">
@@ -412,14 +387,40 @@
   </div>
 
   <!-- Modal de escolha -->
-  <div id="choiceDlg" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #262626; color: white; border: 1px solid #999; border-radius: 6px; padding: 16px 20px; font-family: sans-serif; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 10000;">
+  <div id="choiceDlg" style="
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #262626;
+    color: white;
+    border: 1px solid #999;
+    border-radius: 6px;
+    padding: 16px 20px;
+    font-family: sans-serif;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    z-index: 10000;
+  ">
     <div style="margin-bottom: 10px">O que deseja visualizar?</div>
     <button onclick="setForecastView('all')">Todos os riscos</button>
     <button onclick="setForecastView('overall')">Mapa geral</button>
   </div>
 
   <!-- Modal de Coordenadas -->
-  <div id="coordModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 10000; width: 300px;">
+  <div id="coordModal" style="
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 10000;
+    width: 300px;
+  ">
     <h3>Coordenadas da Imagem</h3>
     <div style="margin-bottom: 15px;">
       <button id="btnAutoLoad" class="auto-load" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 10px;">
@@ -452,86 +453,268 @@
 
   let currentUser = null;
 
+  // 🔒 Escuta login enviado pelo Wix
   window.addEventListener("message", (e) => {
     const msg = e.data;
+
     try {
       const parsed = typeof msg === "string" ? JSON.parse(msg) : msg;
+
       if (parsed?.loggedIn) {
-        currentUser = { email: parsed.email, nick: parsed.nick || parsed.email?.split("@")[0], memberId: parsed.memberId || null };
+        currentUser = {
+          email: parsed.email,
+          nick: parsed.nick || parsed.email?.split("@")[0],
+          memberId: parsed.memberId || null
+        };
         console.log("✅ Usuário logado:", currentUser);
       }
     } catch (err) {
-      console.warn("🔁 Mensagem não era JSON parseável:", err);
+      // console.warn("🔁 Mensagem não era JSON parseável:", err);
     }
   });
 
+  // 🕒 Se não houver login após 3s, assume anônimo
   setTimeout(() => {
     if (!currentUser) {
-      currentUser = { email: "anon@local", nick: "visitante", memberId: null };
+      currentUser = {
+        email: "anon@local",
+        nick: "visitante",
+        memberId: null
+      };
       console.warn("⚠️ Modo visitante");
     }
   }, 3000);
 
   function triggerImageUpload() {
+    console.log("🖼️ Botão de upload clicado");
     const input = document.getElementById("geoImageInput");
-    if (!input) return;
-    if (!input.hasEventListener) {
-      input.addEventListener("change", handleFileSelect);
-      input.hasEventListener = true;
+    
+    if (!input) {
+      console.error("❌ Input de arquivo não encontrado!");
+      return;
     }
+    
     input.click();
+    console.log("✅ Input de arquivo acionado");
   }
   
   function handleFileSelect(e) {
+    console.log("📁 Handler de arquivo chamado");
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      console.warn("⚠️ Nenhum arquivo selecionado");
+      return;
+    }
+
+    console.log("📄 Arquivo selecionado:", file.name);
+
+    // Verifica o tipo do arquivo
     const validTypes = ['image/jpeg', 'image/png', 'image/tiff'];
     if (!validTypes.includes(file.type)) {
       alert("Por favor, selecione uma imagem nos formatos: JPG, PNG ou TIFF");
       return;
     }
+
     const reader = new FileReader();
+    
     reader.onload = function(evt) {
+      console.log("📷 Imagem carregada no FileReader");
       window.currentImageURL = evt.target.result;
-      document.getElementById("coordModal").style.display = "block";
-      initModalButtons();
+      
+      const modal = document.getElementById("coordModal");
+      console.log("🔍 Procurando modal:", !!modal);
+      
+      if (!modal) {
+        console.error("❌ Modal não encontrado!");
+        return;
+      }
+      
+      modal.style.display = "block";
+      console.log("✅ Modal exibido");
     };
+
+    reader.onerror = function(evt) {
+      console.error("❌ Erro ao ler arquivo:", evt.target.error);
+      alert("Erro ao ler o arquivo. Por favor, tente novamente.");
+    };
+
+    console.log("📖 Iniciando leitura do arquivo...");
     reader.readAsDataURL(file);
   }
+  
+  function toggleOverlayContent() {
+      const content = document.getElementById('overlayControls-content');
+      const header = document.querySelector('#overlayControls h3');
+      if (content.style.display === 'none' || content.style.display === '') {
+          content.style.display = 'block';
+          header.innerHTML = '▾ Sobreposições';
+      } else {
+          content.style.display = 'none';
+          header.innerHTML = '▸ Sobreposições';
+      }
+  }
+
 
   require([
-    "esri/map", "esri/geometry/Polygon", "esri/geometry/webMercatorUtils", "esri/geometry/Extent",
-    "esri/dijit/HomeButton", "esri/layers/WebTiledLayer", "esri/layers/WMSLayer", "esri/layers/TiledMapServiceLayer",
-    "esri/toolbars/edit", "esri/dijit/Print", "esri/dijit/Legend", "esri/dijit/BasemapGallery",
-    "esri/dijit/OverviewMap", "esri/dijit/TimeSlider", "esri/dijit/Scalebar", "esri/layers/ArcGISDynamicMapServiceLayer",
-    "esri/geometry/Point", "esri/SpatialReference", "esri/symbols/SimpleMarkerSymbol", "esri/symbols/SimpleLineSymbol",
-    "esri/symbols/SimpleFillSymbol", "esri/Color", "esri/graphic", "esri/toolbars/draw",
-    "esri/layers/MapImage", "esri/layers/MapImageLayer", "esri/config", "dojo/dom", "dojo/on",
-    "dojo/dom-construct", "dojo/_base/declare", "dojo/domReady!"
+    "esri/map",
+    "esri/geometry/Polygon",
+    "esri/geometry/webMercatorUtils",
+    "esri/geometry/Extent",
+    "esri/dijit/HomeButton",
+    "esri/layers/WebTiledLayer",
+    "esri/layers/WMSLayer",
+    "esri/layers/TiledMapServiceLayer",
+    "esri/toolbars/edit",
+    "esri/dijit/Print",
+    "esri/dijit/Legend",
+    "esri/dijit/BasemapGallery",
+    "esri/dijit/OverviewMap",
+    "esri/dijit/TimeSlider",
+    "esri/dijit/Scalebar",
+    "esri/layers/ArcGISDynamicMapServiceLayer",
+    "esri/layers/FeatureLayer",
+    "esri/geometry/Point",
+    "esri/SpatialReference",
+    "esri/symbols/SimpleMarkerSymbol",
+    "esri/symbols/SimpleLineSymbol",
+    "esri/symbols/SimpleFillSymbol",
+    "esri/Color",
+    "esri/graphic",
+    "esri/toolbars/draw",
+    "esri/layers/MapImage",
+    "esri/layers/MapImageLayer",
+    "esri/config",
+    "dojo/dom",
+    "dojo/on",
+    "dojo/dom-construct",
+    "dojo/_base/declare",
+    "dojo/parser",
+    "dojo/domReady!"
   ], function(
     Map, Polygon, webMercatorUtils, Extent, HomeButton, WebTiledLayer, WMSLayer,
     TiledMapServiceLayer, edit, Print, Legend, BasemapGallery, OverviewMap, TimeSlider,
-    Scalebar, ArcGISDynamicMapServiceLayer, Point, SpatialReference,
+    Scalebar, ArcGISDynamicMapServiceLayer, FeatureLayer, Point, SpatialReference,
     SimpleMarkerSymbol, SimpleLineSymbol, SimpleFillSymbol,
     Color, Graphic, Draw, MapImage, MapImageLayer, esriConfig,
-    dom, on, domConstruct, declare
+    dom, on, domConstruct, declare, parser
   ) {
-    esriConfig.defaults.io.corsEnabledServers.push("radar.cptec.inpe.br", "http://radar.cptec.inpe.br", "https://radar.cptec.inpe.br");
+    parser.parse();
+    // Configuração CORS e segurança
+    esriConfig.defaults.io.corsEnabledServers.push(
+      "radar.cptec.inpe.br",
+      "http://radar.cptec.inpe.br",
+      "https://radar.cptec.inpe.br"
+    );
+    
+    // Desativa uso de proxy e CORS
     esriConfig.defaults.io.alwaysUseProxy = false;
     esriConfig.defaults.io.corsDetection = false;
-    esriConfig.defaults.io.useCors = false;
-    esriConfig.defaults.io.postMixInProperties = function() { this.protocol = window.location.protocol; };
-    esriConfig.defaults.io.timeout = 60000;
+    
+    // Configura timeout mais longo para requisições
+    esriConfig.defaults.io.timeout = 60000; // 60 segundos
+    
+    // Armazena classes globalmente
+    window.WMSLayer = WMSLayer;
 
-    window.map = new Map("mapDiv", { basemap: "topo", center: [-49.5, -24.75], zoom: 6, sliderStyle: "small" });
+    // Define uma classe customizada para o radar CPTEC
+    var CPTECRadarLayer = declare([TiledMapServiceLayer], {
+      constructor: function(url, options) {
+        this.inherited(arguments);
+        this._url = url;
+        this._options = options;
+        this.id = options.id;
+        const sr = new SpatialReference({ wkid: 4326 });
+        this.spatialReference = sr;
+        this.tileInfo = {
+          "rows": 256, "cols": 256, "dpi": 96, "format": "PNG32", "compressionQuality": 0,
+          "origin": { "x": -180, "y": 90 },
+          "spatialReference": sr,
+          "lods": [
+            { "level": 3, "resolution": 0.17578125, "scale": 73874398.264687508 },
+            { "level": 4, "resolution": 0.087890625, "scale": 36937199.132343754 },
+            { "level": 5, "resolution": 0.0439453125, "scale": 18468599.566171877 },
+            { "level": 6, "resolution": 0.02197265625, "scale": 9234299.7830859385 },
+            { "level": 7, "resolution": 0.010986328125, "scale": 4617149.8915429693 }
+          ]
+        };
+        const extent = new Extent({ "xmin": -75.2337, "ymin": -35.7213, "xmax": -27.5977, "ymax": 7.2426, "spatialReference": sr });
+        this.initialExtent = extent;
+        this.fullExtent = extent;
+        this.opacity = options.opacity || 0.8;
+        this.loaded = true;
+        this.onLoad(this);
+      },
+      getTileUrl: function(level, row, col) {
+        try {
+          const bbox = this._getTileBBox(level, row, col);
+          const width = this.tileInfo.cols;
+          const height = this.tileInfo.rows;
+          const url = `${this._url}?service=WMS&version=1.1.1&request=GetMap&layers=${this._options.layerId}&styles=&bbox=${bbox}&width=${width}&height=${height}&srs=EPSG:4326&format=image/png&transparent=true&time=${new Date().getTime()}`;
+          return url;
+        } catch (err) {
+          console.error("❌ Erro ao gerar URL do tile:", err);
+          return "";
+        }
+      },
+      _getTileBBox: function(level, row, col) {
+        try {
+          const resolution = this.tileInfo.lods[level - 3].resolution;
+          const tileWidth = this.tileInfo.cols * resolution;
+          const tileHeight = this.tileInfo.rows * resolution;
+          const minx = Math.max(-180, col * tileWidth - 180);
+          const maxy = Math.min(90, 90 - row * tileHeight);
+          const maxx = Math.min(180, minx + tileWidth);
+          const miny = Math.max(-90, maxy - tileHeight);
+          return [minx.toFixed(6), miny.toFixed(6), maxx.toFixed(6), maxy.toFixed(6)].join(",");
+        } catch (err) {
+          console.error("❌ Erro ao calcular BBOX:", err);
+          return "-75.233700,-35.721300,-27.597700,7.242600";
+        }
+      }
+    });
+
+    window.addCPTECRadar = function(radarId, type) {
+      const layerId = window.CPTEC_LAYERS[type][radarId];
+      if (window.cptecLayers?.[layerId]) {
+        window.map.removeLayer(window.cptecLayers[layerId]);
+      }
+      try {
+        const layer = new CPTECRadarLayer("https://radar.cptec.inpe.br/geoserver/wms", { id: layerId, layerId: layerId, opacity: 0.8 });
+        if (!window.cptecLayers) window.cptecLayers = {};
+        window.cptecLayers[layerId] = layer;
+        window.map.addLayer(layer);
+      } catch (err) {
+        console.error(`❌ Erro ao adicionar camada ${layerId}:`, err);
+      }
+    };
+
+    window.WMSLayer = WMSLayer;
+    window.Extent = Extent;
+
+    window.map = new Map("mapDiv", {
+      basemap: "streets-night-vector", // Default to a dark theme
+      center: [-49.5, -24.75],
+      zoom: 5,
+      sliderStyle: "small"
+    });
+
     window.imageOverlay = null;
     window.currentImageURL = null;
-    const editToolbar = new edit(window.map);
-    const relatosLayer = new esri.layers.GraphicsLayer({ id: "relatosLayer" });
-    if (!window.map.getLayer("relatosLayer")) { window.map.addLayer(relatosLayer); }
-    window.relatosLayer = relatosLayer;
-    let radarLayer = null;
 
+    const editToolbar = new edit(window.map);
+
+    const relatosLayer = new FeatureLayer("https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/MapServer/0", {
+        mode: FeatureLayer.MODE_ONDEMAND,
+        outFields: ["*"],
+        id: "relatosLayer"
+    });
+
+    if (!window.map.getLayer("relatosLayer")) {
+      window.map.addLayer(relatosLayer);
+    }
+    window.relatosLayer = relatosLayer;
+
+    let radarLayer = null;
     fetch('https://api.rainviewer.com/public/weather-maps.json')
       .then(res => res.json())
       .then(data => {
@@ -539,26 +722,70 @@
         const frames = [...(data.radar.past || []), ...(data.radar.nowcast || [])];
         if (!frames.length) return;
         const latest = frames[frames.length - 1];
-        const urlTemplate = `${host}${latest.path}/256/{level}/{col}/{row}/5/0_0.png`;
+        const path = latest.path;
+        const urlTemplate = `${host}${path}/512/{level}/{col}/{row}/5/1_1.png`;
         radarLayer = new WebTiledLayer(urlTemplate, { id: "rainviewer", visible: false, copyright: "RainViewer" });
         window.map.addLayer(radarLayer);
       }).catch(err => console.error('❌ Erro ao carregar RainViewer:', err));
-    
-    window.map.on("mouse-move", function(evt) {
-      if (evt && evt.mapPoint) {
-        document.getElementById("hudOverlay").innerHTML = `📍 ${evt.mapPoint.x.toFixed(5)}, ${evt.mapPoint.y.toFixed(5)}°`;
-      }
-    });
+      
+    var scalebar = new Scalebar({ map: window.map, scalebarUnit: "dual" });
 
-    const scalebarDiv = document.createElement("div");
-    scalebarDiv.style.cssText = `position: fixed; bottom: 80px; left: 20px; background: rgba(255,255,255,0.9); padding: 4px 10px; font-family: sans-serif; font-size: 11px; border-radius: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.2); z-index: 1000;`;
-    document.body.appendChild(scalebarDiv);
-    new Scalebar({ map: window.map, scalebarUnit: "dual", attachTo: "bottom-left" }, scalebarDiv);
 
     window.map.on("load", function() {
-        if (typeof window.addCPTECControls === 'function') { window.addCPTECControls(); }
-        new HomeButton({ map: window.map }, domConstruct.create("div", null, dom.byId("customTools"), "first")).startup();
+        var basemapGallery = new BasemapGallery({
+            showArcGISBasemaps: false,
+            map: window.map,
+            basemaps: [
+                {
+                    layers: [new TiledMapServiceLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer")],
+                    id: "imagery",
+                    title: "Satélite",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/10df2279f9684e4a9f6a7f08febac2a9/info/thumbnail/world_imagery.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer")],
+                    id: "streets",
+                    title: "Ruas",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/d8855ee4d3d74413babfb0f41203b168/info/thumbnail/world_street_map.jpg"
+                },
+                 {
+                    layers: [
+                        new TiledMapServiceLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"),
+                        new TiledMapServiceLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer")
+                    ],
+                    id: "hybrid",
+                    title: "Híbrido",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/413fd0591dc34ae288b81b2c590e1151/info/thumbnail/imagery_labels.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer")],
+                    id: "topo",
+                    title: "Topográfico",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/30e5fe3149c34df1ba922e6f5bbf808f/info/thumbnail/topo_map_2.jpg"
+                },
+                {
+                    layers: [new TiledMapServiceLayer("https://services.arcgisonline.com/arcgis/rest/services/Ocean/World_Ocean_Base/MapServer")],
+                    id: "oceans",
+                    title: "Oceanos",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/48b8cec7ebf04b5f8a31818048246453/info/thumbnail/ocean_basemap.jpg"
+                },
+                {
+                    layers: [new WebTiledLayer("https://{subDomain}.tile.openstreetmap.org/{level}/{col}/{row}.png", { subDomains: ["a", "b", "c"] })],
+                    id: "osm",
+                    title: "OpenStreetMap",
+                    thumbnailUrl: "https://www.arcgis.com/sharing/rest/content/items/5d2bfa736f8448b3a1708e1f6be23eed/info/thumbnail/osm_map.jpg"
+                }
+            ]
+        }, "basemapGalleryDiv");
+        basemapGallery.startup();
+
+        if (typeof window.addCPTECControls === 'function') {
+            window.addCPTECControls();
+        }
         updateRiskLegend();
+        
+        var homeButton = new HomeButton({ map: window.map }, "homeButtonDiv");
+        homeButton.startup();
     });
 
     fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -579,29 +806,21 @@
           new Polygon({ rings: f.geometry.coordinates, spatialReference: { wkid: 4326 } }),
           new SimpleFillSymbol(SimpleFillSymbol.STYLE_NULL, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0, 0.3]), 1), null)
         ));
-        const featureLayer = new esri.layers.GraphicsLayer({ id: "municipios" });
-        municipioGraphics.forEach(g => featureLayer.add(g));
+        const featureLayer = new FeatureLayer({ id: "municipios", graphics: municipioGraphics });
         window.map.addLayer(featureLayer);
         featureLayer.setVisibility(false);
         window.municipiosLayer = featureLayer;
       });
       
-    function levelOf(prob, type) {
-      return type === 'tornado' ? {2:1, 5:2, 10:3, 15:4}[prob] || 0 : {5:1, 15:2, 30:3, 45:4}[prob] || 0;
-    }
+    function levelOf(prob, type) { return type === 'tornado' ? {2:1, 5:2, 10:3, 15:4}[prob] || 0 : {5:1, 15:2, 30:3, 45:4}[prob] || 0; }
 
     function setForecastView(mode) {
       forecastMode = mode;
       document.getElementById("choiceDlg").style.display = "none";
       clearForecastPolygons();
-      const legendPrevots = document.getElementById("legendPrevots");
-      const legendRisk = document.getElementById("legendRisk");
-      legendPrevots.style.display = mode === "overall" ? "block" : "none";
-      legendRisk.style.display = mode !== "overall" ? "block" : "none";
       const dateISO = document.getElementById("startDate").value || new Date().toISOString().slice(0, 10);
       window.parent.postMessage({ action: "requestForecast", data: { dateISO } }, "*");
     }
-
     window.setForecastView = function(mode) {
       forecastMode = mode;
       document.getElementById("choiceDlg").style.display = "none";
@@ -610,15 +829,13 @@
       const hazard = mode === "all" ? document.getElementById("hazardSel").value : "*";
       window.parent.postMessage({ action: "requestForecast", data: { dateISO, hazard } }, "*");
     };
-
     function renderForecastPolygons(fc) {
       clearForecastPolygons();
       if (!fc?.features?.length) return;
       if (forecastMode === "overall") {
         const merged = turf.union(...fc.features);
         if (!merged) return;
-        const rings = merged.geometry.coordinates[0];
-        const polygon = new Polygon({ rings, spatialReference: { wkid: 4326 } });
+        const polygon = new Polygon({ rings: merged.geometry.coordinates[0], spatialReference: { wkid: 4326 } });
         const symbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color("#00cfff"), 2), new Color([0, 207, 255, 0.3]));
         const graphic = new Graphic(polygon, symbol);
         window.map.graphics.add(graphic);
@@ -627,106 +844,41 @@
       }
       fc.features.forEach(f => {
         if (f.geometry?.type !== "Polygon") return;
-        const rings = f.geometry.coordinates[0];
-        const polygon = new Polygon({ rings, spatialReference: { wkid: 4326 } });
+        const polygon = new Polygon({ rings: f.geometry.coordinates[0], spatialReference: { wkid: 4326 } });
         const hazard = f.properties?.type || "hail";
-        const level  = f.properties?.level || 0;
-        const color  = catColor[level] || "#999";
+        const level = f.properties?.level || 0;
+        const color = catColor[level] || "#999";
         const symbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_DIAGONAL_CROSS, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color(color), 2), new Color([...hexToRgb(color), 0.25]));
         const g = new Graphic(polygon, symbol);
         window.map.graphics.add(g);
         forecastGraphics.push(g);
       });
     }
-
-    function clearForecastPolygons() {
-      forecastGraphics.forEach(g => window.map.graphics.remove(g));
-      forecastGraphics = [];
-    }
+    function clearForecastPolygons() { forecastGraphics.forEach(g => window.map.graphics.remove(g)); forecastGraphics = []; }
     const polygonGroups = { hail: [], wind: [], tornado: [] };
-
-    function togglePolygonsByRisk(selected) {
-      Object.entries(polygonGroups).forEach(([risk, group]) => {
-        group.forEach(g => g.setVisibility(risk === selected));
-      });
-    }
-
+    function togglePolygonsByRisk(selected) { Object.entries(polygonGroups).forEach(([risk, group]) => group.forEach(g => g.setVisibility(risk === selected))); }
+    
     function getIconSymbol(hazard, sev = "NOR") {
       const key = `${hazard.toLowerCase()}|${(sev || "NOR").toUpperCase()}`;
-      const iconMap = {
-        'vento|NOR':   'https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png',
-        'vento|SS':    'https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png',
-        'granizo|NOR': 'https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png',
-        'granizo|SS':  'https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png',
-        'tornado|NOR': 'https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png',
-        'tornado|SS':  'https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png'
-      };
+      const iconMap = { 'vento|NOR': 'https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png', 'vento|SS': 'https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png', 'granizo|NOR': 'https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png', 'granizo|SS': 'https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png', 'tornado|NOR': 'https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png', 'tornado|SS': 'https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png' };
       return new esri.symbol.PictureMarkerSymbol(iconMap[key] || iconMap['vento|NOR'], 20, 20);
     }
-
-    window.resetMap = function () {
-      window.map.setExtent(new Extent({ xmin: -60.5, ymin: -33.0, xmax: -38.5, ymax: -16.5, spatialReference: { wkid: 4326 } }));
-    };
-
-    var damageLayer = new ArcGISDynamicMapServiceLayer("https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/MapServer", { id: "damageLayer", opacity: 0.7, visible: true });
-    window.map.addLayer(damageLayer);
-    window.map.on("layers-add-result", function(evt){
-      var info = evt.layers[0].layer.timeInfo;
-      if (!info) return;
-      var slider = new TimeSlider({ style: "width:100%;" }, "timeSliderDiv");
-      window.map.setTimeSlider(slider);
-      slider.setThumbCount(2);
-      slider.createTimeStopsByTimeInterval(info.timeExtent, 1, "days");
-      slider.setThumbMovingRate(2000);
-      slider.startup();
-      on(slider, "time-extent-change", function(evt){ damageLayer.setTimeDefinition(evt.startTime, evt.endTime); });
-    });
-    damageLayer.setVisibleLayers([0,1,2]);
-
-    var searchMarker = null;
-    document.getElementById("searchInput").addEventListener("keypress", function(e) {
-      if (e.key === "Enter") {
-        var query = this.value.trim();
-        if (!query) return;
-        fetch("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?SingleLine=" + encodeURIComponent(query) + "&f=json")
-          .then(res => res.json()).then(data => {
-            if (!data.candidates || data.candidates.length === 0) { alert("❌ Nenhum endereço encontrado."); return; }
-            var best = data.candidates[0];
-            var pt = new Point(best.location.x, best.location.y, new SpatialReference({ wkid: 4326 }));
-            window.map.centerAndZoom(pt, 12);
-            if (searchMarker) window.map.graphics.remove(searchMarker);
-            var symbol = new SimpleMarkerSymbol().setColor(new Color([255, 0, 0, 0.75])).setSize(12).setOutline(new SimpleLineSymbol().setColor(new Color([255,255,255])));
-            var graphic = new Graphic(pt, symbol);
-            window.map.graphics.add(graphic);
-            searchMarker = graphic;
-            setTimeout(() => {
-              window.map.infoWindow.setTitle("Resultado");
-              window.map.infoWindow.setContent(best.address);
-              window.map.infoWindow.show(pt);
-            }, 300);
-          });
-      }
-    });
-
-    window.toggleFullscreen = function () {
-      const el = document.documentElement;
-      if (!document.fullscreenElement) { el.requestFullscreen().catch(err => alert("Erro ao entrar em tela cheia.")); } else { document.exitFullscreen(); }
-    };
+    window.resetMap = function () { window.map.setExtent(new Extent({ xmin: -60.5, ymin: -33.0, xmax: -38.5, ymax: -16.5, spatialReference: { wkid: 4326 } })); };
 
     var drawToolbar = new Draw(window.map);
     let isDrawing = false;
     drawToolbar.on("draw-complete", function(evt) {
       drawToolbar.deactivate();
       isDrawing = false;
+      const hazard = document.getElementById("hazardSel").value;
+      const prob = +document.getElementById("probSel").value;
+      const level = levelOf(prob, hazard);
+      const color = catColor[level] || "#888";
       if (!brazilBoundary) { alert("⏳ Contorno do Brasil ainda não está pronto."); return; }
       const geom4326 = webMercatorUtils.webMercatorToGeographic(evt.geometry);
       const turfPolygon = { type: "Feature", geometry: { type: "Polygon", coordinates: geom4326.rings.map(ring => ring.map(([x, y]) => [parseFloat(x), parseFloat(y)])) }, properties: {} };
       const clipped = turf.intersect(turfPolygon, brazilBoundary);
       if (!clipped) { alert("⚠️ Previsão é feita apenas para o Brasil."); return; }
-      const hazard = document.getElementById("hazardSel").value;
-      const prob = +document.getElementById("probSel").value;
-      const level = levelOf(prob, hazard);
-      const color = catColor[level] || "#888";
       const symbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color(color), 2), new Color([...hexToRgb(color), 0.25]));
       const clippedGraphic = new Graphic(new Polygon({ rings: clipped.geometry.coordinates, spatialReference: { wkid: 4326 } }), symbol);
       clippedGraphic.setAttributes({ hazard, level, prob });
@@ -734,62 +886,46 @@
       polygonGroups[hazard].push(clippedGraphic);
       window.map.graphics.add(clippedGraphic);
     });
-
-    window.activatePolygonDraw = function () {
-      if (!brazilBoundaryReady) { alert("⏳ Aguarde: limites do Brasil ainda estão carregando..."); return; }
-      isDrawing = true;
-      drawToolbar.activate(Draw.POLYGON);
-    };
-
-    window.cancelForecast = () => document.getElementById("forecastModal").style.display = "none";
-    window.confirmForecast = function () {
-      const dateISO = new Date().toISOString().slice(0,10);
-      const dayType = document.getElementById("dayType").value;
-      const features = Object.values(polygonGroups).flat().map(g => ({ type: "Feature", geometry: g.geometry.toJson(), properties: g.attributes }));
-      if (!features.length) { alert("⚠️ Nenhum polígono desenhado."); return; }
-      const message = { action: "saveForecast", data: { dateISO, dayType, geojson: { type: "FeatureCollection", features } } };
-      window.parent.postMessage(JSON.stringify(message), "*");
-      document.getElementById("forecastModal").style.display = "none";
-    };
-
+    window.activatePolygonDraw = function () { if (!brazilBoundaryReady) { alert("⏳ Aguarde: limites do Brasil ainda estão carregando..."); return; } isDrawing = true; drawToolbar.activate(Draw.POLYGON); };
+    
     function updateProbabilities() {
       const hazard = document.getElementById("hazardSel").value;
       const probs = { hail:[5,15,30,45], wind:[5,15,30,45], tornado:[2,5,10,15] }[hazard];
       document.getElementById("probSel").innerHTML = probs.map(p => `<option value="${p}">${p}</option>`).join('');
     }
     updateProbabilities();
-    document.getElementById("hazardSel").addEventListener("change", function () {
-      updateProbabilities();
-      updateRiskLegend();
-      togglePolygonsByRisk(this.value);
-    });
-
+    document.getElementById("hazardSel").addEventListener("change", function () { updateProbabilities(); updateRiskLegend(); togglePolygonsByRisk(this.value); });
+    function sendForecast() {
+      const dateISO = document.getElementById("startDate").value || new Date().toISOString().slice(0, 10);
+      const dayType = document.getElementById("dayType")?.value || "hoje";
+      if (!currentUser?.email) { alert("⚠️ Faça login para enviar sua previsão."); return; }
+      const fc = { type: "FeatureCollection", features: [] };
+      Object.entries(polygonGroups).forEach(([hazard, group]) => {
+        group.forEach(g => {
+          const f = { type: "Feature", geometry: { type: "Polygon", coordinates: g.geometry.toJson().rings, }, properties: { type: hazard, level: g.attributes?.level || 0, prob: g.attributes?.prob || 0 } };
+          fc.features.push(f);
+        });
+      });
+      if (!fc.features.length) { alert("⚠️ Nenhum polígono foi desenhado."); return; }
+      window.parent.postMessage(JSON.stringify({ action: "saveForecast", data: { dateISO, dayType, geojson: fc, memberId: currentUser.memberId || null, nick: currentUser.nick, email: currentUser.email } }), "*");
+      const dialog = document.createElement("div");
+      dialog.innerHTML = `<div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#262626; color:white; padding:16px 24px; border-radius:8px; box-shadow:0 0 10px black; z-index:10000; font-family:sans-serif; text-align:center;">✅ Previsão enviada com sucesso!<br><br><button onclick="this.parentElement.remove()" style="margin-top:12px; padding:6px 16px; border:none; background:#00cfff; color:white; border-radius:4px; cursor:pointer;">Fechar</button></div>`;
+      document.body.appendChild(dialog);
+    }
     function updateRiskLegend() {
+      const probsByType = { hail: [5,15,30,45], wind: [5,15,30,45], tornado: [2,5,10,15] };
       const type = document.getElementById("hazardSel").value;
-      const probs = { hail: [5,15,30,45], wind: [5,15,30,45], tornado: [2,5,10,15] }[type] || [];
-      document.getElementById("legendItems").innerHTML = probs.map(p => {
-        const lvl = levelOf(p, type);
-        const color = catColor[lvl] || "#999";
-        return `<div><span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>${p}% (Nível ${lvl})</div>`;
-      }).join('');
+      const probs = probsByType[type] || [];
+      document.getElementById("legendItems").innerHTML = probs.map(p => { const lvl = levelOf(p, type); const color = catColor[lvl] || "#999"; return `<div style="margin-bottom:4px"><span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>${p}% (Nível ${lvl})</div>`; }).join('');
     }
-
-    function hexToRgb(hex) {
-      hex = hex.replace("#", "");
-      return [ parseInt(hex.substring(0,2), 16), parseInt(hex.substring(2,4), 16), parseInt(hex.substring(4,6), 16) ];
-    }
-    document.getElementById("toggleRainviewer").addEventListener("change", e => radarLayer?.setVisibility(e.target.checked));
-    document.getElementById("toggleMunicipios").addEventListener("change", e => window.municipiosLayer?.setVisibility(e.target.checked));
-    document.getElementById("submitDate").addEventListener("click", () => {
-      const dateISO = document.getElementById("startDate").value;
-      if (dateISO) window.parent.postMessage({ action: "fetchReports", data: { dateISO } }, "*");
-    });
-    document.getElementById("btnSubmitForecast").addEventListener("click", () => document.getElementById("forecastModal").style.display = "block");
-    document.getElementById("chkForecastView").addEventListener("change", e => {
-      if (e.target.checked) { document.getElementById("choiceDlg").style.display = "block"; }
-      else { clearForecastPolygons(); document.getElementById("legendPrevots").style.display = "none"; document.getElementById("legendRisk").style.display = "block"; }
-    });
-
+    function hexToRgb(hex) { hex = hex.replace("#", ""); return [parseInt(hex.substring(0,2), 16), parseInt(hex.substring(2,4), 16), parseInt(hex.substring(4,6), 16)]; }
+    
+    document.getElementById("toggleRainviewer").addEventListener("change", function(e) { if (radarLayer) { radarLayer.setVisibility(e.target.checked); } });
+    document.getElementById("toggleMunicipios").addEventListener("change", function(e) { if (window.municipiosLayer) { window.municipiosLayer.setVisibility(e.target.checked); } });
+    document.getElementById("submitDate").addEventListener("click", function () { const dateISO = document.getElementById("startDate").value; if (!dateISO) { alert("Selecione uma data para buscar relatos."); return; } window.parent.postMessage({ action: "fetchReports", data: { dateISO } }, "*"); });
+    document.getElementById("btnSubmitForecast").addEventListener("click", sendForecast);
+    document.getElementById("chkForecastView").addEventListener("change", function (e) { const choiceDlg = document.getElementById("choiceDlg"); if (e.target.checked) { choiceDlg.style.display = "block"; } else { clearForecastPolygons(); const dateISO = document.getElementById("startDate").value || new Date().toISOString().slice(0, 10); window.parent.postMessage({ action: "fetchReports", data: { dateISO } }, "*"); } });
+    
     window.addEventListener("message", function (evt) {
       const msg = evt.data;
       if (msg.action === "reportsData") {
@@ -797,12 +933,17 @@
         if (!window.relatosLayer) return;
         const stats = { total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 };
         relatosLayer.clear();
+        const rendered = new Set();
         features.forEach(f => {
           const [lon, lat] = f.geometry.coordinates;
           const props = f.properties || {};
           const hazard = props.hazard?.toLowerCase() || "desconhecido";
           const sev = props.sev || "N/A";
-          stats.total++; if (sev === 'SS') stats.sig++;
+          const key = `${hazard}_${lat.toFixed(5)}_${lon.toFixed(5)}`;
+          if (rendered.has(key)) return;
+          rendered.add(key);
+          stats.total++;
+          if (sev === 'SS') stats.sig++;
           if (hazard === 'granizo') { stats.hail++; if (sev === 'SS') stats.hailSig++; }
           if (hazard === 'vento') { stats.wind++; if (sev === 'SS') stats.windSig++; }
           if (hazard === 'tornado') { stats.tornado++; if (sev === 'SS') stats.tornadoSig++; }
@@ -820,8 +961,7 @@
         if (forecastMode === "overall") {
           const merged = turf.union(...fc.features);
           if (!merged) return;
-          const rings = merged.geometry.coordinates[0];
-          const polygon = new Polygon({ rings, spatialReference: { wkid: 4326 } });
+          const polygon = new Polygon({ rings: merged.geometry.coordinates[0], spatialReference: { wkid: 4326 } });
           const symbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID, new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color("#00cfff"), 2), new Color([0, 207, 255, 0.3]));
           const graphic = new Graphic(polygon, symbol);
           window.map.graphics.add(graphic);
@@ -836,27 +976,24 @@
       }
     });
     window.parent.postMessage({ action: "ready" }, "*");
-
+    
     function safeInitialize() {
-      const requiredElements = [ "geoImageInput", "coordModal", "toggleRainviewer", "toggleMunicipios" ];
-      if (requiredElements.some(id => !document.getElementById(id))) { setTimeout(safeInitialize, 100); return; }
-      initModalButtons();
-      const input = document.getElementById("geoImageInput");
-      if (input && !input.hasEventListener) { input.addEventListener("change", handleFileSelect); input.hasEventListener = true; }
-      const overlayHeader = document.getElementById('overlayHeader');
-      const overlayContent = document.getElementById('overlayContent');
-      if (overlayHeader && overlayContent) {
-          overlayHeader.addEventListener('click', () => {
-              overlayContent.classList.toggle('collapsed');
-              overlayHeader.classList.toggle('collapsed');
-          });
-      }
-      const cptecContainer = document.getElementById('cptecControlsContainer');
-      if (typeof window.addCPTECControls === 'function') { window.addCPTECControls(cptecContainer); }
-
+      const required = ["geoImageInput", "coordModal", "toggleRainviewer", "toggleMunicipios"];
+      if (required.some(id => !document.getElementById(id))) { setTimeout(safeInitialize, 100); return; }
+      try {
+        document.getElementById("geoImageInput").addEventListener("change", handleFileSelect);
+        document.getElementById("btnAutoLoad").addEventListener("click", () => window.autoLoadImage());
+        document.getElementById("btnLoadCoords").addEventListener("click", () => window.loadImageWithCoords());
+        document.getElementById("btnCancelLoad").addEventListener("click", () => window.cancelImageLoad());
+        document.getElementById('btn-add-data').addEventListener('click', () => { document.getElementById('addDataPanel').style.display = 'block'; });
+        document.getElementById('btn-fullscreen').addEventListener('click', window.toggleFullscreen);
+      } catch (err) { console.error("❌ Erro durante inicialização:", err); }
     }
-    document.addEventListener("DOMContentLoaded", safeInitialize);
+    
+    if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", safeInitialize); } 
+    else { safeInitialize(); }
 
+    window.CPTECRadarLayer = CPTECRadarLayer;
   });
   </script>
 </body>
