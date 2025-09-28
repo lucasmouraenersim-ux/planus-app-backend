@@ -9,12 +9,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Square, Lightbulb } from 'lucide-react';
+import { Loader2, Send, Paperclip, Search, MessagesSquare, ArrowLeft, Mic, Square, Lightbulb, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import Image from 'next/image';
-import { doc, getDoc, Timestamp, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, Timestamp, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from "@/hooks/use-toast";
@@ -258,6 +269,19 @@ export function ChatLayout() {
     setIsTemplatesPopoverOpen(false);
   };
 
+  const handleClearChat = async () => {
+    if (!selectedLead) return;
+    try {
+        const chatDocRef = doc(db, "crm_lead_chats", selectedLead.id);
+        await updateDoc(chatDocRef, { messages: [] });
+        setChatMessages([]);
+        toast({ title: "Chat Limpo", description: "O histórico de mensagens foi apagado." });
+    } catch (error) {
+        console.error("Error clearing chat:", error);
+        toast({ title: "Erro ao Limpar", description: "Não foi possível apagar as mensagens.", variant: "destructive" });
+    }
+  };
+
 
   const filteredLeads = useMemo(() => {
     return leads
@@ -328,6 +352,25 @@ export function ChatLayout() {
                   <p className="text-xs text-muted-foreground">{selectedLead.phone || 'Telefone não disponível'}</p>
                 )}
               </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon">
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Apagar Histórico?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Esta ação irá apagar permanentemente todas as mensagens deste chat. Não é possível desfazer.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearChat}>Confirmar e Apagar</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </header>
             
             <ScrollArea className="flex-1 p-4">
