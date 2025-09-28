@@ -32,6 +32,7 @@ type EsriModules = [
     typeof __esri.GraphicsLayer,
     typeof __esri.WebTileLayer,
     typeof import ("esri/geometry/support/webMercatorUtils"),
+    typeof __esri.Polygon,
 ];
 
 // Helper to require modules
@@ -50,6 +51,7 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/layers/GraphicsLayer",
         "esri/layers/WebTileLayer",
         "esri/geometry/support/webMercatorUtils",
+        "esri/geometry/Polygon",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });

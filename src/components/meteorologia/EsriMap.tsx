@@ -232,17 +232,6 @@ export function EsriMap() {
                     });
                 });
 
-                const menuContainer = document.createElement("div");
-                const menuExpand = new Expand({
-                    view: view,
-                    content: menuContainer,
-                    expandIcon: "menu",
-                    group: "top-right",
-                });
-                view.ui.add(menuExpand, "top-right");
-                const menuRoot = createRoot(menuContainer);
-                menuRoot.render(<SideMenu />);
-                
                 const basemapGallery = new BasemapGallery({ view });
                 view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-right" }), "top-right");
 
@@ -260,6 +249,17 @@ export function EsriMap() {
                     group: "top-right",
                 });
                 view.ui.add(sketchExpand, "top-right");
+                
+                const menuContainer = document.createElement("div");
+                const menuExpand = new Expand({
+                    view: view,
+                    content: menuContainer,
+                    expandIconClass: "menu", // Correct icon name
+                    group: "top-right",
+                });
+                view.ui.add(menuExpand, "top-right");
+                const menuRoot = createRoot(menuContainer);
+                menuRoot.render(<SideMenu />);
                 
                 const root = createRoot(drawContainer);
                 root.render(
