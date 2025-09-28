@@ -75,8 +75,15 @@ export function EsriMap() {
                 });
 
                 const cptecLayer = new MapImageLayer({
-                    url: "https://bancodedados.cptec.inpe.br/arcgis/rest/services/publico/cptec_radares/MapServer",
+                    url: "https://geoserver.cptec.inpe.br/geoserver/SIGSC/wms",
                     title: "Radares CPTEC",
+                    sublayers: [
+                        {
+                            name: "radar_maxcap",
+                            title: "Radar MaxCAP",
+                            visible: true
+                        }
+                    ],
                     visible: false
                 });
 
