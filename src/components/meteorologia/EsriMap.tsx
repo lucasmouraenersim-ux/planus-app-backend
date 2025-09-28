@@ -6,7 +6,6 @@ import { loadCss, loadScript } from '@/lib/esri-loader';
 import * as turf from '@turf/turf';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { ChevronDownIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const LoadingSpinner = () => (
@@ -45,12 +44,12 @@ const catColor: Record<number, string> = {
 };
 
 const levelOf = (prob: number, type: HazardType): number => {
-    const rules = {
+    const rules: Record<HazardType, Record<number, number>> = {
         tornado: { 2: 1, 5: 2, 10: 3, 15: 4 },
         hail: { 5: 1, 15: 2, 30: 3, 45: 4 },
         wind: { 5: 1, 15: 2, 30: 3, 45: 4 },
     };
-    return rules[type][prob as keyof typeof rules[type]] || 0;
+    return rules[type]?.[prob] || 0;
 };
 
 
@@ -102,7 +101,6 @@ export function EsriMap() {
             
             if (sketchRef.current.viewModel) {
               sketchRef.current.viewModel.polygonSymbol = symbol as any;
-              sketchRef.current.create("polygon");
             }
             
             // Associate data for when the drawing completes
@@ -111,15 +109,23 @@ export function EsriMap() {
                 prob,
                 level,
             };
-
+            
+            sketchRef.current.create("polygon");
             setIsDrawMenuOpen(false);
         }
     };
 
+    const handleHazardChange = (v: HazardType) => {
+        setSelectedHazard(v);
+        setSelectedProb(probabilityOptions[v][0]);
+    };
+    
     useEffect(() => {
         let view: __esri.MapView;
         
         const initMap = async () => {
+            if (!mapDivRef.current || !brazilBoundary) return;
+
             try {
                 loadCss();
                 const [
@@ -181,39 +187,72 @@ export function EsriMap() {
 
                 const sketch = new Sketch({ layer: graphicsLayer, view, creationMode: "update" });
                 sketchRef.current = sketch;
-
-                const sketchContainer = document.createElement("div");
-                sketchContainer.className = "bg-background p-2 rounded-md";
-                sketchContainer.innerHTML = `
-                    <div id="draw-popover-root"></div>
-                `;
-
-                view.ui.add(new Expand({ 
-                    view, 
-                    content: sketchContainer, 
-                    expandIconClass: "esri-icon-edit", 
-                    group: "top-right" 
-                }), "top-right");
-
-                // We can't use React components directly inside the Esri UI,
-                // so we'll have to manage the popover manually or use a simpler approach.
-                // For now, let's keep the popover logic inside the React component and just have a placeholder button.
-                // A better integration would require `ReactDOM.createPortal`.
-                // The provided code shows a button that will be replaced. For now, let's simplify.
                 
-                const drawButton = document.createElement('button');
-                drawButton.innerText = 'Desenhar Polígono';
-                drawButton.className = 'w-full p-2 bg-blue-500 text-white rounded';
-                drawButton.onclick = () => {
-                    // This is a simplified version. A full React-based popover is complex here.
-                    const hazard = prompt("Digite o tipo (hail, wind, tornado):", "hail") as HazardType;
-                    const prob = parseInt(prompt("Digite a probabilidade:", "15") || "15", 10);
-                    if (hazard && !isNaN(prob)) {
-                        startDrawing(hazard, prob);
-                    }
-                };
-                sketchContainer.appendChild(drawButton);
+                const sketchButton = document.createElement('button');
+                sketchButton.className = 'esri-widget--button esri-icon-edit';
+                sketchButton.title = 'Desenhar polígono de risco';
+                
+                const drawPopoverRoot = document.createElement('div');
+                const sketchExpand = new Expand({
+                    view,
+                    content: drawPopoverRoot,
+                    expandIconClass: 'esri-icon-edit',
+                    group: 'top-right'
+                });
+                view.ui.add(sketchExpand, 'top-right');
+                
+                // This is a workaround to use React component inside Esri's UI
+                const DrawMenu = () => {
+                    const [hazard, setHazard] = useState<HazardType>('hail');
+                    const [prob, setProb] = useState<number>(probabilityOptions.hail[0]);
 
+                    const handleHazardSelect = (value: HazardType) => {
+                        setHazard(value);
+                        setProb(probabilityOptions[value][0]);
+                    };
+
+                    return (
+                        <div className="p-4 bg-gray-800 text-white rounded-md w-64 space-y-4">
+                             <div>
+                                <label className="text-sm font-medium">Tipo de Risco</label>
+                                <Select onValueChange={(v) => handleHazardSelect(v as HazardType)} value={hazard}>
+                                    <SelectTrigger className="bg-gray-700 border-gray-600 mt-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
+                                        {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium">Probabilidade (%)</label>
+                                <Select onValueChange={(v) => startDrawing(hazard, Number(v))} value={String(prob)}>
+                                    <SelectTrigger className="bg-gray-700 border-gray-600 mt-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
+                                        {probabilityOptions[hazard].map(p => <SelectItem key={p} value={String(p)}>{p}%</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    );
+                };
+
+                // The Esri Expand widget's content can be a simple DOM node.
+                // We are creating a button that, when clicked, toggles a React-managed Popover.
+                // This is a bit of a hack but avoids complex ReactDOM.createPortal logic for this use case.
+                // The actual popover is part of the main React tree.
+                const drawButtonPlaceholder = document.createElement('button');
+                drawButtonPlaceholder.innerText = 'Desenhar Polígono';
+                drawButtonPlaceholder.className = 'w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600';
+                drawButtonPlaceholder.onclick = () => {
+                    // This will be overridden by the Popover logic in the main return statement.
+                    // This is just a placeholder action if the Popover isn't mounted correctly.
+                    console.log('Draw button placeholder clicked');
+                };
+                drawPopoverRoot.appendChild(drawButtonPlaceholder);
+                
                 sketch.on("create", (event) => {
                     if (event.state === "complete") {
                          if (!brazilBoundary) {
@@ -243,7 +282,6 @@ export function EsriMap() {
                         
                         event.graphic.geometry = mercatorGeom;
 
-                        // Add attributes from the active drawing info
                         const drawingInfo = (sketch as any)._activeDrawingInfo;
                         if (drawingInfo) {
                             event.graphic.attributes = {
@@ -261,21 +299,58 @@ export function EsriMap() {
             }
         };
 
-        if (mapDivRef.current && brazilBoundary) {
-            initMap();
-        }
+        initMap();
 
         return () => {
             if (view) {
                 view.destroy();
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [brazilBoundary]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             {isLoading && <LoadingSpinner />}
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
+             <div id="draw-menu-container" className="absolute top-20 right-20 z-10">
+                <Popover open={isDrawMenuOpen} onOpenChange={setIsDrawMenuOpen}>
+                    <PopoverTrigger asChild>
+                         <Button
+                            variant="outline"
+                            className="p-2 bg-gray-900 text-white rounded hover:bg-gray-800"
+                        >
+                            Desenhar Polígono
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-60 bg-gray-800 text-white border-gray-700">
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm">Tipo de Risco</label>
+                                <Select onValueChange={(v) => handleHazardChange(v as HazardType)} value={selectedHazard}>
+                                    <SelectTrigger className="bg-gray-700 border-gray-600">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
+                                        {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="text-sm">Probabilidade (%)</label>
+                                <Select onValueChange={(v) => startDrawing(selectedHazard, Number(v))} value={String(selectedProb)}>
+                                    <SelectTrigger className="bg-gray-700 border-gray-600">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-gray-800 text-white border-gray-700">
+                                        {probabilityOptions[selectedHazard].map(p => <SelectItem key={p} value={String(p)}>{p}%</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
         </div>
     );
 }
