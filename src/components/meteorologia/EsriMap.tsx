@@ -69,7 +69,7 @@ export function EsriMap() {
                 });
 
                 const municipiosLayer = new TileLayer({
-                    url: "https://tiles.arcgis.com/tiles/nSZVuSZjHpFpeKDr/arcgis/rest/services/Limite_de_Munic%C3%ADpios_do_Brasil/MapServer",
+                    url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/BR_Municipios_2022/FeatureServer",
                     title: "Municípios",
                     visible: false
                 });
