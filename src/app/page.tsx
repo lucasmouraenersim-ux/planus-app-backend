@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight, Camera, LineChart } from 'lucide-react';
+import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight, Camera, LineChart, CloudRain } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
@@ -326,6 +326,12 @@ const LandingPage = () => {
                 <LineChart className="mr-2 h-4 w-4"/>
                 Invista em Forex
             </Button>
+            <Link href="/meteorologia" passHref>
+              <Button variant='ghost' className="transition-all">
+                  <CloudRain className="mr-2 h-4 w-4"/>
+                  Meteorologia BR
+              </Button>
+            </Link>
         </nav>
       </header>
 
