@@ -46,7 +46,6 @@ export function EsriMap() {
         let basemapGallery: __esri.BasemapGallery;
         let layerList: __esri.LayerList;
         let sketch: __esri.Sketch;
-        let drawToolbar: __esri.Draw;
 
         const initMap = async () => {
             try {
@@ -54,8 +53,8 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, MapImageLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
-                    Draw, SimpleFillSymbol, SimpleLineSymbol, Color, Graphic,
-                    webMercatorUtils // Import for clipping logic
+                    SimpleFillSymbol, SimpleLineSymbol, Color, Graphic,
+                    webMercatorUtils
                 ] = await loadScript();
 
                 const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
@@ -105,57 +104,53 @@ export function EsriMap() {
                 sketch = new Sketch({ layer: graphicsLayer, view, creationMode: "update", container: document.createElement("div") });
                 const sketchExpand = new Expand({ view, content: sketch, expandIconClass: "esri-icon-edit", group: "top-right" });
                 
-                // Redefine o botão de polígono para usar o Draw toolbar
-                const polygonButton = sketch.viewModel.toolCollection.find(tool => tool.id === "polygon");
-                if (polygonButton) {
-                    polygonButton.active = false;
-                    polygonButton.on("click", () => {
-                        if (brazilBoundary) {
-                            drawToolbar.activate(Draw.POLYGON);
-                        } else {
-                            alert("Aguarde o carregamento dos limites do Brasil.");
-                        }
-                    });
-                }
                 view.ui.add(sketchExpand, "top-right");
-                
-                drawToolbar = new Draw(map);
-                drawToolbar.on("draw-complete", (evt) => {
-                    drawToolbar.deactivate();
-                    if (!brazilBoundary) {
-                        alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
-                        return;
+
+                sketch.on("create", (event) => {
+                    if (event.state === "complete") {
+                         if (!brazilBoundary) {
+                            alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
+                            graphicsLayer.remove(event.graphic); // Remove the original graphic
+                            return;
+                        }
+
+                        // Convert geometry to geographic coordinates for turf
+                        const geographicGeom = webMercatorUtils.webMercatorToGeographic(event.graphic.geometry) as __esri.Polygon;
+                        const turfPolygon = turf.polygon(geographicGeom.rings);
+
+                        const clipped = turf.intersect(turfPolygon, brazilBoundary);
+
+                        graphicsLayer.remove(event.graphic); // Always remove the original graphic
+
+                        if (!clipped) {
+                            alert("O polígono desenhado está fora dos limites do Brasil.");
+                            return;
+                        }
+
+                        const symbol = new SimpleFillSymbol({
+                           style: "solid",
+                           color: new Color([0, 207, 255, 0.3]),
+                           outline: new SimpleLineSymbol({
+                               style: "solid",
+                               color: new Color([0, 207, 255, 0.8]),
+                               width: 2,
+                           })
+                        });
+                        
+                        const clippedPolygonForEsri = {
+                            type: "polygon",
+                            rings: clipped.geometry.coordinates,
+                            spatialReference: { wkid: 4326 }
+                        };
+
+                        const mercatorGeom = webMercatorUtils.geographicToWebMercator(clippedPolygonForEsri);
+
+                        const graphic = new Graphic({
+                            geometry: mercatorGeom,
+                            symbol: symbol
+                        });
+                        graphicsLayer.add(graphic);
                     }
-
-                    // Convert geometry to geographic coordinates for turf
-                    const geographicGeom = webMercatorUtils.webMercatorToGeographic(evt.geometry) as __esri.Polygon;
-                    
-                    const turfPolygon = turf.polygon(geographicGeom.rings);
-
-                    const clipped = turf.intersect(turfPolygon, brazilBoundary);
-
-                    if (!clipped) {
-                        alert("O polígono desenhado está fora dos limites do Brasil.");
-                        return;
-                    }
-
-                    const symbol = new SimpleFillSymbol(
-                        SimpleFillSymbol.STYLE_SOLID,
-                        new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 207, 255, 0.8]), 2),
-                        new Color([0, 207, 255, 0.3])
-                    );
-                    
-                    // The clipped geometry is already in geographic, convert it back to Web Mercator for display
-                    const clippedPolygonForEsri = {
-                        type: "polygon",
-                        rings: clipped.geometry.coordinates,
-                        spatialReference: { wkid: 4326 }
-                    };
-
-                    const mercatorGeom = webMercatorUtils.geographicToWebMercator(clippedPolygonForEsri);
-
-                    const graphic = new Graphic(mercatorGeom, symbol);
-                    graphicsLayer.add(graphic);
                 });
 
             } catch (error) {
@@ -171,7 +166,7 @@ export function EsriMap() {
         return () => {
             if (view) view.destroy();
         };
-    }, [brazilBoundary]); // Re-run effect if brazilBoundary changes
+    }, [brazilBoundary]);
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
