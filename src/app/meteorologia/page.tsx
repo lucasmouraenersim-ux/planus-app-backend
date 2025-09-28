@@ -19,12 +19,13 @@ export default function MeteorologiaPage() {
           overflow: hidden; /* Prevent scrolling on the main page */
         }
         #meteorologia-container {
-            position: absolute;
+            position: fixed; /* Changed from absolute to fixed */
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
             border: none;
+            z-index: 10; /* Ensure it's on top */
         }
       `}</style>
       
