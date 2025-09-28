@@ -115,8 +115,8 @@ export function EsriMap() {
                 loadCss();
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
-                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer, FeatureLayer,
-                    webMercatorUtils
+                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
+                    WebTileLayer, webMercatorUtils
                 ] = await loadScript();
 
                 const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
