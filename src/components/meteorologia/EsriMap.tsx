@@ -75,11 +75,11 @@ export function EsriMap() {
                 });
 
                 const cptecLayer = new MapImageLayer({
-                    url: "https://geoserver.cptec.inpe.br/geoserver/SIGSC/wms",
-                    title: "Radares CPTEC",
+                    url: "https://redemet.decea.gov.br/geoserver/wms",
+                    title: "Radares CPTEC/REDEMET",
                     sublayers: [
                         {
-                            name: "radar_maxcap",
+                            name: "radar_rmaxx",
                             title: "Radar MaxCAP",
                             visible: true
                         }
@@ -118,7 +118,7 @@ export function EsriMap() {
                         if (item.layer.type !== "group") {
                             item.panel = {
                                 content: "legend",
-                                open: item.layer.title === "Radares CPTEC"
+                                open: item.layer.title === "Radares CPTEC/REDEMET"
                             };
                         }
                     }
