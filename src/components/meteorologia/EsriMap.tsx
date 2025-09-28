@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -69,13 +70,13 @@ export function EsriMap() {
                 });
 
                 const municipiosLayer = new TileLayer({
-                    url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/BR_Municipios_2022/FeatureServer",
+                    url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/BR_Municipios_2022_UF/FeatureServer",
                     title: "Municípios",
                     visible: false
                 });
 
                 const cptecLayer = new MapImageLayer({
-                    url: "https://redemet.decea.gov.br/geoserver/wms",
+                    url: "https://redemet.decea.mil.br/geoserver/wms",
                     title: "Radares CPTEC/REDEMET",
                     sublayers: [
                         {
