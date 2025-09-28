@@ -62,16 +62,11 @@ export default function MeteorologiaLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="pt-BR">
-        <head>
-            <title>Sent Meteorologia</title>
-        </head>
-      <body>
+    <section>
         <AuthProvider>
             <MeteorologiaLayoutContent>{children}</MeteorologiaLayoutContent>
             <Toaster />
         </AuthProvider>
-      </body>
-    </html>
+    </section>
   )
 }
