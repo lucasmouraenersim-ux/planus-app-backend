@@ -1,39 +1,28 @@
-
 "use client";
-import Head from 'next/head';
+import { EsriMap } from '@/components/meteorologia/EsriMap';
+import { Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
+
+const LoadingSpinner = () => (
+    <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-900 text-white">
+        <div className="flex items-center justify-center space-x-1">
+            <div className="h-4 w-2 animate-pulse bg-white" style={{ animationDelay: '0s' }}></div>
+            <div className="h-6 w-2 animate-pulse bg-white" style={{ animationDelay: '0.1s' }}></div>
+            <div className="h-8 w-2 animate-pulse bg-white" style={{ animationDelay: '0.2s' }}></div>
+            <div className="h-6 w-2 animate-pulse bg-white" style={{ animationDelay: '0.3s' }}></div>
+            <div className="h-4 w-2 animate-pulse bg-white" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+        <p className="mt-4 text-sm">Carregando mapa meteorológico...</p>
+    </div>
+);
+
 
 export default function MeteorologiaPage() {
   return (
-    <>
-      <Head>
-        <title>Tempo Severo no Hemisfério Sul</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
-      <style jsx global>{`
-        html, body {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: hidden; /* Prevent scrolling on the main page */
-        }
-        #meteorologia-container {
-            position: fixed; /* Changed from absolute to fixed */
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            z-index: 10; /* Ensure it's on top */
-        }
-      `}</style>
-      
-      <iframe 
-        id="meteorologia-container" 
-        src="/meteorologia.html" 
-        title="Meteorologia BR"
-      ></iframe>
-    </>
+    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden', backgroundColor: '#4A90E2' }}>
+        <Suspense fallback={<LoadingSpinner />}>
+            <EsriMap />
+        </Suspense>
+    </div>
   );
 }
