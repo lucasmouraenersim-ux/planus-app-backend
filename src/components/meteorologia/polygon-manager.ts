@@ -45,16 +45,24 @@ function hexToRgb(hex: string): number[] {
 function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardType): boolean {
   if (!turf) return true; // Se turf não estiver carregado, pula a validação
 
-  const newPolygonFeature = turf.feature(newPolygon.toJSON());
-  const newArea = turf.area(newPolygonFeature);
+  // Correctly create a GeoJSON Feature from the Esri Polygon geometry
+  const newPolygonGeoJSON = {
+    type: "Polygon",
+    coordinates: newPolygon.rings
+  };
+  const newArea = turf.area(newPolygonGeoJSON);
   
   const sameHazardPolys = polygonGroups[hazard] || [];
   for (const existingGraphic of sameHazardPolys) {
     const existingLevel = existingGraphic.attributes?.level;
     if (existingLevel == null || existingLevel >= newLevel) continue;
     
-    const existingPolygonFeature = turf.feature(existingGraphic.geometry.toJSON());
-    const existingArea = turf.area(existingPolygonFeature);
+    // Correctly create a GeoJSON Feature from the existing Esri Polygon geometry
+    const existingPolygonGeoJSON = {
+        type: "Polygon",
+        coordinates: (existingGraphic.geometry as EsriPolygon).rings
+    };
+    const existingArea = turf.area(existingPolygonGeoJSON);
     
     if (newArea > existingArea) {
       alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
@@ -89,8 +97,8 @@ export function addPolygon({
   const level = levelOf(prob, hazard);
 
   // 1. Converte e Recorta a geometria
-  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry);
-  const turfPolygon = turf.polygon((geographicGeom as any).rings);
+  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
+  const turfPolygon = turf.polygon(geographicGeom.rings);
   const clipped = turf.intersect(turfPolygon, brazilBoundary);
 
   if (!clipped || !clipped.geometry) {
