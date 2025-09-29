@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2 } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -179,21 +179,14 @@ const ReportsLegend = () => {
 };
 
 
-const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: 'risk' | 'prevots', options: any) => void }) => {
+const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: 'risk' | 'prevots') => void }) => {
     const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
     const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions["hail"][0]);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(prevotsLevelOptions[0]);
 
-    useEffect(() => {
-        setSelectedProb(probabilityOptions[selectedHazard][0]);
-    }, [selectedHazard]);
-
     const handleDrawClick = () => {
-        const options = drawingMode === 'risk'
-            ? { hazard: selectedHazard, prob: selectedProb }
-            : { level: selectedPrevotsLevel };
-        onStartDrawing(drawingMode, options);
+        onStartDrawing(drawingMode);
     };
   
     return (
@@ -291,32 +284,20 @@ export function EsriMap() {
         }
     };
 
-    useEffect(() => {
-        fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
-            .then(res => res.json())
-            .then(data => {
-                const firstValid = data.features.find(
-                    (f: any) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
-                );
-                if (firstValid) {
-                    setBrazilBoundary(firstValid);
-                } else {
-                    console.error("❌ Nenhum polígono válido no GeoJSON do Brasil.");
-                }
-            })
-            .catch(err => console.error("❌ Erro ao carregar contorno do Brasil:", err));
-    }, []);
-    
-    const handleStartDrawing = useCallback((mode: 'risk' | 'prevots', options: any) => {
+    const handleStartDrawing = useCallback((mode: 'risk' | 'prevots') => {
         if (sketchRef.current) {
             let symbol;
             let attributes;
             let targetLayer;
 
+            const selectedHazard = (document.getElementById('typeSel') as HTMLSelectElement)?.value as HazardType || 'hail';
+            const selectedProb = Number((document.getElementById('probSel') as HTMLSelectElement)?.value) || 5;
+            const selectedPrevotsLevel = Number((document.getElementById('prevotsLevelSel') as HTMLSelectElement)?.value) || 1;
+
+
             if (mode === 'risk') {
                 targetLayer = graphicsLayerRef.current;
-                const { hazard, prob } = options;
-                const level = levelOf(prob, hazard);
+                const level = levelOf(selectedProb, selectedHazard);
                 const colorHex = catColor[level] || "#999999";
                 const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
                 symbol = {
@@ -324,10 +305,10 @@ export function EsriMap() {
                     color: [r, g, b, 0.25],
                     outline: { color: [r, g, b, 1], width: 2 }
                 };
-                attributes = { type: 'risk', hazard, prob, level, uid: `risk-${Date.now()}` };
+                attributes = { type: 'risk', hazard: selectedHazard, prob: selectedProb, level, uid: `risk-${Date.now()}` };
             } else if (mode === 'prevots') {
                 targetLayer = prevotsLayerRef.current;
-                const { level } = options;
+                const level = selectedPrevotsLevel;
                 const colorHex = catColor[level] || "#999999";
                 const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
                 symbol = {
@@ -347,6 +328,21 @@ export function EsriMap() {
         }
     }, []);
 
+    useEffect(() => {
+        fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
+            .then(res => res.json())
+            .then(data => {
+                const firstValid = data.features.find(
+                    (f: any) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+                );
+                if (firstValid) {
+                    setBrazilBoundary(firstValid);
+                } else {
+                    console.error("❌ Nenhum polígono válido no GeoJSON do Brasil.");
+                }
+            })
+            .catch(err => console.error("❌ Erro ao carregar contorno do Brasil:", err));
+    }, []);
 
     useEffect(() => {
         if (!modelGroupLayer) return;
@@ -455,10 +451,13 @@ export function EsriMap() {
                         return;
                     }
                     view.hitTest(event).then((response) => {
-                        const graphicResult = response.results.find(result => result.graphic.layer === graphicsLayerRef.current || result.graphic.layer === prevotsLayerRef.current);
+                         const graphicResult = response.results.find(result => {
+                            const graphic = result.graphic;
+                            // Check if the graphic's UID is in our drawnGraphics state
+                            return drawnGraphics.some(drawnGraphic => drawnGraphic.attributes.uid === graphic.attributes.uid);
+                        });
                         if (graphicResult) {
-                            const clickedUid = graphicResult.graphic.attributes.uid;
-                            setActiveGraphicUid(clickedUid);
+                            setActiveGraphicUid(graphicResult.graphic.attributes.uid);
                             showPolygonPopup(graphicResult.graphic);
                         } else {
                             setActiveGraphicUid(null);
@@ -489,7 +488,7 @@ export function EsriMap() {
                 menuRoot.render(<SideMenu onLogout={handleLogout} />);
                 
                 const root = createRoot(drawContainer);
-                root.render(<DrawUI onStartDrawing={handleStartDrawing} />);
+                root.render(<DrawUI onStartDrawing={(mode) => handleStartDrawing(mode)} />);
                 
                 sketch.on("create", (event) => {
                     if (event.state === "complete") {
@@ -544,11 +543,14 @@ export function EsriMap() {
                         editButton.textContent = '✏️ Editar';
                         editButton.className = 'p-1 mt-2 mr-2 bg-blue-500 text-white rounded';
                         editButton.onclick = () => {
-                            if (sketchRef.current) {
+                           if (sketchRef.current) {
+                                // Find the latest version of the graphic from the state
                                 const graphicToUpdate = drawnGraphics.find(g => g.attributes.uid === graphic.attributes.uid);
                                 if (graphicToUpdate) {
                                     sketchRef.current.update([graphicToUpdate], { tool: "reshape" });
                                     view.closePopup();
+                                } else {
+                                    alert("Gráfico não encontrado para edição.");
                                 }
                             }
                         };
