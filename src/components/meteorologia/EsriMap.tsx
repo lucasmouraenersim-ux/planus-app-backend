@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -223,8 +224,8 @@ const PrevotsLegend = () => (
       <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFFF00',marginRight:'6px'}}></span>PREV 2
       </div>
-      <div>
-        <span style="display:inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
+       <div>
+        <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FF0000',marginRight:'6px'}}></span>PREV 4
@@ -236,19 +237,20 @@ const PrevotsLegend = () => (
 );
 
 
-const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: DrawingMode) => void }) => {
+const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedProb, setSelectedProb, selectedPrevotsLevel, setSelectedPrevotsLevel }: { 
+    onStartDrawing: (mode: DrawingMode, options: any) => void;
+    selectedHazard: HazardType;
+    setSelectedHazard: (h: HazardType) => void;
+    selectedProb: number;
+    setSelectedProb: (p: number) => void;
+    selectedPrevotsLevel: number;
+    setSelectedPrevotsLevel: (l: number) => void;
+}) => {
     const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
-    const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
-    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions["hail"][0]);
-    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(prevotsLevelOptions[0]);
-
-    const handleDrawClick = () => {
-        onStartDrawing(drawingMode);
-    };
-  
+    
     useEffect(() => {
         setSelectedProb(probabilityOptions[selectedHazard][0]);
-    }, [selectedHazard]);
+    }, [selectedHazard, setSelectedProb]);
   
     return (
       <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
@@ -277,7 +279,7 @@ const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: DrawingMode) => voi
                     <SelectContent>{probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleDrawClick} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={() => onStartDrawing('risk', {hazard: selectedHazard, prob: selectedProb})} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
             {drawingMode === 'prevots' && (
@@ -290,7 +292,7 @@ const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: DrawingMode) => voi
                     <SelectContent>{prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleDrawClick} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={() => onStartDrawing('prevots', {level: selectedPrevotsLevel})} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
           </>
@@ -304,12 +306,12 @@ export function EsriMap() {
     const { userAppRole } = useAuth();
     const router = useRouter();
     const mapDivRef = useRef<HTMLDivElement>(null);
-    const sketchRef = useRef<__esri.Sketch | null>(null);
     const viewRef = useRef<__esri.MapView | null>(null);
-    const graphicsLayersRef = useRef<Record<string, __esri.GraphicsLayer>>({});
+    const sketchRef = useRef<__esri.Sketch | null>(null);
+    const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
     
     // Armazena os polígonos por tipo em cache
-    const [drawnPolygonsCache, setDrawnPolygonsCache] = useState<Record<string, any[]>>({ hail: [], wind: [], tornado: [], prevots: [] });
+    const [drawnPolygonsCache, setDrawnPolygonsCache] = useState<Record<string, __esri.Graphic[]>>({ hail: [], wind: [], tornado: [], prevots: [] });
     
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
@@ -334,8 +336,11 @@ export function EsriMap() {
     const [isViewingForecast, setIsViewingForecast] = useState(false);
     const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
     
-    const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
-    const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<HazardType>('hail');
+    const [selectedHazard, setSelectedHazard] = useState<HazardType>('hail');
+    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
+    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
+    
+    const activeDrawingOptions = useRef<any>({});
 
 
     const handleLogout = async () => {
@@ -347,8 +352,9 @@ export function EsriMap() {
         }
     };
 
-    const handleStartDrawing = (mode: DrawingMode) => {
+    const handleStartDrawing = (mode: DrawingMode, options: any) => {
         if (!sketchRef.current) return;
+        activeDrawingOptions.current = { mode, ...options };
         sketchRef.current.create("polygon");
     };
 
@@ -372,16 +378,22 @@ export function EsriMap() {
         const legendDiv = document.getElementById("legendItems");
         if (!legendDiv) return;
 
-        const probs = probabilityOptions[selectedHazardForDisplay] || [];
+        const probs = probabilityOptions[selectedHazard] || [];
         legendDiv.innerHTML = probs.map(p => {
-            const lvl = levelOf(p, selectedHazardForDisplay);
+            const lvl = levelOf(p, selectedHazard);
             const color = catColor[lvl] || "#999";
             return `<div style="margin-bottom:4px">
                 <span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>
                 ${p}% (Nível ${lvl})
             </div>`;
         }).join('');
-    }, [selectedHazardForDisplay]);
+    }, [selectedHazard]);
+
+    useEffect(() => {
+        if (viewRef.current) { // Only update if map is initialized
+            updateRiskLegend();
+        }
+    }, [selectedHazard, updateRiskLegend]);
 
     useEffect(() => {
         if (!modelGroupLayer) return;
@@ -402,10 +414,13 @@ export function EsriMap() {
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
             
             const features = allGraphics.map(g => {
-                const geoJSON = JSON.parse(g.geometry.toJSON());
-                return {
+                const geoJSON = JSON.parse(JSON.stringify(g.geometry.toJSON()));
+                 return {
                     type: "Feature",
-                    geometry: geoJSON,
+                    geometry: {
+                        type: "Polygon",
+                        coordinates: geoJSON.rings
+                    },
                     properties: g.attributes
                 };
             });
@@ -417,7 +432,7 @@ export function EsriMap() {
             });
 
             alert("Previsão enviada com sucesso!");
-            setDrawnPolygonsCache({ hail: [], wind: [], tornado: [], prevots: [] }); // Clear local drawings after sending
+            setDrawnPolygonsCache({ hail: [], wind: [], tornado: [], prevots: [] });
 
         } catch (error) {
             console.error("Erro ao enviar previsão: ", error);
@@ -468,11 +483,9 @@ export function EsriMap() {
                 });
                 setModelGroupLayer(newModelGroupLayer);
                 
-                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
-                graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
-                graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
+                graphicsLayerRef.current = new GraphicsLayer({ id: 'userGraphics' });
                 
-                const map = new Map({ basemap: "dark-gray-vector", layers: [newModelGroupLayer, ...Object.values(graphicsLayersRef.current)] });
+                const map = new Map({ basemap: "dark-gray-vector", layers: [newModelGroupLayer, graphicsLayerRef.current] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
                 
@@ -489,14 +502,14 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketch = new Sketch({ view, layer: graphicsLayersRef.current.hail, creationMode: "update" });
+                const sketch = new Sketch({ view, layer: graphicsLayerRef.current!, creationMode: "update" });
                 sketchRef.current = sketch;
                 
                 const drawContainer = document.createElement("div");
                 const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
                 
                 const menuContainer = document.createElement("div");
-                const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "menu", group: "top-left" });
+                const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "esri-icon-menu", group: "top-left" });
 
                 if (userAppRole === 'superadmin') view.ui.add(sketchExpand, "top-left");
                 view.ui.add(menuExpand, "top-left");
@@ -505,7 +518,17 @@ export function EsriMap() {
                 menuRoot.render(<SideMenu onLogout={handleLogout} />);
                 
                 const root = createRoot(drawContainer);
-                root.render(<DrawUI onStartDrawing={handleStartDrawing} />);
+                root.render(
+                    <DrawUI 
+                        onStartDrawing={handleStartDrawing} 
+                        selectedHazard={selectedHazard}
+                        setSelectedHazard={setSelectedHazard}
+                        selectedProb={selectedProb}
+                        setSelectedProb={setSelectedProb}
+                        selectedPrevotsLevel={selectedPrevotsLevel}
+                        setSelectedPrevotsLevel={setSelectedPrevotsLevel}
+                    />
+                );
                 
                 sketch.on("create", (event) => {
                     if (event.state === "complete") {
@@ -528,12 +551,23 @@ export function EsriMap() {
                         const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
                         event.graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
                         
-                        const currentHazard = selectedHazardForDisplay;
-                        const prob = Number((document.getElementById('probSel') as HTMLSelectElement)?.value) || 5;
-                        const level = levelOf(prob, currentHazard);
+                        const { mode, hazard, prob, level: prevotsLevel } = activeDrawingOptions.current;
+                        let attributes: any = {};
+                        let colorHex = "#999999";
+                        let cacheKey = "prevots";
 
-                        event.graphic.attributes = { type: 'risk', hazard: currentHazard, prob, level, uid: `risk-${Date.now()}` };
-                        const colorHex = catColor[level] || "#999999";
+                        if (mode === 'risk') {
+                            const level = levelOf(prob, hazard);
+                            attributes = { type: 'risk', hazard, prob, level, uid: `risk-${Date.now()}` };
+                            colorHex = catColor[level] || "#999999";
+                            cacheKey = hazard;
+                        } else if (mode === 'prevots') {
+                            attributes = { type: 'prevots', level: prevotsLevel, uid: `prevots-${Date.now()}` };
+                            colorHex = catColor[prevotsLevel] || "#999999";
+                            cacheKey = 'prevots';
+                        }
+                        
+                        event.graphic.attributes = attributes;
                         const [r, g, b] = hexToRgbArray(colorHex);
                         event.graphic.symbol = new SimpleFillSymbol({
                             color: [r, g, b, 0.25],
@@ -542,7 +576,7 @@ export function EsriMap() {
                         
                         setDrawnPolygonsCache(prev => ({
                             ...prev,
-                            [currentHazard]: [...prev[currentHazard], event.graphic]
+                            [cacheKey]: [...prev[cacheKey], event.graphic]
                         }));
                     }
                 });
@@ -550,10 +584,12 @@ export function EsriMap() {
                 sketch.on("update", (event) => {
                     if (event.state === "complete") {
                       const updatedGraphic = event.graphics[0];
-                      const hazard = updatedGraphic.attributes.hazard;
+                      const { type, hazard } = updatedGraphic.attributes;
+                      const cacheKey = type === 'risk' ? hazard : 'prevots';
+                      
                       setDrawnPolygonsCache(prev => ({
                         ...prev,
-                        [hazard]: prev[hazard].map(g => g.attributes.uid === updatedGraphic.attributes.uid ? updatedGraphic : g)
+                        [cacheKey]: prev[cacheKey].map(g => g.attributes.uid === updatedGraphic.attributes.uid ? updatedGraphic : g)
                       }));
                     }
                 });
@@ -569,16 +605,16 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, selectedHazardForDisplay, updateRiskLegend]);
+    }, [brazilBoundary, userAppRole, selectedHazard, updateRiskLegend]);
     
     // Effect to render polygons from cache based on selected hazard
     useEffect(() => {
-        Object.values(graphicsLayersRef.current).forEach(layer => layer?.removeAll());
-        const graphicsToShow = drawnPolygonsCache[selectedHazardForDisplay] || [];
-        if (graphicsLayersRef.current[selectedHazardForDisplay]) {
-            graphicsLayersRef.current[selectedHazardForDisplay].addMany(graphicsToShow);
+        if (graphicsLayerRef.current) {
+            graphicsLayerRef.current.removeAll();
+            const allGraphics = Object.values(drawnPolygonsCache).flat();
+            graphicsLayerRef.current.addMany(allGraphics);
         }
-    }, [drawnPolygonsCache, selectedHazardForDisplay]);
+    }, [drawnPolygonsCache]);
 
     const handleSaveReport = async () => {
         if (!newReport.location) {
