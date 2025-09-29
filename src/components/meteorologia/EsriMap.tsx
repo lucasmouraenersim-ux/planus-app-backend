@@ -94,7 +94,7 @@ const Scoreboard = () => {
     ];
 
     return (
-        <div id="scoreboard-wrapper" className="absolute top-[88px] right-[56px] z-[1000] w-[240px] pointer-events-none">
+        <div id="scoreboard-wrapper" className="absolute top-[88px] right-[20px] z-10 w-[240px] pointer-events-none">
             <table id="scoreboard" className="w-full border-collapse bg-black/60 text-white text-[13px] leading-tight font-sans">
                 <thead>
                     <tr>
@@ -134,7 +134,7 @@ const StatsPanel = () => {
             borderRadius: "6px",
             boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
             fontFamily: "sans-serif",
-            zIndex: 9999
+            zIndex: 999
         }}>
             <div id="statsContent">Carregando estatísticas...</div>
         </div>
@@ -152,7 +152,7 @@ const ReportsLegend = () => {
             borderRadius: '6px',
             boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
             fontFamily: 'sans-serif',
-            zIndex: 9999
+            zIndex: 999
         }}>
             <b>Relatos</b><br />
             <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16" alt="Vento leve" /> Vento 80–100km/h</div>
@@ -187,7 +187,7 @@ const RiskLegend = ({ selectedHazard }: { selectedHazard: Exclude<HazardType, 'p
       borderRadius: '6px',
       boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
       fontFamily: 'sans-serif',
-      zIndex: 9999,
+      zIndex: 999,
     }}>
       <b style={{display: 'block', marginBottom: '6px'}}>Legenda por Risco ({hazardOptions.find(h => h.value === selectedHazard)?.label})</b>
       <div id="legendItems" dangerouslySetInnerHTML={{ __html: legendItems }}></div>
@@ -209,7 +209,7 @@ const PrevotsLegend = () => (
         borderRadius: '6px',
         boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
         fontFamily: 'sans-serif',
-        zIndex: 9999
+        zIndex: 999
     }}>
       <b>Níveis PREVOTS</b>
       <div>
@@ -341,10 +341,11 @@ export function EsriMap() {
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
 
-    const [dialogState, setDialogState] = useState<{
-      isOpen: boolean;
-      graphic: __esri.Graphic | null;
-    }>({ isOpen: false, graphic: null });
+    const [popoverState, setPopoverState] = useState<{
+        isOpen: boolean;
+        graphic: __esri.Graphic | null;
+        anchor: { top: number; left: number } | null;
+    }>({ isOpen: false, graphic: null, anchor: null });
 
     function getInitialForecastDate() {
         const now = new Date();
@@ -672,15 +673,14 @@ export function EsriMap() {
                 });
                 
                 view.on("click", (event) => {
-                    if (sketchViewModelRef.current?.state === 'active') return; // Don't interfere with active drawing/editing
+                    if (sketchViewModelRef.current?.state === 'active') return;
 
                     view.hitTest(event).then((response) => {
                         const results = response.results.filter(r => r.graphic && r.graphic.layer?.type === 'graphics');
                         if (results.length > 0) {
                             const graphic = results[0].graphic;
-                            // Check if the forecast is for the current prediction cycle
                             if (graphic.attributes.date === forecastDate) {
-                                setDialogState({ isOpen: true, graphic: graphic });
+                                setPopoverState({ isOpen: true, graphic: graphic, anchor: {top: event.y, left: event.x } });
                             } else {
                                 alert("Não é possível editar ou excluir previsões de datas passadas.");
                             }
@@ -743,19 +743,19 @@ export function EsriMap() {
     };
     
     const startEdit = () => {
-      if (dialogState.graphic) {
-        sketchViewModelRef.current?.update(dialogState.graphic, { tool: "transform" });
+      if (popoverState.graphic) {
+        sketchViewModelRef.current?.update(popoverState.graphic, { tool: "transform" });
       }
-      setDialogState({ isOpen: false, graphic: null });
+      setPopoverState({ isOpen: false, graphic: null, anchor: null });
     };
 
     const confirmDelete = () => {
-      if (dialogState.graphic) {
-        const { graphic } = dialogState;
+      if (popoverState.graphic) {
+        const { graphic } = popoverState;
         const layerId = graphic.layer.id;
         deletePolygon(graphic, graphicsLayersRef.current[layerId]);
       }
-      setDialogState({ isOpen: false, graphic: null });
+      setPopoverState({ isOpen: false, graphic: null, anchor: null });
     };
 
 
@@ -768,18 +768,18 @@ export function EsriMap() {
             <RiskLegend selectedHazard={selectedHazardForDisplay} />
             <PrevotsLegend />
             
-            <div className="absolute top-4 left-[110px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
-                <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
-                <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
+             <div className="absolute top-4 left-[110px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
+                <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9 w-auto" />
+                <Button onClick={handleLoadForecast} size="sm"><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
                 {(userAppRole === 'superadmin') && (
-                    <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
+                    <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'} size="sm">
                         {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                        {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
+                        {isReportMode ? 'Cancelar' : 'Adicionar Relato'}
                     </Button>
                 )}
             </div>
             
-            <div className="absolute top-[88px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col md:flex-row items-stretch gap-1">
+            <div className="absolute top-[88px] left-[20px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col items-stretch gap-1">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
@@ -805,7 +805,7 @@ export function EsriMap() {
             </div>
 
             {isReportMode && (
-                <div className="absolute top-[182px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                <div className="absolute top-[230px] left-[20px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
@@ -845,28 +845,30 @@ export function EsriMap() {
                     {countdown}
                 </span>
             </div>
-
-             <AlertDialog open={dialogState.isOpen} onOpenChange={(isOpen) => setDialogState({ isOpen, graphic: isOpen ? dialogState.graphic : null })}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Ação do Polígono</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    O que você gostaria de fazer com o polígono selecionado?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <Button variant="outline" onClick={startEdit}>
-                    <Edit className="mr-2 h-4 w-4" /> Editar
-                  </Button>
-                  <AlertDialogAction asChild>
-                    <Button variant="destructive" onClick={confirmDelete}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                    </Button>
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            
+            <div 
+                className="absolute"
+                style={{
+                  left: `${popoverState.anchor?.left ?? -1000}px`,
+                  top: `${popoverState.anchor?.top ?? -1000}px`,
+                }}
+              >
+                <Popover open={popoverState.isOpen} onOpenChange={(isOpen) => setPopoverState(prev => ({...prev, isOpen}))}>
+                  <PopoverTrigger asChild>
+                    <div />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" side="right" align="start">
+                      <div className="bg-gray-800 text-white p-2 rounded-md shadow-lg flex flex-col gap-2">
+                          <Button variant="ghost" className="justify-start" onClick={startEdit}>
+                            <Edit className="mr-2 h-4 w-4" /> Editar
+                          </Button>
+                          <Button variant="ghost" className="justify-start text-red-400 hover:text-red-400 hover:bg-red-900/50" onClick={confirmDelete}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                          </Button>
+                      </div>
+                  </PopoverContent>
+                </Popover>
+            </div>
 
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
