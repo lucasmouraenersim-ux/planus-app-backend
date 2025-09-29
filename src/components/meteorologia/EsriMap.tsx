@@ -18,7 +18,8 @@ import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
-import { addPolygon, removePolygon, getAllPolygons, getPolygonsByHazard, togglePolygonVisibility, catColor, levelOf, probabilityOptions } from './polygon-manager';
+import { addPolygon, clearAllPolygons, deletePolygon, getPolygonGroups, initializePolygonManager, togglePolygonVisibility, updatePolygon, validateArea, catColor, levelOf, probabilityOptions } from './polygon-manager';
+
 
 const LoadingSpinner = () => (
     <div className="absolute inset-0 z-50 flex h-full w-full flex-col items-center justify-center bg-gray-900 bg-opacity-70 text-white">
@@ -206,7 +207,7 @@ const PrevotsLegend = () => (
       </div>
       <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFFF00',marginRight:'6px'}}></span>PREV 2
-      </div>
+       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
        </div>
@@ -337,7 +338,7 @@ export function EsriMap() {
         }
     };
     
-    const handleStartDrawing = useCallback((mode: DrawingMode) => {
+    const handleStartDrawing = useCallback((mode: DrawingMode, SimpleFillSymbol: any, Color: any) => {
         if (!sketchViewModelRef.current) return;
     
         const sketchVM = sketchViewModelRef.current;
@@ -351,22 +352,25 @@ export function EsriMap() {
             const prob = selectedProb;
             const level = levelOf(prob, hazard);
             const colorHex = catColor[level] || "#999999";
-            const SimpleFillSymbol = (sketchVM as any)._graphicsView.graphics.items[0].symbol.constructor;
-            symbolOptions = { color: [...(SimpleFillSymbol as any).prototype.color.constructor.fromHex(colorHex).toRgb(), 0.25], outline: { color: (SimpleFillSymbol as any).prototype.color.constructor.fromHex(colorHex), width: 2 } };
+            
+            const rgbColor = new Color(colorHex).toRgb();
+            symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            
             targetLayerId = hazard;
             attributes = { type: 'risk', hazard, prob, level };
         } else if (mode === 'prevots') {
             const level = selectedPrevotsLevel;
             const colorHex = catColor[level] || "#999999";
-            const SimpleFillSymbol = (sketchVM as any)._graphicsView.graphics.items[0].symbol.constructor;
-            symbolOptions = { color: [...(SimpleFillSymbol as any).prototype.color.constructor.fromHex(colorHex).toRgb(), 0.25], outline: { color: (SimpleFillSymbol as any).prototype.color.constructor.fromHex(colorHex), width: 2 } };
+
+            const rgbColor = new Color(colorHex).toRgb();
+            symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            
             targetLayerId = 'prevots';
             attributes = { type: 'prevots', level };
         } else {
             return;
         }
 
-        const SimpleFillSymbol = sketchVM.polygonSymbol.constructor as any;
         const newSymbol = new SimpleFillSymbol(symbolOptions);
         sketchVM.polygonSymbol = newSymbol;
         (sketchVM as any)._creationAttributes = attributes;
@@ -399,8 +403,8 @@ export function EsriMap() {
     }, [selectedModel, modelGroupLayer]);
 
     const handleSendForecast = async () => {
-        const allGraphics = getAllPolygons();
-        if (allGraphics.length === 0) {
+        const drawnGraphics = getAllPolygons();
+        if (drawnGraphics.length === 0) {
             alert("Nenhum polígono desenhado para enviar.");
             return;
         }
@@ -409,10 +413,15 @@ export function EsriMap() {
             const forecastId = `forecast_${forecastDate}`;
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
             
+            const featuresToSave = drawnGraphics.map(g => ({
+              geometry: JSON.stringify(g.geometry.toJSON()),
+              attributes: g.attributes
+            }));
+
             await setDoc(forecastDocRef, {
                 date: forecastDate,
                 createdAt: serverTimestamp(),
-                features: allGraphics.map(g => g.toJSON()) // Save full graphic object
+                features: featuresToSave
             });
 
             alert("Previsão enviada com sucesso!");
@@ -439,6 +448,8 @@ export function EsriMap() {
                     WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
                     SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
                 ] = await loadScript();
+                
+                initializePolygonManager(turf);
 
                 let models: any[] = [];
                 try {
@@ -460,7 +471,8 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const map = new Map({ basemap: "dark-gray-vector", layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
+                const basemap = await Basemap.fromId("dark-gray");
+                const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
                 
@@ -516,7 +528,7 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <DrawUI 
-                        onStartDrawing={handleStartDrawing}
+                        onStartDrawing={(mode) => handleStartDrawing(mode, SimpleFillSymbol, Color)}
                         selectedHazard={selectedHazardForDisplay}
                         setSelectedHazard={setSelectedHazardForDisplay}
                         selectedProb={selectedProb}
