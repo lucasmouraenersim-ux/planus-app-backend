@@ -52,14 +52,6 @@ export default function RankingPrevisoesPage() {
     handleLoadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
-  if (userAppRole !== 'admin' && userAppRole !== 'superadmin') {
-      return (
-          <div className="flex items-center justify-center h-full">
-              <p className="text-destructive">Você não tem permissão para ver esta página.</p>
-          </div>
-      );
-  }
 
   return (
     <div className="container mx-auto p-4 md:p-8">
