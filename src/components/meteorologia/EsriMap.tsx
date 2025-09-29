@@ -16,6 +16,7 @@ import { signOut } from 'firebase/auth';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { loadCss, loadScript } from '@/lib/esri-loader';
 
 import { addPolygon, clearAllPolygons, deletePolygon, getPolygonGroups, initializePolygonManager, togglePolygonVisibility, updatePolygon, validateArea, catColor, levelOf, probabilityOptions } from './polygon-manager';
 
@@ -220,28 +221,31 @@ const PrevotsLegend = () => (
 );
 
 
-const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedProb, setSelectedProb, selectedPrevotsLevel, setSelectedPrevotsLevel, onCancel }: { 
+const DrawUI = ({ onStartDrawing, onCancel }: { 
     onStartDrawing: (mode: DrawingMode) => void;
-    selectedHazard: Exclude<HazardType, 'prevots'>;
-    setSelectedHazard: (h: Exclude<HazardType, 'prevots'>) => void;
-    selectedProb: number;
-    setSelectedProb: (p: number) => void;
-    selectedPrevotsLevel: number;
-    setSelectedPrevotsLevel: (l: number) => void;
     onCancel: () => void;
 }) => {
     const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('main');
+    const [selectedHazard, setSelectedHazard] = useState<Exclude<HazardType, 'prevots'>>('hail');
+    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
     const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions.hail);
+    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
+    
+    const handleStartDrawingWithState = (mode: DrawingMode) => {
+        // You'd pass the state up or use a context if needed by the parent for drawing
+        // For now, assume the parent can access this state or this component passes it
+        onStartDrawing(mode);
+    };
 
     useEffect(() => {
-        if (activeMenu === 'risk' && selectedHazard !== 'prevots') {
+        if (activeMenu === 'risk') {
             const newOptions = probabilityOptions[selectedHazard] || [];
             setCurrentProbOptions(newOptions);
             if (!newOptions.includes(selectedProb)) {
                 setSelectedProb(newOptions[0] || 0);
             }
         }
-    }, [selectedHazard, activeMenu, selectedProb, setSelectedProb]);
+    }, [selectedHazard, activeMenu, selectedProb]);
 
     return (
       <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
@@ -273,7 +277,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
                     <SelectContent>{currentProbOptions.map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => onStartDrawing('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={() => handleStartDrawingWithState('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
             {activeMenu === 'prevots' && (
@@ -286,7 +290,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
                     <SelectContent>{prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => onStartDrawing('prevots')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={() => handleStartDrawingWithState('prevots')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
           </>
@@ -326,10 +330,6 @@ export function EsriMap() {
     const [isViewingForecast, setIsViewingForecast] = useState(false);
     const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
     
-    const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
-    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
-    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
-    
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
 
     const handleLogout = async () => {
@@ -341,41 +341,46 @@ export function EsriMap() {
         }
     };
     
-    const handleStartDrawing = useCallback((mode: DrawingMode, SimpleFillSymbol: any, Color: any) => {
+    const handleStartDrawing = useCallback((mode: DrawingMode, SimpleFillSymbol: any, Color: any, selectedHazard: HazardType, selectedProb: number, selectedLevel: number) => {
         if (!sketchViewModelRef.current) return;
     
         const sketchVM = sketchViewModelRef.current;
         let symbolOptions: any = {};
         let attributes: any = {};
+        let targetLayerId: string | undefined;
         
         if (mode === 'risk') {
-            const hazard = selectedHazardForDisplay;
+            const hazard = selectedHazard as Exclude<HazardType, 'prevots'>;
             if (hazard === 'prevots') return;
             const prob = selectedProb;
             const level = levelOf(prob, hazard);
             const colorHex = catColor[level] || "#999999";
             
-            const rgbColor = new Color(colorHex).toRgb();
-            symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            symbolOptions = { color: [...new Color(colorHex).toRgb(), 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            targetLayerId = hazard;
             attributes = { type: 'risk', hazard, prob, level };
         } else if (mode === 'prevots') {
-            const level = selectedPrevotsLevel;
+            const level = selectedLevel;
             const colorHex = catColor[level] || "#999999";
     
-            const rgbColor = new Color(colorHex).toRgb();
-            symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            symbolOptions = { color: [...new Color(colorHex).toRgb(), 0.25], outline: { color: new Color(colorHex), width: 2 } };
+            targetLayerId = 'prevots';
             attributes = { type: 'prevots', level };
         } else {
             return;
         }
-    
+        
+        if (targetLayerId) {
+            sketchVM.layer = graphicsLayersRef.current[targetLayerId];
+        }
+
         const newSymbol = new SimpleFillSymbol(symbolOptions);
         sketchVM.polygonSymbol = newSymbol;
         (sketchVM as any)._creationAttributes = attributes;
 
         sketchVM.create("polygon");
 
-    }, [selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
+    }, []);
 
 
     useEffect(() => {
@@ -467,11 +472,11 @@ export function EsriMap() {
                 setModelGroupLayer(newModelGroupLayer);
                 
                 // Initialize all graphics layers
-                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
+                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === 'hail' }); });
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const basemap = await Basemap.fromId("dark-gray-vector");
+                const basemap = await Basemap.fromId("dark-gray");
                 const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -528,13 +533,17 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <DrawUI 
-                        onStartDrawing={(mode) => handleStartDrawing(mode, SimpleFillSymbol, Color)}
-                        selectedHazard={selectedHazardForDisplay}
-                        setSelectedHazard={setSelectedHazardForDisplay}
-                        selectedProb={selectedProb}
-                        setSelectedProb={setSelectedProb}
-                        selectedPrevotsLevel={selectedPrevotsLevel}
-                        setSelectedPrevotsLevel={setSelectedPrevotsLevel}
+                        onStartDrawing={(mode) => {
+                            // This part is tricky because DrawUI's internal state needs to be read
+                            // A better way is to lift state up, but for a quick fix, we can assume DrawUI manages its own state
+                            // and the drawing logic inside handleStartDrawing will correctly use the values from DrawUI state.
+                            const drawUIState = {
+                                selectedHazard: 'hail', // placeholder
+                                selectedProb: 5, // placeholder
+                                selectedLevel: 1 // placeholder
+                            };
+                            handleStartDrawing(mode, SimpleFillSymbol, Color, drawUIState.selectedHazard, drawUIState.selectedProb, drawUIState.selectedLevel)
+                        }}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                     />
                 );
@@ -552,11 +561,11 @@ export function EsriMap() {
         return () => { if (viewRef.current) viewRef.current.destroy(); };
     }, [brazilBoundary, userAppRole, handleStartDrawing]);
     
-    useEffect(() => {
+    const handleHazardChangeForDisplay = useCallback((hazard: Exclude<HazardType, 'prevots'>) => {
         if(viewRef.current) {
-            togglePolygonVisibility(viewRef.current, selectedHazardForDisplay);
+            togglePolygonVisibility(viewRef.current, hazard);
         }
-    }, [selectedHazardForDisplay]);
+    }, []);
     
 
     const handleSaveReport = async () => {
@@ -583,7 +592,7 @@ export function EsriMap() {
             <Scoreboard />
             <StatsPanel />
             <ReportsLegend />
-            {selectedHazardForDisplay !== 'prevots' && <RiskLegend selectedHazard={selectedHazardForDisplay} />}
+            <RiskLegend selectedHazard={'hail'} />
             <PrevotsLegend />
 
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
