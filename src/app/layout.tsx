@@ -1,3 +1,4 @@
+
 "use client";
 
 // import type { Metadata } from 'next'; // Metadata can be an issue with "use client"
@@ -200,7 +201,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
-                         <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Ranking de Previsões" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Ranking Previsões</SidebarMenuButton></Link></SidebarMenuItem>
+                         <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Placar" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Placar</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
                             <SidebarMenuItem>
