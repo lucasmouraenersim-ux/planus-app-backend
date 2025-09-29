@@ -1,4 +1,3 @@
-
 // src/components/meteorologia/polygon-manager.ts
 
 import type { Feature, Polygon as TurfPolygon } from '@turf/turf';
@@ -9,7 +8,7 @@ type EsriGraphic = __esri.Graphic;
 type EsriColor = __esri.Color;
 type EsriSimpleFillSymbol = __esri.symbols.SimpleFillSymbol;
 type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
-type EsriGraphicsLayer = __esri.GraphicsLayer;
+type EsriGraphicsLayer = __esri.layers.GraphicsLayer;
 type EsriMapView = __esri.MapView;
 type Turf = typeof import('@turf/turf');
 type HazardType = "hail" | "wind" | "tornado" | "prevots";
