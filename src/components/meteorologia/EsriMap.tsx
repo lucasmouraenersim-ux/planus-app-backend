@@ -7,9 +7,19 @@ import * as turf from '@turf/turf';
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon, Clock, Trash2 } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon, Clock, Trash2, Edit } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -330,6 +340,11 @@ export function EsriMap() {
     const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
+
+    const [dialogState, setDialogState] = useState<{
+      isOpen: boolean;
+      graphic: __esri.Graphic | null;
+    }>({ isOpen: false, graphic: null });
 
     function getInitialForecastDate() {
         const now = new Date();
@@ -656,34 +671,23 @@ export function EsriMap() {
                     }
                 });
                 
-                view.on("double-click", (event) => {
+                view.on("click", (event) => {
+                    if (sketchViewModelRef.current?.state === 'active') return; // Don't interfere with active drawing/editing
+
                     view.hitTest(event).then((response) => {
-                        const results = response.results.filter(r => r.graphic && (r.graphic.layer?.type === 'graphics'));
+                        const results = response.results.filter(r => r.graphic && r.graphic.layer?.type === 'graphics');
                         if (results.length > 0) {
                             const graphic = results[0].graphic;
-                            // Check if the forecast is for today before allowing edit
-                            if (graphic.attributes.date === forecastDate || !graphic.attributes.date) {
-                                sketchViewModelRef.current?.update(graphic, { tool: "transform" });
+                            // Check if the forecast is for the current prediction cycle
+                            if (graphic.attributes.date === forecastDate) {
+                                setDialogState({ isOpen: true, graphic: graphic });
                             } else {
-                                alert("Não é possível editar previsões de datas passadas.");
+                                alert("Não é possível editar ou excluir previsões de datas passadas.");
                             }
                         }
                     });
                 });
                 
-                const trashBtn = document.createElement("div");
-                trashBtn.className = "esri-widget--button esri-icon-trash";
-                trashBtn.title = "Excluir polígono selecionado";
-                trashBtn.onclick = () => {
-                    if (sketchViewModelRef.current?.state === "active" && sketchViewModelRef.current.updateGraphics.length > 0) {
-                        const graphicToDelete = sketchViewModelRef.current.updateGraphics.getItemAt(0);
-                        const layerId = graphicToDelete.layer.id;
-                        deletePolygon(graphicToDelete, graphicsLayersRef.current[layerId]);
-                         sketchViewModelRef.current?.cancel();
-                    }
-                };
-                view.ui.add(trashBtn, "top-right");
-
                 const drawContainer = document.createElement("div");
                 const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
                 
@@ -737,6 +741,22 @@ export function EsriMap() {
             alert("Falha ao salvar o relato.");
         }
     };
+    
+    const startEdit = () => {
+      if (dialogState.graphic) {
+        sketchViewModelRef.current?.update(dialogState.graphic, { tool: "transform" });
+      }
+      setDialogState({ isOpen: false, graphic: null });
+    };
+
+    const confirmDelete = () => {
+      if (dialogState.graphic) {
+        const { graphic } = dialogState;
+        const layerId = graphic.layer.id;
+        deletePolygon(graphic, graphicsLayersRef.current[layerId]);
+      }
+      setDialogState({ isOpen: false, graphic: null });
+    };
 
 
     return (
@@ -747,8 +767,8 @@ export function EsriMap() {
             <ReportsLegend />
             <RiskLegend selectedHazard={selectedHazardForDisplay} />
             <PrevotsLegend />
-
-            <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
+            
+            <div className="absolute top-4 left-[110px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
                 <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
                 {(userAppRole === 'superadmin') && (
@@ -826,8 +846,346 @@ export function EsriMap() {
                 </span>
             </div>
 
+             <AlertDialog open={dialogState.isOpen} onOpenChange={(isOpen) => setDialogState({ isOpen, graphic: isOpen ? dialogState.graphic : null })}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Ação do Polígono</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O que você gostaria de fazer com o polígono selecionado?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <Button variant="outline" onClick={startEdit}>
+                    <Edit className="mr-2 h-4 w-4" /> Editar
+                  </Button>
+                  <AlertDialogAction asChild>
+                    <Button variant="destructive" onClick={confirmDelete}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                    </Button>
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
     );
 }
+
+```
+- src/components/meteorologia/polygon-manager.ts:
+```ts
+// src/components/meteorologia/polygon-manager.ts
+
+import type { Feature, Polygon as TurfPolygon } from '@turf/turf';
+
+// Definições de tipo para clareza
+type EsriPolygon = __esri.Polygon;
+type EsriGraphic = __esri.Graphic;
+type EsriColor = __esri.Color;
+type EsriSimpleFillSymbol = __esri.symbols.SimpleFillSymbol;
+type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
+type EsriGraphicsLayer = __esri.layers.GraphicsLayer;
+type EsriMapView = __esri.MapView;
+type Turf = typeof import('@turf/turf');
+type HazardType = "hail" | "wind" | "tornado" | "prevots";
+
+
+// Regras de negócio e cores, extraídas da referência
+export const catColor: Record<number, string> = {
+  0: '#90EE90', // Verde claro para Risco Mínimo/Geral
+  1: "#FFFF00", // Nível 1 (Amarelo)
+  2: "#FFA500", // Nível 2 (Laranja)
+  3: "#FF0000", // Nível 3 (Vermelho)
+  4: "#800080"  // Roxo - PREV 4 (se houver)
+};
+
+export const levelOf = (p: number, t: Exclude<HazardType, 'prevots'>): number => {
+    return t === 'tornado'
+        ? ({2:1, 5:2, 10:3, 15:4}[p] || 0)
+        : ({5:1, 15:2, 30:3, 45:4}[p] || 0);
+};
+
+export const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
+    hail: [5, 15, 30, 45],
+    wind: [5, 15, 30, 45],
+    tornado: [2, 5, 10, 15],
+};
+
+let turfInstance: Turf | null = null;
+
+// Cache para armazenar polígonos por tipo
+const polygonGroups: Record<string, EsriGraphic[]> = {
+  hail: [],
+  wind: [],
+  tornado: [],
+  prevots: [],
+};
+
+export function initializePolygonManager(turfLib: Turf) {
+  turfInstance = turfLib;
+}
+
+// Validação de área: polígono de nível maior não pode ser maior que um de nível menor
+export function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: Exclude<HazardType, 'prevots'>): boolean {
+  if (!turfInstance || !newPolygon?.rings) return true; // Se turf não estiver carregado, pula a validação
+
+  const newPolygonGeoJSON = { type: "Polygon" as const, coordinates: newPolygon.rings };
+  const newPolygonFeature = turfInstance.feature(newPolygonGeoJSON);
+  const newArea = turfInstance.area(newPolygonFeature);
+  
+  const sameHazardPolys = polygonGroups[hazard] || [];
+  for (const existingGraphic of sameHazardPolys) {
+    const existingLevel = existingGraphic.attributes?.level;
+    if (existingLevel == null || existingLevel >= newLevel) continue;
     
+    const existingGeom = existingGraphic.geometry as EsriPolygon;
+    if (!existingGeom?.rings) continue;
+    
+    const existingPolygonGeoJSON = { type: "Polygon" as const, coordinates: existingGeom.rings };
+    const existingPolygonFeature = turfInstance.feature(existingPolygonGeoJSON);
+    const existingArea = turfInstance.area(existingPolygonFeature);
+    
+    if (newArea > existingArea) {
+      alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
+      return false;
+    }
+  }
+  return true;
+}
+
+
+// Adiciona um novo polígono ao mapa e ao cache
+export function addPolygon({
+  graphic,
+  attributes,
+  brazilBoundary,
+  Color,
+  SimpleFillSymbol,
+  SimpleLineSymbol,
+  Polygon,
+  webMercatorUtils
+}: {
+  graphic: EsriGraphic;
+  attributes: any,
+  brazilBoundary: any;
+  Color: any;
+  SimpleFillSymbol: any;
+  SimpleLineSymbol: any;
+  Polygon: any;
+  webMercatorUtils: any;
+}): EsriGraphic | null {
+  if (!turfInstance) {
+    console.error("Turf.js não inicializado. Chame initializePolygonManager primeiro.");
+    return null;
+  }
+  
+  if (!attributes) {
+    console.error("Atributos ausentes ao adicionar polígono.");
+    return null;
+  }
+  // Ensure attributes are attached to the graphic
+  graphic.attributes = attributes;
+  const { hazard, prob, level, type } = attributes;
+  
+  // 1. Converte e Recorta a geometria
+  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
+  const turfPolygon = turfInstance.polygon(geographicGeom.rings);
+  const clipped = turfInstance.intersect(turfPolygon, brazilBoundary);
+
+  if (!clipped || !clipped.geometry) {
+      alert("O polígono desenhado está fora dos limites do Brasil.");
+      return null;
+  }
+  
+  const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+  
+  if (type === 'risk') {
+    // 2. Validação de Área
+    if (!validateArea(esriPolygon, level, hazard)) {
+        return null;
+    }
+    
+    graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+    
+    // 4. Adiciona ao cache
+    if (!polygonGroups[hazard]) {
+        polygonGroups[hazard] = [];
+    }
+    polygonGroups[hazard].push(graphic);
+    
+    console.log(`✅ Polígono (${hazard}, ${prob}%) adicionado.`);
+    return graphic;
+
+  } else if (type === 'prevots') {
+     // A lógica para PREVOTS pode ser mais simples se não precisar de validação de área complexa
+    graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+    if (!polygonGroups['prevots']) {
+        polygonGroups['prevots'] = [];
+    }
+    polygonGroups['prevots'].push(graphic);
+    console.log(`✅ Polígono (PREVOTS, Nível ${level}) adicionado.`);
+    return graphic;
+  }
+  
+  return graphic; // Retorna o gráfico original se não for de um tipo conhecido
+}
+
+
+// Remove um polígono do mapa e do cache
+export function deletePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
+  const { hazard, uid, type } = graphic.attributes;
+  const groupKey = type === 'prevots' ? 'prevots' : hazard;
+  
+  if (groupKey && polygonGroups[groupKey]) {
+    polygonGroups[groupKey] = polygonGroups[groupKey].filter(g => g.uid !== graphic.uid);
+    graphicsLayer.remove(graphic);
+    console.log(`🗑️ Polígono (${groupKey}) removido.`);
+  }
+}
+
+export function updatePolygon(graphic: EsriGraphic, newAttributes: any) {
+    graphic.attributes = { ...graphic.attributes, ...newAttributes };
+}
+
+
+// Limpa todos os polígonos
+export function clearAllPolygons(view: EsriMapView): void {
+  Object.keys(polygonGroups).forEach(key => {
+      const layer = view.map.findLayerById(key) as EsriGraphicsLayer;
+      if (layer) {
+          layer.removeAll();
+      }
+      polygonGroups[key] = [];
+  });
+  console.log("🗑️ Todos os polígonos foram limpos.");
+}
+
+// Retorna todos os polígonos de todos os grupos
+export function getPolygonGroups(): Record<string, EsriGraphic[]> {
+  return polygonGroups;
+}
+
+// Retorna polígonos de um risco específico
+export function getPolygonsByHazard(hazard: Exclude<HazardType, 'prevots'>): EsriGraphic[] {
+  return polygonGroups[hazard] || [];
+}
+
+// Atualiza a visibilidade das camadas no mapa
+export function togglePolygonVisibility(view: EsriMapView, selectedHazard: Exclude<HazardType, 'prevots'>): void {
+    if (!view) return;
+    Object.keys(polygonGroups).forEach(hazardKey => {
+        const layer = view.map.findLayerById(hazardKey) as EsriGraphicsLayer;
+        if (layer) {
+            // A camada de PREVOTS tem sua própria lógica, não deve ser afetada aqui
+            if(hazardKey !== 'prevots') {
+                layer.visible = (hazardKey === selectedHazard);
+            }
+        }
+    });
+}
+```
+- src/lib/esri-loader.ts:
+```ts
+// src/lib/esri-loader.ts
+
+// Flag to ensure CSS is loaded only once
+let isCssLoaded = false;
+
+// Function to load the Esri CSS
+export function loadCss(url?: string) {
+    if (isCssLoaded) {
+        return;
+    }
+    const esriVersion = "4.29"; // Use a consistent version
+    const finalUrl = url || `https://js.arcgis.com/${esriVersion}/esri/themes/dark/main.css`;
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = finalUrl;
+    document.head.appendChild(link);
+    isCssLoaded = true;
+}
+
+// Type definition for the loaded modules
+type EsriModules = [
+    typeof __esri.Map,
+    typeof __esri.MapView,
+    typeof __esri.Basemap,
+    typeof __esri.TileLayer,
+    typeof __esri.GroupLayer,
+    typeof __esri.BasemapGallery,
+    typeof __esri.Expand,
+    typeof __esri.LayerList,
+    typeof __esri.Sketch,
+    typeof __esri.GraphicsLayer,
+    typeof __esri.WebTileLayer,
+    typeof import ("esri/geometry/support/webMercatorUtils"),
+    typeof __esri.Polygon,
+    typeof __esri.Color,
+    typeof __esri.Graphic,
+    typeof __esri.symbols.SimpleFillSymbol,
+    typeof __esri.symbols.SimpleLineSymbol,
+    typeof __esri.symbols.PictureMarkerSymbol,
+    typeof __esri.Point,
+    typeof __esri.widgets.Sketch.SketchViewModel,
+];
+
+// Helper to require modules
+function requireModules(resolve: (modules: EsriModules) => void) {
+    // @ts-ignore
+    window.require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/Basemap",
+        "esri/layers/TileLayer",
+        "esri/layers/GroupLayer",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/Expand",
+        "esri/widgets/LayerList",
+        "esri/widgets/Sketch",
+        "esri/layers/GraphicsLayer",
+        "esri/layers/WebTileLayer",
+        "esri/geometry/support/webMercatorUtils",
+        "esri/geometry/Polygon",
+        "esri/Color",
+        "esri/Graphic",
+        "esri/symbols/SimpleFillSymbol",
+        "esri/symbols/SimpleLineSymbol",
+        "esri/symbols/PictureMarkerSymbol",
+        "esri/geometry/Point",
+        "esri/widgets/Sketch/SketchViewModel",
+    ], (...modules: EsriModules) => {
+        resolve(modules);
+    });
+}
+
+// Function to load the Esri JavaScript modules
+export function loadScript(): Promise<EsriModules> {
+    const esriVersion = "4.29";
+    const scriptUrl = `https://js.arcgis.com/${esriVersion}/`;
+
+    return new Promise((resolve, reject) => {
+        // @ts-ignore
+        if (window.require) {
+            requireModules(resolve);
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = scriptUrl;
+        script.async = true;
+        document.head.appendChild(script);
+
+        script.onload = () => {
+            requireModules(resolve);
+        };
+
+        script.onerror = (error) => {
+            console.error("Failed to load ArcGIS API script:", error);
+            reject(new Error("Failed to load the ArcGIS API for JavaScript."));
+        };
+    });
+}
+```
