@@ -1,6 +1,8 @@
 
 // src/components/meteorologia/polygon-manager.ts
 
+import type { Feature, Polygon as TurfPolygon } from '@turf/turf';
+
 // Definições de tipo para clareza
 type EsriPolygon = __esri.Polygon;
 type EsriGraphic = __esri.Graphic;
@@ -15,7 +17,7 @@ type HazardType = "hail" | "wind" | "tornado" | "prevots";
 
 // Regras de negócio e cores, extraídas da referência
 export const catColor: Record<number, string> = {
-  0: '#00FF00', // Risco Geral/Mínimo
+  0: '#90EE90', // Verde claro para Risco Mínimo/Geral
   1: "#FFFF00", // Nível 1 (Amarelo)
   2: "#FFA500", // Nível 2 (Laranja)
   3: "#FF0000", // Nível 3 (Vermelho)
@@ -101,7 +103,11 @@ export function addPolygon({
     console.error("Turf.js não inicializado. Chame initializePolygonManager primeiro.");
     return null;
   }
-
+  
+  if (!attributes) {
+    console.error("Atributos ausentes ao adicionar polígono.");
+    return null;
+  }
   // Ensure attributes are attached to the graphic
   graphic.attributes = attributes;
   const { hazard, prob, level, type } = attributes;
