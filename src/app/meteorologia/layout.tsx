@@ -1,9 +1,9 @@
+
 "use client";
 
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
-import { Toaster } from '@/components/ui/toaster';
 import { Loader2 } from 'lucide-react';
 
 const LoadingSpinner = () => (
@@ -12,7 +12,6 @@ const LoadingSpinner = () => (
         <p className="text-white mt-4">Carregando...</p>
     </div>
 );
-
 
 const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
     const { firebaseUser, isLoadingAuth } = useAuth();
@@ -51,9 +50,8 @@ export default function MeteorologiaLayout({
   children: React.ReactNode
 }) {
   return (
-    // AuthProvider has been removed from here. It's now only in the root layout.
     <section>
-        {children}
+        <MeteorologiaLayoutContent>{children}</MeteorologiaLayoutContent>
     </section>
   )
 }

@@ -11,11 +11,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 
 const LoadingSpinner = () => (
@@ -61,7 +63,7 @@ const levelOf = (prob: number, type: HazardType): number => {
     return rules[type]?.[prob] || 0;
 };
 
-const SideMenu = () => {
+const SideMenu = ({ onLogout }: { onLogout: () => void }) => {
     const menuItems = [
         "Modelos Meteorologico",
         "Placar",
@@ -73,8 +75,8 @@ const SideMenu = () => {
     ];
 
     return (
-        <div className="bg-gray-800 p-3 rounded-md shadow-md text-white w-56">
-            <ul className="space-y-2">
+        <div className="bg-gray-800 p-3 rounded-md shadow-md text-white w-56 flex flex-col h-full">
+            <ul className="space-y-2 flex-grow">
                 {menuItems.map(item => (
                     <li key={item}>
                         <a href="#" className="block px-3 py-2 text-sm rounded-md hover:bg-gray-700 transition-colors">
@@ -83,6 +85,10 @@ const SideMenu = () => {
                     </li>
                 ))}
             </ul>
+             <Button onClick={onLogout} variant="ghost" className="w-full justify-start text-left text-red-400 hover:bg-red-900/50 hover:text-white mt-4">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+            </Button>
         </div>
     );
 };
@@ -122,6 +128,7 @@ const Scoreboard = () => {
         </div>
     );
 };
+
 
 // Stats Panel Component
 const StatsPanel = () => {
@@ -172,6 +179,7 @@ const ReportsLegend = () => {
 
 export function EsriMap() {
     const { userAppRole } = useAuth();
+    const router = useRouter();
     const mapDivRef = useRef<HTMLDivElement>(null);
     const sketchRef = useRef<__esri.Sketch | null>(null);
     const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
@@ -199,6 +207,15 @@ export function EsriMap() {
         date: new Date().toISOString().slice(0, 10),
         location: null
     });
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            router.replace('/meteorologia/login');
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
+    };
 
 
     useEffect(() => {
@@ -449,7 +466,7 @@ export function EsriMap() {
                 view.ui.add(menuExpand, "top-left");
                 
                 const menuRoot = createRoot(menuContainer);
-                menuRoot.render(<SideMenu />);
+                menuRoot.render(<SideMenu onLogout={handleLogout} />);
                 
                 const root = createRoot(drawContainer);
                 root.render(
