@@ -146,12 +146,10 @@ const StatsPanel = () => {
 // Reports Legend Component
 const ReportsLegend = () => {
     return (
-        <div id="legendReports" style={{
+        <div id="legendReports" className="bg-gray-800/80 backdrop-blur-sm text-white" style={{
             position: 'fixed',
             bottom: '95px',
             left: '20px',
-            background: 'rgba(30, 30, 30, 0.85)', // Darker background
-            color: "white",
             padding: '10px 14px',
             fontSize: '13px',
             borderRadius: '6px',
@@ -258,13 +256,16 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
-                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol, SimpleLineSymbol,
-                    PictureMarkerSymbol, Point
+                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
+                    SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point
                 ] = await loadScript();
 
                 let models: any[] = [];
                 try {
-                    const response = await fetch('/api/rainviewer'); // Changed to local proxy
+                    const response = await fetch('/api/rainviewer');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
                     const data = await response.json();
                     const host = data.host;
                     
@@ -335,7 +336,7 @@ export function EsriMap() {
                                 spatialReference: { wkid: 4326 }
                             }),
                             symbol: new SimpleFillSymbol({
-                                style: "null",
+                                style: "none",
                                 outline: new SimpleLineSymbol({
                                     style: "solid",
                                     color: new Color([0, 0, 0, 0.3]),
@@ -561,7 +562,7 @@ export function EsriMap() {
                 }
                 
                 const legendDiv = document.createElement("div");
-                legendDiv.className = "bg-gray-800 p-3 rounded-md shadow-md text-white";
+                legendDiv.className = "bg-gray-800/80 backdrop-blur-sm text-white p-3 rounded-md shadow-md";
                 view.ui.add(legendDiv, "bottom-right");
 
                 const updateLegend = () => {
