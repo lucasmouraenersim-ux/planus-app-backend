@@ -3,7 +3,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { loadCss, loadScript } from '@/lib/esri-loader';
 import * as turf from '@turf/turf';
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -333,7 +332,6 @@ export function EsriMap() {
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
 
-
     const handleLogout = async () => {
         try {
             await signOut(auth);
@@ -375,7 +373,6 @@ export function EsriMap() {
         sketchVM.polygonSymbol = newSymbol;
         (sketchVM as any)._creationAttributes = attributes;
 
-        // This is the crucial missing line
         sketchVM.create("polygon");
 
     }, [selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
@@ -553,7 +550,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing]);
     
     useEffect(() => {
         if(viewRef.current) {
