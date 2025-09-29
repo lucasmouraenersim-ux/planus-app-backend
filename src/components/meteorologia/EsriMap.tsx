@@ -82,6 +82,42 @@ const SideMenu = () => {
     );
 };
 
+// Placar Component
+const Scoreboard = () => {
+    const scores = [
+        { hazard: 'Granizo', hits: 0, misses: 0, percentage: 0, points: 0 },
+        { hazard: 'Vento', hits: 0, misses: 0, percentage: 0, points: 0 },
+        { hazard: 'Tornados', hits: 0, misses: 0, percentage: 0, points: 0 },
+    ];
+
+    return (
+        <div id="scoreboard-wrapper" className="absolute top-[88px] right-[56px] z-[1000] w-[240px] pointer-events-none">
+            <table id="scoreboard" className="w-full border-collapse bg-black/60 text-white text-[13px] leading-tight font-sans">
+                <thead>
+                    <tr>
+                        <th className="p-1 border border-gray-700">Perigo</th>
+                        <th className="p-1 border border-gray-700">Acertos</th>
+                        <th className="p-1 border border-gray-700">Erros</th>
+                        <th className="p-1 border border-gray-700">% AxE</th>
+                        <th className="p-1 border border-gray-700">Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {scores.map(score => (
+                        <tr key={score.hazard} data-hazard={score.hazard.toLowerCase()}>
+                            <td className="p-1 border border-gray-700">{score.hazard}</td>
+                            <td className="p-1 border border-gray-700 text-center">{score.hits}</td>
+                            <td className="p-1 border border-gray-700 text-center">{score.misses}</td>
+                            <td className="p-1 border border-gray-700 text-center">{score.percentage} %</td>
+                            <td className="p-1 border border-gray-700 text-center">{score.points}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
 
 export function EsriMap() {
     const mapDivRef = useRef<HTMLDivElement>(null);
@@ -159,12 +195,18 @@ export function EsriMap() {
                     WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol, SimpleLineSymbol
                 ] = await loadScript();
 
-                // Fetch weather models data
                 let models: any[] = [];
                 try {
                     const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
                     const data = await response.json();
                     const host = data.host;
+                    
+                    const processModelData = (category: string, subCategory: string, dataObj: any) => {
+                        if (dataObj && Array.isArray(dataObj)) {
+                            return { id: `${category}.${subCategory}`, path: dataObj[0].path, name: `${category.toUpperCase()} - ${subCategory.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}` };
+                        }
+                        return null;
+                    };
                     
                     models = Object.keys(data)
                       .filter(key => key !== 'host')
@@ -175,25 +217,20 @@ export function EsriMap() {
                           if (key === 'satellite' && data.satellite.infrared) {
                               return { id: 'satellite.infrared', path: data.satellite.infrared[0].path, name: 'Satélite (Infravermelho)' };
                           }
-                          // GFS and other models
                           if (key === 'gfs' || key === 'ecmwf' || key === 'meteofrance') {
                              if (typeof data[key] === 'object' && data[key] !== null) {
-                                return Object.keys(data[key]).map(subKey => ({
-                                  id: `${key}.${subKey}`,
-                                  path: data[key][subKey][0].path,
-                                  name: `${key.toUpperCase()} - ${subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}`
-                                }));
+                                return Object.keys(data[key]).map(subKey => processModelData(key, subKey, data[key][subKey])).filter(Boolean);
                              }
                           }
                           return [];
                       }).filter(model => model && model.path);
+                      
                     setWeatherModels(models);
+
                 } catch(e) {
                     console.error("Failed to fetch weather models, proceeding without them", e);
                 }
 
-
-                // Create a GroupLayer for all weather models
                 const modelLayers = models.map(model => new WebTileLayer({
                     id: model.id,
                     urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
@@ -215,7 +252,6 @@ export function EsriMap() {
                     visible: false,
                 });
                 
-                // Fetch and render municipality boundaries
                 fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
                     .then(res => res.json())
                     .then(data => {
@@ -313,7 +349,7 @@ export function EsriMap() {
                                 <Select value={selectedModel} onValueChange={setSelectedModel}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {models.map(model => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}
+                                        {weatherModels.map(model => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -465,6 +501,7 @@ export function EsriMap() {
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             {isLoading && <LoadingSpinner />}
+            <Scoreboard />
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
     );
