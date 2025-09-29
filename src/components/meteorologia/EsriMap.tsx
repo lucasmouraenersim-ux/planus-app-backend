@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -118,6 +119,52 @@ const Scoreboard = () => {
     );
 };
 
+// Stats Panel Component
+const StatsPanel = () => {
+    return (
+        <div id="statsPanel" style={{
+            position: "fixed",
+            bottom: "180px",
+            right: "20px",
+            background: "rgba(255,255,255,0.95)",
+            padding: "10px 14px",
+            fontSize: "13px",
+            borderRadius: "6px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            fontFamily: "sans-serif",
+            zIndex: 9999
+        }}>
+            <div id="statsContent">Carregando estatísticas...</div>
+        </div>
+    );
+};
+
+// Reports Legend Component
+const ReportsLegend = () => {
+    return (
+        <div id="legendReports" style={{
+            position: 'fixed',
+            bottom: '95px',
+            left: '20px', // Adjusted position from example
+            background: 'rgba(255,255,255,0.95)',
+            padding: '10px 14px',
+            fontSize: '13px',
+            borderRadius: '6px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            fontFamily: 'sans-serif',
+            zIndex: 9999
+        }}>
+            <b>Relatos</b><br />
+            <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16" alt="Vento leve" /> Vento 80–100km/h</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento &gt;100km/h</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png" width="16" alt="Granizo pequeno" /> Granizo &lt; 4cm</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16" alt="Granizo grande" /> Granizo &gt; 4cm</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png" width="16" alt="Tornado fraco" /> Tornado &lt; EF2</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png" width="16" alt="Tornado forte" /> Tornado ≥ EF2</div>
+        </div>
+    );
+};
+
 
 export function EsriMap() {
     const mapDivRef = useRef<HTMLDivElement>(null);
@@ -192,7 +239,8 @@ export function EsriMap() {
                 const [
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
-                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol, SimpleLineSymbol
+                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol, SimpleLineSymbol,
+                    PictureMarkerSymbol, Point
                 ] = await loadScript();
 
                 let models: any[] = [];
@@ -251,6 +299,12 @@ export function EsriMap() {
                     title: "Municípios",
                     visible: false,
                 });
+
+                const reportsLayer = new GraphicsLayer({
+                    id: "reports",
+                    title: "Relatos",
+                    visible: true,
+                });
                 
                 fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
                     .then(res => res.json())
@@ -276,7 +330,7 @@ export function EsriMap() {
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
-                    layers: [newModelGroupLayer, municipiosLayer],
+                    layers: [newModelGroupLayer, municipiosLayer, reportsLayer],
                     opacity: 0.8
                 });
 
@@ -295,7 +349,10 @@ export function EsriMap() {
                     zoom: 5
                 });
                 
-                view.when(() => setIsLoading(false));
+                view.when(() => {
+                    setIsLoading(false);
+                    loadReports(new Date().toISOString().slice(0, 10)); // Load today's reports on init
+                });
                 
                 view.popup.autoOpenEnabled = false; 
                 view.on("click", (event) => {
@@ -472,6 +529,76 @@ export function EsriMap() {
                     `;
                 };
                 updateLegend();
+
+                // Reports logic
+                function getIconSymbol(hazard: string, sev: string = "NOR") {
+                    const key = `${hazard.toLowerCase()}|${sev.toUpperCase()}`;
+                    const iconMap: Record<string, string> = {
+                        'vento|NOR': 'https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png',
+                        'vento|SS': 'https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png',
+                        'granizo|NOR': 'https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png',
+                        'granizo|SS': 'https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png',
+                        'tornado|NOR': 'https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png',
+                        'tornado|SS': 'https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png'
+                    };
+                    const iconUrl = iconMap[key] || iconMap['vento|NOR'];
+                    return new PictureMarkerSymbol({ url: iconUrl, width: "20px", height: "20px" });
+                }
+
+                function loadReports(dateISO: string) {
+                    const endpoint = `https://www.brazilstormchase.com.br/teste/_functions/reports/list?date=${dateISO}`;
+                    reportsLayer.removeAll();
+                    
+                    fetch(endpoint)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.features || data.features.length === 0) {
+                                console.log("Nenhum relato encontrado para:", dateISO);
+                                updateStatsPanel({ total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 });
+                                return;
+                            }
+                            const stats = { total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 };
+                            const reportGraphics = data.features.map((f: any) => {
+                                const [lon, lat] = f.geometry.coordinates;
+                                const props = f.properties || {};
+                                const hazard = props.hazard?.toLowerCase() || "desconhecido";
+                                const sev = props.sev || "NOR";
+                                
+                                stats.total++;
+                                if (sev === 'SS') stats.sig++;
+                                if (hazard === 'granizo') { stats.hail++; if (sev === 'SS') stats.hailSig++; }
+                                if (hazard === 'vento') { stats.wind++; if (sev === 'SS') stats.windSig++; }
+                                if (hazard === 'tornado') { stats.tornado++; if (sev === 'SS') stats.tornadoSig++; }
+
+                                return new Graphic({
+                                    geometry: new Point({ longitude: lon, latitude: lat, spatialReference: { wkid: 4326 } }),
+                                    symbol: getIconSymbol(hazard, sev),
+                                    attributes: props
+                                });
+                            });
+                            reportsLayer.addMany(reportGraphics);
+                            updateStatsPanel(stats);
+                            console.log(`✅ ${data.features.length} relatos adicionados para ${dateISO}`);
+                        })
+                        .catch(err => {
+                            console.error("❌ Erro ao buscar relatos:", err);
+                            updateStatsPanel({ total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 });
+                        });
+                }
+                
+                function updateStatsPanel(stats: any) {
+                    const statsContent = document.getElementById("statsContent");
+                    if (statsContent) {
+                        statsContent.innerHTML = `
+                            <b>Total:</b> ${stats.total} (<b>${stats.sig}</b> sig)<br>
+                            <span style="color:#3366cc"><b>Vento:</b> ${stats.wind} (${stats.windSig} sig)</span><br>
+                            <span style="color:#33aa33"><b>Granizo:</b> ${stats.hail} (${stats.hailSig} sig)</span><br>
+                            <span style="color:#cc0033"><b>Tornado:</b> ${stats.tornado} (${stats.tornadoSig} sig)</span>
+                        `;
+                    }
+                }
+
+
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
                 setIsLoading(false);
@@ -502,6 +629,8 @@ export function EsriMap() {
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             {isLoading && <LoadingSpinner />}
             <Scoreboard />
+            <StatsPanel />
+            <ReportsLegend />
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
     );

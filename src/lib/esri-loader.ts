@@ -1,3 +1,4 @@
+
 // src/lib/esri-loader.ts
 
 // Flag to ensure CSS is loaded only once
@@ -37,6 +38,8 @@ type EsriModules = [
     typeof __esri.Graphic,
     typeof __esri.symbols.SimpleFillSymbol,
     typeof __esri.symbols.SimpleLineSymbol,
+    typeof __esri.symbols.PictureMarkerSymbol,
+    typeof __esri.Point,
 ];
 
 // Helper to require modules
@@ -60,6 +63,8 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/Graphic",
         "esri/symbols/SimpleFillSymbol",
         "esri/symbols/SimpleLineSymbol",
+        "esri/symbols/PictureMarkerSymbol",
+        "esri/geometry/Point",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
