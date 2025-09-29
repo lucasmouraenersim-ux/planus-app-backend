@@ -129,11 +129,12 @@ const StatsPanel = () => {
             position: "fixed",
             bottom: "180px",
             right: "20px",
-            background: "rgba(255,255,255,0.95)",
+            background: "rgba(30, 30, 30, 0.85)", // Darker background
+            color: "white",
             padding: "10px 14px",
             fontSize: "13px",
             borderRadius: "6px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
             fontFamily: "sans-serif",
             zIndex: 9999
         }}>
@@ -148,12 +149,13 @@ const ReportsLegend = () => {
         <div id="legendReports" style={{
             position: 'fixed',
             bottom: '95px',
-            left: '20px', // Adjusted position from example
-            background: 'rgba(255,255,255,0.95)',
+            left: '20px',
+            background: 'rgba(30, 30, 30, 0.85)', // Darker background
+            color: "white",
             padding: '10px 14px',
             fontSize: '13px',
             borderRadius: '6px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
             fontFamily: 'sans-serif',
             zIndex: 9999
         }}>
@@ -262,13 +264,14 @@ export function EsriMap() {
 
                 let models: any[] = [];
                 try {
-                    const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+                    const response = await fetch('/api/rainviewer'); // Changed to local proxy
                     const data = await response.json();
                     const host = data.host;
                     
                     const processModelData = (category: string, subCategory: string, dataObj: any) => {
                         if (dataObj && Array.isArray(dataObj) && dataObj.length > 0) {
-                            return { id: `${category}.${subCategory}`, path: dataObj[0].path, name: `${category.toUpperCase()} - ${subCategory.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}` };
+                             const name = `${category.toUpperCase()} - ${subCategory.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, str => str.toUpperCase())}`;
+                            return { id: `${category}.${subCategory}`, path: dataObj[0].path, name: name };
                         }
                         return null;
                     };
@@ -558,7 +561,7 @@ export function EsriMap() {
                 }
                 
                 const legendDiv = document.createElement("div");
-                legendDiv.className = "bg-white p-3 rounded-md shadow-md text-black";
+                legendDiv.className = "bg-gray-800 p-3 rounded-md shadow-md text-white";
                 view.ui.add(legendDiv, "bottom-right");
 
                 const updateLegend = () => {
@@ -598,9 +601,9 @@ export function EsriMap() {
                     if (statsContent) {
                         statsContent.innerHTML = `
                             <b>Total:</b> ${stats.total} (<b>${stats.sig}</b> sig)<br>
-                            <span style="color:#3366cc"><b>Vento:</b> ${stats.wind} (${stats.windSig} sig)</span><br>
-                            <span style="color:#33aa33"><b>Granizo:</b> ${stats.hail} (${stats.hailSig} sig)</span><br>
-                            <span style="color:#cc0033"><b>Tornado:</b> ${stats.tornado} (${stats.tornadoSig} sig)</span>
+                            <span style="color:#60a5fa"><b>Vento:</b> ${stats.wind} (${stats.windSig} sig)</span><br>
+                            <span style="color:#4ade80"><b>Granizo:</b> ${stats.hail} (${stats.hailSig} sig)</span><br>
+                            <span style="color:#f87171"><b>Tornado:</b> ${stats.tornado} (${stats.tornadoSig} sig)</span>
                         `;
                     }
                 }
