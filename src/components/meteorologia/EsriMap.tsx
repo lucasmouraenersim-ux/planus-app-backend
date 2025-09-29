@@ -209,11 +209,11 @@ const PrevotsLegend = () => (
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFFF00',marginRight:'6px'}}></span>PREV 2
        </div>
        <div>
-        <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
+         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: 'rgb(255, 165, 0)', marginRight: '6px'}} ></span>PREV 3
        </div>
        <div>
-        <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FF0000',marginRight:'6px'}}></span>PREV 4
-      </div>
+         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: 'rgb(255, 0, 0)', marginRight: '6px'}} ></span>PREV 4
+       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
       </div>
