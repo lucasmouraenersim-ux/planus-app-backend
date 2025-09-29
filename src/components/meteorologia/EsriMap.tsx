@@ -36,7 +36,7 @@ const LoadingSpinner = () => (
 type HazardType = "hail" | "wind" | "tornado" | "prevots";
 type DrawingMode = 'risk' | 'prevots' | 'none';
 
-const hazardOptions: { value: HazardType; label: string }[] = [
+const hazardOptions: { value: Exclude<HazardType, 'prevots'>; label: string }[] = [
     { value: "hail", label: "Granizo" },
     { value: "wind", label: "Vento" },
     { value: "tornado", label: "Tornado" },
@@ -48,7 +48,7 @@ const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
     tornado: [2, 5, 10, 15],
 };
 
-const prevotsLevelOptions = [1, 2, 3, 4];
+const prevotsLevelOptions = [1, 2, 3, 4, 5];
 
 const hexToRgbArray = (hex: string): [number, number, number] => {
   hex = hex.replace("#", "");
@@ -168,7 +168,7 @@ const ReportsLegend = () => {
     );
 };
 
-const RiskLegend = ({ selectedHazard }: { selectedHazard: HazardType }) => {
+const RiskLegend = ({ selectedHazard }: { selectedHazard: Exclude<HazardType, 'prevots'> }) => {
     const isRiskHazard = selectedHazard !== 'prevots';
     const hazardProbs = isRiskHazard ? probabilityOptions[selectedHazard] : [];
 
@@ -224,9 +224,9 @@ const PrevotsLegend = () => (
       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
-      </div>
+       </div>
        <div>
-         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: 'rgb(255, 0, 0)', marginRight: '6px'}} ></span>PREV 4
+         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: '#FF0000', marginRight: '6px'}} ></span>PREV 4
        </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
@@ -237,8 +237,8 @@ const PrevotsLegend = () => (
 
 const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedProb, setSelectedProb, selectedPrevotsLevel, setSelectedPrevotsLevel, onCancel }: { 
     onStartDrawing: (mode: DrawingMode) => void;
-    selectedHazard: HazardType;
-    setSelectedHazard: (h: HazardType) => void;
+    selectedHazard: Exclude<HazardType, 'prevots'>;
+    setSelectedHazard: (h: Exclude<HazardType, 'prevots'>) => void;
     selectedProb: number;
     setSelectedProb: (p: number) => void;
     selectedPrevotsLevel: number;
@@ -271,7 +271,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
                 <h3 className="font-bold">Desenhar Polígono de Risco</h3>
                 <div>
                   <Label>Tipo de Risco</Label>
-                  <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
+                  <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as Exclude<HazardType, 'prevots'>)}>
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
                     <SelectContent>{hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
                   </Select>
@@ -311,7 +311,6 @@ export function EsriMap() {
     const router = useRouter();
     const mapDivRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<__esri.MapView | null>(null);
-    const sketchRef = useRef<__esri.Sketch | null>(null);
     const graphicsLayersRef = useRef<Record<string, __esri.GraphicsLayer>>({});
     
     const [isLoading, setIsLoading] = useState(true);
@@ -323,7 +322,7 @@ export function EsriMap() {
 
     const [isReportMode, setIsReportMode] = useState(false);
     const [newReport, setNewReport] = useState<{
-        hazard: HazardType,
+        hazard: Exclude<HazardType, 'prevots'>,
         sev: 'NOR' | 'SS',
         date: string,
         location: __esri.Point | null
@@ -337,11 +336,11 @@ export function EsriMap() {
     const [isViewingForecast, setIsViewingForecast] = useState(false);
     const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
     
-    const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<HazardType>('hail');
+    const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
-    const sketchViewModelRef = useRef<__esri.SketchViewModel | null>(null);
+    const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
 
 
     const handleLogout = async () => {
@@ -356,7 +355,10 @@ export function EsriMap() {
     const handleStartDrawing = (mode: DrawingMode) => {
         if (!sketchViewModelRef.current) return;
         
-        let symbolOptions = {};
+        let symbolOptions: any = {};
+        let targetLayerId = '';
+        let attributes: any = {};
+
         if (mode === 'risk') {
             const hazard = selectedHazardForDisplay;
             if (hazard === 'prevots') return;
@@ -368,6 +370,8 @@ export function EsriMap() {
                 color: [r, g, b, 0.25],
                 outline: { color: [r, g, b, 1], width: 2 }
             };
+            targetLayerId = hazard;
+            attributes = { type: 'risk', hazard, prob, level };
         } else if (mode === 'prevots') {
             const level = selectedPrevotsLevel;
             const colorHex = catColor[level] || "#999999";
@@ -376,11 +380,16 @@ export function EsriMap() {
                 color: [r, g, b, 0.25],
                 outline: { color: [r, g, b, 1], width: 2 }
             };
+            targetLayerId = 'prevots';
+            attributes = { type: 'prevots', level };
+        } else {
+            return;
         }
     
         const SimpleFillSymbol = sketchViewModelRef.current.polygonSymbol.constructor as any;
         const newSymbol = new SimpleFillSymbol(symbolOptions);
         sketchViewModelRef.current.polygonSymbol = newSymbol;
+        (sketchViewModelRef.current as any)._creationAttributes = attributes;
         
         sketchViewModelRef.current.create("polygon");
     };
@@ -420,12 +429,11 @@ export function EsriMap() {
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
             
             const features = allGraphics.map(g => JSON.stringify(g.geometry.toJSON()));
-
+            
             await setDoc(forecastDocRef, {
                 date: forecastDate,
                 createdAt: serverTimestamp(),
-                features: features,
-                attributes: allGraphics.map(g => g.attributes)
+                features: allGraphics.map(g => g.toJSON()) // Save full graphic object
             });
 
             alert("Previsão enviada com sucesso!");
@@ -473,6 +481,7 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
+                // Weather Models
                 const map = new Map({ basemap: "dark-gray-vector", layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -488,23 +497,26 @@ export function EsriMap() {
                 
                 const sketchVM = new SketchViewModel({
                     view: view,
-                    layer: graphicsLayersRef.current.hail,
+                    layer: graphicsLayersRef.current.hail, // Default layer
                 });
                 sketchViewModelRef.current = sketchVM;
 
                 sketchVM.on("create", (event) => {
                     if (event.state === "complete") {
+                         const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
                         const graphic = addPolygon({
                             graphic: event.graphic,
-                            hazard: (sketchVM as any)._drawingMode === 'risk' ? selectedHazardForDisplay : 'prevots',
-                            prob: (sketchVM as any)._drawingMode === 'risk' ? selectedProb : selectedPrevotsLevel,
+                            attributes: attributes,
                             brazilBoundary,
                             Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
                         });
                         if (graphic) {
-                            const targetLayerId = graphic.attributes.hazard;
+                            const targetLayerId = graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard;
                             const targetLayer = graphicsLayersRef.current[targetLayerId];
                             if (targetLayer) {
+                                // We remove the graphic from the default layer it was added to
+                                sketchViewModelRef.current!.layer.remove(event.graphic);
+                                // And add the processed graphic to the correct layer
                                 targetLayer.add(graphic);
                             }
                         }
@@ -527,7 +539,6 @@ export function EsriMap() {
                 root.render(
                     <DrawUI 
                         onStartDrawing={(mode) => {
-                            (sketchViewModelRef.current as any)._drawingMode = mode;
                             handleStartDrawing(mode);
                         }}
                         selectedHazard={selectedHazardForDisplay}
@@ -584,7 +595,7 @@ export function EsriMap() {
             <Scoreboard />
             <StatsPanel />
             <ReportsLegend />
-            <RiskLegend selectedHazard={selectedHazardForDisplay} />
+            {selectedHazardForDisplay !== 'prevots' && <RiskLegend selectedHazard={selectedHazardForDisplay} />}
             <PrevotsLegend />
 
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
@@ -609,7 +620,7 @@ export function EsriMap() {
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
-                        <Select value={newReport.hazard} onValueChange={(v: HazardType) => setNewReport(prev => ({...prev, hazard: v}))}>
+                        <Select value={newReport.hazard} onValueChange={(v: Exclude<HazardType, 'prevots'>) => setNewReport(prev => ({...prev, hazard: v}))}>
                             <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue/></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="wind"><Wind className="inline-block mr-2 h-4 w-4" />Vento</SelectItem>

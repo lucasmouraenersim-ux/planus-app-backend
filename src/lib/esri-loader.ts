@@ -1,4 +1,3 @@
-
 // src/lib/esri-loader.ts
 
 // Flag to ensure CSS is loaded only once
@@ -40,6 +39,7 @@ type EsriModules = [
     typeof __esri.symbols.SimpleLineSymbol,
     typeof __esri.symbols.PictureMarkerSymbol,
     typeof __esri.Point,
+    typeof __esri.widgets.Sketch.SketchViewModel, // Added SketchViewModel
 ];
 
 // Helper to require modules
@@ -65,6 +65,7 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/symbols/SimpleLineSymbol",
         "esri/symbols/PictureMarkerSymbol",
         "esri/geometry/Point",
+        "esri/widgets/Sketch/SketchViewModel", // Added SketchViewModel
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
@@ -91,8 +92,4 @@ export function loadScript(): Promise<EsriModules> {
             requireModules(resolve);
         };
 
-        script.onerror = (error) => {
-            reject(error);
-        };
-    });
-}
+        script.onerror = (error
