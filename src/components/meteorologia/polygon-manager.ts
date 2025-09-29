@@ -1,9 +1,7 @@
 
 // src/components/meteorologia/polygon-manager.ts
-import * as turf from '@turf/turf';
 
 // Definições de tipo para clareza
-type HazardType = "hail" | "wind" | "tornado" | "prevots";
 type EsriPolygon = __esri.Polygon;
 type EsriGraphic = __esri.Graphic;
 type EsriColor = __esri.Color;
@@ -11,6 +9,7 @@ type EsriSimpleFillSymbol = __esri.symbols.SimpleFillSymbol;
 type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
 type EsriGraphicsLayer = __esri.GraphicsLayer;
 type EsriMapView = __esri.MapView;
+type Turf = typeof import('@turf/turf');
 
 // Regras de negócio e cores, extraídas da referência
 export const catColor: Record<number, string> = {
@@ -33,6 +32,7 @@ export const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]
     tornado: [2, 5, 10, 15],
 };
 
+let turfInstance: Turf | null = null;
 
 // Cache para armazenar polígonos por tipo
 const polygonGroups: Record<string, EsriGraphic[]> = {
@@ -42,13 +42,18 @@ const polygonGroups: Record<string, EsriGraphic[]> = {
   prevots: [],
 };
 
+export function initializePolygonManager(turfLib: Turf) {
+  turfInstance = turfLib;
+}
+
 // Validação de área: polígono de nível maior não pode ser maior que um de nível menor
-function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: Exclude<HazardType, 'prevots'>): boolean {
-  if (!turf || !newPolygon?.rings) return true; // Se turf não estiver carregado, pula a validação
+export function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: Exclude<HazardType, 'prevots'>): boolean {
+  if (!turfInstance || !newPolygon?.rings) return true; // Se turf não estiver carregado, pula a validação
 
-  const newPolygonGeoJSON = { type: "Polygon", coordinates: newPolygon.rings };
-  const newArea = turf.area(turf.feature(newPolygonGeoJSON));
-
+  const newPolygonGeoJSON = { type: "Polygon" as const, coordinates: newPolygon.rings };
+  const newPolygonFeature = turfInstance.feature(newPolygonGeoJSON);
+  const newArea = turfInstance.area(newPolygonFeature);
+  
   const sameHazardPolys = polygonGroups[hazard] || [];
   for (const existingGraphic of sameHazardPolys) {
     const existingLevel = existingGraphic.attributes?.level;
@@ -57,8 +62,9 @@ function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: Exclude
     const existingGeom = existingGraphic.geometry as EsriPolygon;
     if (!existingGeom?.rings) continue;
     
-    const existingPolygonGeoJSON = { type: "Polygon", coordinates: existingGeom.rings };
-    const existingArea = turf.area(turf.feature(existingPolygonGeoJSON));
+    const existingPolygonGeoJSON = { type: "Polygon" as const, coordinates: existingGeom.rings };
+    const existingPolygonFeature = turfInstance.feature(existingPolygonGeoJSON);
+    const existingArea = turfInstance.area(existingPolygonFeature);
     
     if (newArea > existingArea) {
       alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
@@ -89,22 +95,26 @@ export function addPolygon({
   Polygon: any;
   webMercatorUtils: any;
 }): EsriGraphic | null {
+  if (!turfInstance) {
+    console.error("Turf.js não inicializado. Chame initializePolygonManager primeiro.");
+    return null;
+  }
 
   const { hazard, prob, level, type } = attributes;
   
+  // 1. Converte e Recorta a geometria
+  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
+  const turfPolygon = turfInstance.polygon(geographicGeom.rings);
+  const clipped = turfInstance.intersect(turfPolygon, brazilBoundary);
+
+  if (!clipped || !clipped.geometry) {
+      alert("O polígono desenhado está fora dos limites do Brasil.");
+      return null;
+  }
+  
+  const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+  
   if (type === 'risk') {
-    // 1. Converte e Recorta a geometria
-    const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
-    const turfPolygon = turf.polygon(geographicGeom.rings);
-    const clipped = turf.intersect(turfPolygon, brazilBoundary);
-
-    if (!clipped || !clipped.geometry) {
-        alert("O polígono desenhado está fora dos limites do Brasil.");
-        return null;
-    }
-    
-    const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
-
     // 2. Validação de Área
     if (!validateArea(esriPolygon, level, hazard)) {
         return null;
@@ -123,6 +133,7 @@ export function addPolygon({
 
   } else if (type === 'prevots') {
      // A lógica para PREVOTS pode ser mais simples se não precisar de validação de área complexa
+    graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
     if (!polygonGroups['prevots']) {
         polygonGroups['prevots'] = [];
     }
@@ -134,8 +145,9 @@ export function addPolygon({
   return graphic; // Retorna o gráfico original se não for de um tipo conhecido
 }
 
+
 // Remove um polígono do mapa e do cache
-export function removePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
+export function deletePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
   const { hazard, uid, type } = graphic.attributes;
   const groupKey = type === 'prevots' ? 'prevots' : hazard;
   
@@ -146,21 +158,26 @@ export function removePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsL
   }
 }
 
-// Limpa o cache de um tipo de risco específico
-export function clearPolygonGroup(hazard: HazardType) {
-    if (polygonGroups[hazard]) {
-      polygonGroups[hazard] = [];
-    }
+export function updatePolygon(graphic: EsriGraphic, newAttributes: any) {
+    graphic.attributes = { ...graphic.attributes, ...newAttributes };
 }
 
-// Retorna todos os polígonos de um grupo específico
-export function getPolygonsByHazard(hazard: HazardType): EsriGraphic[] {
-  return polygonGroups[hazard] || [];
+
+// Limpa todos os polígonos
+export function clearAllPolygons(view: EsriMapView): void {
+  Object.keys(polygonGroups).forEach(key => {
+      const layer = view.map.findLayerById(key) as EsriGraphicsLayer;
+      if (layer) {
+          layer.removeAll();
+      }
+      polygonGroups[key] = [];
+  });
+  console.log("🗑️ Todos os polígonos foram limpos.");
 }
 
 // Retorna todos os polígonos de todos os grupos
-export function getAllPolygons(): EsriGraphic[] {
-  return Object.values(polygonGroups).flat();
+export function getPolygonGroups(): Record<string, EsriGraphic[]> {
+  return polygonGroups;
 }
 
 // Atualiza a visibilidade das camadas no mapa

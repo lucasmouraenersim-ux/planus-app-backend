@@ -212,7 +212,7 @@ const PrevotsLegend = () => (
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
        </div>
        <div>
-        <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: '#FF0000', marginRight: '6px'}} ></span>PREV 4
+        <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FF0000',marginRight:'6px'}}></span>PREV 4
       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
@@ -403,7 +403,8 @@ export function EsriMap() {
     }, [selectedModel, modelGroupLayer]);
 
     const handleSendForecast = async () => {
-        const drawnGraphics = getAllPolygons();
+        const polygonGroups = getPolygonGroups();
+        const drawnGraphics = Object.values(polygonGroups).flat();
         if (drawnGraphics.length === 0) {
             alert("Nenhum polígono desenhado para enviar.");
             return;
@@ -471,7 +472,7 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const basemap = await Basemap.fromId("dark-gray");
+                const basemap = await Basemap.fromId("dark-gray-vector");
                 const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -591,7 +592,7 @@ export function EsriMap() {
                 <Button onClick={() => alert("Função de busca por data a ser implementada.")}>Buscar Previsões</Button>
                 {(userAppRole === 'superadmin') && (
                     <>
-                        <Button onClick={handleSendForecast} disabled={isSubmittingForecast || getAllPolygons().length === 0} className="bg-green-600 hover:bg-green-700">
+                        <Button onClick={handleSendForecast} disabled={isSubmittingForecast || Object.values(getPolygonGroups()).flat().length === 0} className="bg-green-600 hover:bg-green-700">
                             {isSubmittingForecast ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                             Enviar Previsão
                         </Button>
