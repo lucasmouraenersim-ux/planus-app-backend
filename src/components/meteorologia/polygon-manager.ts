@@ -15,7 +15,7 @@ export const catColor: Record<number, string> = {
   1: "#FFFF00", // Nível 1 (Amarelo)
   2: "#FFA500", // Nível 2 (Laranja)
   3: "#FF0000", // Nível 3 (Vermelho)
-  4: "#800080"  // Nível 4 (Roxo)
+  4: "#800080"  // Roxo - PREV 4 (se houver)
 };
 
 export const levelOf = (p: number, t: HazardType): number => {
@@ -155,3 +155,13 @@ export function togglePolygonVisibility(map: __esri.Map, selectedHazard: HazardT
   if (!map) return;
   Object.entries(polygonGroups).forEach(([hazard, group]) => {
     group.forEach(graphic => {
+      const isVisible = hazard === selectedHazard;
+      const layer = map.graphics; // Assume a single graphics layer for simplicity
+      if (isVisible && !layer.graphics.includes(graphic)) {
+          layer.add(graphic);
+      } else if (!isVisible && layer.graphics.includes(graphic)) {
+          layer.remove(graphic);
+      }
+    });
+  });
+}
