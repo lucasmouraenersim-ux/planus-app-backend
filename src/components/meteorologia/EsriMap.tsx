@@ -33,7 +33,7 @@ const LoadingSpinner = () => (
     </div>
 );
 
-type HazardType = "hail" | "wind" | "tornado";
+type HazardType = "hail" | "wind" | "tornado" | "prevots";
 type DrawingMode = 'risk' | 'prevots' | 'none';
 
 const hazardOptions: { value: HazardType; label: string }[] = [
@@ -42,7 +42,7 @@ const hazardOptions: { value: HazardType; label: string }[] = [
     { value: "tornado", label: "Tornado" },
 ];
 
-const probabilityOptions: Record<HazardType, number[]> = {
+const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
     hail: [5, 15, 30, 45],
     wind: [5, 15, 30, 45],
     tornado: [2, 5, 10, 15],
@@ -169,7 +169,10 @@ const ReportsLegend = () => {
 };
 
 const RiskLegend = ({ selectedHazard }: { selectedHazard: HazardType }) => {
-    const legendItems = probabilityOptions[selectedHazard].map(p => {
+    const isRiskHazard = selectedHazard !== 'prevots';
+    const hazardProbs = isRiskHazard ? probabilityOptions[selectedHazard] : [];
+
+    const legendItems = hazardProbs.map(p => {
         const lvl = levelOf(p, selectedHazard);
         const color = catColor[lvl] || "#999";
         return `<div style="margin-bottom:4px">
@@ -223,8 +226,8 @@ const PrevotsLegend = () => (
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
       </div>
        <div>
-        <span style="display: inline-block; width: 14px; height: 14px; background-color: rgb(255, 0, 0); margin-right: 6px;" ></span>PREV 4
-      </div>
+         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: 'rgb(255, 0, 0)', marginRight: '6px'}} ></span>PREV 4
+       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
       </div>
@@ -245,7 +248,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
     const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('main');
 
     useEffect(() => {
-        if (activeMenu === 'risk') {
+        if (activeMenu === 'risk' && selectedHazard !== 'prevots') {
             setSelectedProb(probabilityOptions[selectedHazard][0]);
         }
     }, [selectedHazard, activeMenu, setSelectedProb]);
@@ -277,7 +280,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
                   <Label>Probabilidade (%)</Label>
                   <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>{probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
+                    <SelectContent>{(selectedHazard !== 'prevots' ? probabilityOptions[selectedHazard] : []).map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <Button onClick={() => onStartDrawing('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
@@ -338,7 +341,8 @@ export function EsriMap() {
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
-    const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
+    const sketchViewModelRef = useRef<__esri.SketchViewModel | null>(null);
+
 
     const handleLogout = async () => {
         try {
@@ -350,12 +354,12 @@ export function EsriMap() {
     };
     
     const handleStartDrawing = (mode: DrawingMode) => {
-        if (!sketchRef.current) return;
-        setDrawingMode(mode);
+        if (!sketchViewModelRef.current) return;
         
         let symbolOptions = {};
         if (mode === 'risk') {
             const hazard = selectedHazardForDisplay;
+            if (hazard === 'prevots') return;
             const prob = selectedProb;
             const level = levelOf(prob, hazard);
             const colorHex = catColor[level] || "#999999";
@@ -373,12 +377,12 @@ export function EsriMap() {
                 outline: { color: [r, g, b, 1], width: 2 }
             };
         }
-
-        const SimpleFillSymbol = (sketchRef.current.viewModel as any).polygonSymbol.constructor;
+    
+        const SimpleFillSymbol = sketchViewModelRef.current.polygonSymbol.constructor as any;
         const newSymbol = new SimpleFillSymbol(symbolOptions);
-        (sketchRef.current.viewModel as any).polygonSymbol = newSymbol;
+        sketchViewModelRef.current.polygonSymbol = newSymbol;
         
-        sketchRef.current.create("polygon");
+        sketchViewModelRef.current.create("polygon");
     };
 
     useEffect(() => {
@@ -446,7 +450,7 @@ export function EsriMap() {
                     Map, MapView, Basemap, TileLayer, GroupLayer,
                     BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
                     WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
-                    SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point
+                    SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
                 ] = await loadScript();
 
                 let models: any[] = [];
@@ -469,8 +473,6 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                // Weather Models
-                
                 const map = new Map({ basemap: "dark-gray-vector", layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -484,9 +486,31 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketch = new Sketch({ view, layer: graphicsLayersRef.current.hail, creationMode: "update" });
-                sketchRef.current = sketch;
-                
+                const sketchVM = new SketchViewModel({
+                    view: view,
+                    layer: graphicsLayersRef.current.hail,
+                });
+                sketchViewModelRef.current = sketchVM;
+
+                sketchVM.on("create", (event) => {
+                    if (event.state === "complete") {
+                        const graphic = addPolygon({
+                            graphic: event.graphic,
+                            hazard: (sketchVM as any)._drawingMode === 'risk' ? selectedHazardForDisplay : 'prevots',
+                            prob: (sketchVM as any)._drawingMode === 'risk' ? selectedProb : selectedPrevotsLevel,
+                            brazilBoundary,
+                            Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
+                        });
+                        if (graphic) {
+                            const targetLayerId = graphic.attributes.hazard;
+                            const targetLayer = graphicsLayersRef.current[targetLayerId];
+                            if (targetLayer) {
+                                targetLayer.add(graphic);
+                            }
+                        }
+                    }
+                });
+
                 const drawContainer = document.createElement("div");
                 const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
                 
@@ -502,42 +526,19 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <DrawUI 
-                        onStartDrawing={handleStartDrawing} 
+                        onStartDrawing={(mode) => {
+                            (sketchViewModelRef.current as any)._drawingMode = mode;
+                            handleStartDrawing(mode);
+                        }}
                         selectedHazard={selectedHazardForDisplay}
                         setSelectedHazard={setSelectedHazardForDisplay}
                         selectedProb={selectedProb}
                         setSelectedProb={setSelectedProb}
                         selectedPrevotsLevel={selectedPrevotsLevel}
                         setSelectedPrevotsLevel={setSelectedPrevotsLevel}
-                        onCancel={() => { sketchExpand.collapse(); setDrawingMode('none'); }}
+                        onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                     />
                 );
-                
-                sketch.on("create", (event) => {
-                    if (event.state === "complete" && drawingMode !== 'none') {
-                         if (!brazilBoundary) {
-                            alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
-                            sketchRef.current?.cancel();
-                            return;
-                        }
-                        
-                        const addedGraphic = addPolygon({
-                            graphic: event.graphic,
-                            hazard: drawingMode === 'risk' ? selectedHazardForDisplay : 'prevots', // Simplified
-                            prob: drawingMode === 'risk' ? selectedProb : selectedPrevotsLevel, // Re-using prob field
-                            brazilBoundary,
-                            Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
-                        });
-                        
-                        if (addedGraphic) {
-                            const targetLayer = graphicsLayersRef.current[addedGraphic.attributes.hazard];
-                            if(targetLayer) {
-                                targetLayer.add(addedGraphic);
-                            }
-                        }
-                        setDrawingMode('none');
-                    }
-                });
 
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
@@ -550,7 +551,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel, drawingMode]);
+    }, [brazilBoundary, userAppRole, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
     
     useEffect(() => {
         if(viewRef.current) {
