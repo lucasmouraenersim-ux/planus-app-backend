@@ -39,7 +39,7 @@ type EsriModules = [
     typeof __esri.symbols.SimpleLineSymbol,
     typeof __esri.symbols.PictureMarkerSymbol,
     typeof __esri.Point,
-    typeof __esri.widgets.Sketch.SketchViewModel, // Added SketchViewModel
+    typeof __esri.widgets.Sketch.SketchViewModel,
 ];
 
 // Helper to require modules
@@ -65,7 +65,7 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/symbols/SimpleLineSymbol",
         "esri/symbols/PictureMarkerSymbol",
         "esri/geometry/Point",
-        "esri/widgets/Sketch/SketchViewModel", // Added SketchViewModel
+        "esri/widgets/Sketch/SketchViewModel",
     ], (...modules: EsriModules) => {
         resolve(modules);
     });
@@ -92,4 +92,9 @@ export function loadScript(): Promise<EsriModules> {
             requireModules(resolve);
         };
 
-        script.onerror = (error
+        script.onerror = (error) => {
+            console.error("Failed to load ArcGIS API script:", error);
+            reject(new Error("Failed to load the ArcGIS API for JavaScript."));
+        };
+    });
+}
