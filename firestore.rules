@@ -2,10 +2,21 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow any authenticated user to read and write to any document.
-    // The application logic is now responsible for controlling data access.
+
+    // Regra para a coleção 'weather_reports'
+    // Permite que qualquer pessoa leia os documentos, mas apenas usuários autenticados podem criar.
+    // Ninguém pode atualizar ou apagar relatos diretamente pelo cliente para garantir a integridade.
+    match /weather_reports/{reportId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if false;
+    }
+
+    // Regra padrão para todas as outras coleções.
+    // Nega acesso a todas as outras coleções por padrão, a menos que uma regra mais específica seja definida.
+    // Você deve adicionar regras para 'users', 'crm_leads', etc., conforme necessário.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

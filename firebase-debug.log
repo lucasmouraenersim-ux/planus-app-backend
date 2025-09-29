@@ -5201,3 +5201,9 @@ Dev App Server is now running.
 
 Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
  
+[info] i  firestore: Change detected, updating rules... 
+[debug] [2025-09-29T01:01:08.824Z] >>> [apiv2][query] PUT http://127.0.0.1:8080/emulator/v1/projects/demo-app:securityRules [none]
+[debug] [2025-09-29T01:01:08.824Z] >>> [apiv2][body] PUT http://127.0.0.1:8080/emulator/v1/projects/demo-app:securityRules {"ignore_errors":true,"rules":{"files":[{"name":"security.rules","content":"rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    // Regra para a coleção 'weather_reports'\n    // Permite que qualquer pessoa leia os documentos, mas apenas usuários autenticados podem criar.\n    // Ninguém pode atualizar ou apagar relatos diretamente pelo cliente para garantir a integridade.\n    match /weather_reports/{reportId} {\n      allow read: if true;\n      allow create: if request.auth != null;\n      allow update, delete: if false;\n    }\n\n    // Regra padrão para todas as outras coleções.\n    // Nega acesso a todas as outras coleções por padrão, a menos que uma regra mais específica seja definida.\n    // Você deve adicionar regras para 'users', 'crm_leads', etc., conforme necessário.\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}\n"}]}}
+[debug] [2025-09-29T01:01:08.889Z] Sep 29, 2025 1:01:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Sep 29, 2025 1:01:08 AM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
