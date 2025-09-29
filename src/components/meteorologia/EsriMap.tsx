@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import * as turf from '@turf/turf';
+import * * as turf from '@turf/turf';
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from '@/components/ui/button';
@@ -752,12 +752,10 @@ export function EsriMap() {
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
                 <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
                 {(userAppRole === 'superadmin') && (
-                    <>
-                        <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
-                            {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                            {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
-                        </Button>
-                    </>
+                    <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
+                        {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                        {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
+                    </Button>
                 )}
             </div>
             
@@ -833,4 +831,3 @@ export function EsriMap() {
     );
 }
     
-
