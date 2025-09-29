@@ -89,8 +89,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
+        // The user is admin, force the type to 'superadmin' regardless of what's in Firestore.
         const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
         const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
+        
+        if (isSuperAdmin && firestoreUserData.type !== 'superadmin') {
+            await setDoc(userDocRef, { type: 'superadmin' }, { merge: true });
+        }
+
 
         return {
           uid: user.uid,
@@ -115,22 +121,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           assignmentLimit: firestoreUserData.assignmentLimit,
           trainingProgress: firestoreUserData.trainingProgress, // Include training progress
           personalFinance: firestoreUserData.personalFinance,
+          signedContractUrl: firestoreUserData.signedContractUrl,
         };
       } else {
-        console.warn(`Firestore document for user ${user.uid} not found.`);
-        return { 
+        console.warn(`Firestore document for user ${user.uid} not found. Creating a base document.`);
+        const newUserType: UserType = isSuperAdmin ? 'superadmin' : 'user';
+        const newFirestoreUser: FirestoreUser = {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
-            photoURL: user.photoURL,
-            type: 'pending_setup',
+            type: newUserType,
+            createdAt: Timestamp.now(),
             personalBalance: 0,
             mlmBalance: 0,
-            createdAt: new Date().toISOString(),
-            canViewLeadPhoneNumber: false,
-            canViewCrm: false,
-            canViewCareerPlan: false,
+            canViewLeadPhoneNumber: isSuperAdmin,
+            canViewCrm: isSuperAdmin,
+            canViewCareerPlan: isSuperAdmin,
         };
+        await setDoc(userDocRef, newFirestoreUser);
+        return {
+            ...newFirestoreUser,
+            createdAt: (newFirestoreUser.createdAt as Timestamp).toDate().toISOString(),
+        } as AppUser;
       }
     } catch (error) {
       console.error("Error fetching user data from Firestore:", error);

@@ -15,6 +15,7 @@ import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, Cl
 import { collection, addDoc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from '../ui/input';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 const LoadingSpinner = () => (
@@ -170,6 +171,7 @@ const ReportsLegend = () => {
 
 
 export function EsriMap() {
+    const { userAppRole } = useAuth();
     const mapDivRef = useRef<HTMLDivElement>(null);
     const sketchRef = useRef<__esri.Sketch | null>(null);
     const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
@@ -680,10 +682,12 @@ export function EsriMap() {
                     className="bg-gray-700 border-gray-600 text-white h-9"
                 />
                  <Button onClick={() => alert("Função de busca por data a ser implementada.")}>Buscar Relatos</Button>
-                <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
-                    {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                    {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
-                </Button>
+                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (
+                    <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
+                        {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                        {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
+                    </Button>
+                )}
             </div>
             
             {isReportMode && (
