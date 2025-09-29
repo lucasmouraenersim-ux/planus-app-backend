@@ -300,6 +300,9 @@ export function EsriMap() {
     const viewRef = useRef<__esri.MapView | null>(null);
     const graphicsLayersRef = useRef<Record<string, __esri.GraphicsLayer>>({});
     
+    // Refs for ESRI classes
+    const esriModulesRef = useRef<any>({});
+
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
     
@@ -403,6 +406,8 @@ export function EsriMap() {
         const hazardsToFetch: HazardType[] = ['hail', 'wind', 'tornado', 'prevots'];
         
         try {
+            const { Polygon, Graphic, SimpleFillSymbol, Color } = esriModulesRef.current;
+
             for (const hazard of hazardsToFetch) {
                 const forecastId = `forecast_${forecastDate}_${hazard}`;
                 const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
@@ -412,8 +417,6 @@ export function EsriMap() {
                     const data = docSnap.data();
                     const features = data.features || [];
                     
-                    const { Polygon, Graphic, SimpleFillSymbol, Color } = await loadScript();
-
                     features.forEach((feature: any) => {
                         const geometry = new Polygon(JSON.parse(feature.geometry));
                         const attributes = feature.attributes;
@@ -456,9 +459,11 @@ export function EsriMap() {
         }
     }, []);
 
-    const handleStartDrawing = useCallback((mode: DrawingMode, hazard: HazardType, probability: number, level: number, Color: any, SimpleFillSymbol: any) => {
+    const handleStartDrawing = useCallback((mode: DrawingMode, hazard: HazardType, probability: number, level: number) => {
         const sketchVM = sketchViewModelRef.current;
         if (!sketchVM) return;
+
+        const { Color, SimpleFillSymbol } = esriModulesRef.current;
     
         let symbolOptions: any = {};
         let attributes: any = {};
@@ -506,6 +511,14 @@ export function EsriMap() {
                     WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
                     SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
                 ] = await loadScript();
+
+                // Store loaded modules in refs
+                esriModulesRef.current = {
+                    Map, MapView, Basemap, TileLayer, GroupLayer, BasemapGallery,
+                    Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
+                    webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol,
+                    SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
+                };
                 
                 initializePolygonManager(turf);
 
@@ -548,7 +561,7 @@ export function EsriMap() {
                 sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
                     if (event.state === "complete") {
                          const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
-                        const graphic = addPolygon({
+                        addPolygon({
                             graphic: event.graphic,
                             attributes: attributes,
                             brazilBoundary,
@@ -573,7 +586,7 @@ export function EsriMap() {
                 root.render(
                     <DrawUI 
                         onStartDrawing={(mode, hazard, prob, level) => {
-                             handleStartDrawing(mode, hazard, prob, level, Color, SimpleFillSymbol);
+                             handleStartDrawing(mode, hazard, prob, level);
                         }}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                         activeHazard={selectedHazardForDisplay}
@@ -623,7 +636,7 @@ export function EsriMap() {
 
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
-                <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Buscar Previsões</Button>
+                <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
                 {(userAppRole === 'superadmin') && (
                     <>
                         <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
