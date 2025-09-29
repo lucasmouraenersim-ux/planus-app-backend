@@ -9,8 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2 } from 'lucide-react';
-import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc } from 'firebase/firestore';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon } from 'lucide-react';
+import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Input } from '../ui/input';
@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { loadCss, loadScript } from '@/lib/esri-loader';
 
-import { addPolygon, clearAllPolygons, deletePolygon, getPolygonGroups, initializePolygonManager, togglePolygonVisibility, updatePolygon, validateArea, catColor, levelOf, probabilityOptions } from './polygon-manager';
+import { addPolygon, clearAllPolygons, deletePolygon, getPolygonGroups, getPolygonsByHazard, initializePolygonManager, togglePolygonVisibility, updatePolygon, validateArea, catColor, levelOf, probabilityOptions } from './polygon-manager';
 
 
 const LoadingSpinner = () => (
@@ -319,11 +319,10 @@ export function EsriMap() {
         date: new Date().toISOString().slice(0, 10),
         location: null
     });
-    const [isSubmittingForecast, setIsSubmittingForecast] = useState(false);
-    const [isViewingForecast, setIsViewingForecast] = useState(false);
+    
+    const [isSubmitting, setIsSubmitting] = useState<Record<string, boolean>>({});
     const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
     const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
-
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
 
@@ -358,39 +357,97 @@ export function EsriMap() {
             layer.visible = (layer.id === selectedModel);
         });
     }, [selectedModel, modelGroupLayer]);
-
-    const handleSendForecast = async () => {
-        const polygonGroups = getPolygonGroups();
-        const drawnGraphics = Object.values(polygonGroups).flat();
-        if (drawnGraphics.length === 0) {
-            alert("Nenhum polígono desenhado para enviar.");
+    
+    const handleSaveHazardForecast = async (hazard: Exclude<HazardType, 'prevots'>) => {
+        const polygonsToSave = getPolygonsByHazard(hazard);
+        if (polygonsToSave.length === 0) {
+            alert(`Nenhum polígono de ${hazard} para salvar.`);
             return;
         }
-        setIsSubmittingForecast(true);
+
+        setIsSubmitting(prev => ({...prev, [hazard]: true}));
+
         try {
-            const forecastId = `forecast_${forecastDate}`;
+            const forecastId = `forecast_${forecastDate}_${hazard}`;
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
             
-            const featuresToSave = drawnGraphics.map(g => ({
+            const featuresToSave = polygonsToSave.map(g => ({
               geometry: JSON.stringify(g.geometry.toJSON()),
               attributes: g.attributes
             }));
 
             await setDoc(forecastDocRef, {
                 date: forecastDate,
+                hazard: hazard,
                 createdAt: serverTimestamp(),
                 features: featuresToSave
-            });
+            }, { merge: true }); // Merge to update if doc exists
 
-            alert("Previsão enviada com sucesso!");
+            alert(`Previsão para ${hazard} salva com sucesso!`);
             
         } catch (error) {
-            console.error("Erro ao enviar previsão: ", error);
-            alert("Falha ao enviar a previsão.");
+            console.error(`Erro ao salvar previsão de ${hazard}: `, error);
+            alert(`Falha ao salvar a previsão de ${hazard}.`);
         } finally {
-            setIsSubmittingForecast(false);
+            setIsSubmitting(prev => ({...prev, [hazard]: false}));
         }
     };
+
+    const handleLoadForecast = useCallback(async () => {
+        if (!viewRef.current) return;
+        
+        clearAllPolygons(viewRef.current);
+        
+        setIsLoading(true);
+
+        const hazardsToFetch: HazardType[] = ['hail', 'wind', 'tornado', 'prevots'];
+        
+        try {
+            for (const hazard of hazardsToFetch) {
+                const forecastId = `forecast_${forecastDate}_${hazard}`;
+                const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
+                const docSnap = await getDoc(forecastDocRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const features = data.features || [];
+                    
+                    const { Polygon, Graphic, SimpleFillSymbol, Color } = await loadScript();
+
+                    features.forEach((feature: any) => {
+                        const geometry = new Polygon(JSON.parse(feature.geometry));
+                        const attributes = feature.attributes;
+                        const { type, hazard: featureHazard, prob, level } = attributes;
+                        
+                        let colorHex = "#999";
+                        if (type === 'risk') {
+                            const riskLevel = levelOf(prob, featureHazard);
+                            colorHex = catColor[riskLevel] || "#999";
+                        } else if (type === 'prevots') {
+                            colorHex = catColor[level] || "#999";
+                        }
+
+                        const symbol = new SimpleFillSymbol({
+                            color: [...new Color(colorHex).toRgb(), 0.25],
+                            outline: { color: new Color(colorHex), width: 2 }
+                        });
+
+                        const graphic = new Graphic({ geometry, symbol, attributes });
+                        const targetLayer = graphicsLayersRef.current[featureHazard || type];
+                        if (targetLayer) {
+                            targetLayer.add(graphic);
+                        }
+                    });
+                }
+            }
+            alert("Previsões carregadas do Firestore!");
+        } catch (error) {
+            console.error("Erro ao carregar previsões: ", error);
+            alert("Falha ao carregar previsões do banco de dados.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [forecastDate]);
 
     const handleHazardChangeForDisplay = useCallback((hazard: Exclude<HazardType, 'prevots'>) => {
         setSelectedHazardForDisplay(hazard);
@@ -400,42 +457,26 @@ export function EsriMap() {
     }, []);
 
     const handleStartDrawing = useCallback((mode: DrawingMode, hazard: HazardType, probability: number, level: number, Color: any, SimpleFillSymbol: any) => {
-        if (!sketchViewModelRef.current) return;
-    
         const sketchVM = sketchViewModelRef.current;
+        if (!sketchVM) return;
+    
         let symbolOptions: any = {};
         let attributes: any = {};
         let targetLayerId: string | undefined;
 
-        if (mode === 'risk') {
-            const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
-            const prob = probability;
-            const riskLevel = levelOf(prob, riskHazard);
-            const colorHex = catColor[riskLevel] || "#999999";
-            
-            symbolOptions = {
-                color: [...new Color(colorHex).toRgb(), 0.25],
-                outline: { color: new Color(colorHex), width: 2 }
-            };
-
-            targetLayerId = riskHazard;
-            attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
-
-        } else if (mode === 'prevots') {
-            const prevotsLevel = level;
-            const colorHex = catColor[prevotsLevel] || "#999999";
-    
-            symbolOptions = {
-                color: [...new Color(colorHex).toRgb(), 0.25],
-                outline: { color: new Color(colorHex), width: 2 }
-            };
-            targetLayerId = 'prevots';
-            attributes = { type: 'prevots', level: prevotsLevel };
-        } else {
-            return;
-        }
+        const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
+        const prob = probability;
+        const riskLevel = levelOf(prob, riskHazard);
+        const colorHex = catColor[riskLevel] || "#999999";
         
-        // This is the correct place to set the target layer for the SketchViewModel
+        symbolOptions = {
+            color: [...new Color(colorHex).toRgb(), 0.25],
+            outline: { color: new Color(colorHex), width: 2 }
+        };
+        
+        targetLayerId = riskHazard;
+        attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
+
         if (targetLayerId && graphicsLayersRef.current[targetLayerId]) {
             sketchVM.layer = graphicsLayersRef.current[targetLayerId];
         } else {
@@ -483,7 +524,6 @@ export function EsriMap() {
                 const newModelGroupLayer = new GroupLayer({ title: "Modelos Meteorológicos", visible: true, layers: modelLayers });
                 setModelGroupLayer(newModelGroupLayer);
                 
-                // Initialize all graphics layers
                 hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
@@ -502,10 +542,7 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketchVM = new SketchViewModel({
-                    view: view,
-                    layer: graphicsLayersRef.current[selectedHazardForDisplay], // Default layer
-                });
+                const sketchVM = new SketchViewModel({ view: view });
                 sketchViewModelRef.current = sketchVM;
 
                 sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
@@ -517,15 +554,6 @@ export function EsriMap() {
                             brazilBoundary,
                             Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
                         });
-                        if (graphic && graphic.attributes) {
-                            const targetLayerId = graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard;
-                            const targetLayer = graphicsLayersRef.current[targetLayerId];
-                            if (targetLayer) {
-                                // The graphic is already on sketchVM.layer.
-                                // If the target layer is different, we might need to move it.
-                                // For now, the logic sets the sketchVM.layer correctly before drawing.
-                            }
-                        }
                     }
                 });
 
@@ -545,7 +573,7 @@ export function EsriMap() {
                 root.render(
                     <DrawUI 
                         onStartDrawing={(mode, hazard, prob, level) => {
-                            handleStartDrawing(mode, hazard, prob, level, Color, SimpleFillSymbol)
+                             handleStartDrawing(mode, hazard, prob, level, Color, SimpleFillSymbol);
                         }}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                         activeHazard={selectedHazardForDisplay}
@@ -563,7 +591,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay]);
     
 
     const handleSaveReport = async () => {
@@ -595,13 +623,9 @@ export function EsriMap() {
 
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
-                <Button onClick={() => alert("Função de busca por data a ser implementada.")}>Buscar Previsões</Button>
+                <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Buscar Previsões</Button>
                 {(userAppRole === 'superadmin') && (
                     <>
-                        <Button onClick={handleSendForecast} disabled={isSubmittingForecast || Object.values(getPolygonGroups()).flat().length === 0} className="bg-green-600 hover:bg-green-700">
-                            {isSubmittingForecast ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Enviar Previsão
-                        </Button>
                         <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
                             {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                             {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
@@ -610,16 +634,28 @@ export function EsriMap() {
                 )}
             </div>
             
-            <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex items-center gap-1">
+            <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col md:flex-row items-stretch gap-1">
                  {hazardOptions.map(hazard => (
-                    <Button 
-                        key={hazard.value} 
-                        variant={selectedHazardForDisplay === hazard.value ? 'secondary' : 'ghost'}
-                        onClick={() => handleHazardChangeForDisplay(hazard.value)}
-                        className="flex items-center gap-2 text-white hover:bg-gray-700 data-[state=active]:bg-blue-600"
-                    >
-                       <hazard.icon className="h-4 w-4" /> {hazard.label}
-                    </Button>
+                    <div key={hazard.value} className="flex items-center gap-1">
+                        <Button 
+                            variant={selectedHazardForDisplay === hazard.value ? 'secondary' : 'ghost'}
+                            onClick={() => handleHazardChangeForDisplay(hazard.value)}
+                            className="flex-grow justify-start text-white hover:bg-gray-700 data-[state=active]:bg-blue-600"
+                        >
+                           <hazard.icon className="h-4 w-4 mr-2" /> {hazard.label}
+                        </Button>
+                        {userAppRole === 'superadmin' && (
+                             <Button 
+                                size="sm"
+                                onClick={() => handleSaveHazardForecast(hazard.value)} 
+                                disabled={isSubmitting[hazard.value]}
+                                className="bg-green-600 hover:bg-green-700 h-full"
+                            >
+                                {isSubmitting[hazard.value] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                <span className="sr-only">Salvar {hazard.label}</span>
+                            </Button>
+                        )}
+                    </div>
                 ))}
             </div>
 
