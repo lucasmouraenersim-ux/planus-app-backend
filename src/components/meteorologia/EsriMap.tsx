@@ -37,11 +37,12 @@ const LoadingSpinner = () => (
 type HazardType = "hail" | "wind" | "tornado" | "prevots";
 type DrawingMode = 'risk' | 'prevots' | 'none';
 
-const hazardOptions: { value: Exclude<HazardType, 'prevots'>; label: string }[] = [
-    { value: "hail", label: "Granizo" },
-    { value: "wind", label: "Vento" },
-    { value: "tornado", label: "Tornado" },
+const hazardOptions: { value: Exclude<HazardType, 'prevots'>; label: string; icon: React.ElementType }[] = [
+    { value: "hail", label: "Granizo", icon: CloudHail },
+    { value: "wind", label: "Vento", icon: Wind },
+    { value: "tornado", label: "Tornado", icon: Tornado },
 ];
+
 
 const prevotsLevelOptions = [1, 2, 3, 4, 5];
 
@@ -155,16 +156,15 @@ const ReportsLegend = () => {
 };
 
 const RiskLegend = ({ selectedHazard }: { selectedHazard: Exclude<HazardType, 'prevots'> }) => {
-  const isRiskHazard = selectedHazard !== 'prevots';
-  const hazardProbs = isRiskHazard ? probabilityOptions[selectedHazard] : [];
-
+  const hazardProbs = probabilityOptions[selectedHazard] || [];
+  
   const legendItems = hazardProbs.map(p => {
-      const lvl = levelOf(p, selectedHazard);
-      const color = catColor[lvl] || "#999";
-      return `<div style="margin-bottom:4px">
-          <span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>
-          ${p}% (Nível ${lvl})
-      </div>`;
+    const lvl = levelOf(p, selectedHazard);
+    const color = catColor[lvl] || "#999";
+    return `<div style="display: flex; align-items: center; margin-bottom: 4px;">
+              <span style="display: inline-block; width: 14px; height: 14px; background-color: ${color}; margin-right: 6px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.2);"></span>
+              <span>${p}% (Nível ${lvl})</span>
+            </div>`;
   }).join('');
 
   return (
@@ -179,7 +179,7 @@ const RiskLegend = ({ selectedHazard }: { selectedHazard: Exclude<HazardType, 'p
       fontFamily: 'sans-serif',
       zIndex: 9999,
     }}>
-      <b>Legenda por risco ({hazardOptions.find(h => h.value === selectedHazard)?.label})</b>
+      <b style={{display: 'block', marginBottom: '6px'}}>Legenda por Risco ({hazardOptions.find(h => h.value === selectedHazard)?.label})</b>
       <div id="legendItems" dangerouslySetInnerHTML={{ __html: legendItems }}></div>
     </div>
   );
@@ -221,33 +221,31 @@ const PrevotsLegend = () => (
 );
 
 
-const DrawUI = ({ onStartDrawing, onCancel }: { 
+const DrawUI = ({ onStartDrawing, onCancel, activeHazard }: { 
     onStartDrawing: (mode: DrawingMode, hazard: HazardType, probability: number, level: number) => void;
     onCancel: () => void;
+    activeHazard: Exclude<HazardType, 'prevots'>;
 }) => {
-    const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('main');
-    const [selectedHazard, setSelectedHazard] = useState<Exclude<HazardType, 'prevots'>>('hail');
-    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
-    const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions.hail);
+    const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('risk'); // Default to risk
+    const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions[activeHazard][0]);
+    const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions[activeHazard]);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
+    useEffect(() => {
+      const newOptions = probabilityOptions[activeHazard] || [];
+      setCurrentProbOptions(newOptions);
+      if (!newOptions.includes(selectedProb)) {
+          setSelectedProb(newOptions[0] || 0);
+      }
+    }, [activeHazard, selectedProb]);
+
     const handleStartDrawingWithState = () => {
         if (activeMenu === 'risk') {
-            onStartDrawing('risk', selectedHazard, selectedProb, selectedPrevotsLevel);
+            onStartDrawing('risk', activeHazard, selectedProb, selectedPrevotsLevel);
         } else if (activeMenu === 'prevots') {
             onStartDrawing('prevots', 'prevots', 0, selectedPrevotsLevel);
         }
     };
-
-    useEffect(() => {
-        if (activeMenu === 'risk') {
-            const newOptions = probabilityOptions[selectedHazard] || [];
-            setCurrentProbOptions(newOptions);
-            if (!newOptions.includes(selectedProb)) {
-                setSelectedProb(newOptions[0] || 0);
-            }
-        }
-    }, [selectedHazard, activeMenu, selectedProb]);
 
     return (
       <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
@@ -261,19 +259,11 @@ const DrawUI = ({ onStartDrawing, onCancel }: {
         
         {activeMenu !== 'main' && (
           <>
-            <Button onClick={() => setActiveMenu('main')} variant="ghost" size="sm" className="mb-4"> &lt; Voltar</Button>
             {activeMenu === 'risk' && (
               <div className="space-y-4">
                 <h3 className="font-bold">Desenhar Polígono de Risco</h3>
                 <div>
-                  <Label>Tipo de Risco</Label>
-                  <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as Exclude<HazardType, 'prevots'>)}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>{hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Probabilidade (%)</Label>
+                  <Label>Probabilidade (%) para {hazardOptions.find(h => h.value === activeHazard)?.label}</Label>
                   <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
                     <SelectContent>{currentProbOptions.map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
@@ -295,6 +285,7 @@ const DrawUI = ({ onStartDrawing, onCancel }: {
                 <Button onClick={handleStartDrawingWithState} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
+             <Button onClick={onCancel} variant="ghost" size="sm" className="w-full justify-center mt-4">Fechar</Button>
           </>
         )}
       </div>
@@ -426,8 +417,10 @@ export function EsriMap() {
                 color: [...new Color(colorHex).toRgb(), 0.25],
                 outline: { color: new Color(colorHex), width: 2 }
             };
+
             targetLayerId = riskHazard;
             attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
+
         } else if (mode === 'prevots') {
             const prevotsLevel = level;
             const colorHex = catColor[prevotsLevel] || "#999999";
@@ -442,8 +435,12 @@ export function EsriMap() {
             return;
         }
         
-        if (targetLayerId) {
+        // This is the correct place to set the target layer for the SketchViewModel
+        if (targetLayerId && graphicsLayersRef.current[targetLayerId]) {
             sketchVM.layer = graphicsLayersRef.current[targetLayerId];
+        } else {
+            console.error(`Layer ${targetLayerId} não encontrada para o desenho.`);
+            return;
         }
         
         const newSymbol = new SimpleFillSymbol(symbolOptions);
@@ -487,7 +484,7 @@ export function EsriMap() {
                 setModelGroupLayer(newModelGroupLayer);
                 
                 // Initialize all graphics layers
-                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === 'hail' }); });
+                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
@@ -507,7 +504,7 @@ export function EsriMap() {
                 
                 const sketchVM = new SketchViewModel({
                     view: view,
-                    layer: graphicsLayersRef.current.hail, // Default layer
+                    layer: graphicsLayersRef.current[selectedHazardForDisplay], // Default layer
                 });
                 sketchViewModelRef.current = sketchVM;
 
@@ -524,10 +521,9 @@ export function EsriMap() {
                             const targetLayerId = graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard;
                             const targetLayer = graphicsLayersRef.current[targetLayerId];
                             if (targetLayer) {
-                                // We remove the graphic from the default layer it was added to
-                                sketchViewModelRef.current!.layer.remove(event.graphic);
-                                // And add the processed graphic to the correct layer
-                                targetLayer.add(graphic);
+                                // The graphic is already on sketchVM.layer.
+                                // If the target layer is different, we might need to move it.
+                                // For now, the logic sets the sketchVM.layer correctly before drawing.
                             }
                         }
                     }
@@ -552,6 +548,7 @@ export function EsriMap() {
                             handleStartDrawing(mode, hazard, prob, level, Color, SimpleFillSymbol)
                         }}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
+                        activeHazard={selectedHazardForDisplay}
                     />
                 );
 
@@ -566,7 +563,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay]);
     
 
     const handleSaveReport = async () => {
@@ -613,17 +610,28 @@ export function EsriMap() {
                 )}
             </div>
             
+            <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex items-center gap-1">
+                 {hazardOptions.map(hazard => (
+                    <Button 
+                        key={hazard.value} 
+                        variant={selectedHazardForDisplay === hazard.value ? 'secondary' : 'ghost'}
+                        onClick={() => handleHazardChangeForDisplay(hazard.value)}
+                        className="flex items-center gap-2 text-white hover:bg-gray-700 data-[state=active]:bg-blue-600"
+                    >
+                       <hazard.icon className="h-4 w-4" /> {hazard.label}
+                    </Button>
+                ))}
+            </div>
+
             {isReportMode && (
-                <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                <div className="absolute top-[130px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
                         <Select value={newReport.hazard} onValueChange={(v: Exclude<HazardType, 'prevots'>) => setNewReport(prev => ({...prev, hazard: v}))}>
                             <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue/></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="wind"><Wind className="inline-block mr-2 h-4 w-4" />Vento</SelectItem>
-                                <SelectItem value="hail"><CloudHail className="inline-block mr-2 h-4 w-4" />Granizo</SelectItem>
-                                <SelectItem value="tornado"><Tornado className="inline-block mr-2 h-4 w-4" />Tornado</SelectItem>
+                                {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}><opt.icon className="inline-block mr-2 h-4 w-4" />{opt.label}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
