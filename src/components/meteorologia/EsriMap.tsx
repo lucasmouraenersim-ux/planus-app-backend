@@ -655,7 +655,7 @@ export function EsriMap() {
                         });
                     }
                 });
-
+                
                 view.on("double-click", (event) => {
                     view.hitTest(event).then((response) => {
                         const results = response.results.filter(r => r.graphic && (r.graphic.layer?.type === 'graphics'));
