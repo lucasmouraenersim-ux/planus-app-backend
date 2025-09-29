@@ -25,6 +25,7 @@ export const catColor: Record<number, string> = {
 };
 
 export const levelOf = (p: number, t: Exclude<HazardType, 'prevots'>): number => {
+    // Corrigido para mapear 15% para nível 2, 30% para 3, etc.
     return t === 'tornado'
         ? {2:1, 5:2, 10:3, 15:4}[p] || 0
         : {5:1, 15:2, 30:3, 45:4}[p] || 0;
