@@ -1,4 +1,3 @@
-
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -62,9 +61,9 @@ const catColor: Record<number, string> = {
 
 const levelOf = (prob: number, type: HazardType): number => {
     const rules: Record<HazardType, Record<number, number>> = {
-        tornado: { 2: 2, 5: 3, 10: 4, 15: 5 },
-        hail: { 5: 2, 15: 3, 30: 4, 45: 5 },
-        wind: { 5: 2, 15: 3, 30: 4, 45: 5 },
+        tornado: { 2: 1, 5: 2, 10: 3, 15: 4 },
+        hail: { 5: 1, 15: 2, 30: 3, 45: 4 },
+        wind: { 5: 1, 15: 2, 30: 3, 45: 4 },
     };
     return rules[type]?.[prob] || 0;
 };
@@ -187,8 +186,12 @@ export function EsriMap() {
     const sketchRef = useRef<__esri.Sketch | null>(null);
     const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
     const prevotsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
+    const viewRef = useRef<__esri.MapView | null>(null);
+    const activeGraphicRef = useRef<__esri.Graphic | null>(null);
+
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
+    const [drawnGraphics, setDrawnGraphics] = useState<__esri.Graphic[]>([]);
 
     const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
     const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
@@ -211,6 +214,8 @@ export function EsriMap() {
         date: new Date().toISOString().slice(0, 10),
         location: null
     });
+    const [isSubmittingForecast, setIsSubmittingForecast] = useState(false);
+    const [isViewingForecast, setIsViewingForecast] = useState(false);
 
     const handleLogout = async () => {
         try {
@@ -237,13 +242,14 @@ export function EsriMap() {
             .catch(err => console.error("❌ Erro ao carregar contorno do Brasil:", err));
     }, []);
     
-    const handleStartDrawing = useCallback(() => {
+    const handleStartDrawing = useCallback((mode: 'risk' | 'prevots') => {
+        setDrawingMode(mode);
         if (sketchRef.current) {
             let symbol;
             let attributes;
             let targetLayer;
 
-            if (drawingMode === 'risk') {
+            if (mode === 'risk') {
                 targetLayer = graphicsLayerRef.current;
                 const hazard = selectedHazard;
                 const prob = selectedProb;
@@ -255,18 +261,18 @@ export function EsriMap() {
                     color: [r, g, b, 0.25],
                     outline: { color: [r, g, b, 1], width: 2 }
                 };
-                attributes = { type: 'risk', hazard, prob, level };
-            } else if (drawingMode === 'prevots') {
+                attributes = { type: 'risk', hazard, prob, level, uid: `risk-${Date.now()}` };
+            } else if (mode === 'prevots') {
                 targetLayer = prevotsLayerRef.current;
                 const level = selectedPrevotsLevel;
                 const colorHex = catColor[level] || "#999999";
                 const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
                 symbol = {
                     type: "simple-fill",
-                    color: [r, g, b, 0.55], // More opaque for PREVOTS
+                    color: [r, g, b, 0.55],
                     outline: { color: [r, g, b, 1], width: 3 }
                 };
-                attributes = { type: 'prevots', level };
+                attributes = { type: 'prevots', level, uid: `prevots-${Date.now()}` };
             } else {
                 return;
             }
@@ -276,7 +282,7 @@ export function EsriMap() {
             (sketchRef.current as any)._activeDrawingInfo = attributes;
             sketchRef.current.create("polygon");
         }
-    }, [drawingMode, selectedHazard, selectedProb, selectedPrevotsLevel]);
+    }, [selectedHazard, selectedProb, selectedPrevotsLevel]);
 
 
     useEffect(() => {
@@ -417,6 +423,7 @@ export function EsriMap() {
                     center: [-54, -15],
                     zoom: 5
                 });
+                viewRef.current = view;
                 
                 view.when(() => {
                     setIsLoading(false);
@@ -459,8 +466,10 @@ export function EsriMap() {
                             result.graphic.layer === graphicsLayerRef.current || result.graphic.layer === prevotsLayerRef.current
                         );
                         if (graphic) {
+                            activeGraphicRef.current = graphic.graphic;
                             showPolygonPopup(graphic.graphic);
                         } else {
+                            activeGraphicRef.current = null;
                             view.closePopup();
                         }
                     });
@@ -472,7 +481,7 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketch = new Sketch({ view, creationMode: "update" });
+                const sketch = new Sketch({ view, layer: graphicsLayer, creationMode: "update" });
                 sketchRef.current = sketch;
                 
                 const drawContainer = document.createElement("div");
@@ -500,60 +509,58 @@ export function EsriMap() {
                 menuRoot.render(<SideMenu onLogout={handleLogout} />);
                 
                 const root = createRoot(drawContainer);
-                root.render(
-                    <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
-                        {drawingMode === 'none' ? (
+                const DrawUI = ({ onStartDrawing }: { onStartDrawing: (mode: 'risk' | 'prevots') => void }) => {
+                    const [currentDrawingMode, setCurrentDrawingMode] = useState<DrawingMode>('none');
+                  
+                    return (
+                      <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
+                        {currentDrawingMode === 'none' ? (
                           <div className="space-y-2">
-                             <Button onClick={() => setDrawingMode('risk')} className="w-full justify-start"><Layers className="mr-2 h-4 w-4"/> Previsão de Risco</Button>
-                             <Button onClick={() => setDrawingMode('prevots')} className="w-full justify-start"><AlertTriangle className="mr-2 h-4 w-4"/> Previsão PREVOTS</Button>
+                            <Button onClick={() => setCurrentDrawingMode('risk')} className="w-full justify-start"><Layers className="mr-2 h-4 w-4"/> Previsão de Risco</Button>
+                            <Button onClick={() => setCurrentDrawingMode('prevots')} className="w-full justify-start"><AlertTriangle className="mr-2 h-4 w-4"/> Previsão PREVOTS</Button>
                           </div>
                         ) : (
                           <>
-                            <Button onClick={() => setDrawingMode('none')} variant="ghost" size="sm" className="mb-4"> &lt; Voltar</Button>
-                            {drawingMode === 'risk' && (
-                                <div className="space-y-4">
-                                    <h3 className="font-bold">Desenhar Polígono de Risco</h3>
-                                     <div>
-                                        <Label>Tipo de Risco</Label>
-                                        <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <Label>Probabilidade (%)</Label>
-                                        <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                            <Button onClick={() => setCurrentDrawingMode('none')} variant="ghost" size="sm" className="mb-4"> &lt; Voltar</Button>
+                            {currentDrawingMode === 'risk' && (
+                              <div className="space-y-4">
+                                <h3 className="font-bold">Desenhar Polígono de Risco</h3>
+                                <div>
+                                  <Label>Tipo de Risco</Label>
+                                  <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>{hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
+                                  </Select>
                                 </div>
-                            )}
-                            {drawingMode === 'prevots' && (
-                                <div className="space-y-4">
-                                    <h3 className="font-bold">Desenhar Polígono PREVOTS</h3>
-                                    <div>
-                                        <Label>Nível PREVOTS</Label>
-                                        <Select value={String(selectedPrevotsLevel)} onValueChange={(v) => setSelectedPrevotsLevel(Number(v))}>
-                                            <SelectTrigger><SelectValue/></SelectTrigger>
-                                            <SelectContent>
-                                                {prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                <div>
+                                  <Label>Probabilidade (%)</Label>
+                                  <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>{probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
+                                  </Select>
                                 </div>
+                                <Button onClick={() => onStartDrawing('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                              </div>
                             )}
-                            <Button onClick={handleStartDrawing} className="w-full mt-4">
-                                <Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho
-                            </Button>
+                            {currentDrawingMode === 'prevots' && (
+                              <div className="space-y-4">
+                                <h3 className="font-bold">Desenhar Polígono PREVOTS</h3>
+                                <div>
+                                  <Label>Nível PREVOTS</Label>
+                                  <Select value={String(selectedPrevotsLevel)} onValueChange={(v) => setSelectedPrevotsLevel(Number(v))}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>{prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </div>
+                                <Button onClick={() => onStartDrawing('prevots')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                              </div>
+                            )}
                           </>
                         )}
-                    </div>
-                );
+                      </div>
+                    );
+                };
+                root.render(<DrawUI onStartDrawing={handleStartDrawing} />);
                 
                 sketch.on("create", (event) => {
                     if (event.state === "complete") {
@@ -584,8 +591,17 @@ export function EsriMap() {
                         if (drawingInfo) {
                             event.graphic.attributes = drawingInfo;
                         }
+                        setDrawnGraphics(prev => [...prev, event.graphic]);
                     }
                 });
+
+                sketch.on("update", (event) => {
+                    if (event.state === "complete") {
+                      const updatedGraphic = event.graphics[0];
+                      setDrawnGraphics(prev => prev.map(g => g.attributes.uid === updatedGraphic.attributes.uid ? updatedGraphic : g));
+                    }
+                });
+        
 
                 function showPolygonPopup(graphic: __esri.Graphic) {
                     const popupData = graphic.attributes || {};
@@ -605,8 +621,10 @@ export function EsriMap() {
                         editButton.textContent = '✏️ Editar';
                         editButton.className = 'p-1 mt-2 mr-2 bg-blue-500 text-white rounded';
                         editButton.onclick = () => {
-                            sketchRef.current?.update([graphic], { tool: "reshape" });
-                            view.closePopup();
+                            if (sketchRef.current && graphic) {
+                                sketchRef.current.update([graphic], { tool: "reshape" });
+                                view.closePopup();
+                            }
                         };
 
                         const deleteButton = document.createElement('button');
@@ -614,6 +632,7 @@ export function EsriMap() {
                         deleteButton.className = 'p-1 mt-2 bg-red-500 text-white rounded';
                         deleteButton.onclick = () => {
                             if (graphic.layer) graphic.layer.remove(graphic);
+                            setDrawnGraphics(prev => prev.filter(g => g !== graphic));
                             view.closePopup();
                         };
                         
@@ -642,7 +661,7 @@ export function EsriMap() {
                             const color = catColor[level] || '#999';
                             return `<div class="flex items-center text-xs mb-1">
                                 <span class="w-4 h-4 rounded-sm mr-2" style="background-color: ${color};"></span>
-                                ${p}% (Nível ${level})
+                                Nível ${level} (${p}%)
                             </div>`;
                         }).join('')}
                     `;
@@ -685,17 +704,15 @@ export function EsriMap() {
         }
 
         return () => {
-            if (view) {
-                view.destroy();
+            if (viewRef.current) {
+                viewRef.current.destroy();
+                viewRef.current = null;
             }
         };
     }, [brazilBoundary, handleStartDrawing, userAppRole]);
     
     useEffect(() => {
         setSelectedProb(probabilityOptions[selectedHazard][0]);
-        if(graphicsLayerRef.current) {
-            graphicsLayerRef.current.removeAll();
-        }
     }, [selectedHazard]);
     
     const handleSaveReport = async () => {
