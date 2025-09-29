@@ -512,18 +512,29 @@ export function EsriMap() {
         let attributes: any = {};
         let targetLayerId: string | undefined;
 
-        const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
-        const prob = probability;
-        const riskLevel = levelOf(prob, riskHazard);
-        const colorHex = catColor[riskLevel] || "#999999";
-        
-        symbolOptions = {
-            color: [...new Color(colorHex).toRgb(), 0.25],
-            outline: { color: new Color(colorHex), width: 2 }
-        };
-        
-        targetLayerId = riskHazard;
-        attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
+        if (mode === 'risk') {
+            const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
+            const prob = probability;
+            const riskLevel = levelOf(prob, riskHazard);
+            const colorHex = catColor[riskLevel] || "#999999";
+            
+            symbolOptions = {
+                color: [...new Color(colorHex).toRgb(), 0.25],
+                outline: { color: new Color(colorHex), width: 2 }
+            };
+            
+            targetLayerId = riskHazard;
+            attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel, date: forecastDate };
+        } else if (mode === 'prevots') {
+            const colorHex = catColor[level] || "#999999";
+            symbolOptions = {
+                color: [...new Color(colorHex).toRgb(), 0.25],
+                outline: { color: new Color(colorHex), width: 2 }
+            };
+            targetLayerId = 'prevots';
+            attributes = { type: 'prevots', level: level, date: forecastDate };
+        }
+
 
         if (targetLayerId && graphicsLayersRef.current[targetLayerId]) {
             sketchVM.layer = graphicsLayersRef.current[targetLayerId];
@@ -538,7 +549,7 @@ export function EsriMap() {
 
         sketchVM.create("polygon");
 
-    }, []);
+    }, [forecastDate]);
 
     useEffect(() => {
         let view: __esri.MapView;
@@ -822,3 +833,4 @@ export function EsriMap() {
     );
 }
     
+
