@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -34,6 +34,8 @@ const LoadingSpinner = () => (
 );
 
 type HazardType = "hail" | "wind" | "tornado";
+type DrawingMode = 'risk' | 'prevots' | 'none';
+
 
 const hazardOptions: { value: HazardType; label: string }[] = [
     { value: "hail", label: "Granizo" },
@@ -47,10 +49,14 @@ const probabilityOptions: Record<HazardType, number[]> = {
     tornado: [2, 5, 10, 15],
 };
 
+const prevotsLevelOptions = [1, 2, 3, 4];
+
+
 const catColor: Record<number, string> = {
-    2: "#FFFF00", // Amarelo
-    3: "#FFA500", // Laranja
-    4: "#FF0000", // Vermelho
+    1: "#90EE90", // Verde claro - PREV 1
+    2: "#FFA500", // Laranja - PREV 2
+    3: "#FF0000", // Vermelho - PREV 3
+    4: "#800080", // Roxo - PREV 4
     5: "#800080"  // Roxo
 };
 
@@ -93,7 +99,6 @@ const SideMenu = ({ onLogout }: { onLogout: () => void }) => {
     );
 };
 
-// Placar Component
 const Scoreboard = () => {
     const scores = [
         { hazard: 'Granizo', hits: 0, misses: 0, percentage: 0, points: 0 },
@@ -130,14 +135,13 @@ const Scoreboard = () => {
 };
 
 
-// Stats Panel Component
 const StatsPanel = () => {
     return (
         <div id="statsPanel" style={{
             position: "fixed",
             bottom: "180px",
             right: "20px",
-            background: "rgba(30, 30, 30, 0.85)", // Darker background
+            background: "rgba(30, 30, 30, 0.85)",
             color: "white",
             padding: "10px 14px",
             fontSize: "13px",
@@ -151,7 +155,6 @@ const StatsPanel = () => {
     );
 };
 
-// Reports Legend Component
 const ReportsLegend = () => {
     return (
         <div id="legendReports" className="bg-gray-800/80 backdrop-blur-sm text-white" style={{
@@ -183,18 +186,19 @@ export function EsriMap() {
     const mapDivRef = useRef<HTMLDivElement>(null);
     const sketchRef = useRef<__esri.Sketch | null>(null);
     const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
+    const prevotsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
 
+    const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
     const [selectedHazard, setSelectedHazard] = useState<HazardType>("hail");
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions["hail"][0]);
+    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(prevotsLevelOptions[0]);
     
-    // New state for weather models
     const [weatherModels, setWeatherModels] = useState<any[]>([]);
     const [selectedModel, setSelectedModel] = useState<string>('radar.nowcast');
     const [modelGroupLayer, setModelGroupLayer] = useState<__esri.GroupLayer | null>(null);
 
-    // Reports States
     const [isReportMode, setIsReportMode] = useState(false);
     const [newReport, setNewReport] = useState<{
         hazard: HazardType,
@@ -217,7 +221,6 @@ export function EsriMap() {
         }
     };
 
-
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
             .then(res => res.json())
@@ -236,27 +239,46 @@ export function EsriMap() {
     
     const handleStartDrawing = useCallback(() => {
         if (sketchRef.current) {
-            graphicsLayerRef.current?.removeAll(); // Limpa os desenhos anteriores
-            const hazard = selectedHazard;
-            const prob = selectedProb;
-            const level = levelOf(prob, hazard);
-            const colorHex = catColor[level] || "#999999";
+            let symbol;
+            let attributes;
+            let targetLayer;
 
-            const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
+            if (drawingMode === 'risk') {
+                targetLayer = graphicsLayerRef.current;
+                const hazard = selectedHazard;
+                const prob = selectedProb;
+                const level = levelOf(prob, hazard);
+                const colorHex = catColor[level] || "#999999";
+                const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
+                symbol = {
+                    type: "simple-fill",
+                    color: [r, g, b, 0.25],
+                    outline: { color: [r, g, b, 1], width: 2 }
+                };
+                attributes = { type: 'risk', hazard, prob, level };
+            } else if (drawingMode === 'prevots') {
+                targetLayer = prevotsLayerRef.current;
+                const level = selectedPrevotsLevel;
+                const colorHex = catColor[level] || "#999999";
+                const [r, g, b] = (colorHex.match(/\w\w/g) || []).map((h) => parseInt(h, 16));
+                symbol = {
+                    type: "simple-fill",
+                    color: [r, g, b, 0.55], // More opaque for PREVOTS
+                    outline: { color: [r, g, b, 1], width: 3 }
+                };
+                attributes = { type: 'prevots', level };
+            } else {
+                return;
+            }
 
-            const symbol = {
-                type: "simple-fill",
-                color: [r, g, b, 0.25],
-                outline: { color: [r, g, b, 1], width: 2 }
-            };
-            
+            if(targetLayer) sketchRef.current.layer = targetLayer;
             sketchRef.current.viewModel.polygonSymbol = symbol as any;
-            (sketchRef.current as any)._activeDrawingInfo = { hazard, prob, level };
+            (sketchRef.current as any)._activeDrawingInfo = attributes;
             sketchRef.current.create("polygon");
         }
-    }, [selectedHazard, selectedProb]);
+    }, [drawingMode, selectedHazard, selectedProb, selectedPrevotsLevel]);
 
-    // Handle changing the visible weather model
+
     useEffect(() => {
         if (!modelGroupLayer) return;
         modelGroupLayer.layers.forEach((layer: any) => {
@@ -345,6 +367,13 @@ export function EsriMap() {
                     title: "Relatos",
                     visible: true,
                 });
+
+                const prevotsLayer = new GraphicsLayer({
+                    id: "prevots",
+                    title: "Previsao PREVOTS",
+                    visible: true,
+                });
+                prevotsLayerRef.current = prevotsLayer;
                 
                 fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
                     .then(res => res.json())
@@ -370,11 +399,11 @@ export function EsriMap() {
                 const groupLayer = new GroupLayer({
                     title: "Sobreposições",
                     visible: true,
-                    layers: [newModelGroupLayer, municipiosLayer, reportsLayer],
+                    layers: [newModelGroupLayer, municipiosLayer, reportsLayer, prevotsLayer],
                     opacity: 0.8
                 });
 
-                const graphicsLayer = new GraphicsLayer();
+                const graphicsLayer = new GraphicsLayer({ title: "Riscos" });
                 graphicsLayerRef.current = graphicsLayer;
 
                 const map = new Map({
@@ -391,7 +420,6 @@ export function EsriMap() {
                 
                 view.when(() => {
                     setIsLoading(false);
-                    // Firestore listener for reports
                     const reportsQuery = query(collection(db, "weather_reports"));
                     onSnapshot(reportsQuery, (querySnapshot) => {
                         const reportGraphics: __esri.Graphic[] = [];
@@ -426,9 +454,10 @@ export function EsriMap() {
                         setNewReport(prev => ({...prev, location: event.mapPoint}));
                         return;
                     }
-
                     view.hitTest(event).then((response) => {
-                        const graphic = response.results.find(result => result.graphic.layer === graphicsLayer);
+                        const graphic = response.results.find(result => 
+                            result.graphic.layer === graphicsLayerRef.current || result.graphic.layer === prevotsLayerRef.current
+                        );
                         if (graphic) {
                             showPolygonPopup(graphic.graphic);
                         } else {
@@ -443,7 +472,7 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketch = new Sketch({ layer: graphicsLayer, view, creationMode: "update" });
+                const sketch = new Sketch({ view, creationMode: "update" });
                 sketchRef.current = sketch;
                 
                 const drawContainer = document.createElement("div");
@@ -462,7 +491,9 @@ export function EsriMap() {
                     group: "top-left",
                 });
 
-                view.ui.add(sketchExpand, "top-left");
+                if (userAppRole === 'superadmin') {
+                  view.ui.add(sketchExpand, "top-left");
+                }
                 view.ui.add(menuExpand, "top-left");
                 
                 const menuRoot = createRoot(menuContainer);
@@ -471,40 +502,56 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
-                        <div className="space-y-4">
-                             <div>
-                                <Label>Modelo Meteorológico</Label>
-                                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {weatherModels.map(model => <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <hr className="border-gray-600"/>
-                            <h3 className="font-bold">Desenhar Polígono de Risco</h3>
-                             <div>
-                                <Label>Tipo de Risco</Label>
-                                <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Probabilidade (%)</Label>
-                                <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button onClick={handleStartDrawing} className="w-full">
+                        {drawingMode === 'none' ? (
+                          <div className="space-y-2">
+                             <Button onClick={() => setDrawingMode('risk')} className="w-full justify-start"><Layers className="mr-2 h-4 w-4"/> Previsão de Risco</Button>
+                             <Button onClick={() => setDrawingMode('prevots')} className="w-full justify-start"><AlertTriangle className="mr-2 h-4 w-4"/> Previsão PREVOTS</Button>
+                          </div>
+                        ) : (
+                          <>
+                            <Button onClick={() => setDrawingMode('none')} variant="ghost" size="sm" className="mb-4"> &lt; Voltar</Button>
+                            {drawingMode === 'risk' && (
+                                <div className="space-y-4">
+                                    <h3 className="font-bold">Desenhar Polígono de Risco</h3>
+                                     <div>
+                                        <Label>Tipo de Risco</Label>
+                                        <Select value={selectedHazard} onValueChange={(v) => setSelectedHazard(v as HazardType)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {hazardOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <Label>Probabilidade (%)</Label>
+                                        <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {probabilityOptions[selectedHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            )}
+                            {drawingMode === 'prevots' && (
+                                <div className="space-y-4">
+                                    <h3 className="font-bold">Desenhar Polígono PREVOTS</h3>
+                                    <div>
+                                        <Label>Nível PREVOTS</Label>
+                                        <Select value={String(selectedPrevotsLevel)} onValueChange={(v) => setSelectedPrevotsLevel(Number(v))}>
+                                            <SelectTrigger><SelectValue/></SelectTrigger>
+                                            <SelectContent>
+                                                {prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            )}
+                            <Button onClick={handleStartDrawing} className="w-full mt-4">
                                 <Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho
                             </Button>
-                        </div>
+                          </>
+                        )}
                     </div>
                 );
                 
@@ -512,7 +559,7 @@ export function EsriMap() {
                     if (event.state === "complete") {
                         if (!brazilBoundary) {
                             alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
-                            graphicsLayer.remove(event.graphic);
+                            if (event.graphic.layer) event.graphic.layer.remove(event.graphic);
                             return;
                         }
 
@@ -522,7 +569,7 @@ export function EsriMap() {
                         
                         if (!clipped || !clipped.geometry) {
                             alert("O polígono desenhado está fora dos limites do Brasil.");
-                            graphicsLayer.remove(event.graphic);
+                            if (event.graphic.layer) event.graphic.layer.remove(event.graphic);
                             return;
                         }
                         
@@ -533,48 +580,49 @@ export function EsriMap() {
                         
                         event.graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
 
-
                         const drawingInfo = (sketch as any)._activeDrawingInfo;
                         if (drawingInfo) {
-                            event.graphic.attributes = {
-                                hazard: drawingInfo.hazard,
-                                prob: drawingInfo.prob,
-                                level: drawingInfo.level,
-                            };
+                            event.graphic.attributes = drawingInfo;
                         }
                     }
                 });
 
                 function showPolygonPopup(graphic: __esri.Graphic) {
                     const popupData = graphic.attributes || {};
+                    const isPrevots = popupData.type === 'prevots';
+                    const title = isPrevots ? "Polígono PREVOTS" : "Polígono de Risco";
+                    const contentHtml = isPrevots 
+                        ? `<b>Nível:</b> ${popupData.level || 'N/A'}`
+                        : `<b>Tipo:</b> ${popupData.hazard || 'N/A'}<br>
+                           <b>Nível:</b> ${popupData.level || 'N/A'}<br>
+                           <b>Probabilidade:</b> ${popupData.prob || 'N/A'}%`;
+
                     const content = document.createElement("div");
-                    content.innerHTML = `
-                        <b>Tipo:</b> ${popupData.hazard || 'N/A'}<br>
-                        <b>Nível:</b> ${popupData.level || 'N/A'}<br>
-                        <b>Probabilidade:</b> ${popupData.prob || 'N/A'}%
-                    `;
+                    content.innerHTML = contentHtml;
 
-                    const editButton = document.createElement('button');
-                    editButton.textContent = '✏️ Editar';
-                    editButton.className = 'p-1 mt-2 mr-2 bg-blue-500 text-white rounded';
-                    editButton.onclick = () => {
-                        sketchRef.current?.update([graphic], { tool: "reshape" });
-                        view.closePopup();
-                    };
+                    if (userAppRole === 'superadmin') {
+                        const editButton = document.createElement('button');
+                        editButton.textContent = '✏️ Editar';
+                        editButton.className = 'p-1 mt-2 mr-2 bg-blue-500 text-white rounded';
+                        editButton.onclick = () => {
+                            sketchRef.current?.update([graphic], { tool: "reshape" });
+                            view.closePopup();
+                        };
 
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = '🗑️ Excluir';
-                    deleteButton.className = 'p-1 mt-2 bg-red-500 text-white rounded';
-                    deleteButton.onclick = () => {
-                        graphicsLayerRef.current?.remove(graphic);
-                        view.closePopup();
-                    };
-                    
-                    content.appendChild(editButton);
-                    content.appendChild(deleteButton);
+                        const deleteButton = document.createElement('button');
+                        deleteButton.textContent = '🗑️ Excluir';
+                        deleteButton.className = 'p-1 mt-2 bg-red-500 text-white rounded';
+                        deleteButton.onclick = () => {
+                            if (graphic.layer) graphic.layer.remove(graphic);
+                            view.closePopup();
+                        };
+                        
+                        content.appendChild(editButton);
+                        content.appendChild(deleteButton);
+                    }
 
                     view.openPopup({
-                        title: "Polígono de Risco",
+                        title: title,
                         content: content,
                         location: graphic.geometry.extent.center
                     });
@@ -601,7 +649,6 @@ export function EsriMap() {
                 };
                 updateLegend();
 
-                // Reports logic
                 function getIconSymbol(hazard: string, sev: string = "NOR") {
                     const key = `${hazard.toLowerCase()}|${sev.toUpperCase()}`;
                     const iconMap: Record<string, string> = {
@@ -627,8 +674,6 @@ export function EsriMap() {
                         `;
                     }
                 }
-
-
             } catch (error) {
                 console.error("Erro ao carregar o mapa da Esri:", error);
                 setIsLoading(false);
@@ -644,13 +689,12 @@ export function EsriMap() {
                 view.destroy();
             }
         };
-    }, [brazilBoundary, handleStartDrawing, selectedHazard, selectedProb, selectedModel]);
+    }, [brazilBoundary, handleStartDrawing, userAppRole]);
     
-    // Effect to update probability options when hazard changes
     useEffect(() => {
         setSelectedProb(probabilityOptions[selectedHazard][0]);
         if(graphicsLayerRef.current) {
-            graphicsLayerRef.current.removeAll(); // Clear drawings on hazard change
+            graphicsLayerRef.current.removeAll();
         }
     }, [selectedHazard]);
     
@@ -674,7 +718,7 @@ export function EsriMap() {
         try {
             await addDoc(collection(db, "weather_reports"), reportData);
             alert("Relato salvo com sucesso!");
-            setIsReportMode(false); // Close panel after saving
+            setIsReportMode(false);
             setNewReport({ hazard: 'wind', sev: 'NOR', date: new Date().toISOString().slice(0, 10), location: null });
         } catch (error) {
             console.error("Erro ao salvar relato: ", error);
@@ -690,7 +734,6 @@ export function EsriMap() {
             <StatsPanel />
             <ReportsLegend />
 
-            {/* Reports Toolbar */}
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
                 <Input
                     type="date"
