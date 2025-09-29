@@ -10,6 +10,8 @@ type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
 type EsriGraphicsLayer = __esri.GraphicsLayer;
 type EsriMapView = __esri.MapView;
 type Turf = typeof import('@turf/turf');
+type HazardType = "hail" | "wind" | "tornado" | "prevots";
+
 
 // Regras de negócio e cores, extraídas da referência
 export const catColor: Record<number, string> = {
@@ -100,6 +102,8 @@ export function addPolygon({
     return null;
   }
 
+  // Ensure attributes are attached to the graphic
+  graphic.attributes = attributes;
   const { hazard, prob, level, type } = attributes;
   
   // 1. Converte e Recorta a geometria
@@ -178,6 +182,11 @@ export function clearAllPolygons(view: EsriMapView): void {
 // Retorna todos os polígonos de todos os grupos
 export function getPolygonGroups(): Record<string, EsriGraphic[]> {
   return polygonGroups;
+}
+
+// Retorna polígonos de um risco específico
+export function getPolygonsByHazard(hazard: Exclude<HazardType, 'prevots'>): EsriGraphic[] {
+  return polygonGroups[hazard] || [];
 }
 
 // Atualiza a visibilidade das camadas no mapa
