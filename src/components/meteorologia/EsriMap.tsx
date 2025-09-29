@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon, Clock } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon, Clock, Trash2 } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -613,6 +613,66 @@ export function EsriMap() {
                     }
                 });
 
+                sketchVM.on("update", (event: any) => {
+                    if (event.state === "complete") {
+                        event.graphics.forEach((graphic: __esri.Graphic) => {
+                             const { hazard, prob, level, type } = graphic.attributes;
+                            
+                             const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as __esri.Polygon;
+                             const turfPolygon = turfInstance.polygon(geographicGeom.rings);
+                             const clipped = turfInstance.intersect(turfPolygon, brazilBoundary);
+                            
+                             if (!clipped || !clipped.geometry) {
+                                alert("A edição resultou em um polígono fora dos limites do Brasil. Revertendo.");
+                                sketchVM.cancel(); // Revert the edit
+                                return;
+                             }
+                            
+                             const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+                            
+                             if (type === 'risk') {
+                                if (!validateArea(esriPolygon, level, hazard)) {
+                                    alert("Falha na validação da área. A edição foi cancelada.");
+                                    sketchVM.cancel();
+                                    return;
+                                }
+                             }
+                            
+                             graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+                             updatePolygon(graphic, graphic.attributes);
+                             console.log(`✅ Polígono (${hazard}, ${prob}%) atualizado.`);
+                        });
+                    }
+                });
+
+                view.on("double-click", (event) => {
+                    view.hitTest(event).then((response) => {
+                        const results = response.results.filter(r => r.graphic && (r.graphic.layer?.type === 'graphics'));
+                        if (results.length > 0) {
+                            const graphic = results[0].graphic;
+                            // Check if the forecast is for today before allowing edit
+                            if (graphic.attributes.date === forecastDate || !graphic.attributes.date) {
+                                sketchViewModelRef.current?.update(graphic, { tool: "transform" });
+                            } else {
+                                alert("Não é possível editar previsões de datas passadas.");
+                            }
+                        }
+                    });
+                });
+                
+                const trashBtn = document.createElement("div");
+                trashBtn.className = "esri-widget--button esri-icon-trash";
+                trashBtn.title = "Excluir polígono selecionado";
+                trashBtn.onclick = () => {
+                    if (sketchViewModelRef.current?.state === "active") {
+                        const graphicToDelete = sketchViewModelRef.current.updateGraphics.getItemAt(0);
+                        const layerId = graphicToDelete.layer.id;
+                        deletePolygon(graphicToDelete, graphicsLayersRef.current[layerId]);
+                    }
+                    sketchViewModelRef.current?.cancel();
+                };
+                view.ui.add(trashBtn, "top-right");
+
                 const drawContainer = document.createElement("div");
                 const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
                 
@@ -680,14 +740,6 @@ export function EsriMap() {
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
                 <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
-                
-                <div className="flex items-center gap-2 p-2 bg-black/30 rounded-md">
-                    <Clock className="h-5 w-5 text-yellow-400"/>
-                    <span className="text-sm font-mono text-yellow-400" title="Tempo restante para a previsão do dia atual">
-                        {countdown}
-                    </span>
-                </div>
-                
                 {(userAppRole === 'superadmin') && (
                     <>
                         <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
@@ -714,7 +766,7 @@ export function EsriMap() {
                                 onClick={() => handleSaveHazardForecast(hazard.value)} 
                                 disabled={isSubmitting[hazard.value]}
                                 className="bg-green-600 hover:bg-green-700 h-full"
-                            >
+                             >
                                 {isSubmitting[hazard.value] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                 <span className="sr-only">Salvar {hazard.label}</span>
                             </Button>
@@ -757,6 +809,13 @@ export function EsriMap() {
                     </Button>
                 </div>
             )}
+            
+            <div style={{ position: 'absolute', bottom: '20px', left: '20px', zIndex: 1000 }} className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-yellow-400"/>
+                <span className="text-sm font-mono text-yellow-400" title="Tempo restante para a previsão do dia atual">
+                    {countdown}
+                </span>
+            </div>
 
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>

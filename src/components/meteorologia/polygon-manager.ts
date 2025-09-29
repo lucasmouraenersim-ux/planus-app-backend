@@ -161,7 +161,7 @@ export function deletePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsL
   const groupKey = type === 'prevots' ? 'prevots' : hazard;
   
   if (groupKey && polygonGroups[groupKey]) {
-    polygonGroups[groupKey] = polygonGroups[groupKey].filter(g => g.attributes.uid !== uid);
+    polygonGroups[groupKey] = polygonGroups[groupKey].filter(g => g.uid !== graphic.uid);
     graphicsLayer.remove(graphic);
     console.log(`🗑️ Polígono (${groupKey}) removido.`);
   }
