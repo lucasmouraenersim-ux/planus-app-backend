@@ -155,34 +155,34 @@ const ReportsLegend = () => {
 };
 
 const RiskLegend = ({ selectedHazard }: { selectedHazard: Exclude<HazardType, 'prevots'> }) => {
-    const isRiskHazard = selectedHazard !== 'prevots';
-    const hazardProbs = isRiskHazard ? probabilityOptions[selectedHazard] : [];
+  const isRiskHazard = selectedHazard !== 'prevots';
+  const hazardProbs = isRiskHazard ? probabilityOptions[selectedHazard] : [];
 
-    const legendItems = hazardProbs.map(p => {
-        const lvl = levelOf(p, selectedHazard);
-        const color = catColor[lvl] || "#999";
-        return `<div style="margin-bottom:4px">
-            <span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>
-            ${p}% (Nível ${lvl})
-        </div>`;
-    }).join('');
+  const legendItems = hazardProbs.map(p => {
+      const lvl = levelOf(p, selectedHazard);
+      const color = catColor[lvl] || "#999";
+      return `<div style="margin-bottom:4px">
+          <span style="display:inline-block;width:14px;height:14px;background:${color};margin-right:6px;border-radius:2px;"></span>
+          ${p}% (Nível ${lvl})
+      </div>`;
+  }).join('');
 
-    return (
-      <div id="legendRisk" className="bg-gray-800/80 backdrop-blur-sm text-white" style={{
-        position: 'fixed',
-        bottom: '20px',
-        right: '20px',
-        padding: '10px 14px',
-        fontSize: '13px',
-        borderRadius: '6px',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-        fontFamily: 'sans-serif',
-        zIndex: 9999,
-      }}>
-        <b>Legenda por risco ({hazardOptions.find(h => h.value === selectedHazard)?.label})</b>
-        <div id="legendItems" dangerouslySetInnerHTML={{ __html: legendItems }}></div>
-      </div>
-    );
+  return (
+    <div id="legendRisk" className="bg-gray-800/80 backdrop-blur-sm text-white" style={{
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      padding: '10px 14px',
+      fontSize: '13px',
+      borderRadius: '6px',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+      fontFamily: 'sans-serif',
+      zIndex: 9999,
+    }}>
+      <b>Legenda por risco ({hazardOptions.find(h => h.value === selectedHazard)?.label})</b>
+      <div id="legendItems" dangerouslySetInnerHTML={{ __html: legendItems }}></div>
+    </div>
+  );
 };
 
 
@@ -231,11 +231,11 @@ const DrawUI = ({ onStartDrawing, onCancel }: {
     const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions.hail);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
-    const handleStartDrawingWithState = (mode: DrawingMode) => {
-        if (mode === 'risk') {
-            onStartDrawing(mode, selectedHazard, selectedProb, selectedPrevotsLevel);
-        } else if (mode === 'prevots') {
-            onStartDrawing(mode, 'prevots', 0, selectedPrevotsLevel);
+    const handleStartDrawingWithState = () => {
+        if (activeMenu === 'risk') {
+            onStartDrawing('risk', selectedHazard, selectedProb, selectedPrevotsLevel);
+        } else if (activeMenu === 'prevots') {
+            onStartDrawing('prevots', 'prevots', 0, selectedPrevotsLevel);
         }
     };
 
@@ -279,7 +279,7 @@ const DrawUI = ({ onStartDrawing, onCancel }: {
                     <SelectContent>{currentProbOptions.map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => handleStartDrawingWithState('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={handleStartDrawingWithState} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
             {activeMenu === 'prevots' && (
@@ -292,7 +292,7 @@ const DrawUI = ({ onStartDrawing, onCancel }: {
                     <SelectContent>{prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => handleStartDrawingWithState('prevots')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+                <Button onClick={handleStartDrawingWithState} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
               </div>
             )}
           </>
@@ -345,54 +345,6 @@ export function EsriMap() {
         }
     };
     
-    const handleStartDrawing = useCallback((mode: DrawingMode, hazard: HazardType, probability: number, level: number) => {
-        if (!sketchViewModelRef.current) return;
-    
-        const sketchVM = sketchViewModelRef.current;
-        let symbolOptions: any = {};
-        let attributes: any = {};
-        let targetLayerId: string | undefined;
-
-        if (mode === 'risk') {
-            const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
-            const prob = probability;
-            const riskLevel = levelOf(prob, riskHazard);
-            const colorHex = catColor[riskLevel] || "#999999";
-            
-            symbolOptions = {
-                color: [...new (sketchVM as any)._graphicsView.graphics.items[0].symbol.color.constructor(colorHex).toRgb(), 0.25],
-                outline: { color: new (sketchVM as any)._graphicsView.graphics.items[0].symbol.color.constructor(colorHex), width: 2 }
-            };
-            targetLayerId = riskHazard;
-            attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
-        } else if (mode === 'prevots') {
-            const prevotsLevel = level;
-            const colorHex = catColor[prevotsLevel] || "#999999";
-    
-            symbolOptions = {
-                color: [...new (sketchVM as any)._graphicsView.graphics.items[0].symbol.color.constructor(colorHex).toRgb(), 0.25],
-                outline: { color: new (sketchVM as any)._graphicsView.graphics.items[0].symbol.color.constructor(colorHex), width: 2 }
-            };
-            targetLayerId = 'prevots';
-            attributes = { type: 'prevots', level: prevotsLevel };
-        } else {
-            return;
-        }
-        
-        if (targetLayerId) {
-            sketchVM.layer = graphicsLayersRef.current[targetLayerId];
-        }
-        
-        const SimpleFillSymbol = (sketchVM as any)._graphicsView.graphics.items[0].symbol.constructor;
-        const newSymbol = new SimpleFillSymbol(symbolOptions);
-        sketchVM.polygonSymbol = newSymbol;
-        (sketchVM as any)._creationAttributes = attributes;
-
-        sketchVM.create("polygon");
-
-    }, []);
-
-
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
             .then(res => res.json())
@@ -454,6 +406,52 @@ export function EsriMap() {
         if(viewRef.current) {
             togglePolygonVisibility(viewRef.current, hazard);
         }
+    }, []);
+
+    const handleStartDrawing = useCallback((mode: DrawingMode, hazard: HazardType, probability: number, level: number, Color: any, SimpleFillSymbol: any) => {
+        if (!sketchViewModelRef.current) return;
+    
+        const sketchVM = sketchViewModelRef.current;
+        let symbolOptions: any = {};
+        let attributes: any = {};
+        let targetLayerId: string | undefined;
+
+        if (mode === 'risk') {
+            const riskHazard = hazard as Exclude<HazardType, 'prevots'>;
+            const prob = probability;
+            const riskLevel = levelOf(prob, riskHazard);
+            const colorHex = catColor[riskLevel] || "#999999";
+            
+            symbolOptions = {
+                color: [...new Color(colorHex).toRgb(), 0.25],
+                outline: { color: new Color(colorHex), width: 2 }
+            };
+            targetLayerId = riskHazard;
+            attributes = { type: 'risk', hazard: riskHazard, prob, level: riskLevel };
+        } else if (mode === 'prevots') {
+            const prevotsLevel = level;
+            const colorHex = catColor[prevotsLevel] || "#999999";
+    
+            symbolOptions = {
+                color: [...new Color(colorHex).toRgb(), 0.25],
+                outline: { color: new Color(colorHex), width: 2 }
+            };
+            targetLayerId = 'prevots';
+            attributes = { type: 'prevots', level: prevotsLevel };
+        } else {
+            return;
+        }
+        
+        if (targetLayerId) {
+            sketchVM.layer = graphicsLayersRef.current[targetLayerId];
+        }
+        
+        const newSymbol = new SimpleFillSymbol(symbolOptions);
+        sketchVM.polygonSymbol = newSymbol;
+        (sketchVM as any)._creationAttributes = attributes;
+
+        sketchVM.create("polygon");
+
     }, []);
 
     useEffect(() => {
@@ -551,7 +549,7 @@ export function EsriMap() {
                 root.render(
                     <DrawUI 
                         onStartDrawing={(mode, hazard, prob, level) => {
-                            handleStartDrawing(mode, hazard, prob, level)
+                            handleStartDrawing(mode, hazard, prob, level, Color, SimpleFillSymbol)
                         }}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                     />
