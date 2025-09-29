@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -18,7 +19,7 @@ import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
-import { addPolygon, removePolygon, getAllPolygons, getPolygonsByHazard, togglePolygonVisibility, catColor, levelOf } from './polygon-manager';
+import { addPolygon, removePolygon, getAllPolygons, getPolygonsByHazard, togglePolygonVisibility, catColor, levelOf, probabilityOptions } from './polygon-manager';
 
 const LoadingSpinner = () => (
     <div className="absolute inset-0 z-50 flex h-full w-full flex-col items-center justify-center bg-gray-900 bg-opacity-70 text-white">
@@ -42,22 +43,7 @@ const hazardOptions: { value: Exclude<HazardType, 'prevots'>; label: string }[] 
     { value: "tornado", label: "Tornado" },
 ];
 
-const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
-    hail: [5, 15, 30, 45],
-    wind: [5, 15, 30, 45],
-    tornado: [2, 5, 10, 15],
-};
-
 const prevotsLevelOptions = [1, 2, 3, 4, 5];
-
-const hexToRgbArray = (hex: string): [number, number, number] => {
-  hex = hex.replace("#", "");
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  return [r, g, b];
-};
-
 
 const SideMenu = ({ onLogout }: { onLogout: () => void }) => {
     const menuItems = [
@@ -226,8 +212,8 @@ const PrevotsLegend = () => (
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
        </div>
        <div>
-         <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: '#FF0000', marginRight: '6px'}} ></span>PREV 4
-       </div>
+        <span style={{display: 'inline-block', width: '14px', height: '14px', backgroundColor: '#FF0000', marginRight: '6px'}} ></span>PREV 4
+      </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
       </div>
@@ -352,9 +338,10 @@ export function EsriMap() {
         }
     };
     
-    const handleStartDrawing = (mode: DrawingMode) => {
+    const handleStartDrawing = useCallback((mode: DrawingMode) => {
         if (!sketchViewModelRef.current) return;
-        
+    
+        const sketchVM = sketchViewModelRef.current;
         let symbolOptions: any = {};
         let targetLayerId = '';
         let attributes: any = {};
@@ -365,34 +352,29 @@ export function EsriMap() {
             const prob = selectedProb;
             const level = levelOf(prob, hazard);
             const colorHex = catColor[level] || "#999999";
-            const [r, g, b] = hexToRgbArray(colorHex);
-            symbolOptions = {
-                color: [r, g, b, 0.25],
-                outline: { color: [r, g, b, 1], width: 2 }
-            };
+            const SimpleFillSymbol = (sketchVM as any)._graphicsView.graphics.items[0].symbol.constructor;
+            symbolOptions = { color: [...SimpleFillSymbol.prototype.color.constructor.fromHex(colorHex).toRgb(), 0.25], outline: { color: SimpleFillSymbol.prototype.color.constructor.fromHex(colorHex), width: 2 } };
             targetLayerId = hazard;
             attributes = { type: 'risk', hazard, prob, level };
         } else if (mode === 'prevots') {
             const level = selectedPrevotsLevel;
             const colorHex = catColor[level] || "#999999";
-            const [r, g, b] = hexToRgbArray(colorHex);
-            symbolOptions = {
-                color: [r, g, b, 0.25],
-                outline: { color: [r, g, b, 1], width: 2 }
-            };
+             const SimpleFillSymbol = (sketchVM as any)._graphicsView.graphics.items[0].symbol.constructor;
+            symbolOptions = { color: [...SimpleFillSymbol.prototype.color.constructor.fromHex(colorHex).toRgb(), 0.25], outline: { color: SimpleFillSymbol.prototype.color.constructor.fromHex(colorHex), width: 2 } };
             targetLayerId = 'prevots';
             attributes = { type: 'prevots', level };
         } else {
             return;
         }
-    
-        const SimpleFillSymbol = sketchViewModelRef.current.polygonSymbol.constructor as any;
+
+        const SimpleFillSymbol = sketchVM.polygonSymbol.constructor as any;
         const newSymbol = new SimpleFillSymbol(symbolOptions);
-        sketchViewModelRef.current.polygonSymbol = newSymbol;
-        (sketchViewModelRef.current as any)._creationAttributes = attributes;
-        
-        sketchViewModelRef.current.create("polygon");
-    };
+        sketchVM.polygonSymbol = newSymbol;
+        (sketchVM as any)._creationAttributes = attributes;
+
+        sketchVM.create("polygon");
+    }, [selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
+
 
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -427,8 +409,6 @@ export function EsriMap() {
         try {
             const forecastId = `forecast_${forecastDate}`;
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
-            
-            const features = allGraphics.map(g => JSON.stringify(g.geometry.toJSON()));
             
             await setDoc(forecastDocRef, {
                 date: forecastDate,
@@ -481,7 +461,6 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                // Weather Models
                 const map = new Map({ basemap: "dark-gray-vector", layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -501,7 +480,7 @@ export function EsriMap() {
                 });
                 sketchViewModelRef.current = sketchVM;
 
-                sketchVM.on("create", (event) => {
+                sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
                     if (event.state === "complete") {
                          const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
                         const graphic = addPolygon({
@@ -538,9 +517,7 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <DrawUI 
-                        onStartDrawing={(mode) => {
-                            handleStartDrawing(mode);
-                        }}
+                        onStartDrawing={handleStartDrawing}
                         selectedHazard={selectedHazardForDisplay}
                         setSelectedHazard={setSelectedHazardForDisplay}
                         selectedProb={selectedProb}
@@ -562,7 +539,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
     
     useEffect(() => {
         if(viewRef.current) {
@@ -656,3 +633,187 @@ export function EsriMap() {
         </div>
     );
 }
+```
+
+agora, a funcao de poligono:
+```
+// src/components/meteorologia/polygon-manager.ts
+import * as turf from '@turf/turf';
+
+// Definições de tipo para clareza
+type HazardType = "hail" | "wind" | "tornado";
+type EsriPolygon = __esri.Polygon;
+type EsriGraphic = __esri.Graphic;
+type EsriColor = __esri.Color;
+type EsriSimpleFillSymbol = __esri.symbols.SimpleFillSymbol;
+type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
+type EsriGraphicsLayer = __esri.GraphicsLayer;
+type EsriMapView = __esri.MapView;
+
+// Regras de negócio e cores, extraídas da referência
+export const catColor: Record<number, string> = {
+  0: '#00FF00', // Risco Geral/Mínimo
+  1: "#FFFF00", // Nível 1 (Amarelo)
+  2: "#FFA500", // Nível 2 (Laranja)
+  3: "#FF0000", // Nível 3 (Vermelho)
+  4: "#800080"  // Roxo - PREV 4 (se houver)
+};
+
+export const levelOf = (p: number, t: HazardType): number => {
+    return t === 'tornado'
+        ? {2:1, 5:2, 10:3, 15:4}[p] || 0
+        : {5:1, 15:2, 30:3, 45:4}[p] || 0;
+};
+
+export const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
+    hail: [5, 15, 30, 45],
+    wind: [5, 15, 30, 45],
+    tornado: [2, 5, 10, 15],
+};
+
+
+// Cache para armazenar polígonos por tipo
+const polygonGroups: Record<HazardType, EsriGraphic[]> = {
+  hail: [],
+  wind: [],
+  tornado: []
+};
+
+// Converte Hex para array RGB
+function hexToRgb(hex: string): number[] {
+  hex = hex.replace("#", "");
+  return [
+    parseInt(hex.substring(0,2), 16),
+    parseInt(hex.substring(2,4), 16),
+    parseInt(hex.substring(4,6), 16)
+  ];
+}
+
+// Validação de área: polígono de nível maior não pode ser maior que um de nível menor
+function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardType): boolean {
+  if (!turf || !newPolygon?.rings) return true;
+
+  const newPolygonGeoJSON = { type: "Polygon", coordinates: newPolygon.rings };
+  const newArea = turf.area(turf.feature(newPolygonGeoJSON));
+  
+  const sameHazardPolys = polygonGroups[hazard] || [];
+  for (const existingGraphic of sameHazardPolys) {
+    const existingLevel = existingGraphic.attributes?.level;
+    if (existingLevel == null || existingLevel >= newLevel) continue;
+    
+    const existingGeom = existingGraphic.geometry as EsriPolygon;
+    if (!existingGeom?.rings) continue;
+    
+    const existingPolygonGeoJSON = { type: "Polygon", coordinates: existingGeom.rings };
+    const existingArea = turf.area(turf.feature(existingPolygonGeoJSON));
+    
+    if (newArea > existingArea) {
+      alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
+      return false;
+    }
+  }
+  return true;
+}
+
+
+// Adiciona um novo polígono ao mapa e ao cache
+export function addPolygon({
+  graphic,
+  attributes,
+  brazilBoundary,
+  Color,
+  SimpleFillSymbol,
+  SimpleLineSymbol,
+  Polygon,
+  webMercatorUtils
+}: {
+  graphic: EsriGraphic;
+  attributes: any,
+  brazilBoundary: any;
+  Color: any;
+  SimpleFillSymbol: any;
+  SimpleLineSymbol: any;
+  Polygon: any;
+  webMercatorUtils: any;
+}): EsriGraphic | null {
+
+  const { hazard, prob, level, type } = attributes;
+  
+  if (type !== 'risk') { // Por enquanto, só processamos polígonos de risco
+    return graphic;
+  }
+
+  // 1. Converte e Recorta a geometria
+  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
+  const turfPolygon = turf.polygon(geographicGeom.rings);
+  const clipped = turf.intersect(turfPolygon, brazilBoundary);
+
+  if (!clipped || !clipped.geometry) {
+    alert("O polígono desenhado está fora dos limites do Brasil.");
+    return null;
+  }
+  
+  const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+
+  // 2. Validação de Área
+  if (!validateArea(esriPolygon, level, hazard)) {
+    return null;
+  }
+  
+  // 3. Cria Símbolo e Atributos
+  const colorHex = catColor[level] || "#999999";
+  const symbol = new SimpleFillSymbol({
+      color: [...hexToRgb(colorHex), 0.25],
+      outline: { color: new Color(colorHex), width: 2 }
+  });
+
+  graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+  graphic.symbol = symbol;
+  graphic.attributes = { ...attributes, uid: `risk-${Date.now()}` };
+  
+  // 4. Adiciona ao cache
+  if (!polygonGroups[hazard]) {
+    polygonGroups[hazard] = [];
+  }
+  polygonGroups[hazard].push(graphic);
+
+  console.log(`✅ Polígono (${hazard}, ${prob}%) adicionado.`);
+  return graphic;
+}
+
+// Remove um polígono do mapa e do cache
+export function removePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
+  const { hazard, uid } = graphic.attributes;
+  if (hazard && polygonGroups[hazard as HazardType]) {
+    polygonGroups[hazard as HazardType] = polygonGroups[hazard as HazardType].filter(g => g.attributes.uid !== uid);
+    graphicsLayer.remove(graphic);
+    console.log(`🗑️ Polígono (${hazard}) removido.`);
+  }
+}
+
+// Limpa o cache de um tipo de risco específico
+export function clearPolygonGroup(hazard: HazardType) {
+    polygonGroups[hazard] = [];
+}
+
+// Retorna todos os polígonos de um grupo específico
+export function getPolygonsByHazard(hazard: HazardType): EsriGraphic[] {
+  return polygonGroups[hazard] || [];
+}
+
+// Retorna todos os polígonos de todos os grupos
+export function getAllPolygons(): EsriGraphic[] {
+  return Object.values(polygonGroups).flat();
+}
+
+// Atualiza a visibilidade das camadas no mapa
+export function togglePolygonVisibility(view: EsriMapView, selectedHazard: HazardType): void {
+    if (!view) return;
+    Object.keys(polygonGroups).forEach(hazardKey => {
+        const layer = view.map.findLayerById(hazardKey) as EsriGraphicsLayer;
+        if (layer) {
+            layer.visible = (hazardKey === selectedHazard);
+        }
+    });
+}
+```
