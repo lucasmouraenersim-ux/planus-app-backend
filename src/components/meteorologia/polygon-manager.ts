@@ -45,14 +45,16 @@ function hexToRgb(hex: string): number[] {
 function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardType): boolean {
   if (!turf) return true; // Se turf não estiver carregado, pula a validação
 
-  const newArea = turf.area(newPolygon.toJSON());
+  const newPolygonFeature = turf.feature(newPolygon.toJSON());
+  const newArea = turf.area(newPolygonFeature);
   
   const sameHazardPolys = polygonGroups[hazard] || [];
   for (const existingGraphic of sameHazardPolys) {
     const existingLevel = existingGraphic.attributes?.level;
     if (existingLevel == null || existingLevel >= newLevel) continue;
     
-    const existingArea = turf.area(existingGraphic.geometry.toJSON());
+    const existingPolygonFeature = turf.feature(existingGraphic.geometry.toJSON());
+    const existingArea = turf.area(existingPolygonFeature);
     
     if (newArea > existingArea) {
       alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
@@ -128,8 +130,8 @@ export function addPolygon({
 // Remove um polígono do mapa e do cache
 export function removePolygon(graphic: EsriGraphic, graphicsLayer: __esri.GraphicsLayer): void {
   const { hazard, uid } = graphic.attributes;
-  if (hazard && polygonGroups[hazard]) {
-    polygonGroups[hazard] = polygonGroups[hazard].filter(g => g.attributes.uid !== uid);
+  if (hazard && polygonGroups[hazard as HazardType]) {
+    polygonGroups[hazard as HazardType] = polygonGroups[hazard as HazardType].filter(g => g.attributes.uid !== uid);
     graphicsLayer.remove(graphic);
     console.log(`🗑️ Polígono (${hazard}) removido.`);
   }
@@ -151,17 +153,11 @@ export function getAllPolygons(): EsriGraphic[] {
 }
 
 // Atualiza a visibilidade das camadas no mapa
-export function togglePolygonVisibility(map: __esri.Map, selectedHazard: HazardType): void {
-  if (!map) return;
-  Object.entries(polygonGroups).forEach(([hazard, group]) => {
-    group.forEach(graphic => {
-      const isVisible = hazard === selectedHazard;
-      const layer = map.graphics; // Assume a single graphics layer for simplicity
-      if (isVisible && !layer.graphics.includes(graphic)) {
-          layer.add(graphic);
-      } else if (!isVisible && layer.graphics.includes(graphic)) {
-          layer.remove(graphic);
-      }
+export function togglePolygonVisibility(graphicsLayers: Record<string, __esri.GraphicsLayer>, selectedHazard: HazardType): void {
+    if (!graphicsLayers) return;
+    Object.entries(graphicsLayers).forEach(([hazard, layer]) => {
+        if (layer) {
+            layer.visible = (hazard === selectedHazard);
+        }
     });
-  });
 }
