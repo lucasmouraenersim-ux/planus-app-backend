@@ -232,12 +232,17 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
     onCancel: () => void;
 }) => {
     const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('main');
+    const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions.hail);
 
     useEffect(() => {
         if (activeMenu === 'risk' && selectedHazard !== 'prevots') {
-            setSelectedProb(probabilityOptions[selectedHazard][0]);
+            const newOptions = probabilityOptions[selectedHazard] || [];
+            setCurrentProbOptions(newOptions);
+            if (!newOptions.includes(selectedProb)) {
+                setSelectedProb(newOptions[0] || 0);
+            }
         }
-    }, [selectedHazard, activeMenu, setSelectedProb]);
+    }, [selectedHazard, activeMenu, selectedProb, setSelectedProb]);
 
     return (
       <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
@@ -266,7 +271,7 @@ const DrawUI = ({ onStartDrawing, selectedHazard, setSelectedHazard, selectedPro
                   <Label>Probabilidade (%)</Label>
                   <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
                     <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>{(selectedHazard !== 'prevots' ? probabilityOptions[selectedHazard] : []).map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
+                    <SelectContent>{currentProbOptions.map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <Button onClick={() => onStartDrawing('risk')} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
@@ -343,9 +348,8 @@ export function EsriMap() {
     
         const sketchVM = sketchViewModelRef.current;
         let symbolOptions: any = {};
-        let targetLayerId = '';
         let attributes: any = {};
-
+        
         if (mode === 'risk') {
             const hazard = selectedHazardForDisplay;
             if (hazard === 'prevots') return;
@@ -355,27 +359,25 @@ export function EsriMap() {
             
             const rgbColor = new Color(colorHex).toRgb();
             symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
-            
-            targetLayerId = hazard;
             attributes = { type: 'risk', hazard, prob, level };
         } else if (mode === 'prevots') {
             const level = selectedPrevotsLevel;
             const colorHex = catColor[level] || "#999999";
-
+    
             const rgbColor = new Color(colorHex).toRgb();
             symbolOptions = { color: [...rgbColor, 0.25], outline: { color: new Color(colorHex), width: 2 } };
-            
-            targetLayerId = 'prevots';
             attributes = { type: 'prevots', level };
         } else {
             return;
         }
-
+    
         const newSymbol = new SimpleFillSymbol(symbolOptions);
         sketchVM.polygonSymbol = newSymbol;
         (sketchVM as any)._creationAttributes = attributes;
 
+        // This is the crucial missing line
         sketchVM.create("polygon");
+
     }, [selectedHazardForDisplay, selectedProb, selectedPrevotsLevel]);
 
 
