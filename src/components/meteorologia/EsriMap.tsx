@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado, LogOut, Layers, AlertTriangle, Send, Loader2, Search as SearchIcon, Clock } from 'lucide-react';
 import { collection, addDoc, query, where, onSnapshot, Timestamp, serverTimestamp, setDoc, doc, getDoc } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -324,10 +324,53 @@ export function EsriMap() {
     });
     
     const [isSubmitting, setIsSubmitting] = useState<Record<string, boolean>>({});
-    const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
+    const [countdown, setCountdown] = useState('');
+    const [forecastDate, setForecastDate] = useState(getInitialForecastDate());
+
     const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
+
+    function getInitialForecastDate() {
+        const now = new Date();
+        const deadline = new Date(now);
+        deadline.setHours(12, 0, 0, 0); // Deadline is at 12:00:00.000
+
+        if (now >= deadline) {
+            // If it's past noon, forecast is for the next day
+            now.setDate(now.getDate() + 1);
+        }
+        return now.toISOString().slice(0, 10);
+    }
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            const now = new Date();
+            let deadline = new Date();
+            deadline.setHours(12, 0, 0, 0);
+
+            if (now > deadline) {
+                deadline.setDate(deadline.getDate() + 1);
+            }
+
+            const diff = deadline.getTime() - now.getTime();
+
+            if (diff <= 0) {
+                setForecastDate(getInitialForecastDate());
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            setCountdown(
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+            );
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -634,9 +677,17 @@ export function EsriMap() {
             <RiskLegend selectedHazard={selectedHazardForDisplay} />
             <PrevotsLegend />
 
-            <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
+            <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9" />
                 <Button onClick={handleLoadForecast}><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
+                
+                <div className="flex items-center gap-2 p-2 bg-black/30 rounded-md">
+                    <Clock className="h-5 w-5 text-yellow-400"/>
+                    <span className="text-sm font-mono text-yellow-400" title="Tempo restante para a previsão do dia atual">
+                        {countdown}
+                    </span>
+                </div>
+                
                 {(userAppRole === 'superadmin') && (
                     <>
                         <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
@@ -647,7 +698,7 @@ export function EsriMap() {
                 )}
             </div>
             
-            <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col md:flex-row items-stretch gap-1">
+            <div className="absolute top-[88px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col md:flex-row items-stretch gap-1">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
@@ -673,7 +724,7 @@ export function EsriMap() {
             </div>
 
             {isReportMode && (
-                <div className="absolute top-[130px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                <div className="absolute top-[138px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
