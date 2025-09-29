@@ -223,7 +223,7 @@ const PrevotsLegend = () => (
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FFA500',marginRight:'6px'}}></span>PREV 3
       </div>
        <div>
-        <span style={{display:'inline-block',width:'14px',height:'14px',background:'#FF0000',marginRight:'6px'}}></span>PREV 4
+        <span style="display: inline-block; width: 14px; height: 14px; background-color: rgb(255, 0, 0); margin-right: 6px;" ></span>PREV 4
       </div>
        <div>
         <span style={{display:'inline-block',width:'14px',height:'14px',background:'#800080',marginRight:'6px'}}></span>PREV 5
@@ -309,7 +309,7 @@ export function EsriMap() {
     const mapDivRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<__esri.MapView | null>(null);
     const sketchRef = useRef<__esri.Sketch | null>(null);
-    const graphicsLayerRef = useRef<__esri.GraphicsLayer | null>(null);
+    const graphicsLayersRef = useRef<Record<string, __esri.GraphicsLayer>>({});
     
     const [isLoading, setIsLoading] = useState(true);
     const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
@@ -334,11 +334,11 @@ export function EsriMap() {
     const [isViewingForecast, setIsViewingForecast] = useState(false);
     const [forecastDate, setForecastDate] = useState(new Date().toISOString().slice(0, 10));
     
-    const [selectedHazard, setSelectedHazard] = useState<HazardType>('hail');
+    const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<HazardType>('hail');
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions.hail[0]);
     const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
-    const [isDrawing, setIsDrawing] = useState(false);
+    const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
 
     const handleLogout = async () => {
         try {
@@ -351,24 +351,35 @@ export function EsriMap() {
     
     const handleStartDrawing = (mode: DrawingMode) => {
         if (!sketchRef.current) return;
+        setDrawingMode(mode);
         
-        const hazard = selectedHazard;
-        const prob = selectedProb;
-        const level = levelOf(prob, hazard);
-        const colorHex = catColor[level] || "#999999";
-        const [r, g, b] = hexToRgbArray(colorHex);
+        let symbolOptions = {};
+        if (mode === 'risk') {
+            const hazard = selectedHazardForDisplay;
+            const prob = selectedProb;
+            const level = levelOf(prob, hazard);
+            const colorHex = catColor[level] || "#999999";
+            const [r, g, b] = hexToRgbArray(colorHex);
+            symbolOptions = {
+                color: [r, g, b, 0.25],
+                outline: { color: [r, g, b, 1], width: 2 }
+            };
+        } else if (mode === 'prevots') {
+            const level = selectedPrevotsLevel;
+            const colorHex = catColor[level] || "#999999";
+            const [r, g, b] = hexToRgbArray(colorHex);
+            symbolOptions = {
+                color: [r, g, b, 0.25],
+                outline: { color: [r, g, b, 1], width: 2 }
+            };
+        }
 
-        const symbol = new (sketchRef.current as any).viewModel.polygonSymbol.constructor({
-             color: new (sketchRef.current as any).viewModel.polygonSymbol.color.constructor([r, g, b, 0.25]),
-             outline: { color: new (sketchRef.current as any).viewModel.polygonSymbol.outline.color.constructor([r, g, b, 1]), width: 2 }
-        });
+        const SimpleFillSymbol = (sketchRef.current.viewModel as any).polygonSymbol.constructor;
+        const newSymbol = new SimpleFillSymbol(symbolOptions);
+        (sketchRef.current.viewModel as any).polygonSymbol = newSymbol;
         
-        (sketchRef.current as any).viewModel.polygonSymbol = symbol;
-        
-        setIsDrawing(true);
         sketchRef.current.create("polygon");
     };
-
 
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -404,18 +415,14 @@ export function EsriMap() {
             const forecastId = `forecast_${forecastDate}`;
             const forecastDocRef = doc(db, 'weather_forecasts', forecastId);
             
-            const features = allGraphics.map(g => {
-                const geoJSON = g.geometry.toJSON();
-                return JSON.stringify(geoJSON);
-            });
+            const features = allGraphics.map(g => JSON.stringify(g.geometry.toJSON()));
 
             await setDoc(forecastDocRef, {
                 date: forecastDate,
                 createdAt: serverTimestamp(),
-                features: features.map(f => JSON.parse(f)),
+                features: features,
                 attributes: allGraphics.map(g => g.attributes)
             });
-
 
             alert("Previsão enviada com sucesso!");
             
@@ -452,33 +459,23 @@ export function EsriMap() {
                 } catch(e) {
                     console.error("Failed to fetch weather models, proceeding without them", e);
                 }
-
-                const modelLayers = models.map(model => new WebTileLayer({
-                    id: model.id,
-                    urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`,
-                    title: model.name,
-                    visible: model.id === selectedModel, 
-                    opacity: 0.7,
-                }));
                 
-                const newModelGroupLayer = new GroupLayer({
-                    title: "Modelos Meteorológicos",
-                    visible: true,
-                    layers: modelLayers,
-                });
+                const modelLayers = models.map(model => new WebTileLayer({ id: model.id, urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`, title: model.name, visible: model.id === selectedModel, opacity: 0.7 }));
+                const newModelGroupLayer = new GroupLayer({ title: "Modelos Meteorológicos", visible: true, layers: modelLayers });
                 setModelGroupLayer(newModelGroupLayer);
                 
-                graphicsLayerRef.current = new GraphicsLayer({ id: 'userGraphics' });
-                const reportsLayer = new GraphicsLayer({ id: 'reports' });
+                // Initialize all graphics layers
+                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
+                graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
+                graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const map = new Map({ basemap: "dark-gray-vector", layers: [newModelGroupLayer, graphicsLayerRef.current, reportsLayer] });
+                // Weather Models
+                
+                const map = new Map({ basemap: "dark-gray-vector", layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
                 
-                view.when(() => {
-                    setIsLoading(false);
-                });
-                
+                view.when(() => { setIsLoading(false); });
                 view.popup.autoOpenEnabled = false; 
 
                 const basemapGallery = new BasemapGallery({ view });
@@ -487,7 +484,7 @@ export function EsriMap() {
                 const layerList = new LayerList({ view });
                 view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
                 
-                const sketch = new Sketch({ view, layer: graphicsLayerRef.current!, creationMode: "update" });
+                const sketch = new Sketch({ view, layer: graphicsLayersRef.current.hail, creationMode: "update" });
                 sketchRef.current = sketch;
                 
                 const drawContainer = document.createElement("div");
@@ -506,39 +503,39 @@ export function EsriMap() {
                 root.render(
                     <DrawUI 
                         onStartDrawing={handleStartDrawing} 
-                        selectedHazard={selectedHazard}
-                        setSelectedHazard={setSelectedHazard}
+                        selectedHazard={selectedHazardForDisplay}
+                        setSelectedHazard={setSelectedHazardForDisplay}
                         selectedProb={selectedProb}
                         setSelectedProb={setSelectedProb}
                         selectedPrevotsLevel={selectedPrevotsLevel}
                         setSelectedPrevotsLevel={setSelectedPrevotsLevel}
-                        onCancel={() => { sketchExpand.collapse(); setIsDrawing(false); }}
+                        onCancel={() => { sketchExpand.collapse(); setDrawingMode('none'); }}
                     />
                 );
                 
                 sketch.on("create", (event) => {
-                    if (event.state === "complete") {
+                    if (event.state === "complete" && drawingMode !== 'none') {
                          if (!brazilBoundary) {
                             alert("Contorno do Brasil não carregado. Tente desenhar novamente em alguns segundos.");
                             sketchRef.current?.cancel();
                             return;
                         }
-
+                        
                         const addedGraphic = addPolygon({
                             graphic: event.graphic,
-                            hazard: selectedHazard,
-                            prob: selectedProb,
+                            hazard: drawingMode === 'risk' ? selectedHazardForDisplay : 'prevots', // Simplified
+                            prob: drawingMode === 'risk' ? selectedProb : selectedPrevotsLevel, // Re-using prob field
                             brazilBoundary,
                             Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
                         });
                         
                         if (addedGraphic) {
-                            graphicsLayerRef.current?.remove(event.graphic);
-                            graphicsLayerRef.current?.add(addedGraphic);
-                        } else {
-                            graphicsLayerRef.current?.remove(event.graphic);
+                            const targetLayer = graphicsLayersRef.current[addedGraphic.attributes.hazard];
+                            if(targetLayer) {
+                                targetLayer.add(addedGraphic);
+                            }
                         }
-                        setIsDrawing(false);
+                        setDrawingMode('none');
                     }
                 });
 
@@ -553,13 +550,13 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, selectedHazard, selectedProb, selectedPrevotsLevel]);
+    }, [brazilBoundary, userAppRole, selectedHazardForDisplay, selectedProb, selectedPrevotsLevel, drawingMode]);
     
     useEffect(() => {
-        if(graphicsLayerRef.current && viewRef.current) {
-            togglePolygonVisibility(viewRef.current.map, selectedHazard);
+        if(viewRef.current) {
+            togglePolygonVisibility(viewRef.current, selectedHazardForDisplay);
         }
-    }, [selectedHazard]);
+    }, [selectedHazardForDisplay]);
     
 
     const handleSaveReport = async () => {
@@ -586,7 +583,7 @@ export function EsriMap() {
             <Scoreboard />
             <StatsPanel />
             <ReportsLegend />
-            <RiskLegend selectedHazard={selectedHazard} />
+            <RiskLegend selectedHazard={selectedHazardForDisplay} />
             <PrevotsLegend />
 
             <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">

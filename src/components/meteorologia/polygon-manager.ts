@@ -8,6 +8,8 @@ type EsriGraphic = __esri.Graphic;
 type EsriColor = __esri.Color;
 type EsriSimpleFillSymbol = __esri.symbols.SimpleFillSymbol;
 type EsriSimpleLineSymbol = __esri.symbols.SimpleLineSymbol;
+type EsriGraphicsLayer = __esri.GraphicsLayer;
+type EsriMapView = __esri.MapView;
 
 // Regras de negócio e cores, extraídas da referência
 export const catColor: Record<number, string> = {
@@ -43,13 +45,9 @@ function hexToRgb(hex: string): number[] {
 
 // Validação de área: polígono de nível maior não pode ser maior que um de nível menor
 function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardType): boolean {
-  if (!turf) return true; // Se turf não estiver carregado, pula a validação
+  if (!turf || !newPolygon?.rings) return true;
 
-  // Correctly create a GeoJSON Feature from the Esri Polygon geometry
-  const newPolygonGeoJSON = {
-    type: "Polygon",
-    coordinates: newPolygon.rings
-  };
+  const newPolygonGeoJSON = { type: "Polygon", coordinates: newPolygon.rings };
   const newArea = turf.area(newPolygonGeoJSON);
   
   const sameHazardPolys = polygonGroups[hazard] || [];
@@ -57,11 +55,10 @@ function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardT
     const existingLevel = existingGraphic.attributes?.level;
     if (existingLevel == null || existingLevel >= newLevel) continue;
     
-    // Correctly create a GeoJSON Feature from the existing Esri Polygon geometry
-    const existingPolygonGeoJSON = {
-        type: "Polygon",
-        coordinates: (existingGraphic.geometry as EsriPolygon).rings
-    };
+    const existingGeom = existingGraphic.geometry as EsriPolygon;
+    if (!existingGeom?.rings) continue;
+    
+    const existingPolygonGeoJSON = { type: "Polygon", coordinates: existingGeom.rings };
     const existingArea = turf.area(existingPolygonGeoJSON);
     
     if (newArea > existingArea) {
@@ -136,7 +133,7 @@ export function addPolygon({
 }
 
 // Remove um polígono do mapa e do cache
-export function removePolygon(graphic: EsriGraphic, graphicsLayer: __esri.GraphicsLayer): void {
+export function removePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
   const { hazard, uid } = graphic.attributes;
   if (hazard && polygonGroups[hazard as HazardType]) {
     polygonGroups[hazard as HazardType] = polygonGroups[hazard as HazardType].filter(g => g.attributes.uid !== uid);
@@ -161,11 +158,12 @@ export function getAllPolygons(): EsriGraphic[] {
 }
 
 // Atualiza a visibilidade das camadas no mapa
-export function togglePolygonVisibility(graphicsLayers: Record<string, __esri.GraphicsLayer>, selectedHazard: HazardType): void {
-    if (!graphicsLayers) return;
-    Object.entries(graphicsLayers).forEach(([hazard, layer]) => {
+export function togglePolygonVisibility(view: EsriMapView | null, selectedHazard: HazardType): void {
+    if (!view) return;
+    Object.keys(polygonGroups).forEach(hazardKey => {
+        const layer = view.map.findLayerById(hazardKey) as EsriGraphicsLayer;
         if (layer) {
-            layer.visible = (hazard === selectedHazard);
+            layer.visible = (hazardKey === selectedHazard);
         }
     });
 }
