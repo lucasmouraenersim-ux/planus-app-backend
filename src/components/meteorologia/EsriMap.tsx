@@ -11,7 +11,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Pencil, Menu } from 'lucide-react';
+import { Pencil, Menu, MapPin, X, PlusCircle, Calendar as CalendarIcon, Wind, CloudHail, Tornado } from 'lucide-react';
+import { collection, addDoc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Input } from '../ui/input';
 
 
 const LoadingSpinner = () => (
@@ -181,6 +184,20 @@ export function EsriMap() {
     const [selectedModel, setSelectedModel] = useState<string>('radar.nowcast');
     const [modelGroupLayer, setModelGroupLayer] = useState<__esri.GroupLayer | null>(null);
 
+    // Reports States
+    const [isReportMode, setIsReportMode] = useState(false);
+    const [newReport, setNewReport] = useState<{
+        hazard: HazardType,
+        sev: 'NOR' | 'SS',
+        date: string,
+        location: __esri.Point | null
+    }>({
+        hazard: 'wind',
+        sev: 'NOR',
+        date: new Date().toISOString().slice(0, 10),
+        location: null
+    });
+
 
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -250,7 +267,7 @@ export function EsriMap() {
                     const host = data.host;
                     
                     const processModelData = (category: string, subCategory: string, dataObj: any) => {
-                        if (dataObj && Array.isArray(dataObj)) {
+                        if (dataObj && Array.isArray(dataObj) && dataObj.length > 0) {
                             return { id: `${category}.${subCategory}`, path: dataObj[0].path, name: `${category.toUpperCase()} - ${subCategory.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}` };
                         }
                         return null;
@@ -267,11 +284,11 @@ export function EsriMap() {
                           }
                           if (key === 'gfs' || key === 'ecmwf' || key === 'meteofrance') {
                              if (typeof data[key] === 'object' && data[key] !== null) {
-                                return Object.keys(data[key]).map(subKey => processModelData(key, subKey, data[key][subKey])).filter(Boolean);
+                                return Object.keys(data[key]).map(subKey => processModelData(key, subKey, data[key][subKey])).filter(Boolean) as { id: string; path: string; name: string; }[];
                              }
                           }
                           return [];
-                      }).filter(model => model && model.path);
+                      }).filter((model): model is { id: string; path: string; name: string; } => model !== null && model.path !== null);
                       
                     setWeatherModels(models);
 
@@ -351,11 +368,42 @@ export function EsriMap() {
                 
                 view.when(() => {
                     setIsLoading(false);
-                    loadReports(new Date().toISOString().slice(0, 10)); // Load today's reports on init
+                    // Firestore listener for reports
+                    const reportsQuery = query(collection(db, "weather_reports"));
+                    onSnapshot(reportsQuery, (querySnapshot) => {
+                        const reportGraphics: __esri.Graphic[] = [];
+                        const stats = { total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 };
+                        
+                        querySnapshot.forEach((doc) => {
+                            const data = doc.data();
+                            const { hazard, sev, location } = data;
+                            if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
+                                stats.total++;
+                                if (sev === 'SS') stats.sig++;
+                                if (hazard === 'hail') { stats.hail++; if (sev === 'SS') stats.hailSig++; }
+                                if (hazard === 'wind') { stats.wind++; if (sev === 'SS') stats.windSig++; }
+                                if (hazard === 'tornado') { stats.tornado++; if (sev === 'SS') stats.tornadoSig++; }
+
+                                reportGraphics.push(new Graphic({
+                                    geometry: new Point({ longitude: location.longitude, latitude: location.latitude }),
+                                    symbol: getIconSymbol(hazard, sev),
+                                    attributes: data,
+                                }));
+                            }
+                        });
+                        reportsLayer.removeAll();
+                        reportsLayer.addMany(reportGraphics);
+                        updateStatsPanel(stats);
+                    });
                 });
                 
                 view.popup.autoOpenEnabled = false; 
                 view.on("click", (event) => {
+                    if (isReportMode) {
+                        setNewReport(prev => ({...prev, location: event.mapPoint}));
+                        return;
+                    }
+
                     view.hitTest(event).then((response) => {
                         const graphic = response.results.find(result => result.graphic.layer === graphicsLayer);
                         if (graphic) {
@@ -534,56 +582,15 @@ export function EsriMap() {
                 function getIconSymbol(hazard: string, sev: string = "NOR") {
                     const key = `${hazard.toLowerCase()}|${sev.toUpperCase()}`;
                     const iconMap: Record<string, string> = {
-                        'vento|NOR': 'https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png',
-                        'vento|SS': 'https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png',
-                        'granizo|NOR': 'https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png',
-                        'granizo|SS': 'https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png',
+                        'wind|NOR': 'https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png',
+                        'wind|SS': 'https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png',
+                        'hail|NOR': 'https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png',
+                        'hail|SS': 'https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png',
                         'tornado|NOR': 'https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png',
                         'tornado|SS': 'https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png'
                     };
-                    const iconUrl = iconMap[key] || iconMap['vento|NOR'];
+                    const iconUrl = iconMap[key] || iconMap['wind|NOR'];
                     return new PictureMarkerSymbol({ url: iconUrl, width: "20px", height: "20px" });
-                }
-
-                function loadReports(dateISO: string) {
-                    const endpoint = `https://www.brazilstormchase.com.br/teste/_functions/reports/list?date=${dateISO}`;
-                    reportsLayer.removeAll();
-                    
-                    fetch(endpoint)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (!data.features || data.features.length === 0) {
-                                console.log("Nenhum relato encontrado para:", dateISO);
-                                updateStatsPanel({ total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 });
-                                return;
-                            }
-                            const stats = { total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 };
-                            const reportGraphics = data.features.map((f: any) => {
-                                const [lon, lat] = f.geometry.coordinates;
-                                const props = f.properties || {};
-                                const hazard = props.hazard?.toLowerCase() || "desconhecido";
-                                const sev = props.sev || "NOR";
-                                
-                                stats.total++;
-                                if (sev === 'SS') stats.sig++;
-                                if (hazard === 'granizo') { stats.hail++; if (sev === 'SS') stats.hailSig++; }
-                                if (hazard === 'vento') { stats.wind++; if (sev === 'SS') stats.windSig++; }
-                                if (hazard === 'tornado') { stats.tornado++; if (sev === 'SS') stats.tornadoSig++; }
-
-                                return new Graphic({
-                                    geometry: new Point({ longitude: lon, latitude: lat, spatialReference: { wkid: 4326 } }),
-                                    symbol: getIconSymbol(hazard, sev),
-                                    attributes: props
-                                });
-                            });
-                            reportsLayer.addMany(reportGraphics);
-                            updateStatsPanel(stats);
-                            console.log(`✅ ${data.features.length} relatos adicionados para ${dateISO}`);
-                        })
-                        .catch(err => {
-                            console.error("❌ Erro ao buscar relatos:", err);
-                            updateStatsPanel({ total: 0, sig: 0, hail: 0, wind: 0, tornado: 0, hailSig: 0, windSig: 0, tornadoSig: 0 });
-                        });
                 }
                 
                 function updateStatsPanel(stats: any) {
@@ -623,6 +630,34 @@ export function EsriMap() {
             graphicsLayerRef.current.removeAll(); // Clear drawings on hazard change
         }
     }, [selectedHazard]);
+    
+    const handleSaveReport = async () => {
+        if (!newReport.location) {
+            alert("Por favor, clique no mapa para definir a localização do relato.");
+            return;
+        }
+
+        const reportData = {
+            hazard: newReport.hazard,
+            sev: newReport.sev,
+            date: newReport.date,
+            location: {
+                latitude: newReport.location.latitude,
+                longitude: newReport.location.longitude,
+            },
+            timestamp: Timestamp.now(),
+        };
+
+        try {
+            await addDoc(collection(db, "weather_reports"), reportData);
+            alert("Relato salvo com sucesso!");
+            setIsReportMode(false); // Close panel after saving
+            setNewReport({ hazard: 'wind', sev: 'NOR', date: new Date().toISOString().slice(0, 10), location: null });
+        } catch (error) {
+            console.error("Erro ao salvar relato: ", error);
+            alert("Falha ao salvar o relato.");
+        }
+    };
 
 
     return (
@@ -631,6 +666,59 @@ export function EsriMap() {
             <Scoreboard />
             <StatsPanel />
             <ReportsLegend />
+
+            {/* Reports Toolbar */}
+            <div className="absolute top-4 left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2">
+                <Input
+                    type="date"
+                    value={newReport.date}
+                    onChange={(e) => setNewReport(prev => ({...prev, date: e.target.value}))}
+                    className="bg-gray-700 border-gray-600 text-white h-9"
+                />
+                 <Button onClick={() => alert("Função de busca por data a ser implementada.")}>Buscar Relatos</Button>
+                <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'}>
+                    {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                    {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
+                </Button>
+            </div>
+            
+            {isReportMode && (
+                <div className="absolute top-[80px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                    <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
+                    <div>
+                        <Label className="text-gray-300">Tipo de Evento</Label>
+                        <Select value={newReport.hazard} onValueChange={(v: HazardType) => setNewReport(prev => ({...prev, hazard: v}))}>
+                            <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="wind"><Wind className="inline-block mr-2 h-4 w-4" />Vento</SelectItem>
+                                <SelectItem value="hail"><CloudHail className="inline-block mr-2 h-4 w-4" />Granizo</SelectItem>
+                                <SelectItem value="tornado"><Tornado className="inline-block mr-2 h-4 w-4" />Tornado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div>
+                        <Label className="text-gray-300">Severidade</Label>
+                        <Select value={newReport.sev} onValueChange={(v: 'NOR' | 'SS') => setNewReport(prev => ({...prev, sev: v}))}>
+                            <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="NOR">Normal</SelectItem>
+                                <SelectItem value="SS">Significativo (SS)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="text-sm text-yellow-300 bg-yellow-900/50 p-2 rounded-md flex items-center">
+                        <MapPin className="h-5 w-5 mr-2 flex-shrink-0"/>
+                        {newReport.location 
+                            ? `Localização: ${newReport.location.latitude.toFixed(4)}, ${newReport.location.longitude.toFixed(4)}`
+                            : "Clique no mapa para definir a localização."
+                        }
+                    </div>
+                    <Button onClick={handleSaveReport} className="w-full bg-blue-600 hover:bg-blue-700" disabled={!newReport.location}>
+                        Salvar Relato
+                    </Button>
+                </div>
+            )}
+
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
     );
