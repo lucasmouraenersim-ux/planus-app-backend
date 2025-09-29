@@ -440,7 +440,7 @@ export function EsriMap() {
     };
 
     const handleLoadForecast = useCallback(async () => {
-        if (!viewRef.current) return;
+        if (!viewRef.current || !esriModulesRef.current.Polygon) return;
         
         clearAllPolygons(viewRef.current);
         
@@ -619,8 +619,8 @@ export function EsriMap() {
                              const { hazard, prob, level, type } = graphic.attributes;
                             
                              const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as __esri.Polygon;
-                             const turfPolygon = turfInstance.polygon(geographicGeom.rings);
-                             const clipped = turfInstance.intersect(turfPolygon, brazilBoundary);
+                             const turfPolygon = turf.polygon(geographicGeom.rings);
+                             const clipped = turf.intersect(turfPolygon, brazilBoundary);
                             
                              if (!clipped || !clipped.geometry) {
                                 alert("A edição resultou em um polígono fora dos limites do Brasil. Revertendo.");
@@ -664,12 +664,12 @@ export function EsriMap() {
                 trashBtn.className = "esri-widget--button esri-icon-trash";
                 trashBtn.title = "Excluir polígono selecionado";
                 trashBtn.onclick = () => {
-                    if (sketchViewModelRef.current?.state === "active") {
+                    if (sketchViewModelRef.current?.state === "active" && sketchViewModelRef.current.updateGraphics.length > 0) {
                         const graphicToDelete = sketchViewModelRef.current.updateGraphics.getItemAt(0);
                         const layerId = graphicToDelete.layer.id;
                         deletePolygon(graphicToDelete, graphicsLayersRef.current[layerId]);
+                         sketchViewModelRef.current?.cancel();
                     }
-                    sketchViewModelRef.current?.cancel();
                 };
                 view.ui.add(trashBtn, "top-right");
 
@@ -776,7 +776,7 @@ export function EsriMap() {
             </div>
 
             {isReportMode && (
-                <div className="absolute top-[138px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                <div className="absolute top-[182px] left-[60px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
