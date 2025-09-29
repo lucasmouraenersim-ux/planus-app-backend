@@ -1,8 +1,9 @@
+
 // src/components/meteorologia/polygon-manager.ts
 import * as turf from '@turf/turf';
 
 // Definições de tipo para clareza
-type HazardType = "hail" | "wind" | "tornado";
+type HazardType = "hail" | "wind" | "tornado" | "prevots";
 type EsriPolygon = __esri.Polygon;
 type EsriGraphic = __esri.Graphic;
 type EsriColor = __esri.Color;
@@ -20,36 +21,34 @@ export const catColor: Record<number, string> = {
   4: "#800080"  // Roxo - PREV 4 (se houver)
 };
 
-export const levelOf = (p: number, t: HazardType): number => {
+export const levelOf = (p: number, t: Exclude<HazardType, 'prevots'>): number => {
     return t === 'tornado'
         ? {2:1, 5:2, 10:3, 15:4}[p] || 0
         : {5:1, 15:2, 30:3, 45:4}[p] || 0;
 };
 
-// Cache para armazenar polígonos por tipo
-const polygonGroups: Record<HazardType, EsriGraphic[]> = {
-  hail: [],
-  wind: [],
-  tornado: []
+export const probabilityOptions: Record<Exclude<HazardType, 'prevots'>, number[]> = {
+    hail: [5, 15, 30, 45],
+    wind: [5, 15, 30, 45],
+    tornado: [2, 5, 10, 15],
 };
 
-// Converte Hex para array RGB
-function hexToRgb(hex: string): number[] {
-  hex = hex.replace("#", "");
-  return [
-    parseInt(hex.substring(0,2), 16),
-    parseInt(hex.substring(2,4), 16),
-    parseInt(hex.substring(4,6), 16)
-  ];
-}
+
+// Cache para armazenar polígonos por tipo
+const polygonGroups: Record<string, EsriGraphic[]> = {
+  hail: [],
+  wind: [],
+  tornado: [],
+  prevots: [],
+};
 
 // Validação de área: polígono de nível maior não pode ser maior que um de nível menor
-function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardType): boolean {
-  if (!turf || !newPolygon?.rings) return true;
+function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: Exclude<HazardType, 'prevots'>): boolean {
+  if (!turf || !newPolygon?.rings) return true; // Se turf não estiver carregado, pula a validação
 
   const newPolygonGeoJSON = { type: "Polygon", coordinates: newPolygon.rings };
-  const newArea = turf.area(newPolygonGeoJSON);
-  
+  const newArea = turf.area(turf.feature(newPolygonGeoJSON));
+
   const sameHazardPolys = polygonGroups[hazard] || [];
   for (const existingGraphic of sameHazardPolys) {
     const existingLevel = existingGraphic.attributes?.level;
@@ -59,7 +58,7 @@ function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardT
     if (!existingGeom?.rings) continue;
     
     const existingPolygonGeoJSON = { type: "Polygon", coordinates: existingGeom.rings };
-    const existingArea = turf.area(existingPolygonGeoJSON);
+    const existingArea = turf.area(turf.feature(existingPolygonGeoJSON));
     
     if (newArea > existingArea) {
       alert("🚫 Um polígono de nível maior não pode ser maior que um de nível menor.");
@@ -69,11 +68,11 @@ function validateArea(newPolygon: EsriPolygon, newLevel: number, hazard: HazardT
   return true;
 }
 
+
 // Adiciona um novo polígono ao mapa e ao cache
 export function addPolygon({
   graphic,
-  hazard,
-  prob,
+  attributes,
   brazilBoundary,
   Color,
   SimpleFillSymbol,
@@ -82,8 +81,7 @@ export function addPolygon({
   webMercatorUtils
 }: {
   graphic: EsriGraphic;
-  hazard: HazardType;
-  prob: number;
+  attributes: any,
   brazilBoundary: any;
   Color: any;
   SimpleFillSymbol: any;
@@ -91,60 +89,68 @@ export function addPolygon({
   Polygon: any;
   webMercatorUtils: any;
 }): EsriGraphic | null {
-  const level = levelOf(prob, hazard);
 
-  // 1. Converte e Recorta a geometria
-  const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
-  const turfPolygon = turf.polygon(geographicGeom.rings);
-  const clipped = turf.intersect(turfPolygon, brazilBoundary);
+  const { hazard, prob, level, type } = attributes;
+  
+  if (type === 'risk') {
+    // 1. Converte e Recorta a geometria
+    const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as EsriPolygon;
+    const turfPolygon = turf.polygon(geographicGeom.rings);
+    const clipped = turf.intersect(turfPolygon, brazilBoundary);
 
-  if (!clipped || !clipped.geometry) {
-    alert("O polígono desenhado está fora dos limites do Brasil.");
-    return null;
+    if (!clipped || !clipped.geometry) {
+        alert("O polígono desenhado está fora dos limites do Brasil.");
+        return null;
+    }
+    
+    const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+
+    // 2. Validação de Área
+    if (!validateArea(esriPolygon, level, hazard)) {
+        return null;
+    }
+    
+    graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+    
+    // 4. Adiciona ao cache
+    if (!polygonGroups[hazard]) {
+        polygonGroups[hazard] = [];
+    }
+    polygonGroups[hazard].push(graphic);
+    
+    console.log(`✅ Polígono (${hazard}, ${prob}%) adicionado.`);
+    return graphic;
+
+  } else if (type === 'prevots') {
+     // A lógica para PREVOTS pode ser mais simples se não precisar de validação de área complexa
+    if (!polygonGroups['prevots']) {
+        polygonGroups['prevots'] = [];
+    }
+    polygonGroups['prevots'].push(graphic);
+    console.log(`✅ Polígono (PREVOTS, Nível ${level}) adicionado.`);
+    return graphic;
   }
   
-  const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
-
-  // 2. Validação de Área
-  if (!validateArea(esriPolygon, level, hazard)) {
-    return null;
-  }
-  
-  // 3. Cria Símbolo e Atributos
-  const colorHex = catColor[level] || "#999999";
-  const [r, g, b] = hexToRgb(colorHex);
-  const symbol = new SimpleFillSymbol({
-      color: new Color([r, g, b, 0.25]),
-      outline: { color: new Color([r, g, b, 1]), width: 2 }
-  });
-
-  graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
-  graphic.symbol = symbol;
-  graphic.attributes = { type: 'risk', hazard, prob, level, uid: `risk-${Date.now()}` };
-  
-  // 4. Adiciona ao cache
-  if (!polygonGroups[hazard]) {
-    polygonGroups[hazard] = [];
-  }
-  polygonGroups[hazard].push(graphic);
-
-  console.log(`✅ Polígono (${hazard}, ${prob}%) adicionado.`);
-  return graphic;
+  return graphic; // Retorna o gráfico original se não for de um tipo conhecido
 }
 
 // Remove um polígono do mapa e do cache
 export function removePolygon(graphic: EsriGraphic, graphicsLayer: EsriGraphicsLayer): void {
-  const { hazard, uid } = graphic.attributes;
-  if (hazard && polygonGroups[hazard as HazardType]) {
-    polygonGroups[hazard as HazardType] = polygonGroups[hazard as HazardType].filter(g => g.attributes.uid !== uid);
+  const { hazard, uid, type } = graphic.attributes;
+  const groupKey = type === 'prevots' ? 'prevots' : hazard;
+  
+  if (groupKey && polygonGroups[groupKey]) {
+    polygonGroups[groupKey] = polygonGroups[groupKey].filter(g => g.attributes.uid !== uid);
     graphicsLayer.remove(graphic);
-    console.log(`🗑️ Polígono (${hazard}) removido.`);
+    console.log(`🗑️ Polígono (${groupKey}) removido.`);
   }
 }
 
 // Limpa o cache de um tipo de risco específico
 export function clearPolygonGroup(hazard: HazardType) {
-    polygonGroups[hazard] = [];
+    if (polygonGroups[hazard]) {
+      polygonGroups[hazard] = [];
+    }
 }
 
 // Retorna todos os polígonos de um grupo específico
@@ -158,12 +164,15 @@ export function getAllPolygons(): EsriGraphic[] {
 }
 
 // Atualiza a visibilidade das camadas no mapa
-export function togglePolygonVisibility(view: EsriMapView | null, selectedHazard: HazardType): void {
+export function togglePolygonVisibility(view: EsriMapView, selectedHazard: Exclude<HazardType, 'prevots'>): void {
     if (!view) return;
     Object.keys(polygonGroups).forEach(hazardKey => {
         const layer = view.map.findLayerById(hazardKey) as EsriGraphicsLayer;
         if (layer) {
-            layer.visible = (hazardKey === selectedHazard);
+            // A camada de PREVOTS tem sua própria lógica, não deve ser afetada aqui
+            if(hazardKey !== 'prevots') {
+                layer.visible = (hazardKey === selectedHazard);
+            }
         }
     });
 }
