@@ -597,10 +597,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const basemap = new Basemap({
-                    baseLayers: [ new TileLayer({ url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer" }) ]
-                });
-                const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
+                const map = new Map({ layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
                 
@@ -729,10 +726,21 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     };
     
     const startEdit = () => {
-      if (popoverState.graphic) {
-        sketchViewModelRef.current?.update(popoverState.graphic, { tool: "transform" });
-      }
-      setPopoverState({ isOpen: false, graphic: null, anchor: null });
+        const sketchVM = sketchViewModelRef.current;
+        const { graphic } = popoverState;
+        
+        if (graphic && sketchVM) {
+            const targetLayerId = graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard;
+            const targetLayer = graphicsLayersRef.current[targetLayerId];
+
+            if (targetLayer) {
+                sketchVM.layer = targetLayer;
+                sketchVM.update(graphic, { tool: "transform" });
+            } else {
+                console.error(`Camada de destino '${targetLayerId}' não encontrada para edição.`);
+            }
+        }
+        setPopoverState({ isOpen: false, graphic: null, anchor: null });
     };
 
     const confirmDelete = () => {
@@ -765,7 +773,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 )}
             </div>
             
-            <div className="absolute top-[88px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
+            <div className="absolute top-[88px] left-[75px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
