@@ -154,7 +154,7 @@ const ReportsLegend = () => {
             fontFamily: 'sans-serif',
             zIndex: 999
         }}>
-            <b>Relatos</b><br />
+            <b>Relatos</b>
             <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16" alt="Vento leve" /> Vento 80–100km/h</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento &gt;100km/h</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png" width="16" alt="Granizo pequeno" /> Granizo &lt; 4cm</div>
@@ -302,15 +302,12 @@ const DrawUI = ({ onStartDrawing, onCancel, activeHazard }: {
     );
 };
 
-
-export function EsriMap() {
+const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     const { userAppRole } = useAuth();
-    const router = useRouter();
     const mapDivRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<__esri.MapView | null>(null);
     const graphicsLayersRef = useRef<Record<string, __esri.GraphicsLayer>>({});
     
-    // Refs for ESRI classes
     const esriModulesRef = useRef<any>({});
 
     const [isLoading, setIsLoading] = useState(true);
@@ -350,10 +347,9 @@ export function EsriMap() {
     function getInitialForecastDate() {
         const now = new Date();
         const deadline = new Date(now);
-        deadline.setHours(12, 0, 0, 0); // Deadline is at 12:00:00.000
+        deadline.setHours(12, 0, 0, 0);
 
         if (now >= deadline) {
-            // If it's past noon, forecast is for the next day
             now.setDate(now.getDate() + 1);
         }
         return now.toISOString().slice(0, 10);
@@ -387,15 +383,6 @@ export function EsriMap() {
 
         return () => clearInterval(timer);
     }, []);
-
-    const handleLogout = useCallback(async () => {
-        try {
-            await signOut(auth);
-            router.replace('/meteorologia/login');
-        } catch (error) {
-            console.error("Logout error:", error);
-        }
-    }, [router]);
     
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -443,7 +430,7 @@ export function EsriMap() {
                 hazard: hazard,
                 createdAt: serverTimestamp(),
                 features: featuresToSave
-            }, { merge: true }); // Merge to update if doc exists
+            }, { merge: true });
 
             alert(`Previsão para ${hazard} salva com sucesso!`);
             
@@ -582,7 +569,6 @@ export function EsriMap() {
                     SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
                 ] = await loadScript();
 
-                // Store loaded modules in refs
                 esriModulesRef.current = {
                     Map, MapView, Basemap, TileLayer, GroupLayer, BasemapGallery,
                     Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
@@ -612,11 +598,7 @@ export function EsriMap() {
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
                 const basemap = new Basemap({
-                    baseLayers: [
-                        new TileLayer({
-                            url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer"
-                        })
-                    ]
+                    baseLayers: [ new TileLayer({ url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer" }) ]
                 });
                 const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
@@ -657,7 +639,7 @@ export function EsriMap() {
                             
                              if (!clipped || !clipped.geometry) {
                                 alert("A edição resultou em um polígono fora dos limites do Brasil. Revertendo.");
-                                sketchVM.cancel(); // Revert the edit
+                                sketchVM.cancel();
                                 return;
                              }
                             
@@ -704,7 +686,7 @@ export function EsriMap() {
                 view.ui.add(menuExpand, "top-left");
                 
                 const menuRoot = createRoot(menuContainer);
-                menuRoot.render(<SideMenu onLogout={handleLogout} />);
+                menuRoot.render(<SideMenu onLogout={onLogout} />);
                 
                 const root = createRoot(drawContainer);
                 root.render(
@@ -726,7 +708,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay, handleLogout]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay, onLogout]);
     
 
     const handleSaveReport = async () => {
@@ -772,7 +754,7 @@ export function EsriMap() {
             <RiskLegend selectedHazard={selectedHazardForDisplay} />
             <PrevotsLegend />
             
-             <div className="absolute top-4 left-[110px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex items-center gap-2 flex-wrap">
                 <Input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="bg-gray-700 border-gray-600 text-white h-9 w-auto" />
                 <Button onClick={handleLoadForecast} size="sm"><SearchIcon className="mr-2 h-4 w-4"/>Ver Previsão Feita</Button>
                 {(userAppRole === 'superadmin') && (
@@ -783,13 +765,13 @@ export function EsriMap() {
                 )}
             </div>
             
-            <div className="absolute top-[88px] left-[20px] z-50 bg-gray-800/80 backdrop-blur-sm p-1 rounded-md shadow-lg flex flex-col items-stretch gap-1">
+            <div className="absolute top-[88px] left-[20px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
                             variant={selectedHazardForDisplay === hazard.value ? 'secondary' : 'ghost'}
                             onClick={() => handleHazardChangeForDisplay(hazard.value)}
-                            className="flex-grow justify-start text-white hover:bg-gray-700 data-[state=active]:bg-blue-600"
+                            className="flex-grow justify-start text-white hover:bg-gray-700 data-[state=active]:bg-blue-600 px-3 py-2 h-auto"
                         >
                            <hazard.icon className="h-4 w-4 mr-2" /> {hazard.label}
                         </Button>
@@ -798,7 +780,7 @@ export function EsriMap() {
                                 size="sm"
                                 onClick={() => handleSaveHazardForecast(hazard.value)} 
                                 disabled={isSubmitting[hazard.value]}
-                                className="bg-green-600 hover:bg-green-700 h-full"
+                                className="bg-green-600 hover:bg-green-700 h-full p-2"
                              >
                                 {isSubmitting[hazard.value] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                 <span className="sr-only">Salvar {hazard.label}</span>
@@ -877,4 +859,18 @@ export function EsriMap() {
             <div ref={mapDivRef} style={{ width: '100%', height: '100%' }}></div>
         </div>
     );
+}
+
+export function EsriMap() {
+    const router = useRouter();
+    const handleLogout = useCallback(async () => {
+        try {
+            await signOut(auth);
+            router.replace('/meteorologia/login');
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
+    }, [router]);
+
+    return <EsriMapInternal onLogout={handleLogout} />;
 }
