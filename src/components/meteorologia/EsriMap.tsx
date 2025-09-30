@@ -765,7 +765,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 )}
             </div>
             
-            <div className="absolute top-[88px] left-[20px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
+            <div className="absolute top-[88px] left-[60px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
