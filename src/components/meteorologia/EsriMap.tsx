@@ -388,14 +388,14 @@ export function EsriMap() {
         return () => clearInterval(timer);
     }, []);
 
-    const handleLogout = async () => {
+    const handleLogout = useCallback(async () => {
         try {
             await signOut(auth);
             router.replace('/meteorologia/login');
         } catch (error) {
             console.error("Logout error:", error);
         }
-    };
+    }, [router]);
     
     useEffect(() => {
         fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson")
@@ -611,7 +611,13 @@ export function EsriMap() {
                 graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
                 graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
                 
-                const basemap = await Basemap.fromId("dark-gray-vector");
+                const basemap = new Basemap({
+                    baseLayers: [
+                        new TileLayer({
+                            url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer"
+                        })
+                    ]
+                });
                 const map = new Map({ basemap: basemap, layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
                 view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
                 viewRef.current = view;
@@ -703,9 +709,7 @@ export function EsriMap() {
                 const root = createRoot(drawContainer);
                 root.render(
                     <DrawUI 
-                        onStartDrawing={(mode, hazard, prob, level) => {
-                             handleStartDrawing(mode, hazard, prob, level);
-                        }}
+                        onStartDrawing={handleStartDrawing}
                         onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
                         activeHazard={selectedHazardForDisplay}
                     />
@@ -722,7 +726,7 @@ export function EsriMap() {
         }
 
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay, handleLogout]);
     
 
     const handleSaveReport = async () => {
