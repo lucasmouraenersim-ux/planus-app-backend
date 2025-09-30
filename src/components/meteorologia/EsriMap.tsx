@@ -593,11 +593,32 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
             graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
             graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
-            
+            graphicsLayersRef.current.municipios = new GraphicsLayer({ id: "municipios", title: "Municípios", visible: false });
+
+            fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
+              .then(res => res.json())
+              .then(data => {
+                  const municipioGraphics = data.features.map((f: any) => new Graphic(
+                      new Polygon({
+                          rings: f.geometry.coordinates,
+                          spatialReference: { wkid: 4326 }
+                      }),
+                      new SimpleFillSymbol(
+                          SimpleFillSymbol.STYLE_NULL,
+                          new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0, 0, 0, 0.3]), 1),
+                          null
+                      )
+                  ));
+                  graphicsLayersRef.current.municipios.addMany(municipioGraphics);
+                  console.log("✅ Municípios carregados na camada de gráficos.");
+              })
+              .catch(err => console.error("❌ Erro ao carregar GeoJSON de municípios:", err));
+
             const map = new Map({
                 basemap: "dark-gray-vector",
                 layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] 
             });
+
             const view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
             viewRef.current = view;
             
