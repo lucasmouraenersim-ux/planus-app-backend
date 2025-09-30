@@ -554,158 +554,156 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
 
     }, [forecastDate]);
 
-    useEffect(() => {
-        let view: __esri.MapView;
-        
-        const initMap = async () => {
-            if (!mapDivRef.current || !brazilBoundary) return;
+    const initMap = useCallback(async () => {
+        if (!mapDivRef.current || !brazilBoundary) return;
 
+        try {
+            loadCss();
+            const [
+                Map, MapView, Basemap, TileLayer, GroupLayer,
+                BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
+                WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
+                SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
+            ] = await loadScript();
+
+            esriModulesRef.current = {
+                Map, MapView, Basemap, TileLayer, GroupLayer, BasemapGallery,
+                Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
+                webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol,
+                SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
+            };
+            
+            initializePolygonManager(turf);
+
+            let models: any[] = [];
             try {
-                loadCss();
-                const [
-                    Map, MapView, Basemap, TileLayer, GroupLayer,
-                    BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
-                    WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
-                    SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
-                ] = await loadScript();
+                const response = await fetch('/api/rainviewer');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                models = Object.keys(data.radar).map(key => ({ id: `radar.${key}`, path: data.radar[key][0].path, name: `Radar ${key}` }));
+                setWeatherModels(models);
+            } catch(e) {
+                console.error("Failed to fetch weather models, proceeding without them", e);
+            }
+            
+            const modelLayers = models.map(model => new WebTileLayer({ id: model.id, urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`, title: model.name, visible: model.id === selectedModel, opacity: 0.7 }));
+            const newModelGroupLayer = new GroupLayer({ title: "Modelos Meteorológicos", visible: true, layers: modelLayers });
+            setModelGroupLayer(newModelGroupLayer);
+            
+            hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
+            graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
+            graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
+            
+            const map = new Map({
+                basemap: "dark-gray-vector",
+                layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] 
+            });
+            const view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
+            viewRef.current = view;
+            
+            view.when(() => { setIsLoading(false); });
+            view.popup.autoOpenEnabled = false; 
 
-                esriModulesRef.current = {
-                    Map, MapView, Basemap, TileLayer, GroupLayer, BasemapGallery,
-                    Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
-                    webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol,
-                    SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
-                };
-                
-                initializePolygonManager(turf);
+            const basemapGallery = new BasemapGallery({ view });
+            view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-left" }), "top-left");
 
-                let models: any[] = [];
-                try {
-                    const response = await fetch('/api/rainviewer');
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const data = await response.json();
-                    models = Object.keys(data.radar).map(key => ({ id: `radar.${key}`, path: data.radar[key][0].path, name: `Radar ${key}` }));
-                    setWeatherModels(models);
-                } catch(e) {
-                    console.error("Failed to fetch weather models, proceeding without them", e);
+            const layerList = new LayerList({ view });
+            view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
+            
+            const sketchVM = new SketchViewModel({ view: view });
+            sketchViewModelRef.current = sketchVM;
+
+            sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
+                if (event.state === "complete") {
+                     const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
+                    addPolygon({
+                        graphic: event.graphic,
+                        attributes: attributes,
+                        brazilBoundary,
+                        Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
+                    });
                 }
-                
-                const modelLayers = models.map(model => new WebTileLayer({ id: model.id, urlTemplate: `https://tilecache.rainviewer.com${model.path}/256/{level}/{col}/{row}/5/1_1.png`, title: model.name, visible: model.id === selectedModel, opacity: 0.7 }));
-                const newModelGroupLayer = new GroupLayer({ title: "Modelos Meteorológicos", visible: true, layers: modelLayers });
-                setModelGroupLayer(newModelGroupLayer);
-                
-                hazardOptions.forEach(h => { graphicsLayersRef.current[h.value] = new GraphicsLayer({ id: h.value, title: h.label, visible: h.value === selectedHazardForDisplay }); });
-                graphicsLayersRef.current.prevots = new GraphicsLayer({ id: "prevots", title: "Previsao PREVOTS", visible: true });
-                graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
-                
-                const map = new Map({ layers: [ newModelGroupLayer, ...Object.values(graphicsLayersRef.current) ] });
-                view = new MapView({ container: mapDivRef.current!, map: map, center: [-54, -15], zoom: 5 });
-                viewRef.current = view;
-                
-                view.when(() => { setIsLoading(false); });
-                view.popup.autoOpenEnabled = false; 
+            });
 
-                const basemapGallery = new BasemapGallery({ view });
-                view.ui.add(new Expand({ view, content: basemapGallery, expandIconClass: "esri-icon-basemap", group: "top-left" }), "top-left");
-
-                const layerList = new LayerList({ view });
-                view.ui.add(new Expand({ view, content: layerList, expandIconClass: "esri-icon-layers", group: "top-left" }), "top-left");
-                
-                const sketchVM = new SketchViewModel({ view: view });
-                sketchViewModelRef.current = sketchVM;
-
-                sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
-                    if (event.state === "complete") {
-                         const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
-                        addPolygon({
-                            graphic: event.graphic,
-                            attributes: attributes,
-                            brazilBoundary,
-                            Color, SimpleFillSymbol, SimpleLineSymbol, Polygon, webMercatorUtils
-                        });
-                    }
-                });
-
-                sketchVM.on("update", (event: any) => {
-                    if (event.state === "complete") {
-                        event.graphics.forEach((graphic: __esri.Graphic) => {
-                             const { hazard, prob, level, type } = graphic.attributes;
-                            
-                             const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as __esri.Polygon;
-                             const turfPolygon = turf.polygon(geographicGeom.rings);
-                             const clipped = turf.intersect(turfPolygon, brazilBoundary);
-                            
-                             if (!clipped || !clipped.geometry) {
-                                alert("A edição resultou em um polígono fora dos limites do Brasil. Revertendo.");
+            sketchVM.on("update", (event: any) => {
+                if (event.state === "complete") {
+                    event.graphics.forEach((graphic: __esri.Graphic) => {
+                         const { hazard, prob, level, type } = graphic.attributes;
+                        
+                         const geographicGeom = webMercatorUtils.webMercatorToGeographic(graphic.geometry) as __esri.Polygon;
+                         const turfPolygon = turf.polygon(geographicGeom.rings);
+                         const clipped = turf.intersect(turfPolygon, brazilBoundary);
+                        
+                         if (!clipped || !clipped.geometry) {
+                            alert("A edição resultou em um polígono fora dos limites do Brasil. Revertendo.");
+                            sketchVM.cancel();
+                            return;
+                         }
+                        
+                         const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
+                        
+                         if (type === 'risk') {
+                            if (!validateArea(esriPolygon, level, hazard)) {
+                                alert("Falha na validação da área. A edição foi cancelada.");
                                 sketchVM.cancel();
                                 return;
-                             }
-                            
-                             const esriPolygon = new Polygon({ rings: (clipped.geometry as any).coordinates, spatialReference: { wkid: 4326 } });
-                            
-                             if (type === 'risk') {
-                                if (!validateArea(esriPolygon, level, hazard)) {
-                                    alert("Falha na validação da área. A edição foi cancelada.");
-                                    sketchVM.cancel();
-                                    return;
-                                }
-                             }
-                            
-                             graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
-                             updatePolygon(graphic, graphic.attributes);
-                             console.log(`✅ Polígono (${hazard}, ${prob}%) atualizado.`);
-                        });
+                            }
+                         }
+                        
+                         graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
+                         updatePolygon(graphic, graphic.attributes);
+                         console.log(`✅ Polígono (${hazard}, ${prob}%) atualizado.`);
+                    });
+                }
+            });
+            
+            view.on("click", (event) => {
+                if (sketchViewModelRef.current?.state === 'active') return;
+
+                view.hitTest(event).then((response) => {
+                    const results = response.results.filter(r => r.graphic && r.graphic.layer?.type === 'graphics');
+                    if (results.length > 0) {
+                        const graphic = results[0].graphic;
+                        if (graphic.attributes.date === forecastDate) {
+                            setPopoverState({ isOpen: true, graphic: graphic, anchor: {top: event.y, left: event.x } });
+                        } else {
+                            alert("Não é possível editar ou excluir previsões de datas passadas.");
+                        }
                     }
                 });
-                
-                view.on("click", (event) => {
-                    if (sketchViewModelRef.current?.state === 'active') return;
+            });
+            
+            const drawContainer = document.createElement("div");
+            const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
+            
+            const menuContainer = document.createElement("div");
+            const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "esri-icon-menu", group: "top-left" });
 
-                    view.hitTest(event).then((response) => {
-                        const results = response.results.filter(r => r.graphic && r.graphic.layer?.type === 'graphics');
-                        if (results.length > 0) {
-                            const graphic = results[0].graphic;
-                            if (graphic.attributes.date === forecastDate) {
-                                setPopoverState({ isOpen: true, graphic: graphic, anchor: {top: event.y, left: event.x } });
-                            } else {
-                                alert("Não é possível editar ou excluir previsões de datas passadas.");
-                            }
-                        }
-                    });
-                });
-                
-                const drawContainer = document.createElement("div");
-                const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
-                
-                const menuContainer = document.createElement("div");
-                const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "esri-icon-menu", group: "top-left" });
+            if (userAppRole === 'superadmin') view.ui.add(sketchExpand, "top-left");
+            view.ui.add(menuExpand, "top-left");
+            
+            const menuRoot = createRoot(menuContainer);
+            menuRoot.render(<SideMenu onLogout={onLogout} />);
+            
+            const root = createRoot(drawContainer);
+            root.render(
+                <DrawUI 
+                    onStartDrawing={handleStartDrawing}
+                    onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
+                    activeHazard={selectedHazardForDisplay}
+                />
+            );
 
-                if (userAppRole === 'superadmin') view.ui.add(sketchExpand, "top-left");
-                view.ui.add(menuExpand, "top-left");
-                
-                const menuRoot = createRoot(menuContainer);
-                menuRoot.render(<SideMenu onLogout={onLogout} />);
-                
-                const root = createRoot(drawContainer);
-                root.render(
-                    <DrawUI 
-                        onStartDrawing={handleStartDrawing}
-                        onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
-                        activeHazard={selectedHazardForDisplay}
-                    />
-                );
-
-            } catch (error) {
-                console.error("Erro ao carregar o mapa da Esri:", error);
-                setIsLoading(false);
-            }
-        };
-
-        if (brazilBoundary) {
-            initMap();
+        } catch (error) {
+            console.error("Erro ao carregar o mapa da Esri:", error);
+            setIsLoading(false);
         }
-
+    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, onLogout, selectedModel]);
+    
+    useEffect(() => {
+        initMap();
         return () => { if (viewRef.current) viewRef.current.destroy(); };
-    }, [brazilBoundary, userAppRole, handleStartDrawing, handleLoadForecast, selectedHazardForDisplay, onLogout]);
+    }, [initMap]);
     
 
     const handleSaveReport = async () => {
