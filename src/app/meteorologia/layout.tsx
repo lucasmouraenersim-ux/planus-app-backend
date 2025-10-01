@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,8 +6,8 @@ import { useEffect, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const LoadingSpinner = () => (
-    <div className="flex flex-col items-center justify-center h-screen" style={{ backgroundColor: '#4A90E2' }}>
-        <Loader2 className="w-10 h-10 text-white animate-spin" />
+    <div className="flex flex-col items-center justify-center h-screen" style={{ backgroundColor: '#0a0a0b' }}>
+        <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
         <p className="text-white mt-4">Carregando...</p>
     </div>
 );
@@ -35,14 +34,17 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
         return <LoadingSpinner />;
     }
     
-    // Allow rendering login page for non-logged in users, or children for authenticated users
+    // Prevent flicker while redirecting
     if (!firebaseUser && pathname !== '/meteorologia/login') {
        return <LoadingSpinner />;
+    }
+    
+    if (firebaseUser && pathname === '/meteorologia/login') {
+        return <LoadingSpinner />;
     }
 
     return <>{children}</>;
 }
-
 
 export default function MeteorologiaLayout({
   children,

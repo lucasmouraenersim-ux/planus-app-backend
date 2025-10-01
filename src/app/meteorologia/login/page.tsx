@@ -26,9 +26,20 @@ export default function MeteorologiaLoginPage() {
       // onAuthStateChanged in the layout will handle the redirect
       router.push('/meteorologia'); 
     } catch (error: any) {
+      let errorMessage = "Ocorreu uma falha no login.";
+      switch (error.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = "Email ou senha inválidos. Por favor, verifique e tente novamente.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "O formato do email é inválido.";
+          break;
+      }
       toast({
         title: "Erro de Login",
-        description: "Email ou senha inválidos. Por favor, verifique e tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
