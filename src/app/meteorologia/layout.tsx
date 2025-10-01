@@ -19,12 +19,12 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         if (!isLoadingAuth) {
-            const isLoginPage = pathname === '/meteorologia/login';
-            if (firebaseUser && isLoginPage) {
-                // If logged in and on login page, redirect to map
+            const isAuthPage = pathname === '/meteorologia/login' || pathname === '/meteorologia/register';
+            if (firebaseUser && isAuthPage) {
+                // If logged in and on login/register page, redirect to map
                 router.replace('/meteorologia');
-            } else if (!firebaseUser && !isLoginPage) {
-                // If not logged in and not on login page, redirect to login
+            } else if (!firebaseUser && !isAuthPage) {
+                // If not logged in and not on an auth page, redirect to login
                 router.replace('/meteorologia/login');
             }
         }
@@ -35,11 +35,12 @@ const MeteorologiaLayoutContent = ({ children }: { children: ReactNode }) => {
     }
     
     // Prevent flicker while redirecting
-    if (!firebaseUser && pathname !== '/meteorologia/login') {
+    const isAuthPage = pathname === '/meteorologia/login' || pathname === '/meteorologia/register';
+    if (!firebaseUser && !isAuthPage) {
        return <LoadingSpinner />;
     }
     
-    if (firebaseUser && pathname === '/meteorologia/login') {
+    if (firebaseUser && isAuthPage) {
         return <LoadingSpinner />;
     }
 
