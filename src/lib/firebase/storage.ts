@@ -11,7 +11,7 @@ export async function uploadFile(file: File, path: string): Promise<string> {
   };
 
   try {
-    // Upload with explicit metadata. The updateMetadata call was redundant and causing permission issues.
+    // Upload with explicit metadata.
     await uploadBytes(fileRef, file, metadata);
     
     // Get the URL after upload is complete.

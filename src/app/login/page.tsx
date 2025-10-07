@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,9 +132,9 @@ export default function LoginPage() {
         <CardFooter className="flex justify-center text-sm">
           <p>
             Não tem uma conta?{' '}
-            <a href="#" className="font-medium text-primary hover:underline">
+            <Link href="/register" className="font-medium text-primary hover:underline">
               Registre-se
-            </a>
+            </Link>
           </p>
         </CardFooter>
       </Card>

@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
       } else {
         console.warn(`Firestore document for user ${user.uid} not found. Creating a base document.`);
-        const newUserType: UserType = isSuperAdmin ? 'superadmin' : 'user';
+        const newUserType: UserType = isSuperAdmin ? 'superadmin' : 'vendedor'; // Default to 'vendedor' for new sign-ups
         const newFirestoreUser: FirestoreUser = {
             uid: user.uid,
             email: user.email,
@@ -136,7 +136,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             mlmBalance: 0,
             canViewLeadPhoneNumber: isSuperAdmin,
             canViewCrm: isSuperAdmin,
-            canViewCareerPlan: isSuperAdmin,
+            canViewCareerPlan: true,
+            assignmentLimit: 2,
         };
         await setDoc(userDocRef, newFirestoreUser);
         return {
