@@ -8,13 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight, Camera, LineChart, CloudRain } from 'lucide-react';
+import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight, Camera, LineChart, CloudRain, Loader2 } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
 import { cn } from '@/lib/utils';
 import { FakeLogin } from '@/components/auth/FakeLogin';
 import { PhotoEnhancer } from '@/components/photo/PhotoEnhancer';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -274,13 +276,29 @@ const EnergySection = () => {
 }
 
 const PhotoSection = () => {
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
-  
-    if (!isLoggedIn) {
-      return <FakeLogin onLogin={() => setIsLoggedIn(true)} />;
+  const { appUser, isLoadingAuth } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoadingAuth && !appUser) {
+      // Redirect to the main login page, passing the original path as a query param
+      // so we can redirect back if needed (optional).
+      router.push('/login');
     }
-  
-    return <PhotoEnhancer />;
+  }, [isLoadingAuth, appUser, router]);
+
+  // While loading or before redirecting, show a loader.
+  if (isLoadingAuth || !appUser) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
+          <Loader2 className="w-12 h-12 text-[#a855f7] animate-spin mb-4" />
+          <p className="text-lg text-slate-400">Carregando autenticação...</p>
+      </div>
+    );
+  }
+
+  // If user is logged in, show the photo enhancer.
+  return <PhotoEnhancer />;
 };
 
 const ForexSection = () => (

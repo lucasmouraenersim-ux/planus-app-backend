@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Mail, Lock, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 interface FakeLoginProps {
   onLogin: () => void;
@@ -81,6 +81,15 @@ export function FakeLogin({ onLogin }: FakeLoginProps) {
             </Button>
           </form>
         </CardContent>
+        {/* Adicionado link para a página de registro principal */}
+        <div className="text-center pb-4 text-sm">
+            <p className="text-slate-400">
+                Não tem uma conta?{' '}
+                <Link href="/register" className="font-medium text-primary hover:underline">
+                    Registre-se
+                </Link>
+            </p>
+        </div>
       </Card>
     </div>
   );
