@@ -61,25 +61,34 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       emailVerified: true, // Or false, depending on your flow
     });
 
+    const isSuperAdminEmail = input.email === 'lucasmoura@sentenergia.com' || input.email === 'lucasmourafoto@sentenergia.com';
+    const finalUserType = isSuperAdminEmail ? 'superadmin' : input.type;
+
+
     // 4. Create user document in Firestore
     const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
       email: input.email,
       displayName: userRecord.displayName || input.email.split('@')[0],
       cpf: normalizedCpf,
-      type: input.type as UserType,
+      type: finalUserType as UserType,
       createdAt: admin.firestore.Timestamp.now(),
       photoURL: `https://placehold.co/40x40.png?text=${(userRecord.displayName || input.email).charAt(0).toUpperCase()}`,
       phone: input.phone ? input.phone.replace(/\D/g, '') : '',
       personalBalance: 0,
       mlmBalance: 0,
       commissionRate: 40,
-      canViewLeadPhoneNumber: input.type === 'advogado',
-      canViewCrm: input.type === 'advogado',
-      canViewCareerPlan: false,
+      canViewLeadPhoneNumber: finalUserType === 'advogado',
+      canViewCrm: finalUserType === 'advogado' || isSuperAdminEmail,
+      canViewCareerPlan: !isSuperAdminEmail,
       assignmentLimit: 2, // Default limit for new users
     };
     
     await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore);
+    
+    if (isSuperAdminEmail) {
+      await adminAuth.setCustomUserClaims(userRecord.uid, { role: 'superadmin' });
+    }
+
 
     return {
       success: true,

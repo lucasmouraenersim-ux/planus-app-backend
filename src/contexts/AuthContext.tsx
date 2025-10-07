@@ -85,17 +85,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      const isSuperAdmin = user.email === 'lucasmoura@sentenergia.com' || user.email === 'lucasmourafoto@sentenergia.com';
-
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
-        const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
-        const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
+        const isSuperAdminByEmail = user.email === 'lucasmoura@sentenergia.com' || user.email === 'lucasmourafoto@sentenergia.com';
         
-        if (isSuperAdmin && firestoreUserData.type !== 'superadmin') {
-            await setDoc(userDocRef, { type: 'superadmin' }, { merge: true });
+        // The role in the document is the source of truth, unless the email dictates a superadmin override.
+        const finalType = isSuperAdminByEmail ? 'superadmin' : firestoreUserData.type;
+        
+        // Ensure superadmin type is saved back to Firestore if it's not already
+        if (isSuperAdminByEmail && firestoreUserData.type !== 'superadmin') {
+            await updateDoc(userDocRef, { type: 'superadmin' });
         }
-
+        
+        const canViewCrm = finalType === 'superadmin' || finalType === 'admin' || finalType === 'advogado' || firestoreUserData.canViewCrm;
 
         return {
           uid: user.uid,
@@ -114,34 +116,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           mlmEnabled: firestoreUserData.mlmEnabled,
           uplineUid: firestoreUserData.uplineUid,
           recurrenceRate: firestoreUserData.recurrenceRate,
-          canViewLeadPhoneNumber: isSuperAdmin || firestoreUserData.canViewLeadPhoneNumber || false,
-          canViewCareerPlan: isSuperAdmin || firestoreUserData.canViewCareerPlan || false,
+          canViewLeadPhoneNumber: finalType === 'superadmin' || firestoreUserData.canViewLeadPhoneNumber || false,
+          canViewCareerPlan: finalType !== 'superadmin' && (firestoreUserData.canViewCareerPlan !== false), // superadmin doesn't need this view
           canViewCrm: canViewCrm,
           assignmentLimit: firestoreUserData.assignmentLimit,
-          trainingProgress: firestoreUserData.trainingProgress, // Include training progress
+          trainingProgress: firestoreUserData.trainingProgress,
           personalFinance: firestoreUserData.personalFinance,
           signedContractUrl: firestoreUserData.signedContractUrl,
         };
       } else {
-        console.warn(`Firestore document for user ${user.uid} not found. Creating a base document.`);
-        const newUserType: UserType = isSuperAdmin ? 'superadmin' : 'vendedor'; // Default to 'vendedor' for new sign-ups
-        const newFirestoreUser: FirestoreUser = {
+        // This case should ideally be handled by the user registration flow.
+        // It's a fallback for users who exist in Auth but not Firestore.
+        console.warn(`Firestore document for user ${user.uid} not found. A base document will be created upon user action if needed.`);
+        return {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
-            type: newUserType,
-            createdAt: Timestamp.now(),
+            type: 'pending_setup',
             personalBalance: 0,
             mlmBalance: 0,
-            canViewLeadPhoneNumber: isSuperAdmin,
-            canViewCrm: isSuperAdmin,
-            canViewCareerPlan: true,
-            assignmentLimit: 2,
-        };
-        await setDoc(userDocRef, newFirestoreUser);
-        return {
-            ...newFirestoreUser,
-            createdAt: (newFirestoreUser.createdAt as Timestamp).toDate().toISOString(),
         } as AppUser;
       }
     } catch (error) {
