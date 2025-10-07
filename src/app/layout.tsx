@@ -47,7 +47,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!isLoadingAuth) {
             const isAuthPage = pathname === '/login' || pathname === '/register';
-            const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade' || pathname === '/photo-requests'; // Add photo-requests as public-like for auth check
+            const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade' || pathname === '/photo-requests';
             const isTrainingPage = pathname === '/training';
 
             if (appUser) { // User is logged in
@@ -56,8 +56,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
                     return;
                 }
                 
-                if (isAuthPage) { // Only redirect away from explicit auth pages
-                    // Do not redirect from '/' if the user is logged in, to allow access to photo app
+                if (isAuthPage) {
                     if (pathname !== '/') {
                         router.replace('/dashboard');
                     }
@@ -88,11 +87,6 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         // Special case for prospectors on the training page, show minimal shell
         if (userAppRole === 'prospector' && pathname === '/training') {
             return <MinimalShell>{children}</MinimalShell>;
-        }
-
-        // Special case for admins on photo requests page - could be a different layout in future
-        if ((userAppRole === 'admin' || userAppRole === 'superadmin') && pathname === '/photo-requests') {
-             return <AuthenticatedAppShell>{children}</AuthenticatedAppShell>;
         }
 
         return (
@@ -222,6 +216,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          )}
 
                          {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/photo-requests"><SidebarMenuButton tooltip="Edição de Fotos" isActive={currentPathname === '/photo-requests'}><ImageIcon />Edição de Fotos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/profile"><SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}><CircleUserRound />Perfil</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/sobre"><SidebarMenuButton tooltip="Sobre o App" isActive={currentPathname.startsWith('/sobre')}><Info />Sobre</SidebarMenuButton></Link></SidebarMenuItem>
                     </SidebarMenu>
