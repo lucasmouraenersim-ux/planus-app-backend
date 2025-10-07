@@ -47,7 +47,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!isLoadingAuth) {
             const isAuthPage = pathname === '/login' || pathname === '/register';
-            const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade';
+            const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade' || pathname === '/photo-requests'; // Add photo-requests as public-like for auth check
             const isTrainingPage = pathname === '/training';
 
             if (appUser) { // User is logged in
@@ -57,7 +57,10 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
                 }
                 
                 if (isAuthPage) { // Only redirect away from explicit auth pages
-                    router.replace('/dashboard');
+                    // Do not redirect from '/' if the user is logged in, to allow access to photo app
+                    if (pathname !== '/') {
+                        router.replace('/dashboard');
+                    }
                 }
             } else { // User is not logged in
                 if (!isAuthPage && !isPublicPage) {
@@ -85,6 +88,11 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         // Special case for prospectors on the training page, show minimal shell
         if (userAppRole === 'prospector' && pathname === '/training') {
             return <MinimalShell>{children}</MinimalShell>;
+        }
+
+        // Special case for admins on photo requests page - could be a different layout in future
+        if ((userAppRole === 'admin' || userAppRole === 'superadmin') && pathname === '/photo-requests') {
+             return <AuthenticatedAppShell>{children}</AuthenticatedAppShell>;
         }
 
         return (
@@ -200,7 +208,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/photo-requests"><SidebarMenuButton isActive={currentPathname === '/photo-requests'} tooltip="Edição de Fotos"><ImageIcon />Edição de Fotos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Placar" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Placar</SidebarMenuButton></Link></SidebarMenuItem>
                          
@@ -271,5 +278,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-    
