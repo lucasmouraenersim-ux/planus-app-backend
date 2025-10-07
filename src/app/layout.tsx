@@ -56,7 +56,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
                     return;
                 }
                 
-                if (isAuthPage || pathname === '/') {
+                if (isAuthPage) { // Only redirect away from explicit auth pages
                     router.replace('/dashboard');
                 }
             } else { // User is not logged in
@@ -200,6 +200,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/photo-requests"><SidebarMenuButton isActive={currentPathname === '/photo-requests'} tooltip="Edição de Fotos"><ImageIcon />Edição de Fotos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Placar" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Placar</SidebarMenuButton></Link></SidebarMenuItem>
                          
