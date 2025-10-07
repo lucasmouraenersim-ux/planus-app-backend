@@ -24,7 +24,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { ReactNode, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target, ListChecks, BookOpen as TrainingIcon, CloudRain, Trophy } from 'lucide-react';
+import { BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, FileText, LayoutDashboard, ShieldAlert, Loader2, Menu, Send, Info, Network, Banknote, BrainCircuit, LineChart, GraduationCap, Target, ListChecks, BookOpen as TrainingIcon, CloudRain, Trophy, Image as ImageIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -46,7 +46,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         if (!isLoadingAuth) {
-            const isAuthPage = pathname === '/login';
+            const isAuthPage = pathname === '/login' || pathname === '/register';
             const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade';
             const isTrainingPage = pathname === '/training';
 
@@ -76,7 +76,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     }
     
     // Public pages render without the authenticated shell
-    if (!appUser && (pathname === '/' || pathname === '/login' || pathname === '/politica-de-privacidade')) {
+    if (!appUser && (pathname === '/' || pathname === '/login' || pathname === '/register' || pathname === '/politica-de-privacidade')) {
          return <>{children}</>;
     }
 
@@ -200,6 +200,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/photo-requests"><SidebarMenuButton isActive={currentPathname === '/photo-requests'} tooltip="Edição de Fotos"><ImageIcon />Edição de Fotos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Placar" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Placar</SidebarMenuButton></Link></SidebarMenuItem>
                          

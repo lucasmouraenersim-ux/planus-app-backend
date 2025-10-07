@@ -87,7 +87,7 @@ export default function LoginPage() {
             />
           </div>
           <CardTitle className="text-3xl font-bold text-primary">Bem-vindo(a) de volta!</CardTitle>
-          <CardDescription>Acesse o mapa interativo do Brasil.</CardDescription>
+          <CardDescription>Acesse sua conta para continuar.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">

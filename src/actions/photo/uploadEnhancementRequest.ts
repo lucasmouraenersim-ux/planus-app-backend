@@ -31,7 +31,10 @@ export type UploadRequestOutput = z.infer<typeof UploadRequestOutputSchema>;
 
 // Helper function to extract file extension from data URI
 function getFileExtensionFromDataUri(dataUri: string): string {
-    const mimeType = dataUri.substring(dataUri.indexOf(':') + 1, dataUri.indexOf(';'));
+    const mimeTypeMatch = dataUri.match(/^data:(image\/[a-z]+);/);
+    if (!mimeTypeMatch) return 'jpg'; // Default
+
+    const mimeType = mimeTypeMatch[1];
     switch (mimeType) {
         case 'image/jpeg': return 'jpg';
         case 'image/png': return 'png';
@@ -62,18 +65,17 @@ export async function uploadEnhancementRequest(input: UploadRequestInput): Promi
 
     // Convert data URI to a Buffer for upload
     const base64Data = input.photoDataUri.split(',')[1];
+    if (!base64Data) {
+        return { success: false, message: "Formato de data URI inválido." };
+    }
     const imageBuffer = Buffer.from(base64Data, 'base64');
     
-    // We need to pass the file buffer and mime type to uploadFile
-    const mimeType = `image/${fileExtension}`;
-    
-    // This is a temporary solution as uploadFile expects a File object.
-    // We'll create a lightweight object that mimics the necessary File properties for the upload function.
+    // Mimic a File object for the upload function
     const pseudoFile = {
         name: `${requestId}_original.${fileExtension}`,
-        type: mimeType,
-        arrayBuffer: () => imageBuffer,
-    } as any; // Cast to 'any' to bypass strict File type checking for this specific server-side case
+        type: `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
+        arrayBuffer: () => Promise.resolve(imageBuffer.buffer),
+    } as any; 
 
     const originalImageUrl = await uploadFile(pseudoFile, imagePath);
 
@@ -86,7 +88,6 @@ export async function uploadEnhancementRequest(input: UploadRequestInput): Promi
       status: 'pending' as 'pending' | 'completed',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       enhancedImageUrl: null,
-      adminNotes: null,
     };
 
     await newRequestRef.set(requestData);
