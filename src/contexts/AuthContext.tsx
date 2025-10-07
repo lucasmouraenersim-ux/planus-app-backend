@@ -85,11 +85,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      const isSuperAdmin = user.email === 'lucasmoura@sentenergia.com';
+      const isSuperAdmin = user.email === 'lucasmoura@sentenergia.com' || user.email === 'lucasmourafoto@sentenergia.com';
 
       if (userDocSnap.exists()) {
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
-        // The user is admin, force the type to 'superadmin' regardless of what's in Firestore.
         const finalType = isSuperAdmin ? 'superadmin' : firestoreUserData.type;
         const canViewCrm = isSuperAdmin || firestoreUserData.type === 'admin' || firestoreUserData.type === 'advogado' || firestoreUserData.canViewCrm;
         
