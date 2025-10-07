@@ -276,25 +276,32 @@ const EnergySection = () => {
 }
 
 const PhotoSection = () => {
-  const { appUser, isLoadingAuth } = useAuth();
+  const { appUser, isLoadingAuth, firebaseUser } = useAuth();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
 
+  // This handles the case where the user is already logged in via the main app's AuthProvider
   useEffect(() => {
-    if (!isLoadingAuth && !appUser) {
-      // Redirect to the main login page, passing the original path as a query param
-      // so we can redirect back if needed (optional).
-      router.push('/login');
+    if (!isLoadingAuth && firebaseUser) {
+      setIsLoggedIn(true);
     }
-  }, [isLoadingAuth, appUser, router]);
+  }, [isLoadingAuth, firebaseUser]);
+  
+  const handleLoginSuccess = () => {
+      setIsLoggedIn(true);
+  };
 
-  // While loading or before redirecting, show a loader.
-  if (isLoadingAuth || !appUser) {
+  if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
-          <Loader2 className="w-12 h-12 text-[#a855f7] animate-spin mb-4" />
-          <p className="text-lg text-slate-400">Carregando autenticação...</p>
+        <Loader2 className="w-12 h-12 text-[#a855f7] animate-spin mb-4" />
+        <p className="text-lg text-slate-400">Carregando...</p>
       </div>
     );
+  }
+  
+  if (!isLoggedIn) {
+      return <FakeLogin onLogin={handleLoginSuccess} />;
   }
 
   // If user is logged in, show the photo enhancer.
@@ -370,3 +377,5 @@ const LandingPage = () => {
 }
 
 export default LandingPage;
+
+    

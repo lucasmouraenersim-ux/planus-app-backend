@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -8,22 +9,49 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Mail, Lock, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 interface FakeLoginProps {
   onLogin: () => void;
 }
 
 export function FakeLogin({ onLogin }: FakeLoginProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
-    // Simulate a network request
-    setTimeout(() => {
-      onLogin();
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      onLogin(); // Notify parent component of successful login
+    } catch (error: any) {
+      console.error("Login error in Photo App:", error);
+      let errorMessage = "Falha no login.";
+      switch (error.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = "Credenciais inválidas.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "Email inválido.";
+          break;
+        default:
+          errorMessage = "Ocorreu um erro inesperado.";
+      }
+      toast({
+        title: "Erro de Login",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -56,7 +84,8 @@ export function FakeLogin({ onLogin }: FakeLoginProps) {
                   required
                   className="pl-10 bg-slate-800 border-slate-600 text-slate-100"
                   disabled={isLoading}
-                  defaultValue="demo@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
@@ -71,7 +100,8 @@ export function FakeLogin({ onLogin }: FakeLoginProps) {
                   required
                   className="pl-10 bg-slate-800 border-slate-600 text-slate-100"
                   disabled={isLoading}
-                  defaultValue="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
             </div>
@@ -81,7 +111,6 @@ export function FakeLogin({ onLogin }: FakeLoginProps) {
             </Button>
           </form>
         </CardContent>
-        {/* Adicionado link para a página de registro principal */}
         <div className="text-center pb-4 text-sm">
             <p className="text-slate-400">
                 Não tem uma conta?{' '}
@@ -94,3 +123,5 @@ export function FakeLogin({ onLogin }: FakeLoginProps) {
     </div>
   );
 }
+
+    
