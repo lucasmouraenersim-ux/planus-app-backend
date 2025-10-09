@@ -1,0 +1,11 @@
+{
+  "models": [
+    {
+      "name": "WRF 9.0 km",
+      "valid_from": "2024-10-01T12:00:00Z",
+      "valid_to": "2024-10-01T13:00:00Z",
+      "resolution": "9.0 km",
+      "tiles": ["cape_tile.png", "srh_tile.png"]
+    }
+  ]
+}
