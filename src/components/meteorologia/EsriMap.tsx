@@ -157,9 +157,9 @@ const ReportsLegend = () => {
         }}>
             <b>Relatos</b>
             <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16" alt="Vento leve" /> Vento 80–100km/h</div>
-            <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento &gt;100km/h</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento >100km/h</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png" width="16" alt="Granizo pequeno" /> Granizo &lt; 4cm</div>
-            <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16" alt="Granizo grande" /> Granizo &gt; 4cm</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16" alt="Granizo grande" /> Granizo > 4cm</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png" width="16" alt="Tornado fraco" /> Tornado &lt; EF2</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png" width="16" alt="Tornado forte" /> Tornado ≥ EF2</div>
         </div>
@@ -655,6 +655,13 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         sketchVM.create("polygon");
 
     }, [forecastDate]);
+    
+    useEffect(() => {
+        if (!isReportMode && sketchViewModelRef.current) {
+            sketchViewModelRef.current.cancel();
+        }
+    }, [isReportMode]);
+
 
     const initMap = useCallback(async () => {
         if (!mapDivRef.current || !brazilBoundary) return;
@@ -697,7 +704,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             graphicsLayersRef.current.reports = new GraphicsLayer({ id: "reports", title: "Relatos", visible: true });
             graphicsLayersRef.current.municipios = new GraphicsLayer({ id: "municipios", title: "Municípios", visible: false });
 
-            fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplao.geojson")
+            fetch("https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplificado.geojson")
               .then(res => res.json())
               .then(data => {
                   const municipioGraphics = data.features.map((f: any) => new Graphic(
@@ -781,6 +788,11 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             });
             
             view.on("click", (event) => {
+                if (isReportMode) {
+                    setNewReport(prev => ({...prev, location: event.mapPoint}));
+                    return;
+                }
+
                 if (sketchViewModelRef.current?.state === 'active') return;
 
                 view.hitTest(event).then((response) => {
@@ -828,7 +840,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             console.error("Erro ao carregar o mapa da Esri:", error);
             setIsLoading(false);
         }
-    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, onLogout, selectedModel]);
+    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, onLogout, selectedModel, isReportMode]);
     
     useEffect(() => {
         initMap();
