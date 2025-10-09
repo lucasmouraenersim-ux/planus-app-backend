@@ -232,72 +232,35 @@ const PrevotsLegend = () => (
 );
 
 
-const DrawUI = ({ onStartDrawing, onCancel, activeHazard }: { 
+const DrawUI = ({ onStartDrawing, onCancel, activeHazard, isDrawingActive }: { 
     onStartDrawing: (mode: DrawingMode, hazard: HazardType, probability: number, level: number) => void;
     onCancel: () => void;
     activeHazard: Exclude<HazardType, 'prevots'>;
+    isDrawingActive: boolean;
 }) => {
-    const [activeMenu, setActiveMenu] = useState<'main' | 'risk' | 'prevots'>('risk'); // Default to risk
     const [selectedProb, setSelectedProb] = useState<number>(probabilityOptions[activeHazard][0]);
-    const [currentProbOptions, setCurrentProbOptions] = useState<number[]>(probabilityOptions[activeHazard]);
-    const [selectedPrevotsLevel, setSelectedPrevotsLevel] = useState<number>(1);
     
     useEffect(() => {
-      const newOptions = probabilityOptions[activeHazard] || [];
-      setCurrentProbOptions(newOptions);
-      if (!newOptions.includes(selectedProb)) {
-          setSelectedProb(newOptions[0] || 0);
-      }
-    }, [activeHazard, selectedProb]);
+      setSelectedProb(probabilityOptions[activeHazard][0]);
+    }, [activeHazard]);
 
     const handleStartDrawingWithState = () => {
-        if (activeMenu === 'risk') {
-            onStartDrawing('risk', activeHazard, selectedProb, selectedPrevotsLevel);
-        } else if (activeMenu === 'prevots') {
-            onStartDrawing('prevots', 'prevots', 0, selectedPrevotsLevel);
-        }
+        onStartDrawing('risk', activeHazard, selectedProb, 0); // Level 0 for risk mode as it's derived from prob
     };
 
     return (
-      <div className="bg-gray-800 p-3 rounded-md shadow-md text-white">
-        {activeMenu === 'main' && (
-          <div className="space-y-2">
-            <Button onClick={() => setActiveMenu('risk')} className="w-full justify-start"><Layers className="mr-2 h-4 w-4"/> Previsão de Risco</Button>
-            <Button onClick={() => setActiveMenu('prevots')} className="w-full justify-start"><AlertTriangle className="mr-2 h-4 w-4"/> Previsão PREVOTS</Button>
-            <Button onClick={onCancel} variant="ghost" size="sm" className="w-full justify-center mt-2">Fechar</Button>
-          </div>
-        )}
-        
-        {activeMenu !== 'main' && (
-          <>
-            {activeMenu === 'risk' && (
-              <div className="space-y-4">
-                <h3 className="font-bold">Desenhar Polígono de Risco</h3>
-                <div>
-                  <Label>Probabilidade (%) para {hazardOptions.find(h => h.value === activeHazard)?.label}</Label>
-                  <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent>{currentProbOptions.map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={handleStartDrawingWithState} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
-              </div>
-            )}
-            {activeMenu === 'prevots' && (
-              <div className="space-y-4">
-                <h3 className="font-bold">Desenhar Polígono PREVOTS</h3>
-                <div>
-                  <Label>Nível PREVOTS</Label>
-                  <Select value={String(selectedPrevotsLevel)} onValueChange={(v) => setSelectedPrevotsLevel(Number(v))}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue/></SelectTrigger>
-                    <SelectContent>{prevotsLevelOptions.map(lvl => <SelectItem key={lvl} value={String(lvl)}>Nível {lvl}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={handleStartDrawingWithState} className="w-full mt-4"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
-              </div>
-            )}
-             <Button onClick={onCancel} variant="ghost" size="sm" className="w-full justify-center mt-4">Fechar</Button>
-          </>
+      <div className="bg-gray-800 p-3 rounded-md shadow-md text-white space-y-4">
+        <h3 className="font-bold">Desenhar Risco de {hazardOptions.find(h => h.value === activeHazard)?.label}</h3>
+        <div>
+          <Label>Probabilidade (%)</Label>
+          <Select value={String(selectedProb)} onValueChange={(v) => setSelectedProb(Number(v))}>
+            <SelectTrigger className="bg-gray-700 border-gray-600 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>{probabilityOptions[activeHazard].map(prob => <SelectItem key={prob} value={String(prob)}>{prob}%</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <Button onClick={handleStartDrawingWithState} className="w-full mt-4 bg-blue-600 hover:bg-blue-700"><Pencil className="mr-2 h-4 w-4" /> Iniciar Desenho</Button>
+        {isDrawingActive && (
+             <Button onClick={onCancel} variant="destructive" size="sm" className="w-full justify-center mt-2"><X className="mr-2 h-4 w-4"/> Parar Desenho</Button>
         )}
       </div>
     );
@@ -439,6 +402,9 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     const [selectedHazardForDisplay, setSelectedHazardForDisplay] = useState<Exclude<HazardType, 'prevots'>>('hail');
     
     const sketchViewModelRef = useRef<__esri.widgets.Sketch.SketchViewModel | null>(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [isDrawUIOpen, setIsDrawUIOpen] = useState(false);
+
 
     const [popoverState, setPopoverState] = useState<{
         isOpen: boolean;
@@ -611,6 +577,8 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         const sketchVM = sketchViewModelRef.current;
         if (!sketchVM) return;
 
+        setIsDrawUIOpen(false);
+        setIsDrawing(true);
         const { Color, SimpleFillSymbol } = esriModulesRef.current;
     
         let symbolOptions: any = {};
@@ -645,6 +613,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             sketchVM.layer = graphicsLayersRef.current[targetLayerId];
         } else {
             console.error(`Layer ${targetLayerId} não encontrada para o desenho.`);
+            setIsDrawing(false);
             return;
         }
         
@@ -655,6 +624,12 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         sketchVM.create("polygon");
 
     }, [forecastDate]);
+
+    const handleCancelDrawing = () => {
+        sketchViewModelRef.current?.cancel();
+        setIsDrawing(false);
+        setIsDrawUIOpen(false);
+    };
     
     useEffect(() => {
         if (!isReportMode && sketchViewModelRef.current) {
@@ -745,7 +720,8 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
 
             sketchVM.on("create", (event: __esri.SketchViewModelCreateEvent) => {
                 if (event.state === "complete") {
-                     const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
+                    setIsDrawing(false);
+                    const attributes = (sketchViewModelRef.current as any)._creationAttributes || {};
                     addPolygon({
                         graphic: event.graphic,
                         attributes: attributes,
@@ -808,30 +784,28 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 });
             });
             
-            const drawContainer = document.createElement("div");
-            const sketchExpand = new Expand({ view: view, content: drawContainer, expandIconClass: "esri-icon-edit", group: "top-left" });
-            
             const menuContainer = document.createElement("div");
             const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "esri-icon-menu", group: "top-left" });
             
             const meteoTilesContainer = document.createElement("div");
             const meteoTilesExpand = new Expand({ view: view, content: meteoTilesContainer, expandIconClass: "esri-icon-media", group: "top-right", expanded: true });
 
-            if (userAppRole === 'superadmin') view.ui.add(sketchExpand, "top-left");
             view.ui.add(menuExpand, "top-left");
+            if (userAppRole === 'superadmin') {
+                view.ui.add(
+                    new Expand({
+                        view: view,
+                        content: document.getElementById('draw-controls-container')!,
+                        expandIconClass: "esri-icon-edit",
+                        group: "top-left"
+                    }),
+                    "top-left"
+                );
+            }
             view.ui.add(meteoTilesExpand, "top-right");
             
             const menuRoot = createRoot(menuContainer);
             menuRoot.render(<SideMenu onLogout={onLogout} />);
-            
-            const root = createRoot(drawContainer);
-            root.render(
-                <DrawUI 
-                    onStartDrawing={handleStartDrawing}
-                    onCancel={() => { sketchExpand.collapse(); sketchViewModelRef.current?.cancel(); }}
-                    activeHazard={selectedHazardForDisplay}
-                />
-            );
             
             const meteoRoot = createRoot(meteoTilesContainer);
             meteoRoot.render(<MeteoTilesControls map={map} ImageryLayer={ImageryLayer} esriRef={esriModulesRef.current} />);
@@ -840,7 +814,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             console.error("Erro ao carregar o mapa da Esri:", error);
             setIsLoading(false);
         }
-    }, [brazilBoundary, userAppRole, handleStartDrawing, selectedHazardForDisplay, onLogout, selectedModel, isReportMode]);
+    }, [brazilBoundary, userAppRole, onLogout, selectedModel, isReportMode, forecastDate, selectedHazardForDisplay]);
     
     useEffect(() => {
         initMap();
@@ -908,12 +882,25 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 {(userAppRole === 'superadmin') && (
                     <Button onClick={() => setIsReportMode(!isReportMode)} variant={isReportMode ? 'destructive' : 'default'} size="sm">
                         {isReportMode ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                        {isReportMode ? 'Cancelar' : 'Adicionar Relato'}
+                        {isReportMode ? 'Cancelar Relato' : 'Adicionar Relato'}
                     </Button>
                 )}
             </div>
-            
-            <div className="absolute top-[88px] left-[75px] z-50 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
+
+            <div id="draw-controls-container">
+              {isDrawUIOpen && userAppRole === 'superadmin' && (
+                  <div className="absolute top-[88px] left-[75px] z-50">
+                       <DrawUI 
+                          onStartDrawing={handleStartDrawing}
+                          onCancel={handleCancelDrawing}
+                          activeHazard={selectedHazardForDisplay}
+                          isDrawingActive={isDrawing}
+                       />
+                  </div>
+              )}
+            </div>
+
+            <div className="absolute top-[88px] left-[20px] z-40 bg-gray-800/80 backdrop-blur-sm p-2 rounded-md shadow-lg flex flex-col items-stretch gap-2">
                  {hazardOptions.map(hazard => (
                     <div key={hazard.value} className="flex items-center gap-1">
                         <Button 
@@ -936,10 +923,15 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                         )}
                     </div>
                 ))}
+                 {userAppRole === 'superadmin' && (
+                    <Button onClick={() => setIsDrawUIOpen(prev => !prev)} variant="outline" className="mt-2 text-white border-blue-500 hover:bg-blue-600">
+                        <Pencil className="mr-2 h-4 w-4"/> Desenhar Risco
+                    </Button>
+                 )}
             </div>
 
             {isReportMode && (
-                <div className="absolute top-[230px] left-[20px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
+                <div className="absolute top-[88px] left-[250px] z-50 bg-gray-800/90 backdrop-blur-md p-4 rounded-lg shadow-lg w-72 space-y-4">
                     <h3 className="font-bold text-white text-lg border-b border-gray-600 pb-2 mb-3">Novo Relato de Tempo Severo</h3>
                     <div>
                         <Label className="text-gray-300">Tipo de Evento</Label>
