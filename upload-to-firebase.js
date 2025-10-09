@@ -1,6 +1,8 @@
 // Script para fazer upload dos tiles para Firebase Storage
 import { initializeApp } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import fetch from 'node-fetch'; // Import node-fetch
+import fs from 'fs'; // Import fs to read files from disk
 
 const firebaseConfig = {
   apiKey: "AIzaSyASyZjkbeiSqh9fEaYDwuS9diyIDUhEQeQ",
@@ -14,10 +16,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app);
 
-async function uploadFile(file, path) {
+async function uploadFile(fileBuffer, path) {
   try {
     const storageRef = ref(storage, path);
-    const snapshot = await uploadBytes(storageRef, file);
+    const snapshot = await uploadBytes(storageRef, fileBuffer);
     const downloadURL = await getDownloadURL(snapshot.ref);
     console.log(`✅ Upload realizado: ${path}`);
     return downloadURL;
@@ -38,9 +40,13 @@ async function uploadAllTiles() {
 
   for (const { file, path } of filesToUpload) {
     try {
-      const response = await fetch(file);
-      const blob = await response.blob();
-      await uploadFile(blob, path);
+      // Read the file from the local file system
+      if (!fs.existsSync(file)) {
+          console.warn(`⚠️  Arquivo não encontrado: ${file}. Pulando.`);
+          continue;
+      }
+      const fileBuffer = fs.readFileSync(file);
+      await uploadFile(fileBuffer, path);
     } catch (error) {
       console.error(`Erro ao processar ${file}:`, error);
     }
