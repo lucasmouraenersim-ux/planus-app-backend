@@ -40,6 +40,7 @@ type EsriModules = [
     typeof __esri.symbols.PictureMarkerSymbol,
     typeof __esri.Point,
     typeof __esri.widgets.Sketch.SketchViewModel,
+    typeof __esri.layers.ImageryLayer, // Added ImageryLayer
 ];
 
 // Helper to require modules
@@ -66,6 +67,7 @@ function requireModules(resolve: (modules: EsriModules) => void) {
         "esri/symbols/PictureMarkerSymbol",
         "esri/geometry/Point",
         "esri/widgets/Sketch/SketchViewModel",
+        "esri/layers/ImageryLayer", // Added ImageryLayer
     ], (...modules: EsriModules) => {
         resolve(modules);
     });

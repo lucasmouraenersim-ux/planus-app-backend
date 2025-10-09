@@ -27,6 +27,7 @@ import { Input } from '../ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { loadCss, loadScript } from '@/lib/esri-loader';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 import { addPolygon, clearAllPolygons, deletePolygon, getPolygonGroups, getPolygonsByHazard, initializePolygonManager, togglePolygonVisibility, updatePolygon, validateArea, catColor, levelOf, probabilityOptions } from './polygon-manager';
 
@@ -302,6 +303,107 @@ const DrawUI = ({ onStartDrawing, onCancel, activeHazard }: {
     );
 };
 
+// Componente de Controles de Tiles Meteorológicos
+const MeteoTilesControls = ({ map, ImageryLayer, esriRef }: { map: __esri.Map | null, ImageryLayer: any, esriRef: any}) => {
+  const [capeVisible, setCapeVisible] = useState(false);
+  const [srhVisible, setSrhVisible] = useState(false);
+  const [capeOpacity, setCapeOpacity] = useState(70);
+  const [srhOpacity, setSrhOpacity] = useState(70);
+  const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const storage = getStorage();
+  const brazilBounds = {
+      xmin: -75.0,
+      ymin: -35.0,
+      xmax: -30.0,
+      ymax: 5.0,
+      spatialReference: { wkid: 4326 }
+  };
+  
+  const toggleOverlay = useCallback(async (tileType: 'cape' | 'srh', isVisible: boolean, opacity: number) => {
+    if (!map || !ImageryLayer) return;
+    
+    const layerId = `meteo-tile-${tileType}`;
+    const existingLayer = map.findLayerById(layerId) as __esri.ImageryLayer;
+    
+    if (!isVisible) {
+      if (existingLayer) map.remove(existingLayer);
+      return;
+    }
+    
+    if (existingLayer) {
+      existingLayer.opacity = opacity / 100;
+      existingLayer.visible = true;
+      return;
+    }
+    
+    setIsLoading(prev => ({ ...prev, [tileType]: true }));
+    setError(null);
+
+    try {
+      const storageRef = ref(storage, `meteo_tiles/${tileType}_tile.png`);
+      const url = await getDownloadURL(storageRef);
+      
+      const newLayer = new ImageryLayer({
+        id: layerId,
+        url: url,
+        extent: brazilBounds,
+        opacity: opacity / 100
+      });
+      
+      map.add(newLayer);
+      
+    } catch (e) {
+      console.error(`Erro ao carregar tile ${tileType}:`, e);
+      setError(`Falha ao carregar ${tileType}.`);
+    } finally {
+      setIsLoading(prev => ({ ...prev, [tileType]: false }));
+    }
+  }, [map, ImageryLayer, storage, brazilBounds]);
+
+  useEffect(() => {
+    toggleOverlay('cape', capeVisible, capeOpacity);
+  }, [capeVisible, capeOpacity, toggleOverlay]);
+
+  useEffect(() => {
+    toggleOverlay('srh', srhVisible, srhOpacity);
+  }, [srhVisible, srhOpacity, toggleOverlay]);
+
+  return (
+      <div className="absolute top-24 right-5 bg-gray-800/80 backdrop-blur-sm p-4 rounded-lg shadow-lg text-white w-72 z-40">
+          <h3 className="font-bold mb-3 text-lg border-b border-gray-600 pb-2">🌦️ Modelos Meteorológicos</h3>
+          
+          {(isLoading.cape || isLoading.srh) && <div className="text-blue-400 text-xs mb-2">🔄 Carregando...</div>}
+          {error && <div className="text-red-400 text-xs mb-2">❌ {error}</div>}
+
+          <div className="space-y-4">
+              <div>
+                  <Label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={capeVisible} onChange={e => setCapeVisible(e.target.checked)} className="form-checkbox h-4 w-4 text-blue-500 bg-gray-700 border-gray-600 rounded" />
+                      <strong>CAPE</strong>
+                  </Label>
+                  <p className="text-xs text-gray-400 ml-6">Energia Potencial Convectiva</p>
+                  <input type="range" min="0" max="100" value={capeOpacity} onChange={e => setCapeOpacity(Number(e.target.value))} className="w-full h-1 mt-2 accent-blue-500" />
+              </div>
+              <div>
+                  <Label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={srhVisible} onChange={e => setSrhVisible(e.target.checked)} className="form-checkbox h-4 w-4 text-blue-500 bg-gray-700 border-gray-600 rounded" />
+                      <strong>SRH 0-3km</strong>
+                  </Label>
+                  <p className="text-xs text-gray-400 ml-6">Helicidade Relativa à Tempestade</p>
+                  <input type="range" min="0" max="100" value={srhOpacity} onChange={e => setSrhOpacity(Number(e.target.value))} className="w-full h-1 mt-2 accent-blue-500" />
+              </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-4 pt-2 border-t border-gray-600">
+            <p><strong>Modelo:</strong> WRF 9.0 km</p>
+            <p><strong>Válido:</strong> 2024-10-01 12:00 UTC</p>
+          </div>
+      </div>
+  );
+};
+
+
 const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     const { userAppRole } = useAuth();
     const mapDivRef = useRef<HTMLDivElement>(null);
@@ -563,14 +665,14 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                 Map, MapView, Basemap, TileLayer, GroupLayer,
                 BasemapGallery, Expand, LayerList, Sketch, GraphicsLayer,
                 WebTileLayer, webMercatorUtils, Polygon, Color, Graphic, 
-                SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
+                SimpleFillSymbol, SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel, ImageryLayer
             ] = await loadScript();
 
             esriModulesRef.current = {
                 Map, MapView, Basemap, TileLayer, GroupLayer, BasemapGallery,
                 Expand, LayerList, Sketch, GraphicsLayer, WebTileLayer,
                 webMercatorUtils, Polygon, Color, Graphic, SimpleFillSymbol,
-                SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel
+                SimpleLineSymbol, PictureMarkerSymbol, Point, SketchViewModel, ImageryLayer
             };
             
             initializePolygonManager(turf);
@@ -699,9 +801,13 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
             
             const menuContainer = document.createElement("div");
             const menuExpand = new Expand({ view: view, content: menuContainer, expandIconClass: "esri-icon-menu", group: "top-left" });
+            
+            const meteoTilesContainer = document.createElement("div");
+            const meteoTilesExpand = new Expand({ view: view, content: meteoTilesContainer, expandIconClass: "esri-icon-media", group: "top-right", expanded: true });
 
             if (userAppRole === 'superadmin') view.ui.add(sketchExpand, "top-left");
             view.ui.add(menuExpand, "top-left");
+            view.ui.add(meteoTilesExpand, "top-right");
             
             const menuRoot = createRoot(menuContainer);
             menuRoot.render(<SideMenu onLogout={onLogout} />);
@@ -714,6 +820,9 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
                     activeHazard={selectedHazardForDisplay}
                 />
             );
+            
+            const meteoRoot = createRoot(meteoTilesContainer);
+            meteoRoot.render(<MeteoTilesControls map={map} ImageryLayer={ImageryLayer} esriRef={esriModulesRef.current} />);
 
         } catch (error) {
             console.error("Erro ao carregar o mapa da Esri:", error);
