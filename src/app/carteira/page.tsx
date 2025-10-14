@@ -196,6 +196,8 @@ function WalletPageContent() {
                 }
             }
             
+            console.log('📊 Total de leads carregados:', allFetchedLeads.length);
+            console.log('📊 Leads finalizados:', allFetchedLeads.filter(l => l.stageId === 'finalizado').length);
             setAllLeads(allFetchedLeads);
   
         } catch (error) {
@@ -214,24 +216,45 @@ function WalletPageContent() {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return [];
   
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
+    
+    console.log('💰 Total de leads finalizados encontrados:', finalizedLeads.length);
   
     let userVisibleLeads = finalizedLeads;
     // Admins e SuperAdmins veem todos, vendedores só os seus.
     if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
       userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
+      console.log('💰 Leads finalizados do vendedor:', userVisibleLeads.length);
     }
   
-    return userVisibleLeads.map(lead => {
+    const contracts = userVisibleLeads.map(lead => {
       const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
       let commissionRate = 40; // Default Bronze
-      if (seller) {
-        if (seller.commissionRate) {
-          commissionRate = seller.commissionRate;
-        }
+      if (seller?.commissionRate) {
+        commissionRate = seller.commissionRate;
       }
       
-      const baseValueForCommission = lead.valueAfterDiscount > 0 ? lead.valueAfterDiscount : lead.value;
+      // CORREÇÃO: Melhor tratamento para valores undefined/null/0
+      let baseValueForCommission = 0;
+      
+      // Primeiro tenta usar valueAfterDiscount se existir e for maior que 0
+      if (lead.valueAfterDiscount != null && lead.valueAfterDiscount > 0) {
+        baseValueForCommission = lead.valueAfterDiscount;
+      } 
+      // Se não, usa value (valor original)
+      else if (lead.value != null && lead.value > 0) {
+        baseValueForCommission = lead.value;
+      }
+      
       const commission = baseValueForCommission * (commissionRate / 100);
+      
+      console.log(`💰 Lead ${lead.id} (${lead.name}):`, {
+        valueAfterDiscount: lead.valueAfterDiscount,
+        value: lead.value,
+        baseValueForCommission,
+        commissionRate,
+        commission,
+        isPaid: lead.commissionPaid
+      });
       
       const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
       
@@ -239,12 +262,16 @@ function WalletPageContent() {
         leadId: lead.id,
         clientName: lead.name,
         kwh: lead.kwh || 0,
-        valueAfterDiscount: lead.valueAfterDiscount || 0,
+        valueAfterDiscount: lead.valueAfterDiscount || lead.value || 0,
         commission,
         recurrence,
         isPaid: lead.commissionPaid || false,
       };
-    }).filter((c): c is NonNullable<typeof c> => c !== null);
+    }).filter((c): c is NonNullable<typeof c> => c !== null && c.commission > 0); // Filtra comissões válidas
+    
+    console.log('💰 Total de contratos com comissões:', contracts.length);
+    
+    return contracts;
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
 
   const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
@@ -280,16 +307,21 @@ function WalletPageContent() {
       const commissionRate = commissionRates[levelForCommission];
         
       if (!commissionRate) return null;
+      
+      // CORREÇÃO: Usar a mesma lógica para MLM
+      const baseValue = (lead.valueAfterDiscount != null && lead.valueAfterDiscount > 0) 
+        ? lead.valueAfterDiscount 
+        : (lead.value || 0);
   
-      const commission = (lead.valueAfterDiscount || 0) * commissionRate;
-      if (commission <= 0) return null; // Do not show zero or negative commissions
+      const commission = baseValue * commissionRate;
+      if (commission <= 0) return null;
   
       return {
         leadId: lead.id,
         clientName: lead.name,
         downlineSellerName: downlineMember.user.displayName || 'N/A',
         downlineLevel: levelForCommission,
-        valueAfterDiscount: lead.valueAfterDiscount || 0,
+        valueAfterDiscount: baseValue,
         commission
       };
     }).filter((c): c is NonNullable<typeof c> => c !== null);
