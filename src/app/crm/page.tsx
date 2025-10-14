@@ -143,7 +143,7 @@ function CrmPageContent() {
     } as LeadWithId;
   }, []);
   
- useEffect(() => {
+useEffect(() => {
     if (isLoadingAllUsers || !appUser) {
         setIsLoading(true);
         return;
@@ -152,27 +152,42 @@ function CrmPageContent() {
     const leadsCollection = collection(db, "crm_leads");
     let unsubscribe: () => void = () => {};
 
-    // DEBUGGING STEP: Give 'vendedor' the same view as 'admin'
-    if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado' || userAppRole === 'vendedor') {
+    // CORREÇÃO: Vendedores veem apenas seus leads, admins veem todos
+    if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
+        // Admins veem TODOS os leads
         const q = query(leadsCollection, orderBy("lastContact", "desc"));
         unsubscribe = onSnapshot(q, (snapshot) => {
             setLeads(snapshot.docs.map(mapDocToLead));
             setIsLoading(false);
         }, (error) => {
-            console.error("Error fetching leads for admin/seller-debug:", error);
+            console.error("Error fetching leads for admin:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
+    } else if (userAppRole === 'vendedor') {
+        // Vendedores veem APENAS seus leads (onde userId === appUser.uid)
+        const q = query(
+            leadsCollection, 
+            where("userId", "==", appUser.uid),
+            orderBy("lastContact", "desc")
+        );
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            setLeads(snapshot.docs.map(mapDocToLead));
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching leads for seller:", error);
             toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
             setIsLoading(false);
         });
     } else {
-        // For any other user type, show no leads.
+        // Para qualquer outro tipo de usuário, não mostra leads
         setLeads([]);
         setIsLoading(false);
         unsubscribe = () => {};
     }
 
     return () => {
-      // This will call the correct unsubscribe function.
-      unsubscribe();
+        unsubscribe();
     };
 }, [appUser, userAppRole, toast, isLoadingAllUsers, mapDocToLead]);
 
@@ -977,8 +992,9 @@ function CrmPageContent() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setLeadToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleConfirmDelete}>
+            <AlertDialogCancel onClick={() => setLeadToDelete(null)} disabled={isSubmittingAction}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleConfirmDelete} disabled={isSubmittingAction}>
+              {isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Sim, Excluir Lead
             </AlertDialogAction>
           </AlertDialogFooter>
