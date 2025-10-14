@@ -149,9 +149,16 @@ function WalletPageContent() {
         const allFetchedLeads: LeadWithId[] = [];
   
         try {
-            // CORREÇÃO: Buscar TODOS os leads como o CRM faz, independente do role
-            // O filtro será aplicado depois no cálculo das comissões
-            const q = query(leadsCollectionRef);
+            // CORREÇÃO: Vendedores veem apenas seus leads, admins veem todos
+            let q;
+            if (userAppRole === 'admin' || userAppRole === 'superadmin') {
+                // Admins buscam TODOS os leads
+                q = query(leadsCollectionRef);
+            } else {
+                // Vendedores buscam APENAS seus leads (onde userId === appUser.uid)
+                q = query(leadsCollectionRef, where("userId", "==", appUser.uid));
+            }
+            
             const snapshot = await getDocs(q);
             snapshot.forEach(doc => allFetchedLeads.push({
                 id: doc.id,
@@ -200,7 +207,7 @@ function WalletPageContent() {
     };
   
     fetchLeads();
-  }, [appUser, allFirestoreUsers, toast]);
+  }, [appUser, userAppRole, allFirestoreUsers, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
@@ -213,22 +220,20 @@ function WalletPageContent() {
         return [];
     }
   
+    // Filtrar apenas leads finalizados
+    // Os leads já vêm filtrados por userId no useEffect acima para vendedores
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     
     console.log('\n💰 ===== CALCULANDO COMISSÕES =====');
     console.log('💰 Total de leads finalizados:', finalizedLeads.length);
+    console.log('💰 Leads do usuário:', finalizedLeads.map(l => ({ 
+        id: l.id, 
+        name: l.name, 
+        userId: l.userId,
+        'Match': l.userId === appUser.uid 
+    })));
   
-    let userVisibleLeads = finalizedLeads;
-    // Admins e SuperAdmins veem todos, vendedores só os seus.
-    if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
-      const before = userVisibleLeads.length;
-      userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
-      console.log(`💰 Filtrado para vendedor (${appUser.uid}):`, {
-        antes: before,
-        depois: userVisibleLeads.length,
-        leads: userVisibleLeads.map(l => ({ id: l.id, name: l.name, userId: l.userId }))
-      });
-    }
+    const userVisibleLeads = finalizedLeads;
   
     const contracts = userVisibleLeads.map(lead => {
       const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
@@ -551,7 +556,7 @@ function WalletPageContent() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Consumo (KWh)</TableHead>
                   <TableHead>Valor Base</TableHead>
-                  <TableHead>Sua Comissão</TableHead>
+                  <TableHead>Sua Comissão (40%)</TableHead>
                   {userAppRole === 'superadmin' && <TableHead>Recorrência</TableHead>}
                   <TableHead className="text-center">Status Pagto.</TableHead>
                 </TableRow>
