@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -54,7 +53,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed, Network } from 'lucide-react';
+import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed, Network, AlertTriangle } from 'lucide-react';
 import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
@@ -109,6 +108,7 @@ function WalletPageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
 
   const form = useForm<WithdrawalFormData>({
     resolver: zodResolver(withdrawalFormSchema),
@@ -196,8 +196,33 @@ function WalletPageContent() {
                 }
             }
             
+            console.log('🔍 ===== DEBUG CARTEIRA =====');
+            console.log('👤 appUser.uid:', appUser.uid);
+            console.log('👤 appUser.displayName:', appUser.displayName);
+            console.log('👤 userAppRole:', userAppRole);
             console.log('📊 Total de leads carregados:', allFetchedLeads.length);
-            console.log('📊 Leads finalizados:', allFetchedLeads.filter(l => l.stageId === 'finalizado').length);
+            console.log('📊 Leads finalizados (total):', allFetchedLeads.filter(l => l.stageId === 'finalizado').length);
+            
+            // Log detalhado de TODOS os leads finalizados
+            const finalizedLeads = allFetchedLeads.filter(l => l.stageId === 'finalizado');
+            console.log('📋 LEADS FINALIZADOS DETALHADOS:');
+            finalizedLeads.forEach((lead, index) => {
+                console.log(`\n  Lead ${index + 1}:`, {
+                    id: lead.id,
+                    name: lead.name,
+                    userId: lead.userId,
+                    sellerName: lead.sellerName,
+                    stageId: lead.stageId,
+                    value: lead.value,
+                    valueAfterDiscount: lead.valueAfterDiscount,
+                    kwh: lead.kwh,
+                    commissionPaid: lead.commissionPaid,
+                    'userId === appUser.uid': lead.userId === appUser.uid
+                });
+            });
+            
+            console.log('🔍 ===========================');
+            
             setAllLeads(allFetchedLeads);
   
         } catch (error) {
@@ -213,17 +238,30 @@ function WalletPageContent() {
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
-    if (!appUser || !allLeads.length || !allFirestoreUsers.length) return [];
+    if (!appUser || !allLeads.length || !allFirestoreUsers.length) {
+        console.log('⚠️ Condições não atendidas para calcular comissões:', {
+            hasAppUser: !!appUser,
+            leadsCount: allLeads.length,
+            usersCount: allFirestoreUsers.length
+        });
+        return [];
+    }
   
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     
-    console.log('💰 Total de leads finalizados encontrados:', finalizedLeads.length);
+    console.log('\n💰 ===== CALCULANDO COMISSÕES =====');
+    console.log('💰 Total de leads finalizados:', finalizedLeads.length);
   
     let userVisibleLeads = finalizedLeads;
     // Admins e SuperAdmins veem todos, vendedores só os seus.
     if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
+      const before = userVisibleLeads.length;
       userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
-      console.log('💰 Leads finalizados do vendedor:', userVisibleLeads.length);
+      console.log(`💰 Filtrado para vendedor (${appUser.uid}):`, {
+        antes: before,
+        depois: userVisibleLeads.length,
+        leads: userVisibleLeads.map(l => ({ id: l.id, name: l.name, userId: l.userId }))
+      });
     }
   
     const contracts = userVisibleLeads.map(lead => {
@@ -248,12 +286,14 @@ function WalletPageContent() {
       const commission = baseValueForCommission * (commissionRate / 100);
       
       console.log(`💰 Lead ${lead.id} (${lead.name}):`, {
+        seller: seller?.displayName || 'N/A',
         valueAfterDiscount: lead.valueAfterDiscount,
         value: lead.value,
         baseValueForCommission,
         commissionRate,
         commission,
-        isPaid: lead.commissionPaid
+        isPaid: lead.commissionPaid,
+        'commission > 0': commission > 0
       });
       
       const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
@@ -262,14 +302,15 @@ function WalletPageContent() {
         leadId: lead.id,
         clientName: lead.name,
         kwh: lead.kwh || 0,
-        valueAfterDiscount: lead.valueAfterDiscount || lead.value || 0,
+        valueAfterDiscount: baseValueForCommission,
         commission,
         recurrence,
         isPaid: lead.commissionPaid || false,
       };
-    }).filter((c): c is NonNullable<typeof c> => c !== null && c.commission > 0); // Filtra comissões válidas
+    }).filter((c): c is NonNullable<typeof c> => c !== null && c.commission > 0);
     
-    console.log('💰 Total de contratos com comissões:', contracts.length);
+    console.log('💰 Total de contratos com comissões válidas:', contracts.length);
+    console.log('💰 ==================================\n');
     
     return contracts;
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
@@ -424,7 +465,39 @@ function WalletPageContent() {
           <Wallet className="w-7 h-7 mr-3 text-primary" />
           Minha Carteira
         </h1>
+        <Button 
+          onClick={() => setShowDebugInfo(!showDebugInfo)} 
+          variant="outline" 
+          size="sm"
+          className="ml-auto"
+        >
+          <AlertTriangle className="w-4 h-4 mr-2" />
+          {showDebugInfo ? 'Ocultar' : 'Mostrar'} Debug
+        </Button>
       </header>
+
+      {showDebugInfo && (
+        <Card className="bg-yellow-500/10 border-yellow-500/50">
+          <CardHeader>
+            <CardTitle className="text-yellow-500 flex items-center">
+              <AlertTriangle className="w-5 h-5 mr-2" />
+              Informações de Debug
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm font-mono space-y-2">
+            <div><strong>User UID:</strong> {appUser.uid}</div>
+            <div><strong>User Name:</strong> {appUser.displayName}</div>
+            <div><strong>User Role:</strong> {userAppRole}</div>
+            <div><strong>Total Leads:</strong> {allLeads.length}</div>
+            <div><strong>Leads Finalizados:</strong> {allLeads.filter(l => l.stageId === 'finalizado').length}</div>
+            <div><strong>Leads Finalizados do Usuário:</strong> {allLeads.filter(l => l.stageId === 'finalizado' && l.userId === appUser.uid).length}</div>
+            <div><strong>Contratos com Comissão:</strong> {contractsToReceive.length}</div>
+            <div className="mt-4 pt-4 border-t border-yellow-500/30">
+              <strong>Abra o Console (F12) para ver logs detalhados!</strong>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
         <CardHeader>
@@ -498,6 +571,11 @@ function WalletPageContent() {
                 <Info size={48} className="mx-auto mb-4 opacity-50" />
                 <p>Nenhum contrato finalizado encontrado.</p>
                 <p className="text-sm">Quando você finalizar um contrato, a comissão aparecerá aqui.</p>
+                {showDebugInfo && (
+                  <p className="text-xs mt-4 text-yellow-500">
+                    Verifique o console (F12) para informações detalhadas de debug
+                  </p>
+                )}
             </div>
           ) : (
             <Table>
@@ -506,8 +584,8 @@ function WalletPageContent() {
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Consumo (KWh)</TableHead>
-                  <TableHead>Valor c/ Desconto</TableHead>
-                  <TableHead>Sua Comissão</TableHead>
+                  <TableHead>Valor Base</TableHead>
+                  <TableHead>Sua Comissão (40%)</TableHead>
                   {userAppRole === 'superadmin' && <TableHead>Recorrência</TableHead>}
                   <TableHead className="text-center">Status Pagto.</TableHead>
                 </TableRow>
