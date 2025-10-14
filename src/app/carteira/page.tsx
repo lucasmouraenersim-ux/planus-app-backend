@@ -108,7 +108,6 @@ function WalletPageContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
 
   const form = useForm<WithdrawalFormData>({
     resolver: zodResolver(withdrawalFormSchema),
@@ -144,59 +143,51 @@ function WalletPageContent() {
   
     const fetchLeads = async () => {
         setIsLoadingLeads(true);
-  
-        const leadsCollectionRef = collection(db, "crm_leads");
-        const allFetchedLeads: LeadWithId[] = [];
-  
+        
         try {
-            // CORREÇÃO: Vendedores veem apenas seus leads, admins veem todos
-            let q;
-            if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-                // Admins buscam TODOS os leads
-                q = query(leadsCollectionRef);
-            } else {
-                // Vendedores buscam APENAS seus leads (onde userId === appUser.uid)
-                q = query(leadsCollectionRef, where("userId", "==", appUser.uid));
-            }
-            
-            const snapshot = await getDocs(q);
-            snapshot.forEach(doc => allFetchedLeads.push({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-                lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-                signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-                completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-            } as LeadWithId));
+            // CORREÇÃO: Usar a mesma estratégia da página de Ranking
+            // Busca TODOS os leads e filtra por sellerName (nome do vendedor)
+            const leads = await fetchAllCrmLeadsGlobally();
             
             console.log('🔍 ===== DEBUG CARTEIRA =====');
             console.log('👤 appUser.uid:', appUser.uid);
             console.log('👤 appUser.displayName:', appUser.displayName);
             console.log('👤 userAppRole:', userAppRole);
-            console.log('📊 Total de leads carregados:', allFetchedLeads.length);
-            console.log('📊 Leads finalizados (total):', allFetchedLeads.filter(l => l.stageId === 'finalizado').length);
+            console.log('📊 Total de leads carregados:', leads.length);
+            
+            let filteredLeads = leads;
+            
+            // Admins veem todos, vendedores filtram por nome
+            if (userAppRole !== 'admin' && userAppRole !== 'superadmin') {
+                const sellerNameLower = (appUser.displayName || '').trim().toLowerCase();
+                filteredLeads = leads.filter(lead => 
+                    lead.sellerName?.trim().toLowerCase() === sellerNameLower
+                );
+                console.log('👤 Filtrando para vendedor:', sellerNameLower);
+                console.log('📊 Leads após filtro por nome:', filteredLeads.length);
+            }
+            
+            const finalizedLeads = filteredLeads.filter(l => l.stageId === 'finalizado');
+            console.log('📊 Leads finalizados (total):', finalizedLeads.length);
             
             // Log detalhado de TODOS os leads finalizados
-            const finalizedLeads = allFetchedLeads.filter(l => l.stageId === 'finalizado');
             console.log('📋 LEADS FINALIZADOS DETALHADOS:');
             finalizedLeads.forEach((lead, index) => {
                 console.log(`\n  Lead ${index + 1}:`, {
                     id: lead.id,
                     name: lead.name,
-                    userId: lead.userId,
                     sellerName: lead.sellerName,
                     stageId: lead.stageId,
                     value: lead.value,
                     valueAfterDiscount: lead.valueAfterDiscount,
                     kwh: lead.kwh,
                     commissionPaid: lead.commissionPaid,
-                    'userId === appUser.uid': lead.userId === appUser.uid
                 });
             });
             
             console.log('🔍 ===========================');
             
-            setAllLeads(allFetchedLeads);
+            setAllLeads(filteredLeads);
   
         } catch (error) {
             console.error("Error fetching leads for wallet:", error);
@@ -207,7 +198,7 @@ function WalletPageContent() {
     };
   
     fetchLeads();
-  }, [appUser, userAppRole, allFirestoreUsers, toast]);
+  }, [appUser, userAppRole, allFirestoreUsers, toast, fetchAllCrmLeadsGlobally]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
@@ -220,36 +211,30 @@ function WalletPageContent() {
         return [];
     }
   
-    // Filtrar apenas leads finalizados
-    // Os leads já vêm filtrados por userId no useEffect acima para vendedores
+    // Filtrar apenas leads finalizados (os leads já vêm filtrados por vendedor no useEffect)
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
     
     console.log('\n💰 ===== CALCULANDO COMISSÕES =====');
     console.log('💰 Total de leads finalizados:', finalizedLeads.length);
-    console.log('💰 Leads do usuário:', finalizedLeads.map(l => ({ 
-        id: l.id, 
-        name: l.name, 
-        userId: l.userId,
-        'Match': l.userId === appUser.uid 
-    })));
   
-    const userVisibleLeads = finalizedLeads;
-  
-    const contracts = userVisibleLeads.map(lead => {
-      const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
+    const contracts = finalizedLeads.map(lead => {
+      // Buscar o vendedor por nome
+      const sellerNameLower = (lead.sellerName || '').trim().toLowerCase();
+      const seller = allFirestoreUsers.find(u => 
+        u.displayName?.trim().toLowerCase() === sellerNameLower
+      );
+      
       let commissionRate = 40; // Default Bronze
       if (seller?.commissionRate) {
         commissionRate = seller.commissionRate;
       }
       
-      // CORREÇÃO: Melhor tratamento para valores undefined/null/0
+      // Melhor tratamento para valores undefined/null/0
       let baseValueForCommission = 0;
       
-      // Primeiro tenta usar valueAfterDiscount se existir e for maior que 0
       if (lead.valueAfterDiscount != null && lead.valueAfterDiscount > 0) {
         baseValueForCommission = lead.valueAfterDiscount;
       } 
-      // Se não, usa value (valor original)
       else if (lead.value != null && lead.value > 0) {
         baseValueForCommission = lead.value;
       }
@@ -257,14 +242,14 @@ function WalletPageContent() {
       const commission = baseValueForCommission * (commissionRate / 100);
       
       console.log(`💰 Lead ${lead.id} (${lead.name}):`, {
+        sellerName: lead.sellerName,
         seller: seller?.displayName || 'N/A',
         valueAfterDiscount: lead.valueAfterDiscount,
         value: lead.value,
         baseValueForCommission,
         commissionRate,
         commission,
-        isPaid: lead.commissionPaid,
-        'commission > 0': commission > 0
+        isPaid: lead.commissionPaid
       });
       
       const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
@@ -300,19 +285,25 @@ function WalletPageContent() {
     };
     
     const downlineWithLevels = findDownline(appUser.uid);
-    const downlineUids = downlineWithLevels.map(d => d.user.uid);
-  
-    const downlineFinalizedLeads = allLeads.filter(lead => 
-      lead.stageId === 'finalizado' && 
-      lead.userId &&
-      downlineUids.includes(lead.userId) &&
-      !lead.commissionPaid
-    );
+    
+    // Buscar leads finalizados da downline usando sellerName
+    const downlineFinalizedLeads = allLeads.filter(lead => {
+      if (lead.stageId !== 'finalizado' || !lead.sellerName || lead.commissionPaid) return false;
+      
+      const sellerNameLower = lead.sellerName.trim().toLowerCase();
+      return downlineWithLevels.some(d => 
+        d.user.displayName?.trim().toLowerCase() === sellerNameLower
+      );
+    });
   
     const commissionRates: { [key: number]: number } = { 1: 0.05, 2: 0.03, 3: 0.02, 4: 0.01 };
   
     const commissions = downlineFinalizedLeads.map(lead => {
-      const downlineMember = downlineWithLevels.find(d => d.user.uid === lead.userId);
+      const sellerNameLower = lead.sellerName.trim().toLowerCase();
+      const downlineMember = downlineWithLevels.find(d => 
+        d.user.displayName?.trim().toLowerCase() === sellerNameLower
+      );
+      
       if (!downlineMember) return null;
         
       const levelForCommission = downlineMember.level;
@@ -320,7 +311,6 @@ function WalletPageContent() {
         
       if (!commissionRate) return null;
       
-      // CORREÇÃO: Usar a mesma lógica para MLM
       const baseValue = (lead.valueAfterDiscount != null && lead.valueAfterDiscount > 0) 
         ? lead.valueAfterDiscount 
         : (lead.value || 0);
@@ -436,39 +426,7 @@ function WalletPageContent() {
           <Wallet className="w-7 h-7 mr-3 text-primary" />
           Minha Carteira
         </h1>
-        <Button 
-          onClick={() => setShowDebugInfo(!showDebugInfo)} 
-          variant="outline" 
-          size="sm"
-          className="ml-auto"
-        >
-          <AlertTriangle className="w-4 h-4 mr-2" />
-          {showDebugInfo ? 'Ocultar' : 'Mostrar'} Debug
-        </Button>
       </header>
-
-      {showDebugInfo && (
-        <Card className="bg-yellow-500/10 border-yellow-500/50">
-          <CardHeader>
-            <CardTitle className="text-yellow-500 flex items-center">
-              <AlertTriangle className="w-5 h-5 mr-2" />
-              Informações de Debug
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm font-mono space-y-2">
-            <div><strong>User UID:</strong> {appUser.uid}</div>
-            <div><strong>User Name:</strong> {appUser.displayName}</div>
-            <div><strong>User Role:</strong> {userAppRole}</div>
-            <div><strong>Total Leads:</strong> {allLeads.length}</div>
-            <div><strong>Leads Finalizados:</strong> {allLeads.filter(l => l.stageId === 'finalizado').length}</div>
-            <div><strong>Leads Finalizados do Usuário:</strong> {allLeads.filter(l => l.stageId === 'finalizado' && l.userId === appUser.uid).length}</div>
-            <div><strong>Contratos com Comissão:</strong> {contractsToReceive.length}</div>
-            <div className="mt-4 pt-4 border-t border-yellow-500/30">
-              <strong>Abra o Console (F12) para ver logs detalhados!</strong>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
         <CardHeader>
@@ -542,11 +500,6 @@ function WalletPageContent() {
                 <Info size={48} className="mx-auto mb-4 opacity-50" />
                 <p>Nenhum contrato finalizado encontrado.</p>
                 <p className="text-sm">Quando você finalizar um contrato, a comissão aparecerá aqui.</p>
-                {showDebugInfo && (
-                  <p className="text-xs mt-4 text-yellow-500">
-                    Verifique o console (F12) para informações detalhadas de debug
-                  </p>
-                )}
             </div>
           ) : (
             <Table>
@@ -556,7 +509,7 @@ function WalletPageContent() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Consumo (KWh)</TableHead>
                   <TableHead>Valor Base</TableHead>
-                  <TableHead>Sua Comissão (40%)</TableHead>
+                  <TableHead>Sua Comissão</TableHead>
                   {userAppRole === 'superadmin' && <TableHead>Recorrência</TableHead>}
                   <TableHead className="text-center">Status Pagto.</TableHead>
                 </TableRow>
