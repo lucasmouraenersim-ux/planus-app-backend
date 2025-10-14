@@ -6,8 +6,8 @@ entrypoint: npm run start
 
 # The command that builds the app
 buildConfig:
-  build: npm run build
-  install: npm ci
+  installCommand: npm ci
+  buildCommand: npm run build
 
 runConfig:
   # Increase this value if you'd like to automatically spin up
