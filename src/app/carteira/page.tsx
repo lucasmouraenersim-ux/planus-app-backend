@@ -145,56 +145,22 @@ function WalletPageContent() {
     const fetchLeads = async () => {
         setIsLoadingLeads(true);
   
-        const uidsToQuery = new Set<string>();
-        if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-            // No UID filter for admins
-        } else {
-            uidsToQuery.add(appUser.uid);
-            const findDownlineUids = (uplineId: string): string[] => {
-                const directDownline = allFirestoreUsers
-                    .filter(u => u.uplineUid === uplineId)
-                    .map(u => u.uid);
-                let allUids = [...directDownline];
-                directDownline.forEach(uid => {
-                    allUids = [...allUids, ...findDownlineUids(uid)];
-                });
-                return allUids;
-            };
-            findDownlineUids(appUser.uid).forEach(uid => uidsToQuery.add(uid));
-        }
-  
-        const uidsArray = Array.from(uidsToQuery);
         const leadsCollectionRef = collection(db, "crm_leads");
         const allFetchedLeads: LeadWithId[] = [];
   
         try {
-            if (userAppRole === 'admin' || userAppRole === 'superadmin') {
-                const q = query(leadsCollectionRef);
-                const snapshot = await getDocs(q);
-                snapshot.forEach(doc => allFetchedLeads.push({
-                    id: doc.id,
-                    ...doc.data(),
-                    createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-                    lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-                    signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-                    completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-                } as LeadWithId));
-            } else if (uidsArray.length > 0) {
-                // Chunk the UIDs array into groups of 30 for the 'in' query limit
-                for (let i = 0; i < uidsArray.length; i += 30) {
-                    const chunk = uidsArray.slice(i, i + 30);
-                    const q = query(leadsCollectionRef, where("userId", "in", chunk));
-                    const snapshot = await getDocs(q);
-                    snapshot.forEach(doc => allFetchedLeads.push({
-                        id: doc.id,
-                        ...doc.data(),
-                        createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
-                        lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
-                        signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
-                        completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
-                    } as LeadWithId));
-                }
-            }
+            // CORREÇÃO: Buscar TODOS os leads como o CRM faz, independente do role
+            // O filtro será aplicado depois no cálculo das comissões
+            const q = query(leadsCollectionRef);
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => allFetchedLeads.push({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: (doc.data().createdAt as Timestamp).toDate().toISOString(),
+                lastContact: (doc.data().lastContact as Timestamp).toDate().toISOString(),
+                signedAt: doc.data().signedAt ? (doc.data().signedAt as Timestamp).toDate().toISOString() : undefined,
+                completedAt: doc.data().completedAt ? (doc.data().completedAt as Timestamp).toDate().toISOString() : undefined,
+            } as LeadWithId));
             
             console.log('🔍 ===== DEBUG CARTEIRA =====');
             console.log('👤 appUser.uid:', appUser.uid);
@@ -234,7 +200,7 @@ function WalletPageContent() {
     };
   
     fetchLeads();
-  }, [appUser, userAppRole, allFirestoreUsers, toast]);
+  }, [appUser, allFirestoreUsers, toast]);
 
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
@@ -585,7 +551,7 @@ function WalletPageContent() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Consumo (KWh)</TableHead>
                   <TableHead>Valor Base</TableHead>
-                  <TableHead>Sua Comissão (40%)</TableHead>
+                  <TableHead>Sua Comissão</TableHead>
                   {userAppRole === 'superadmin' && <TableHead>Recorrência</TableHead>}
                   <TableHead className="text-center">Status Pagto.</TableHead>
                 </TableRow>
