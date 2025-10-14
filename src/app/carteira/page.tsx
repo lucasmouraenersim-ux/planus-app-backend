@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from 'react';
@@ -53,7 +54,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed, Network, AlertTriangle } from 'lucide-react';
+import { Wallet, Landmark, Send, History, DollarSign, Users, Info, Loader2, FileSignature, Check, CircleDotDashed, Network } from 'lucide-react';
 import type { WithdrawalRequestWithId, PixKeyType, WithdrawalType, WithdrawalStatus } from '@/types/wallet';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser } from '@/types/user';
@@ -271,6 +272,13 @@ function WalletPageContent() {
     return contracts;
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
 
+  // Calcular o total de comissões pessoais pendentes (a receber)
+  const totalPersonalCommissionToReceive = useMemo(() => {
+    return contractsToReceive
+      .filter(contract => !contract.isPaid) // Apenas comissões pendentes
+      .reduce((sum, contract) => sum + contract.commission, 0);
+  }, [contractsToReceive]);
+
   const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return { mlmCommissionsToReceive: [], totalMlmCommissionToReceive: 0 };
   
@@ -339,7 +347,7 @@ function WalletPageContent() {
       return;
     }
 
-    const selectedBalance = data.withdrawalType === 'personal' ? appUser.personalBalance : appUser.mlmBalance;
+    const selectedBalance = data.withdrawalType === 'personal' ? totalPersonalCommissionToReceive : totalMlmCommissionToReceive;
     if (data.amount > selectedBalance) {
       form.setError("amount", {
         type: "manual",
@@ -438,15 +446,15 @@ function WalletPageContent() {
         <CardContent className="space-y-3 text-lg">
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
             <span className="text-muted-foreground">Saldo Pessoal (Disponível):</span>
-            <span className="font-semibold text-foreground">{formatCurrency(appUser.personalBalance)}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(totalPersonalCommissionToReceive)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-background/50 rounded-md">
             <span className="text-muted-foreground">Saldo de Rede (Disponível):</span>
-            <span className="font-semibold text-foreground">{formatCurrency(appUser.mlmBalance)}</span>
+            <span className="font-semibold text-foreground">{formatCurrency(totalMlmCommissionToReceive)}</span>
           </div>
           <div className="flex justify-between items-center p-3 bg-primary/10 rounded-md mt-2">
             <span className="font-bold text-primary">SALDO TOTAL DISPONÍVEL:</span>
-            <span className="font-bold text-primary text-xl">{formatCurrency(appUser.personalBalance + appUser.mlmBalance)}</span>
+            <span className="font-bold text-primary text-xl">{formatCurrency(totalPersonalCommissionToReceive + totalMlmCommissionToReceive)}</span>
           </div>
         </CardContent>
         <CardFooter>
@@ -467,7 +475,7 @@ function WalletPageContent() {
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmitWithdrawal)} className="space-y-4 py-4">
                   <FormField control={form.control} name="amount" render={({ field }) => ( <FormItem> <FormLabel>Valor do Saque (R$)</FormLabel> <FormControl> <Input type="number" placeholder="Ex: 100,50" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /> </FormControl> <FormMessage /> </FormItem> )} />
-                  <FormField control={form.control} name="withdrawalType" render={({ field }) => ( <FormItem> <FormLabel>Origem do Saldo</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Selecione a origem do saldo" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="personal" disabled={appUser.personalBalance <= 0}> Pessoal (Disponível: {formatCurrency(appUser.personalBalance)}) </SelectItem> <SelectItem value="mlm" disabled={appUser.mlmBalance <= 0}> Rede MLM (Disponível: {formatCurrency(appUser.mlmBalance)}) </SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="withdrawalType" render={({ field }) => ( <FormItem> <FormLabel>Origem do Saldo</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Selecione a origem do saldo" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="personal" disabled={totalPersonalCommissionToReceive <= 0}> Pessoal (Disponível: {formatCurrency(totalPersonalCommissionToReceive)}) </SelectItem> <SelectItem value="mlm" disabled={totalMlmCommissionToReceive <= 0}> Rede MLM (Disponível: {formatCurrency(totalMlmCommissionToReceive)}) </SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
                   <FormField control={form.control} name="pixKeyType" render={({ field }) => ( <FormItem> <FormLabel>Tipo de Chave PIX</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Selecione o tipo da chave" /> </SelectTrigger> </FormControl> <SelectContent> {PIX_KEY_TYPES.map(type => ( <SelectItem key={type} value={type}>{type}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
                   <FormField control={form.control} name="pixKey" render={({ field }) => ( <FormItem> <FormLabel>Chave PIX</FormLabel> <FormControl> <Input placeholder="Digite sua chave PIX" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
                   <DialogFooter className="pt-4">
