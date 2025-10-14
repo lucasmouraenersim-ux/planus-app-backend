@@ -145,6 +145,9 @@ function CrmPageContent() {
     } as LeadWithId;
   }, []);
   
+// CORREÇÃO PARA O CRM
+// Substituir o useEffect que carrega os leads por este código:
+
 useEffect(() => {
     if (isLoadingAllUsers || !appUser) {
         setIsLoading(true);
@@ -153,29 +156,43 @@ useEffect(() => {
 
     const leadsCollection = collection(db, "crm_leads");
     let unsubscribe: () => void = () => {};
-    let q;
 
+    // CORREÇÃO: Admins veem todos, vendedores filtram por sellerName (nome)
     if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
-        q = query(leadsCollection);
+        // Admins veem TODOS os leads
+        const q = query(leadsCollection, orderBy("lastContact", "desc"));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            setLeads(snapshot.docs.map(mapDocToLead));
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching leads for admin:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
     } else if (userAppRole === 'vendedor') {
-        q = query(leadsCollection, where("userId", "==", appUser.uid));
+        // Vendedores veem leads onde sellerName corresponde ao displayName
+        // Como não podemos filtrar por sellerName no Firebase (não é indexado),
+        // vamos buscar TODOS e filtrar no cliente
+        const q = query(leadsCollection, orderBy("lastContact", "desc"));
+        unsubscribe = onSnapshot(q, (snapshot) => {
+            const allLeads = snapshot.docs.map(mapDocToLead);
+            const sellerNameLower = (appUser.displayName || '').trim().toLowerCase();
+            const filteredLeads = allLeads.filter(lead => 
+                lead.sellerName?.trim().toLowerCase() === sellerNameLower
+            );
+            setLeads(filteredLeads);
+            setIsLoading(false);
+        }, (error) => {
+            console.error("Error fetching leads for seller:", error);
+            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
+            setIsLoading(false);
+        });
     } else {
+        // Para qualquer outro tipo de usuário, não mostra leads
         setLeads([]);
         setIsLoading(false);
-        return;
+        unsubscribe = () => {};
     }
-
-    unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedLeads = snapshot.docs.map(mapDocToLead);
-        // Sort leads on the client side
-        fetchedLeads.sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
-        setLeads(fetchedLeads);
-        setIsLoading(false);
-    }, (error) => {
-        console.error("Error fetching leads:", error);
-        toast({ title: "Erro ao Carregar Leads", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
-        setIsLoading(false);
-    });
 
     return () => {
         unsubscribe();
@@ -986,11 +1003,15 @@ useEffect(() => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setLeadToDelete(null)} disabled={isSubmittingAction}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={handleConfirmDelete} disabled={isSubmittingAction}>
-              {isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sim, Excluir Lead
+            <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={handleConfirmDelete}
+                disabled={isSubmittingAction}
+            >
+                {isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sim, Excluir Lead
             </AlertDialogAction>
-          </AlertDialogFooter>
+            </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
