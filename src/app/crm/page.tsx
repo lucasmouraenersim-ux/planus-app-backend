@@ -153,40 +153,29 @@ useEffect(() => {
 
     const leadsCollection = collection(db, "crm_leads");
     let unsubscribe: () => void = () => {};
+    let q;
 
-    // CORREÇÃO: Vendedores veem apenas seus leads, admins veem todos
     if (userAppRole === 'admin' || userAppRole === 'superadmin' || userAppRole === 'advogado') {
-        // Admins veem TODOS os leads
-        const q = query(leadsCollection, orderBy("lastContact", "desc"));
-        unsubscribe = onSnapshot(q, (snapshot) => {
-            setLeads(snapshot.docs.map(mapDocToLead));
-            setIsLoading(false);
-        }, (error) => {
-            console.error("Error fetching leads for admin:", error);
-            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
-            setIsLoading(false);
-        });
+        q = query(leadsCollection);
     } else if (userAppRole === 'vendedor') {
-        // Vendedores veem APENAS seus leads (onde userId === appUser.uid)
-        const q = query(
-            leadsCollection, 
-            where("userId", "==", appUser.uid),
-            orderBy("lastContact", "desc")
-        );
-        unsubscribe = onSnapshot(q, (snapshot) => {
-            setLeads(snapshot.docs.map(mapDocToLead));
-            setIsLoading(false);
-        }, (error) => {
-            console.error("Error fetching leads for seller:", error);
-            toast({ title: "Erro ao Carregar Leads", variant: "destructive" });
-            setIsLoading(false);
-        });
+        q = query(leadsCollection, where("userId", "==", appUser.uid));
     } else {
-        // Para qualquer outro tipo de usuário, não mostra leads
         setLeads([]);
         setIsLoading(false);
-        unsubscribe = () => {};
+        return;
     }
+
+    unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedLeads = snapshot.docs.map(mapDocToLead);
+        // Sort leads on the client side
+        fetchedLeads.sort((a, b) => new Date(b.lastContact).getTime() - new Date(a.lastContact).getTime());
+        setLeads(fetchedLeads);
+        setIsLoading(false);
+    }, (error) => {
+        console.error("Error fetching leads:", error);
+        toast({ title: "Erro ao Carregar Leads", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
+        setIsLoading(false);
+    });
 
     return () => {
         unsubscribe();
@@ -546,6 +535,7 @@ useEffect(() => {
 
   const handleConfirmDelete = async () => {
     if (leadToDelete) {
+      setIsSubmittingAction(true);
       await handleDeleteLead(leadToDelete.id);
       // UI will update via realtime listener, but we can also update the dialog state
       setDuplicateGroups(prev =>
@@ -554,9 +544,10 @@ useEffect(() => {
           leads: group.leads.filter(l => l.id !== leadToDelete!.id)
         })).filter(group => group.leads.length > 1)
       );
+      setLeadToDelete(null);
+      setIsDeleteDialogOpen(false);
+      setIsSubmittingAction(false);
     }
-    setLeadToDelete(null);
-    setIsDeleteDialogOpen(false);
   };
 
 
