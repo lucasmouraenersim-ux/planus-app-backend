@@ -6,10 +6,8 @@ entrypoint: npm run start
 
 # The command that builds the app
 buildConfig:
-  # The command that installs dependencies
-  installCommand: npm ci
-  # The command that builds the app
-  buildCommand: npm run build
+  build: npm run build
+  install: npm ci
 
 runConfig:
   # Increase this value if you'd like to automatically spin up
