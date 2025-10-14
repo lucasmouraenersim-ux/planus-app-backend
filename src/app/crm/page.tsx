@@ -93,6 +93,8 @@ function CrmPageContent() {
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [leadToDelete, setLeadToDelete] = useState<LeadWithId | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+
 
   // Filter states
   const [filterName, setFilterName] = useState("");
