@@ -212,42 +212,39 @@ function WalletPageContent() {
 
   const contractsToReceive = useMemo((): ContractToReceive[] => {
     if (!appUser || !allLeads.length || !allFirestoreUsers.length) return [];
-    
+  
     const finalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
-    
+  
     let userVisibleLeads = finalizedLeads;
     // Admins e SuperAdmins veem todos, vendedores só os seus.
     if (userAppRole !== 'superadmin' && userAppRole !== 'admin') {
       userVisibleLeads = finalizedLeads.filter(lead => lead.userId === appUser.uid);
     }
-
+  
     return userVisibleLeads.map(lead => {
-        const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
-        let commissionRate = 40; // Default Bronze
-        if (seller) {
-            // Priority: Explicitly set rate > Level-based rate
-            if(seller.commissionRate) {
-                commissionRate = seller.commissionRate;
-            } else {
-                // Determine level based logic if needed, for now using simple default
-                // This part can be expanded with Bronze/Prata/Ouro logic
-            }
+      const seller = allFirestoreUsers.find(u => u.uid === lead.userId);
+      let commissionRate = 40; // Default Bronze
+      if (seller) {
+        if (seller.commissionRate) {
+          commissionRate = seller.commissionRate;
         }
-        
-        const commission = (lead.valueAfterDiscount || 0) * (commissionRate / 100);
-        const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
-        
-        return {
-            leadId: lead.id,
-            clientName: lead.name,
-            kwh: lead.kwh || 0,
-            valueAfterDiscount: lead.valueAfterDiscount || 0,
-            commission,
-            recurrence,
-            isPaid: true, // Always consider commissions as paid
-        };
+      }
+      
+      const baseValueForCommission = lead.valueAfterDiscount > 0 ? lead.valueAfterDiscount : lead.value;
+      const commission = baseValueForCommission * (commissionRate / 100);
+      
+      const recurrence = userAppRole === 'superadmin' ? (lead.valueAfterDiscount || 0) * ((seller?.recurrenceRate || 0) / 100) : undefined;
+      
+      return {
+        leadId: lead.id,
+        clientName: lead.name,
+        kwh: lead.kwh || 0,
+        valueAfterDiscount: lead.valueAfterDiscount || 0,
+        commission,
+        recurrence,
+        isPaid: lead.commissionPaid || false,
+      };
     }).filter((c): c is NonNullable<typeof c> => c !== null);
-
   }, [allLeads, allFirestoreUsers, appUser, userAppRole]);
 
   const { mlmCommissionsToReceive, totalMlmCommissionToReceive } = useMemo((): { mlmCommissionsToReceive: MlmCommission[], totalMlmCommissionToReceive: number } => {
