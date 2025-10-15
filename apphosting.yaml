@@ -1,4 +1,3 @@
-
 # Configuração de backend para o Firebase App Hosting
 # Este arquivo define como o backend é construído e executado.
 
@@ -10,13 +9,7 @@ entrypoint: npm run start
 
 # Configuração de compilação
 buildConfig:
-  # Passos explícitos para o processo de build
-  steps:
-    # Passo 1: Instalar dependências (o "fetch" que a plataforma exige)
-    - id: "install"
-      name: "gcr.io/cloud-builders/npm"
-      args: ["ci"]
-    # Passo 2: Compilar a aplicação Next.js
-    - id: "build"
-      name: "gcr.io/cloud-builders/npm"
-      args: ["run", "build"]
+  # O buildpack do Node.js será usado por padrão, mas definimos os comandos
+  # explicitamente para garantir a compatibilidade com o sistema de build.
+  installCommand: npm ci
+  buildCommand: npm run build
