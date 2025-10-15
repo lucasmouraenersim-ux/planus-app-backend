@@ -169,7 +169,7 @@ export default function SellerCommissionDashboard({
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  if (isLoading) {
+  if (isLoading || !loggedInUser) {
     return (
       <div className="flex flex-col justify-center items-center h-64 bg-transparent text-primary">
         <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
