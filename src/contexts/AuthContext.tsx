@@ -42,18 +42,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const requestNotificationPermission = useCallback(async (userId: string) => {
     if (typeof window === 'undefined' || !messaging) return;
 
-    console.log('Requesting notification permission for superadmin...');
+    console.log('Requesting notification permission...');
     try {
       const permission = await Notification.requestPermission();
       
       if (permission === 'granted') {
-        // Let Firebase SDK handle the VAPID key
-        const currentToken = await getToken(messaging);
+        const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+        if (!vapidKey) {
+            console.error("VAPID key não encontrada nas variáveis de ambiente.");
+            return;
+        }
+
+        const currentToken = await getToken(messaging, { vapidKey });
         if (currentToken) {
           console.log('FCM Token obtained:', currentToken);
           const userDocRef = doc(db, "users", userId);
-          await updateDoc(userDocRef, { fcmToken: currentToken });
-          console.log('FCM Token saved to Firestore.');
+          // Check if token is already saved to avoid unnecessary writes
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists() && userDoc.data().fcmToken !== currentToken) {
+            await updateDoc(userDocRef, { fcmToken: currentToken });
+            console.log('FCM Token saved to Firestore.');
+          }
         } else {
           console.log('No registration token available. Request permission to generate one.');
         }
@@ -89,10 +98,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const firestoreUserData = userDocSnap.data() as FirestoreUser;
         const isSuperAdminByEmail = user.email === 'lucasmoura@sentenergia.com' || user.email === 'lucasmourafoto@sentenergia.com';
         
-        // The role in the document is the source of truth, unless the email dictates a superadmin override.
         const finalType = isSuperAdminByEmail ? 'superadmin' : firestoreUserData.type;
         
-        // Ensure superadmin type is saved back to Firestore if it's not already
         if (isSuperAdminByEmail && firestoreUserData.type !== 'superadmin') {
             await updateDoc(userDocRef, { type: 'superadmin' });
         }
@@ -117,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           uplineUid: firestoreUserData.uplineUid,
           recurrenceRate: firestoreUserData.recurrenceRate,
           canViewLeadPhoneNumber: finalType === 'superadmin' || firestoreUserData.canViewLeadPhoneNumber || false,
-          canViewCareerPlan: finalType !== 'superadmin' && (firestoreUserData.canViewCareerPlan !== false), // superadmin doesn't need this view
+          canViewCareerPlan: finalType !== 'superadmin' && (firestoreUserData.canViewCareerPlan !== false),
           canViewCrm: canViewCrm,
           assignmentLimit: firestoreUserData.assignmentLimit,
           trainingProgress: firestoreUserData.trainingProgress,
@@ -125,8 +132,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           signedContractUrl: firestoreUserData.signedContractUrl,
         };
       } else {
-        // This case should ideally be handled by the user registration flow.
-        // It's a fallback for users who exist in Auth but not Firestore.
         console.warn(`Firestore document for user ${user.uid} not found. A base document will be created upon user action if needed.`);
         return {
             uid: user.uid,
@@ -168,7 +173,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (data.phone !== undefined && data.phone !== appUser?.phone) {
-      updatesForFirestore.phone = data.phone.replace(/\D/g, ''); // Normalize phone number
+      updatesForFirestore.phone = data.phone.replace(/\D/g, '');
     }
     
     if (data.personalFinance) {
@@ -256,22 +261,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const leadsSnapshot = await getDocs(q);
       return leadsSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        // Helper to safely convert Timestamp to ISO string
         const toISOString = (timestamp: any) => {
             if (timestamp instanceof Timestamp) {
                 return timestamp.toDate().toISOString();
             }
             if (typeof timestamp === 'string') {
-                 // If it's already a string, just return it. Could add validation.
                 return timestamp;
             }
-            return undefined; // Return undefined for invalid types
+            return undefined;
         };
         
         return {
           id: docSnap.id,
           ...data,
-          createdAt: toISOString(data.createdAt) || new Date().toISOString(), // Fallback to now if missing
+          createdAt: toISOString(data.createdAt) || new Date().toISOString(),
           lastContact: toISOString(data.lastContact) || new Date().toISOString(),
           signedAt: toISOString(data.signedAt),
           completedAt: toISOString(data.completedAt),
@@ -293,10 +296,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
         await refreshUsers();
-        // Forcefully request notification permission for superadmin on login
-        if (role === 'superadmin') {
-          await requestNotificationPermission(user.uid);
-        }
+        // Request notification permission for all logged-in users.
+        await requestNotificationPermission(user.uid);
       } else {
         setFirebaseUser(null);
         setAppUser(null);
