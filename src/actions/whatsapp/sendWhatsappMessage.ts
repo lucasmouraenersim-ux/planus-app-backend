@@ -62,12 +62,16 @@ export async function sendWhatsappMessage(input: SendWhatsappMessageInput): Prom
       }
   }
 
-
-  // Using hardcoded values as a temporary measure to unblock the user.
-  // Best practice is to use environment variables/secrets.
-  const phoneNumberId = "750855334768614";
-  const accessToken = "EAA4IDY7gn5sBOwwZCgm3lF97sL7JQxoYkEdZClgKSXkwX02ZAx0eVZC1793rjv8bDIZCk9RMeyb7Q5b3ntiUau05B3lYy7ZC8mcSB1Q8vanVnT4zkbxLZAaknZAZB4WQrO27ERykV8AJQZCisRKmDee5oqzYzcjt3tkKxl8ZAuHjrVB5fcaIofdVdcw6eCl9TWmszbVdAG54gZDZD";
+  // Use environment variables for credentials
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
   const apiVersion = 'v20.0'; 
+
+  if (!phoneNumberId || !accessToken) {
+    const errorMessage = "Credenciais da API do WhatsApp não configuradas no ambiente.";
+    console.error(`[WHATSAPP_API] ERROR: ${errorMessage}`);
+    return { success: false, error: errorMessage };
+  }
 
   const apiUrl = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`;
   
