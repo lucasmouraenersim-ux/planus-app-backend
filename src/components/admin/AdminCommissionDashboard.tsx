@@ -894,13 +894,14 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     }
 
     allLeads.forEach(lead => {
-        if (lead.userId && lead.kwh) {
-            totals.set(lead.userId, (totals.get(lead.userId) || 0) + lead.kwh);
-        } else if (lead.sellerName) { // Fallback to sellerName if userId is missing
+        // Priorizar sellerName, pois é assim que está no Firestore
+        if (lead.sellerName) {
             const user = initialUsers.find(u => u.displayName === lead.sellerName);
             if (user && user.uid && lead.kwh) {
                 totals.set(user.uid, (totals.get(user.uid) || 0) + lead.kwh);
             }
+        } else if (lead.userId && lead.kwh) { // Fallback para userId (legado)
+            totals.set(lead.userId, (totals.get(lead.userId) || 0) + lead.kwh);
         }
     });
 
@@ -1247,7 +1248,10 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const sellerPerformanceMetrics = useMemo(() => {
     return filteredUsers
       .map(user => {
-        const userLeads = filteredLeads.filter(lead => lead.userId === user.uid);
+        // Filtrar por sellerName (padrão do Firestore) ou userId (fallback legado)
+        const userLeads = filteredLeads.filter(lead => 
+          lead.sellerName === user.displayName || lead.userId === user.uid
+        );
         if (userLeads.length === 0) return null;
 
         const finalizedLeads = userLeads.filter(l => l.stageId === 'finalizado' && l.completedAt && l.createdAt);
@@ -1696,4 +1700,3 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
-
