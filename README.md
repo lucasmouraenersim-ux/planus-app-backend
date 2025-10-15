@@ -1,4 +1,4 @@
-m # sent-app-backend
+# sent-app-backend
 
 Este é o backend para o aplicativo Sent Energia, construído com Next.js e Firebase.
 
@@ -19,9 +19,9 @@ Abra [http://localhost:9004](http://localhost:9004) no seu navegador para ver o 
 
 ## Troubleshooting
 
-### Build falha com "package.json not found"
+### Build falha com "package.json not found" ou "missing required build step fetch"
 
-Se a sua implantação no Firebase App Hosting falhar com um erro como `package.json not found` ou `No buildpack groups passed detection`, isso geralmente significa que os arquivos do projeto estão dentro de uma subpasta no seu repositório do GitHub, em vez de na raiz.
+Se a sua implantação no Firebase App Hosting falhar com um erro como `package.json not found` ou `missing required build step fetch`, isso geralmente significa que os arquivos do projeto estão dentro de uma subpasta no seu repositório do GitHub, em vez de na raiz.
 
 **Como Corrigir:**
 
