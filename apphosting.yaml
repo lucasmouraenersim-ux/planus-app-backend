@@ -1,0 +1,22 @@
+
+# Configuração de backend para o Firebase App Hosting
+# Este arquivo define como o backend é construído e executado.
+
+# Especifica a versão da especificação de empacotamento
+specVersion: v1alpha1
+
+# Ponto de entrada para executar a aplicação após a compilação
+entrypoint: npm run start
+
+# Configuração de compilação
+buildConfig:
+  # Passos explícitos para o processo de build
+  steps:
+    # Passo 1: Instalar dependências (o "fetch" que a plataforma exige)
+    - id: "install"
+      name: "gcr.io/cloud-builders/npm"
+      args: ["ci"]
+    # Passo 2: Compilar a aplicação Next.js
+    - id: "build"
+      name: "gcr.io/cloud-builders/npm"
+      args: ["run", "build"]
