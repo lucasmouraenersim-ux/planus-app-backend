@@ -3,8 +3,8 @@
 
 # New build configuration to explicitly define build steps
 buildConfig:
-  installCommand: npm ci
   buildCommand: npm run build
+  installCommand: npm ci
 
 # The command that starts the web server
 entrypoint: npm run start
