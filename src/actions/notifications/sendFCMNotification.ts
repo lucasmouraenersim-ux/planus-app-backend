@@ -9,10 +9,13 @@ import admin from 'firebase-admin';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { FirestoreUser, UserType } from '@/types/user';
 
+// Zod schema for input validation
+const UserTypeEnum = z.enum(['admin', 'superadmin', 'vendedor', 'prospector', 'user', 'pending_setup', 'advogado']);
+
 const SendFCMNotificationInputSchema = z.object({
   title: z.string().min(1, "O título é obrigatório."),
   body: z.string().min(1, "O corpo da mensagem é obrigatório."),
-  targetRole: z.union([z.nativeEnum(require('@/types/user').UserType), z.array(z.nativeEnum(require('@/types/user').UserType))]),
+  targetRole: z.union([UserTypeEnum, z.array(UserTypeEnum)]),
 });
 export type SendFCMNotificationInput = z.infer<typeof SendFCMNotificationInputSchema>;
 
@@ -31,9 +34,12 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
 
     const rolesToTarget = Array.isArray(input.targetRole) ? input.targetRole : [input.targetRole];
 
+    if (rolesToTarget.length === 0) {
+        return { success: false, successCount: 0, failureCount: 0, error: "Nenhum tipo de usuário alvo foi especificado." };
+    }
+
     const usersRef = adminDb.collection("users");
-    // As 'in' queries are limited to 10 values, we must query for each role if there are many.
-    // For a few roles like 'admin' and 'superadmin', this is fine.
+    // As 'in' queries are limited to 30 values, but for roles it should be fine.
     const q = usersRef.where("type", "in", rolesToTarget);
 
     const usersSnapshot = await q.get();
@@ -42,18 +48,16 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
       return { success: true, successCount: 0, failureCount: 0, error: "Nenhum usuário encontrado com o(s) tipo(s) especificado(s)." };
     }
 
-    const tokens: string[] = [];
-    usersSnapshot.forEach(doc => {
-      const user = doc.data() as FirestoreUser;
-      if (user.fcmToken) {
-        tokens.push(user.fcmToken);
-      }
-    });
+    const tokens = usersSnapshot.docs
+      .map(doc => doc.data() as FirestoreUser)
+      .filter(user => user.fcmToken && typeof user.fcmToken === 'string')
+      .map(user => user.fcmToken!);
 
     if (tokens.length === 0) {
       return { success: true, successCount: 0, failureCount: 0, error: "Nenhum usuário com o(s) tipo(s) especificado(s) possui um token de notificação." };
     }
-
+    
+    // FCM can send to up to 500 tokens at once. If you expect more, you would need to chunk this.
     const message = {
       notification: {
         title: input.title,
@@ -62,23 +66,25 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
       tokens: tokens,
     };
     
+    console.log(`[FCM] Attempting to send notification to ${tokens.length} tokens for roles: ${rolesToTarget.join(', ')}`);
     const response = await messaging.sendEachForMulticast(message);
+    console.log(`[FCM] Sent. Success: ${response.successCount}, Failure: ${response.failureCount}`);
     
     if (response.failureCount > 0) {
       const failedTokens: string[] = [];
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
           failedTokens.push(tokens[idx]);
+          console.error(`[FCM] Failed to send to token: ${tokens[idx]}. Error:`, resp.error);
         }
       });
-      console.error('Falha ao enviar para os seguintes tokens:', failedTokens);
     }
     
     return {
       success: response.failureCount === 0,
       successCount: response.successCount,
       failureCount: response.failureCount,
-      error: response.failureCount > 0 ? `Falha ao enviar ${response.failureCount} notificações.` : undefined,
+      error: response.failureCount > 0 ? `Falha ao enviar ${response.failureCount} notificação(ões).` : undefined,
     };
 
   } catch (error: any) {
