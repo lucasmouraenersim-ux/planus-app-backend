@@ -5,8 +5,7 @@
  */
 
 import { z } from 'zod';
-import admin from 'firebase-admin';
-import { initializeAdmin } from '@/lib/firebase/admin';
+import { initializeAdmin, admin } from '@/lib/firebase/admin';
 import type { FirestoreUser, UserType } from '@/types/user';
 
 // Zod schema for input validation
@@ -29,10 +28,15 @@ export type SendFCMNotificationOutput = z.infer<typeof SendFCMNotificationOutput
 
 export async function sendFCMNotification(input: SendFCMNotificationInput): Promise<SendFCMNotificationOutput> {
   try {
+    console.log('[FCM] Initializing admin...');
     const adminDb = await initializeAdmin();
+    
+    console.log('[FCM] Getting messaging instance...');
     const messaging = admin.messaging();
 
     const rolesToTarget = Array.isArray(input.targetRole) ? input.targetRole : [input.targetRole];
+    
+    console.log('[FCM] Fetching users with roles:', rolesToTarget);
 
     if (rolesToTarget.length === 0) {
         return { success: false, successCount: 0, failureCount: 0, error: "Nenhum tipo de usuário alvo foi especificado." };

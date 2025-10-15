@@ -1,25 +1,60 @@
 
 'use server';
+
 import admin from 'firebase-admin';
 
-// This function ensures Firebase Admin is initialized only once.
+let adminInitialized = false;
+
 export async function initializeAdmin() {
-  if (admin.apps.length === 0) {
+  if (!adminInitialized) {
     try {
-      // In Google Cloud environments (like App Hosting), initializeApp() 
-      // with no arguments uses Application Default Credentials.
-      admin.initializeApp();
-      console.log(`[Firebase Admin] SDK initialized successfully.`);
+      // Opção 1: Usar arquivo de credenciais (desenvolvimento local)
+      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        admin.initializeApp({
+          credential: admin.credential.applicationDefault(),
+        });
+      } 
+      // Opção 2: Usar JSON inline (produção/Vercel/App Hosting)
+      else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+        const serviceAccount = JSON.parse(
+          process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+        );
+        
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          projectId: process.env.FIREBASE_PROJECT_ID,
+        });
+      } 
+      // Opção 3: Variáveis individuais (fallback)
+      else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          }),
+        });
+      }
+      // Opção 4: Deixar o ambiente do Google Cloud (App Hosting) descobrir automaticamente
+      else {
+        admin.initializeApp();
+      }
+      
+      adminInitialized = true;
+      console.log('✅ Firebase Admin initialized successfully');
     } catch (error: any) {
-      // This can happen in serverless environments with multiple concurrent executions.
-      // If it's a duplicate app error, we can safely ignore it and use the existing app.
-      if (error.code !== 'app/duplicate-app') {
-        console.error('CRITICAL: Firebase admin initialization error:', error);
-        // Re-throw the error to ensure it's caught by the calling function.
+      if (error.code === 'app/duplicate-app' && admin.apps.length > 0) {
+        console.log('Firebase Admin já foi inicializado.');
+        adminInitialized = true;
+      } else {
+        console.error('❌ Error initializing Firebase Admin:', error);
         throw error;
       }
     }
   }
-  // Return the firestore instance
+  
   return admin.firestore();
 }
+
+// Exportar o admin para que outros módulos possam usá-lo, como o messaging
+export { admin };
