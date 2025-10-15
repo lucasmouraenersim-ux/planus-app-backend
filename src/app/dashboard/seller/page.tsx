@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo } from 'react';
@@ -42,10 +41,10 @@ export default function SellerCommissionDashboard({
   
   // Calcular comissões pessoais (mesma lógica da Carteira)
   const contractsToReceive = useMemo((): ContractToReceive[] => {
-    if (!loggedInUser || !leads || leads.length === 0) {
+    if (!loggedInUser || !leads || !leads.length) {
       console.log('⚠️ SellerDashboard: Condições não atendidas para calcular comissões:', {
         hasLoggedInUser: !!loggedInUser,
-        leadsCount: leads ? leads.length : 0
+        leadsCount: leads ? leads.length : 'undefined'
       });
       return [];
     }
@@ -122,6 +121,14 @@ export default function SellerCommissionDashboard({
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
+
+    if (!leads) {
+      return {
+        finalizedCount: 0,
+        totalValue: 0,
+        totalCommission: 0
+      };
+    }
     
     const thisMonthLeads = leads.filter(lead => {
       if (!lead.completedAt) return false;
@@ -149,6 +156,7 @@ export default function SellerCommissionDashboard({
 
   // Calcular leads ativos da equipe
   const teamActiveLeads = useMemo(() => {
+    if (!leads) return 0;
     return leads.filter(lead => 
       lead.stageId !== 'finalizado' && 
       lead.stageId !== 'perdido' && 
@@ -386,4 +394,3 @@ export default function SellerCommissionDashboard({
     </div>
   );
 }
-
