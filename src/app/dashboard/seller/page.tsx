@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo } from 'react';
@@ -41,10 +42,10 @@ export default function SellerCommissionDashboard({
   
   // Calcular comissões pessoais (mesma lógica da Carteira)
   const contractsToReceive = useMemo((): ContractToReceive[] => {
-    if (!loggedInUser || !leads.length) {
+    if (!loggedInUser || !leads || leads.length === 0) {
       console.log('⚠️ SellerDashboard: Condições não atendidas para calcular comissões:', {
         hasLoggedInUser: !!loggedInUser,
-        leadsCount: leads.length
+        leadsCount: leads ? leads.length : 0
       });
       return [];
     }
@@ -385,3 +386,4 @@ export default function SellerCommissionDashboard({
     </div>
   );
 }
+
