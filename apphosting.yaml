@@ -4,11 +4,6 @@
 # The command that starts the web server
 entrypoint: npm run start
 
-# The commands that are used to build the app
-buildConfig:
-  installCommand: npm ci
-  buildCommand: npm run build
-
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
