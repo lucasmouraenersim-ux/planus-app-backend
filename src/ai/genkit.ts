@@ -1,12 +1,10 @@
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 
-// The GCLOUD_PROJECT environment variable is automatically set in App Hosting.
-// Passing it explicitly to the Google AI plugin can help resolve authentication
-// issues in some environments.
-const projectId = process.env.GCLOUD_PROJECT;
-
-// Initialize Genkit and the Google AI plugin
+// Initialize Genkit and the Google AI plugin.
+// In a Google Cloud environment like App Hosting, the plugin automatically
+// discovers the project ID and authenticates using the environment's
+// service account. Explicitly setting the project ID is not necessary.
 export const ai = genkit({
-  plugins: [googleAI({ projectId })],
+  plugins: [googleAI()],
 });
