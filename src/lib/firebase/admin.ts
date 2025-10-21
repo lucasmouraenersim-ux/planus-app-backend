@@ -58,3 +58,4 @@ export async function initializeAdmin() {
 
 // Exportar o admin para que outros módulos possam usá-lo, como o messaging
 export { admin };
+
