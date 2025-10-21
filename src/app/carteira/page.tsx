@@ -101,7 +101,7 @@ interface MlmCommission {
     commission: number;
 }
 
-function WalletPageContent() {
+function CarteiraPageContent() {
   const { toast } = useToast();
   const { appUser, userAppRole, isLoadingAuth, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
   const [isWithdrawalDialogOpen, setIsWithdrawalDialogOpen] = useState(false);
@@ -658,7 +658,7 @@ export default function CarteiraPage() {
         <p className="text-lg font-medium">Carregando Carteira...</p>
       </div>
     }>
-      <WalletPageContent />
+      <CarteiraPageContent />
     </Suspense>
   );
 }
