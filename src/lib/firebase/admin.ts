@@ -5,57 +5,51 @@ import admin from 'firebase-admin';
 
 let adminInitialized = false;
 
-export async function initializeAdmin() {
+// Interface para o retorno da função
+interface AdminServices {
+  db: admin.firestore.Firestore;
+  auth: admin.auth.Auth;
+  messaging: admin.messaging.Messaging;
+}
+
+export async function initializeAdmin(): Promise<AdminServices> {
   if (!adminInitialized) {
     try {
-      // Opção 1: Usar arquivo de credenciais (desenvolvimento local)
-      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-        });
-      } 
-      // Opção 2: Usar JSON inline (produção/Vercel/App Hosting)
-      else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-        const serviceAccount = JSON.parse(
-          process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-        );
-        
+      const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      
+      if (serviceAccountKey) {
+        const serviceAccount = JSON.parse(serviceAccountKey);
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
           projectId: process.env.FIREBASE_PROJECT_ID,
         });
-      } 
-      // Opção 3: Variáveis individuais (fallback)
-      else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         admin.initializeApp({
-          credential: admin.credential.cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          }),
+          credential: admin.credential.applicationDefault(),
         });
-      }
-      // Opção 4: Deixar o ambiente do Google Cloud (App Hosting) descobrir automaticamente
-      else {
+      } else {
+        // Fallback for Google Cloud environment auto-discovery
         admin.initializeApp();
       }
       
       adminInitialized = true;
       console.log('✅ Firebase Admin initialized successfully');
     } catch (error: any) {
-      if (error.code === 'app/duplicate-app' && admin.apps.length > 0) {
-        console.log('Firebase Admin já foi inicializado.');
-        adminInitialized = true;
+      if (error.code === 'app/duplicate-app') {
+        if (!adminInitialized) {
+          console.log('Firebase Admin já foi inicializado (código de erro duplicado).');
+          adminInitialized = true;
+        }
       } else {
         console.error('❌ Error initializing Firebase Admin:', error);
-        throw error;
+        throw new Error('Failed to initialize Firebase Admin SDK.');
       }
     }
   }
   
-  return admin.firestore();
+  return {
+    db: admin.firestore(),
+    auth: admin.auth(),
+    messaging: admin.messaging(),
+  };
 }
-
-// Exportar o admin para que outros módulos possam usá-lo, como o messaging
-export { admin };
-

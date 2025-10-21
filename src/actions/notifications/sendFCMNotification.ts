@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { initializeAdmin, admin } from '@/lib/firebase/admin';
+import { initializeAdmin } from '@/lib/firebase/admin';
 import type { FirestoreUser, UserType } from '@/types/user';
 
 // Zod schema for input validation
@@ -29,10 +29,9 @@ export type SendFCMNotificationOutput = z.infer<typeof SendFCMNotificationOutput
 export async function sendFCMNotification(input: SendFCMNotificationInput): Promise<SendFCMNotificationOutput> {
   try {
     console.log('[FCM] Initializing admin...');
-    const adminDb = await initializeAdmin();
+    const { db: adminDb, messaging } = await initializeAdmin();
     
-    console.log('[FCM] Getting messaging instance...');
-    const messaging = admin.messaging();
+    console.log('[FCM] Messaging instance obtained.');
 
     const rolesToTarget = Array.isArray(input.targetRole) ? input.targetRole : [input.targetRole];
     
@@ -43,7 +42,6 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
     }
 
     const usersRef = adminDb.collection("users");
-    // As 'in' queries are limited to 30 values, but for roles it should be fine.
     const q = usersRef.where("type", "in", rolesToTarget);
 
     const usersSnapshot = await q.get();
@@ -61,7 +59,6 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
       return { success: true, successCount: 0, failureCount: 0, error: "Nenhum usuário com o(s) tipo(s) especificado(s) possui um token de notificação." };
     }
     
-    // FCM can send to up to 500 tokens at once. If you expect more, you would need to chunk this.
     const message = {
       notification: {
         title: input.title,
@@ -75,10 +72,8 @@ export async function sendFCMNotification(input: SendFCMNotificationInput): Prom
     console.log(`[FCM] Sent. Success: ${response.successCount}, Failure: ${response.failureCount}`);
     
     if (response.failureCount > 0) {
-      const failedTokens: string[] = [];
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
-          failedTokens.push(tokens[idx]);
           console.error(`[FCM] Failed to send to token: ${tokens[idx]}. Error:`, resp.error);
         }
       });

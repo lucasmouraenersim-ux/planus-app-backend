@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action to handle user photo enhancement requests.
@@ -7,7 +8,6 @@
 import { z } from 'zod';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import { uploadFile } from '@/lib/firebase/storage';
-import { getAuth } from 'firebase-admin/auth';
 import type { UserRecord } from 'firebase-admin/auth';
 import admin from 'firebase-admin';
 
@@ -45,8 +45,7 @@ function getFileExtensionFromDataUri(dataUri: string): string {
 
 export async function uploadEnhancementRequest(input: UploadRequestInput): Promise<UploadRequestOutput> {
   try {
-    const adminDb = await initializeAdmin();
-    const adminAuth = getAuth();
+    const { db, auth: adminAuth } = await initializeAdmin();
     
     let user: UserRecord;
     try {
@@ -56,7 +55,7 @@ export async function uploadEnhancementRequest(input: UploadRequestInput): Promi
         return { success: false, message: "Usuário não encontrado." };
     }
 
-    const requestsRef = adminDb.collection('photoEnhancementRequests');
+    const requestsRef = db.collection('photoEnhancementRequests');
     const newRequestRef = requestsRef.doc(); // Create a new document reference to get the ID
     const requestId = newRequestRef.id;
     
