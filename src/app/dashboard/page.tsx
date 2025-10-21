@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, Suspense } from 'react';
@@ -31,10 +30,29 @@ function DashboardPageContent() {
   const [isFidelityEnabled, setIsFidelityEnabled] = useState(false);
   const [showCompetitorAnalysis, setShowCompetitorAnalysis] = useState(false);
 
-  const [discountConfig, setDiscountConfig] = useState<DiscountConfig>({
-    type: 'promotional',
-    promotional: { rate: 25, durationMonths: 3, subsequentRate: 15 },
-    fixed: { rate: 20 },
+  // Ler configurações de desconto da URL ou usar padrão
+  const [discountConfig, setDiscountConfig] = useState<DiscountConfig>(() => {
+    const discountType = searchParams.get('discountType') as 'promotional' | 'fixed' || 'promotional';
+    
+    if (discountType === 'promotional') {
+      return {
+        type: 'promotional',
+        promotional: {
+          rate: parseInt(searchParams.get('promotionalRate') || '25', 10),
+          durationMonths: parseInt(searchParams.get('promotionalDuration') || '3', 10),
+          subsequentRate: parseInt(searchParams.get('subsequentRate') || '15', 10),
+        },
+        fixed: { rate: 20 }
+      };
+    } else {
+      return {
+        type: 'fixed',
+        fixed: {
+          rate: parseInt(searchParams.get('fixedRate') || '20', 10),
+        },
+        promotional: { rate: 25, durationMonths: 3, subsequentRate: 15 }
+      };
+    }
   });
 
   const selectedState = useMemo(() => {
@@ -80,8 +98,19 @@ function DashboardPageContent() {
     if (selectedStateCode) {
       params.set('clienteUF', selectedStateCode);
     }
+    
+    // Adicionar configurações de desconto à URL
+    params.set('discountType', discountConfig.type);
+    if (discountConfig.type === 'promotional' && discountConfig.promotional) {
+      params.set('promotionalRate', String(discountConfig.promotional.rate));
+      params.set('promotionalDuration', String(discountConfig.promotional.durationMonths));
+      params.set('subsequentRate', String(discountConfig.promotional.subsequentRate));
+    } else if (discountConfig.type === 'fixed' && discountConfig.fixed) {
+      params.set('fixedRate', String(discountConfig.fixed.rate));
+    }
+    
     return `/proposal-generator?${params.toString()}`;
-  }, [currentKwh, selectedStateCode]);
+  }, [currentKwh, selectedStateCode, discountConfig]);
 
   return (
     <div className="relative flex flex-col min-h-[calc(100vh-56px)] items-center justify-start p-4 md:p-8 space-y-8">
