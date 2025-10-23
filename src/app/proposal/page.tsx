@@ -2,8 +2,14 @@
 "use client";
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useMemo } from 'react';
+import { Suspense, useMemo, useState, useRef } from 'react';
 import { calculateSavings } from '@/lib/discount-calculator';
+import jsPDF from 'jspdf';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Download } from 'lucide-react';
 
 // Função para formatar moeda
 const formatCurrency = (value: number | undefined | null) => {
@@ -13,6 +19,9 @@ const formatCurrency = (value: number | undefined | null) => {
 
 function ProposalPageContent() {
     const searchParams = useSearchParams();
+    const proposalRef = useRef<HTMLDivElement>(null);
+    const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+    const [fileName, setFileName] = useState('');
 
     // Extrair dados da URL
     const clienteNome = searchParams.get('clienteNome') || "Cliente não informado";
@@ -56,11 +65,55 @@ function ProposalPageContent() {
     const custoComSent = custoAtual - economiaMensal;
     const custoConcorrente = custoAtual * 0.88; // Simulando 12% de desconto da Enersim
     const diferencaVsConcorrente = custoConcorrente - custoComSent;
+    
+    const handleDownloadPDF = () => {
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const content = proposalRef.current;
+        if (content) {
+            doc.html(content, {
+                callback: function (doc) {
+                    doc.save(`${fileName || 'proposta-sent-energia'}.pdf`);
+                    setIsDownloadDialogOpen(false);
+                },
+                x: 15,
+                y: 15,
+                width: 170,
+                windowWidth: 650
+            });
+        }
+    };
+    
+    // Atualiza o nome do arquivo padrão quando o nome do cliente muda
+    useState(() => {
+        setFileName(`Proposta_Sent_Energia_${clienteNome.replace(/\s+/g, '_')}`);
+    });
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", backgroundColor: "#f3f4f6" }}>
-            <div className="a4-container rounded-lg" style={{ maxWidth: '800px', minHeight: '1100px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', margin: '2rem auto', backgroundColor: 'white', padding: '2rem 1.5rem' }}>
-                
+            <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Baixar Proposta em PDF</DialogTitle>
+                        <DialogDescription>
+                            Edite o nome do arquivo abaixo antes de fazer o download.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Label htmlFor="pdf-filename">Nome do Arquivo</Label>
+                        <Input 
+                            id="pdf-filename" 
+                            value={fileName} 
+                            onChange={(e) => setFileName(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleDownloadPDF}>Download</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <div className="a4-container" ref={proposalRef} style={{ maxWidth: '800px', minHeight: '1100px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', margin: '2rem auto', backgroundColor: 'white', padding: '2rem 1.5rem' }}>
                 <header className="flex justify-between items-center pb-6 border-b border-gray-200 mb-8">
                     <div className="flex items-center">
                         <img 
@@ -153,6 +206,14 @@ function ProposalPageContent() {
                     <p>{savingsResult.discountDescription}</p>
                     <p>Os valores são estimativas baseadas no consumo médio fornecido e podem sofrer pequenas variações de acordo com a tarifa e demanda da distribuidora local.</p>
                 </footer>
+            </div>
+             <div className="fixed bottom-6 right-6 z-50">
+                <Button onClick={() => setIsDownloadDialogOpen(true)} size="lg" className="rounded-full shadow-lg h-16 w-auto px-6">
+                    <Download className="mr-3 h-6 w-6" />
+                    <div className="flex flex-col items-start">
+                        <span className="text-base font-bold">Baixar PDF</span>
+                    </div>
+                </Button>
             </div>
         </div>
     );
