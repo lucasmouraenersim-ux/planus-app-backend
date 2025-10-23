@@ -1,17 +1,17 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, ShieldCheck, User, Briefcase, PackageMinus, CircleDollarSign, Receipt, Phone, ArrowRight, Camera, LineChart, CloudRain, Loader2 } from 'lucide-react';
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
+import { getFinalizedKwh } from '@/actions/public/getFinalizedKwh';
 import { cn } from '@/lib/utils';
 import { FakeLogin } from '@/components/auth/FakeLogin';
 import { PhotoEnhancer } from '@/components/photo/PhotoEnhancer';
@@ -39,7 +39,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
       }
     };
     requestAnimationFrame(animationFrame);
-  }, [value, duration]);
+  }, [value]);
 
   return <>{displayValue.toLocaleString('pt-BR')}</>;
 };
@@ -47,18 +47,36 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 const EnergySection = () => {
     const [billAmount, setBillAmount] = useState(1000);
     const savings = calculateSavings(billAmount, { type: 'fixed', fixed: { rate: 15 }});
-    const [stats, setStats] = useState({ totalKwh: 808488, pfCount: 300, pjCount: 188 });
+    // Initialize totalKwh to 0 or a default value
+    const [stats, setStats] = useState({ totalKwh: 0, pfCount: 300, pjCount: 188 });
 
     useEffect(() => {
       const fetchStats = async () => {
-        const result = await getLandingPageStats();
-        if (result.success && result.stats) {
-          setStats(result.stats);
+        // Fetch existing landing page stats
+        const existingStatsResult = await getLandingPageStats();
+        let currentPfCount = 300;
+        let currentPjCount = 188;
+        if (existingStatsResult.success && existingStatsResult.stats) {
+          currentPfCount = existingStatsResult.stats.pfCount;
+          currentPjCount = existingStatsResult.stats.pjCount;
         }
+
+        // Fetch finalized kWh from CRM
+        const finalizedKwhResult = await getFinalizedKwh();
+        let finalizedKwh = 0;
+        if (finalizedKwhResult.success && typeof finalizedKwhResult.totalKwh === 'number') {
+          finalizedKwh = finalizedKwhResult.totalKwh;
+        }
+
+        // Update stats state with fetched values
+        setStats({
+          totalKwh: finalizedKwh,
+          pfCount: currentPfCount,
+          pjCount: currentPjCount,
+        });
       };
-      // Re-enabled fetching in case the permission issue is resolved on the backend later.
-      // fetchStats(); 
-    }, []);
+      fetchStats(); 
+    }, []); // Empty dependency array to run once on mount
 
     const handleSliderChange = (value: number[]) => {
       setBillAmount(value[0]);
@@ -215,7 +233,7 @@ const EnergySection = () => {
             <ul className="list-none space-y-3">
                 <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">Dia 1:</strong> Assinatura digital do contrato.</p></li>
                 <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">Até 30 Dias:</strong> A Sent informa a distribuidora sobre a adesão.</p></li>
-                <li className="flex items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">De 60 a 90 Dias:</strong> A distribuidora processa a alteração e, no ciclo de faturamento seguinte, você recebe sua primeira fatura com o desconto da Sent.</p></li>
+                <li className="flex flex-col items-start"><CheckCircle className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0"/><p><strong className="text-foreground">De 60 a 90 Dias:</strong> A distribuidora processa a alteração e, no ciclo de faturamento seguinte, você recebe sua primeira fatura com o desconto da Sent.</p></li>
             </ul>
             </div>
         </section>
@@ -377,5 +395,3 @@ const LandingPage = () => {
 }
 
 export default LandingPage;
-
-    
