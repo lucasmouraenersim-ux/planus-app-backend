@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useSearchParams } from 'next/navigation';
@@ -53,9 +52,9 @@ function ProposalPageContent() {
     // Dados para a tabela de comparação (exemplo estático, idealmente viria de um cálculo)
     const custoAtual = savingsResult.originalMonthlyBill;
     const economiaMensal = savingsResult.monthlySaving;
-    const custoComBowe = custoAtual - economiaMensal;
+    const custoComSent = custoAtual - economiaMensal;
     const custoConcorrente = custoAtual * 0.88; // Simulando 12% de desconto da Enersim
-    const diferencaVsConcorrente = custoConcorrente - custoComBowe;
+    const diferencaVsConcorrente = custoConcorrente - custoComSent;
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", backgroundColor: "#f3f4f6" }}>
@@ -64,10 +63,10 @@ function ProposalPageContent() {
                 <header className="flex justify-between items-center pb-6 border-b border-gray-200 mb-8">
                     <div className="flex items-center">
                         <img 
-                            src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/logo-bowe.png" 
-                            alt="Bowe Logo" 
+                            src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/LOGO_SENT_ENERGIA_HORIZONTAL_COLORIDA.png" 
+                            alt="Sent Energia Logo" 
                             className="h-8 md:h-10 w-auto"
-                            data-ai-hint="company logo pink"
+                            data-ai-hint="company logo"
                         />
                     </div>
                     <div className="text-right">
@@ -92,7 +91,7 @@ function ProposalPageContent() {
                 </section>
 
                 <section className="text-center mb-10">
-                    <p className="text-xl text-gray-700 font-light mb-4">Com a solução de energia Bowe/Bolt, sua empresa alcançará:</p>
+                    <p className="text-xl text-gray-700 font-light mb-4">Com a solução de energia Sent, sua empresa alcançará:</p>
                     <div className="bg-[#FF3399] text-white p-6 md:p-8 rounded-xl shadow-lg transform hover:scale-[1.02] transition duration-300">
                         <h3 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-2">ECONOMIA ANUAL DE</h3>
                         <p className="text-5xl md:text-7xl font-black">{formatCurrency(savingsResult.annualSaving)}</p>
@@ -113,7 +112,7 @@ function ProposalPageContent() {
                             </thead>
                             <tbody>
                                 <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td data-label="Cenário de Fornecimento">Custo Atual (Antes da Bowe)</td>
+                                    <td data-label="Cenário de Fornecimento">Custo Atual (Antes da Sent)</td>
                                     <td data-label="Custo Mensal Estimado" className="font-bold">{formatCurrency(custoAtual)}</td>
                                     <td data-label="Diferença vs. Custo Antes" className="text-right text-gray-600">{formatCurrency(0)}</td>
                                 </tr>
@@ -123,8 +122,8 @@ function ProposalPageContent() {
                                     <td data-label="Diferença vs. Custo Antes" className="text-right text-red-600 font-medium">Economia de {formatCurrency(custoAtual - custoConcorrente)}</td>
                                 </tr>
                                 <tr className="text-[#FF3399] bg-[#FF3399]/10" style={{ fontWeight: 700, backgroundColor: '#fff0f5' }}>
-                                    <td data-label="Cenário de Fornecimento">Proposta <span className="font-extrabold">Bowe / Bolt</span></td>
-                                    <td data-label="Custo Mensal Estimado" className="font-extrabold text-2xl">{formatCurrency(custoComBowe)}</td>
+                                    <td data-label="Cenário de Fornecimento">Proposta <span className="font-extrabold">Sent</span></td>
+                                    <td data-label="Custo Mensal Estimado" className="font-extrabold text-2xl">{formatCurrency(custoComSent)}</td>
                                     <td data-label="Diferença vs. Custo Antes" className="text-right text-green-700 font-extrabold">Economia de {formatCurrency(economiaMensal)}</td>
                                 </tr>
                             </tbody>
@@ -132,7 +131,7 @@ function ProposalPageContent() {
                     </div>
                     <div className="mt-6 p-4 bg-gray-100 rounded-lg text-center">
                         <p className="text-lg font-semibold text-gray-800">
-                            A diferença entre a proposta <span className="text-[#FF3399]">Bowe / Bolt</span> e a melhor alternativa é de 
+                            A diferença entre a proposta <span className="text-[#FF3399]">Sent</span> e a melhor alternativa é de 
                             <span className="text-[#FF3399] font-extrabold"> {formatCurrency(diferencaVsConcorrente)} mensais</span>.
                         </p>
                     </div>
@@ -140,14 +139,14 @@ function ProposalPageContent() {
 
                 <section className="mb-8 p-6 bg-[#FF3399] rounded-xl text-white text-center">
                     <h4 className="text-xl md:text-2xl font-bold mb-3">Maximize Sua Economia Agora!</h4>
-                    <p className="mb-4">Com o serviço Bowe, você garante a melhor condição de mercado, segurança e previsibilidade no seu custo de energia.</p>
+                    <p className="mb-4">Com o serviço Sent, você garante a melhor condição de mercado, segurança e previsibilidade no seu custo de energia.</p>
                     <button className="bg-white text-[#FF3399] hover:bg-gray-200 transition duration-150 font-bold py-3 px-8 rounded-full shadow-lg">
                         FALE CONOSCO E FECHE O SEU CONTRATO
                     </button>
                 </section>
 
                 <footer className="pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
-                    <p>Proposta elaborada por Bowe | Seu Parceiro em Energia Inteligente.</p>
+                    <p>Proposta elaborada por Sent Energia | Seu Parceiro em Energia Inteligente.</p>
                     <p>Os valores são estimativas baseadas no consumo médio fornecido e podem sofrer pequenas variações de acordo com a tarifa e demanda da distribuidora local.</p>
                 </footer>
             </div>
