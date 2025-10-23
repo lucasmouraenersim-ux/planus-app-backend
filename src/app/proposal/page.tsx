@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSearchParams } from 'next/navigation';
@@ -95,7 +96,9 @@ function ProposalPageContent() {
                     <div className="bg-[#FF3399] text-white p-6 md:p-8 rounded-xl shadow-lg transform hover:scale-[1.02] transition duration-300">
                         <h3 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-2">ECONOMIA ANUAL DE</h3>
                         <p className="text-5xl md:text-7xl font-black">{formatCurrency(savingsResult.annualSaving)}</p>
-                        <p className="text-xl md:text-2xl font-semibold mt-2">ou {formatCurrency(savingsResult.monthlySaving)} por mês!</p>
+                        <p className="text-xl md:text-2xl font-semibold mt-2">
+                          (Desconto efetivo de {savingsResult.effectiveAnnualDiscountPercentage.toFixed(1)}%)
+                        </p>
                     </div>
                 </section>
 
@@ -147,6 +150,7 @@ function ProposalPageContent() {
 
                 <footer className="pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
                     <p>Proposta elaborada por Sent Energia | Seu Parceiro em Energia Inteligente.</p>
+                    <p>{savingsResult.discountDescription}</p>
                     <p>Os valores são estimativas baseadas no consumo médio fornecido e podem sofrer pequenas variações de acordo com a tarifa e demanda da distribuidora local.</p>
                 </footer>
             </div>
