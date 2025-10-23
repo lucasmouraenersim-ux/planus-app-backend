@@ -28,7 +28,7 @@ export async function initializeAdmin(): Promise<AdminServices> {
           credential: admin.credential.applicationDefault(),
         });
       } else {
-        // Fallback for Google Cloud environment auto-discovery
+        // Fallback para o auto-discovery do ambiente Google Cloud
         admin.initializeApp();
       }
       

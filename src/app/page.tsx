@@ -11,7 +11,6 @@ import { CheckCircle, Zap, TrendingUp, Users, FileText, CalendarClock, Leaf, Shi
 import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
-import { getFinalizedKwh } from '@/actions/public/getFinalizedKwh';
 import { cn } from '@/lib/utils';
 import { FakeLogin } from '@/components/auth/FakeLogin';
 import { PhotoEnhancer } from '@/components/photo/PhotoEnhancer';
@@ -39,7 +38,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
       }
     };
     requestAnimationFrame(animationFrame);
-  }, [value]);
+  }, [value, duration]);
 
   return <>{displayValue.toLocaleString('pt-BR')}</>;
 };
@@ -47,36 +46,24 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 const EnergySection = () => {
     const [billAmount, setBillAmount] = useState(1000);
     const savings = calculateSavings(billAmount, { type: 'fixed', fixed: { rate: 15 }});
-    // Initialize totalKwh to 0 or a default value
     const [stats, setStats] = useState({ totalKwh: 0, pfCount: 300, pjCount: 188 });
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
       const fetchStats = async () => {
-        // Fetch existing landing page stats
-        const existingStatsResult = await getLandingPageStats();
-        let currentPfCount = 300;
-        let currentPjCount = 188;
-        if (existingStatsResult.success && existingStatsResult.stats) {
-          currentPfCount = existingStatsResult.stats.pfCount;
-          currentPjCount = existingStatsResult.stats.pjCount;
+        try {
+          const result = await getLandingPageStats();
+          if (result.success && result.stats) {
+            setStats(result.stats);
+          }
+        } catch (error) {
+          console.error('Error fetching stats:', error);
+        } finally {
+          setIsLoading(false);
         }
-
-        // Fetch finalized kWh from CRM
-        const finalizedKwhResult = await getFinalizedKwh();
-        let finalizedKwh = 0;
-        if (finalizedKwhResult.success && typeof finalizedKwhResult.totalKwh === 'number') {
-          finalizedKwh = finalizedKwhResult.totalKwh;
-        }
-
-        // Update stats state with fetched values
-        setStats({
-          totalKwh: finalizedKwh,
-          pfCount: currentPfCount,
-          pjCount: currentPjCount,
-        });
       };
       fetchStats(); 
-    }, []); // Empty dependency array to run once on mount
+    }, []);
 
     const handleSliderChange = (value: number[]) => {
       setBillAmount(value[0]);
@@ -117,7 +104,15 @@ const EnergySection = () => {
             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
                 <CardHeader>
                 <Zap className="w-10 h-10 mx-auto text-primary mb-2" />
-                <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.totalKwh} /></CardTitle>
+                <CardTitle className="text-4xl font-bold">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <AnimatedNumber value={stats.totalKwh} />
+                  )}
+                </CardTitle>
                 </CardHeader>
                 <CardContent>
                 <p className="text-muted-foreground">kWh Conectados</p>
@@ -126,7 +121,15 @@ const EnergySection = () => {
             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
                 <CardHeader>
                 <User className="w-10 h-10 mx-auto text-primary mb-2" />
-                <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.pfCount} /></CardTitle>
+                <CardTitle className="text-4xl font-bold">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <AnimatedNumber value={stats.pfCount} />
+                  )}
+                </CardTitle>
                 </CardHeader>
                 <CardContent>
                 <p className="text-muted-foreground">Clientes Pessoa Física</p>
@@ -135,7 +138,15 @@ const EnergySection = () => {
             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
                 <CardHeader>
                 <Briefcase className="w-10 h-10 mx-auto text-primary mb-2" />
-                <CardTitle className="text-4xl font-bold"><AnimatedNumber value={stats.pjCount} /></CardTitle>
+                <CardTitle className="text-4xl font-bold">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    </div>
+                  ) : (
+                    <AnimatedNumber value={stats.pjCount} />
+                  )}
+                </CardTitle>
                 </CardHeader>
                 <CardContent>
                 <p className="text-muted-foreground">Clientes Pessoa Jurídica</p>
