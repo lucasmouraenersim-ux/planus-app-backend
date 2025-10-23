@@ -3,17 +3,14 @@
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-/**
- * @fileOverview A server action to retrieve landing page statistics.
- * This action now fetches real data from the CRM instead of hardcoded values.
- */
-
 export async function getLandingPageStats(): Promise<{
   success: boolean;
   stats?: { totalKwh: number; pfCount: number; pjCount: number };
   error?: string;
 }> {
   try {
+    console.log('🔍 Buscando dados do CRM...');
+    
     // Buscar leads finalizados do CRM
     const leadsCollection = collection(db, "crm_leads");
     const q = query(leadsCollection, where("stageId", "==", "finalizado"));
@@ -23,16 +20,18 @@ export async function getLandingPageStats(): Promise<{
     let pfCount = 0;
     let pjCount = 0;
 
+    console.log(`📊 Encontrados ${querySnapshot.size} leads finalizados`);
+
     querySnapshot.forEach((doc) => {
       const lead = doc.data();
       
       // Somar kWh dos leads finalizados
-      if (typeof lead.kwh === 'number') {
+      if (typeof lead.kwh === 'number' && lead.kwh > 0) {
         totalKwh += lead.kwh;
+        console.log(`⚡ Lead ${lead.name}: ${lead.kwh} kWh`);
       }
       
-      // Contar clientes por tipo (assumindo que temos um campo 'tipoCliente' ou similar)
-      // Se não tiver, vamos usar uma lógica baseada no consumo
+      // Contar clientes por tipo baseado no consumo
       if (lead.kwh && lead.kwh > 0) {
         if (lead.kwh <= 500) {
           pfCount++; // Pessoa física (consumo menor)
@@ -41,6 +40,8 @@ export async function getLandingPageStats(): Promise<{
         }
       }
     });
+
+    console.log(`✅ Total calculado: ${totalKwh} kWh, PF: ${pfCount}, PJ: ${pjCount}`);
 
     const stats = {
       totalKwh,
@@ -53,7 +54,7 @@ export async function getLandingPageStats(): Promise<{
       stats: stats,
     };
   } catch (error) {
-    console.error("Error fetching landing page stats:", error);
+    console.error("❌ Erro ao buscar dados do CRM:", error);
     
     // Em caso de erro, retornar valores padrão
     const stats = {

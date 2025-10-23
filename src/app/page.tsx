@@ -46,22 +46,35 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 const EnergySection = () => {
     const [billAmount, setBillAmount] = useState(1000);
     const savings = calculateSavings(billAmount, { type: 'fixed', fixed: { rate: 15 }});
-    const [stats, setStats] = useState({ totalKwh: 0, pfCount: 300, pjCount: 188 });
+    const [stats, setStats] = useState({ totalKwh: 0, pfCount: 0, pjCount: 0 });
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
       const fetchStats = async () => {
         try {
+          console.log('🚀 Iniciando busca de dados...');
+          setIsLoading(true);
+          setError(null);
+          
           const result = await getLandingPageStats();
+          console.log('📊 Resultado da busca:', result);
+          
           if (result.success && result.stats) {
             setStats(result.stats);
+            console.log('✅ Dados atualizados:', result.stats);
+          } else {
+            setError('Erro ao carregar dados');
+            console.error('❌ Erro na resposta:', result);
           }
         } catch (error) {
-          console.error('Error fetching stats:', error);
+          console.error('❌ Erro ao buscar dados:', error);
+          setError('Erro ao carregar dados');
         } finally {
           setIsLoading(false);
         }
       };
+      
       fetchStats(); 
     }, []);
 
@@ -73,6 +86,7 @@ const EnergySection = () => {
       const value = parseInt(event.target.value, 10);
       setBillAmount(isNaN(value) ? 0 : value);
     };
+    
     return (
         <>
         {/* Hero Section */}
@@ -109,6 +123,8 @@ const EnergySection = () => {
                     <div className="flex items-center justify-center">
                       <Loader2 className="w-8 h-8 animate-spin" />
                     </div>
+                  ) : error ? (
+                    <span className="text-red-500">Erro</span>
                   ) : (
                     <AnimatedNumber value={stats.totalKwh} />
                   )}
@@ -116,6 +132,7 @@ const EnergySection = () => {
                 </CardHeader>
                 <CardContent>
                 <p className="text-muted-foreground">kWh Conectados</p>
+                {error && <p className="text-xs text-red-500 mt-1">Erro ao carregar dados</p>}
                 </CardContent>
             </Card>
             <Card className="bg-card/70 backdrop-blur-lg border shadow-lg">
@@ -126,6 +143,8 @@ const EnergySection = () => {
                     <div className="flex items-center justify-center">
                       <Loader2 className="w-8 h-8 animate-spin" />
                     </div>
+                  ) : error ? (
+                    <span className="text-red-500">Erro</span>
                   ) : (
                     <AnimatedNumber value={stats.pfCount} />
                   )}
@@ -143,6 +162,8 @@ const EnergySection = () => {
                     <div className="flex items-center justify-center">
                       <Loader2 className="w-8 h-8 animate-spin" />
                     </div>
+                  ) : error ? (
+                    <span className="text-red-500">Erro</span>
                   ) : (
                     <AnimatedNumber value={stats.pjCount} />
                   )}
