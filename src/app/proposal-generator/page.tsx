@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -233,7 +234,7 @@ function ProposalGeneratorPageContent() {
       queryParams.set('fixedRate', String(discountConfig.fixed.rate));
     }
 
-    router.push(`/dashboard?${queryParams.toString()}`);
+    router.push(`/proposal?${queryParams.toString()}`);
   }
 
   return (
