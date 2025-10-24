@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action for an administrator to create a new user.
@@ -30,8 +31,7 @@ export type CreateUserOutput = z.infer<typeof CreateUserOutputSchema>;
 
 export async function createUser(input: CreateUserInput): Promise<CreateUserOutput> {
   try {
-    const adminDb = await initializeAdmin();
-    const adminAuth = admin.auth();
+    const { db: adminDb, auth: adminAuth } = await initializeAdmin();
 
     // 1. Check for existing email in Auth
     try {
