@@ -16,7 +16,7 @@ const CreateUserInputSchema = z.object({
   email: z.string().email("Email inválido."),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
   phone: z.string().optional(),
-  cpf: z.string().min(11, "CPF deve ter 11 dígitos.").max(14, "Formato de CPF inválido."),
+  documento: z.string().min(11, "CPF/CNPJ deve ter pelo menos 11 dígitos.").max(18, "Formato de CPF/CNPJ inválido."),
   type: z.enum(['admin', 'superadmin', 'vendedor', 'prospector', 'advogado']),
 });
 export type CreateUserInput = z.infer<typeof CreateUserInputSchema>;
@@ -44,13 +44,22 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       // If user not found, continue. This is the expected case.
     }
 
-    // 2. Check for existing CPF in Firestore
-    const normalizedCpf = input.cpf.replace(/\D/g, '');
+    // 2. Check for existing CPF/CNPJ in Firestore
+    const normalizedDoc = input.documento.replace(/\D/g, '');
     const usersRef = adminDb.collection("users");
-    const cpfQuery = usersRef.where("cpf", "==", normalizedCpf).limit(1);
-    const cpfSnapshot = await cpfQuery.get();
-    if (!cpfSnapshot.empty) {
-      return { success: false, message: "Este CPF já está cadastrado." };
+    
+    let docQuery;
+    if (normalizedDoc.length === 11) {
+        docQuery = usersRef.where("cpf", "==", normalizedDoc).limit(1);
+    } else if (normalizedDoc.length === 14) {
+        docQuery = usersRef.where("cnpj", "==", normalizedDoc).limit(1);
+    } else {
+        return { success: false, message: "Formato de documento inválido." };
+    }
+
+    const docSnapshot = await docQuery.get();
+    if (!docSnapshot.empty) {
+      return { success: false, message: "Este CPF/CNPJ já está cadastrado." };
     }
 
     // 3. Create user in Firebase Authentication
@@ -69,7 +78,8 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
     const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
       email: input.email,
       displayName: userRecord.displayName || input.email.split('@')[0],
-      cpf: normalizedCpf,
+      cpf: normalizedDoc.length === 11 ? normalizedDoc : undefined,
+      cnpj: normalizedDoc.length === 14 ? normalizedDoc : undefined,
       type: finalUserType as UserType,
       createdAt: admin.firestore.Timestamp.now(),
       photoURL: `https://placehold.co/40x40.png?text=${(userRecord.displayName || input.email).charAt(0).toUpperCase()}`,
