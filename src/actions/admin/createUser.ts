@@ -45,22 +45,27 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
     }
 
     // 2. Check for existing CPF/CNPJ in Firestore
-    const normalizedDoc = input.documento.replace(/\D/g, '');
+    const normalizedDoc = (input.documento || '').replace(/\D/g, '');
     const usersRef = adminDb.collection("users");
     
-    let docQuery;
-    if (normalizedDoc.length === 11) {
-        docQuery = usersRef.where("cpf", "==", normalizedDoc).limit(1);
-    } else if (normalizedDoc.length === 14) {
-        docQuery = usersRef.where("cnpj", "==", normalizedDoc).limit(1);
+    if (normalizedDoc) {
+        let docQuery;
+        if (normalizedDoc.length === 11) {
+            docQuery = usersRef.where("cpf", "==", normalizedDoc).limit(1);
+        } else if (normalizedDoc.length === 14) {
+            docQuery = usersRef.where("cnpj", "==", normalizedDoc).limit(1);
+        } else {
+            return { success: false, message: "Formato de documento inválido." };
+        }
+
+        const docSnapshot = await docQuery.get();
+        if (!docSnapshot.empty) {
+          return { success: false, message: "Este CPF/CNPJ já está cadastrado." };
+        }
     } else {
-        return { success: false, message: "Formato de documento inválido." };
+        return { success: false, message: "CPF/CNPJ é obrigatório." };
     }
 
-    const docSnapshot = await docQuery.get();
-    if (!docSnapshot.empty) {
-      return { success: false, message: "Este CPF/CNPJ já está cadastrado." };
-    }
 
     // 3. Create user in Firebase Authentication
     const userRecord = await adminAuth.createUser({
