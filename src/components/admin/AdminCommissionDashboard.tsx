@@ -89,6 +89,7 @@ const addUserFormSchema = z.object({
   documento: z.string().min(11, "CPF/CNPJ deve ter pelo menos 11 dígitos.").max(18, "Formato de CPF/CNPJ inválido.").refine(val => /^\d{11}$/.test(val.replace(/\D/g, '')) || /^\d{14}$/.test(val.replace(/\D/g, '')), "CPF deve ter 11 dígitos e CNPJ 14."),
   type: z.enum(USER_TYPE_ADD_OPTIONS.map(opt => opt.value) as [Exclude<UserType, 'pending_setup' | 'user'>, ...Exclude<UserType, 'pending_setup' | 'user'>[]], { required_error: "Tipo de usuário é obrigatório." }),
 });
+
 type AddUserFormData = z.infer<typeof addUserFormSchema>;
 
 const editUserFormSchema = z.object({
