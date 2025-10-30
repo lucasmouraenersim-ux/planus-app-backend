@@ -2,13 +2,9 @@
 "use client";
 
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState, useRef } from 'react';
-import { calculateSavings } from '@/lib/discount-calculator';
+import { Suspense, useMemo, useState, useRef, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Download } from 'lucide-react';
 
 // Função para formatar moeda
@@ -17,198 +13,156 @@ const formatCurrency = (value: number | undefined | null) => {
     return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
+const formatKWh = (value: number | undefined | null) => {
+    if (value === undefined || value === null || isNaN(value)) return "0 kWh";
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0 }).format(value) + ' kWh';
+}
+
 function ProposalPageContent() {
     const searchParams = useSearchParams();
     const proposalRef = useRef<HTMLDivElement>(null);
-    const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
-    const [fileName, setFileName] = useState('');
-
-    // Extrair dados da URL
-    const clienteNome = searchParams.get('clienteNome') || "Cliente não informado";
-    const consumoMedioKWh = parseInt(searchParams.get('item1Quantidade') || '0', 10);
-    const ucs = searchParams.get('codigoClienteInstalacao') || 'N/A';
     
-    // Calcular economia
-    const savingsResult = useMemo(() => {
-        const kwh = consumoMedioKWh;
-        const kwhToReaisFactor = 1.0907; // Fator de conversão kWh para Reais
-        const billAmount = kwh * kwhToReaisFactor;
-        const uf = searchParams.get('clienteUF') || 'MT'; // Default para MT
+    // State for all proposal inputs
+    const [proposalData, setProposalData] = useState({
+        proposalCode: '0001/2025',
+        clientName: 'ACADEMIA FITNESS TOTAL LTDA',
+        clientCpfCnpj: 'XX.XXX.XXX/0001-XX',
+        consumerUnit: 'Rua das Acacias, 123 - Goiânia/GO',
+        distributor: 'Neoenergia Brasília',
+        avgConsumption: 23183,
+        currentPrice: 0.98,
+        discountRate: 19
+    });
 
-        // Reconstruir config de desconto da URL
-        const discountType = searchParams.get('discountType') as 'promotional' | 'fixed' || 'promotional';
-        let discountConfig;
-        if (discountType === 'promotional') {
-            discountConfig = {
-                type: 'promotional',
-                promotional: {
-                    rate: parseInt(searchParams.get('promotionalRate') || '25', 10),
-                    durationMonths: parseInt(searchParams.get('promotionalDuration') || '3', 10),
-                    subsequentRate: parseInt(searchParams.get('subsequentRate') || '15', 10),
-                }
-            };
-        } else {
-            discountConfig = {
-                type: 'fixed',
-                fixed: {
-                    rate: parseInt(searchParams.get('fixedRate') || '20', 10),
-                }
-            };
+    // State for calculated values
+    const [calculated, setCalculated] = useState({
+        avgMonthlyCost: 0,
+        bcPrice: 0,
+        bcMonthlyCost: 0,
+        monthlyEconomy: 0,
+        annualEconomy: 0
+    });
+    
+    // Pre-fill from URL params
+    useEffect(() => {
+        const clientNameFromUrl = searchParams.get('clienteNome');
+        const consumptionFromUrl = searchParams.get('item1Quantidade');
+        if (clientNameFromUrl) {
+            setProposalData(prev => ({...prev, clientName: clientNameFromUrl}));
         }
-        // @ts-ignore
-        return calculateSavings(billAmount, discountConfig, uf);
-    }, [searchParams, consumoMedioKWh]);
+        if (consumptionFromUrl) {
+             setProposalData(prev => ({...prev, avgConsumption: parseFloat(consumptionFromUrl) || 0}));
+        }
+    }, [searchParams]);
 
-    // Dados para a tabela de comparação (exemplo estático, idealmente viria de um cálculo)
-    const custoAtual = savingsResult.originalMonthlyBill;
-    const economiaMensal = savingsResult.monthlySaving;
-    const custoComSent = custoAtual - economiaMensal;
-    const custoConcorrente = custoAtual * 0.88; // Simulando 12% de desconto da Enersim
-    const diferencaVsConcorrente = custoConcorrente - custoComSent;
-    
+    // Perform calculations when data changes
+    useEffect(() => {
+        const { avgConsumption, currentPrice, discountRate } = proposalData;
+        const discountDecimal = discountRate / 100;
+        
+        const avgMonthlyCost = avgConsumption * currentPrice;
+        const bcPrice = currentPrice * (1 - discountDecimal);
+        const bcMonthlyCost = avgConsumption * bcPrice;
+        const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
+        const annualEconomy = monthlyEconomy * 12;
+
+        setCalculated({
+            avgMonthlyCost,
+            bcPrice,
+            bcMonthlyCost,
+            monthlyEconomy,
+            annualEconomy
+        });
+    }, [proposalData]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { id, value } = e.target;
+        const isNumber = e.target.type === 'number';
+        setProposalData(prev => ({
+            ...prev,
+            [id]: isNumber ? parseFloat(value) || 0 : value
+        }));
+    };
+
     const handleDownloadPDF = () => {
         const doc = new jsPDF('p', 'pt', 'a4');
         const content = proposalRef.current;
         if (content) {
             doc.html(content, {
                 callback: function (doc) {
-                    doc.save(`${fileName || 'proposta-sent-energia'}.pdf`);
-                    setIsDownloadDialogOpen(false);
+                    doc.save(`Proposta_${proposalData.clientName.replace(/\s+/g, '_')}.pdf`);
                 },
-                x: 15,
-                y: 15,
-                width: 170,
-                windowWidth: 650
+                x: 0,
+                y: 0,
+                html2canvas: {
+                  scale: 0.6 // Scale down to fit A4
+                },
+                // width and windowWidth are not standard in jspdf.html options. Using scale is better.
             });
         }
     };
-    
-    // Atualiza o nome do arquivo padrão quando o nome do cliente muda
-    useState(() => {
-        setFileName(`Proposta_Sent_Energia_${clienteNome.replace(/\s+/g, '_')}`);
-    });
 
     return (
-        <div style={{ fontFamily: "'Inter', sans-serif", backgroundColor: "#f3f4f6" }}>
-            <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Baixar Proposta em PDF</DialogTitle>
-                        <DialogDescription>
-                            Edite o nome do arquivo abaixo antes de fazer o download.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <Label htmlFor="pdf-filename">Nome do Arquivo</Label>
-                        <Input 
-                            id="pdf-filename" 
-                            value={fileName} 
-                            onChange={(e) => setFileName(e.target.value)}
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleDownloadPDF}>Download</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+        <div className="font-sans bg-gray-100 p-4 md:p-8">
+            <div id="proposal-container" className="max-w-4xl mx-auto space-y-6">
 
-            <div className="a4-container" ref={proposalRef} style={{ maxWidth: '800px', minHeight: '1100px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)', margin: '2rem auto', backgroundColor: 'white', padding: '2rem 1.5rem' }}>
-                <header className="flex justify-between items-center pb-6 border-b border-gray-200 mb-8">
-                    <div className="flex items-center">
-                        <img 
-                            src="https://raw.githubusercontent.com/LucasMouraChaser/backgrounds-sent/main/LOGO_SENT_ENERGIA_HORIZONTAL_COLORIDA.png" 
-                            alt="Sent Energia Logo" 
-                            className="h-8 md:h-10 w-auto"
-                            data-ai-hint="company logo"
-                        />
+                {/* Input Area */}
+                <div className="bg-white page rounded-xl p-6 md:p-8 border-t-8 border-blue-600">
+                    <h2 className="text-3xl font-bold mb-6 text-gray-800">⚙️ Configuração Rápida da Proposta (Edite Aqui)</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label htmlFor="proposalCode" className="block text-sm font-medium text-gray-700">1. Código da Proposta</label><input type="text" id="proposalCode" value={proposalData.proposalCode} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="clientName" className="block text-sm font-medium text-gray-700">2. Nome do Cliente</label><input type="text" id="clientName" value={proposalData.clientName} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="clientCpfCnpj" className="block text-sm font-medium text-gray-700">3. CNPJ/CPF</label><input type="text" id="clientCpfCnpj" value={proposalData.clientCpfCnpj} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="consumerUnit" className="block text-sm font-medium text-gray-700">4. Unidade Consumidora (UC)</label><input type="text" id="consumerUnit" value={proposalData.consumerUnit} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="distributor" className="block text-sm font-medium text-gray-700">5. Distribuidora</label><input type="text" id="distributor" value={proposalData.distributor} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="avgConsumption" className="block text-sm font-medium text-gray-700">6. Consumo Mensal (kWh)</label><input type="number" id="avgConsumption" value={proposalData.avgConsumption} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="currentPrice" className="block text-sm font-medium text-gray-700">7. Tarifa Atual (R$/kWh)</label><input type="number" id="currentPrice" step="0.01" value={proposalData.currentPrice} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
+                        <div><label htmlFor="discountRate" className="block text-sm font-medium text-gray-700">8. Desconto Oferecido (%)</label><input type="number" id="discountRate" value={proposalData.discountRate} onChange={handleInputChange} className="p-2 border border-gray-300 rounded-lg w-full" /></div>
                     </div>
-                    <div className="text-right">
-                        <h1 className="text-xl md:text-2xl font-bold text-[#FF3399]">PROPOSTA DE ECONOMIA</h1>
-                        <p className="text-sm text-gray-500">Data: {new Date().toLocaleDateString('pt-BR')}</p>
-                    </div>
-                </header>
+                </div>
 
-                <section className="mb-8 p-4 bg-gray-50 rounded-lg border-l-4 border-[#FF3399]">
-                    <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-2">Cliente</h2>
-                    <p className="text-2xl font-extrabold text-[#FF3399] mb-4">{clienteNome}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                        <div>
-                            <span className="font-medium text-gray-700">Consumo Médio Mensal:</span> 
-                            <span className="font-bold"> {consumoMedioKWh.toLocaleString('pt-BR')} kWh</span>
+                <div ref={proposalRef} className="space-y-6">
+                    {/* Page 1 */}
+                    <div className="page rounded-xl flex flex-col justify-between items-center text-center p-10 md:p-20 bg-[#1e3a8a] text-white">
+                        <p className="text-xl font-light opacity-80">Código da proposta: {proposalData.proposalCode}</p>
+                        <div className="my-16"><h1 className="text-6xl md:text-8xl font-black tracking-tighter">Proposta Comercial</h1><h2 className="text-3xl md:text-5xl font-light mt-4">Geração Distribuída</h2><h3 className="text-2xl md:text-4xl font-extrabold mt-2 text-[#06b6d4]">Energia por Assinatura</h3></div>
+                        <div className="mt-auto"><p className="text-xl md:text-3xl font-light mb-4">Geramos valor com a nossa energia.</p><div className="text-2xl font-black uppercase tracking-widest">GRUPO BC ENERGIA</div></div>
+                    </div>
+
+                    {/* Page 2 */}
+                    <div className="page rounded-xl p-8 md:p-12 bg-white">
+                        <h2 className="text-4xl font-extrabold mb-8 text-[#1e3a8a] border-b pb-2">Quem Somos</h2>
+                        <p className="mb-8 text-lg text-gray-700">O Grupo BC Energia é composto por um conjunto de empresas dedicadas ao setor elétrico, atuando em modelos de negócios de <strong>geração distribuída</strong> (energia por assinatura para baixa tensão) e <strong>comercialização/serviços de gestão de energia</strong> (para média e alta tensão no mercado livre).</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12 text-center">
+                            <div className="p-4 rounded-lg bg-blue-50"><p className="text-3xl font-black text-[#1e3a8a]">+5.500</p><p className="text-sm text-gray-600">clientes atendidos</p></div>
+                            <div className="p-4 rounded-lg bg-blue-50"><p className="text-3xl font-black text-[#1e3a8a]">+R$ 480 mi</p><p className="text-sm text-gray-600">de economia gerada</p></div>
+                            <div className="p-4 rounded-lg bg-blue-50"><p className="text-3xl font-black text-[#1e3a8a]">+230 GWh</p><p className="text-sm text-gray-600">de geração limpa e renovável</p></div>
+                            <div className="p-4 rounded-lg bg-blue-50"><p className="text-3xl font-black text-[#1e3a8a]">ESG</p><p className="text-sm text-gray-600">+15 mil toneladas de CO2 evitados</p></div>
                         </div>
-                        <div>
-                            <span className="font-medium text-gray-700">Unidades Consumidoras (UCs):</span> 
-                            <span className="font-bold"> {ucs}</span>
+                        <h3 className="text-2xl font-bold mb-4 text-gray-800 border-l-4 border-[#06b6d4] pl-3">Algumas de Nossas Usinas</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div className="bg-gray-100 rounded-lg p-4 text-center"><img src="https://placehold.co/400x200/1e3a8a/ffffff?text=FOTO+USINA+1" alt="Placeholder para a foto da Usina 1" className="w-full h-40 object-cover rounded-lg mb-2" /><p className="font-semibold text-sm">Usina Vera de Minas (MG)</p><p className="text-xs text-gray-500">Capacidade: XX MWp</p></div><div className="bg-gray-100 rounded-lg p-4 text-center"><img src="https://placehold.co/400x200/06b6d4/1e3a8a?text=FOTO+USINA+2" alt="Placeholder para a foto da Usina 2" className="w-full h-40 object-cover rounded-lg mb-2" /><p className="font-semibold text-sm">Usina Calajina (GO)</p><p className="text-xs text-gray-500">Capacidade: XX MWp</p></div></div>
+                    </div>
+                    
+                    {/* Page 3 */}
+                    <div className="page rounded-xl p-8 md:p-12 bg-white">
+                        <h2 className="text-4xl font-extrabold mb-4 text-[#1e3a8a] border-b pb-2">Proposta Comercial</h2>
+                        <p className="text-lg text-gray-600 mb-8">Geração Distribuída - Energia por Assinatura</p>
+                        <div className="bg-gray-50 p-6 rounded-lg mb-8 border-l-4 border-[#06b6d4]">
+                            <h3 className="text-xl font-bold text-gray-800 mb-3">Dados da Proposta</h3>
+                            <p className="grid grid-cols-2 gap-2 text-sm"><span className="font-semibold">Cliente:</span> <span>{proposalData.clientName}</span><span className="font-semibold">CNPJ/CPF:</span> <span>{proposalData.clientCpfCnpj}</span><span className="font-semibold">Instalações (UC):</span> <span>{proposalData.consumerUnit}</span><span className="font-semibold">Distribuidora:</span> <span>{proposalData.distributor}</span></p>
                         </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-red-50 p-6 rounded-lg border-l-4 border-red-500"><h3 className="text-2xl font-bold text-red-700 mb-4">Custo sem a BC Energia</h3><div className="space-y-2"><p className="flex justify-between items-center text-lg"><span className="font-semibold">Consumo Mensal (kWh):</span><span className="font-bold">{formatKWh(proposalData.avgConsumption)}</span></p><p className="flex justify-between items-center text-lg"><span className="font-semibold">Preço Atual (R$/kWh):</span><span className="font-bold text-red-500">{formatCurrency(proposalData.currentPrice)}</span></p><p className="flex justify-between items-center text-2xl border-t pt-2"><span className="font-black">Custo Médio (Mensal):</span><span className="font-black text-red-700">{formatCurrency(calculated.avgMonthlyCost)}</span></p></div></div>
+                            <div className="bg-green-50 p-6 rounded-lg border-l-4 border-green-500"><h3 className="text-2xl font-bold text-green-700 mb-4">Desconto BC Energia</h3><div className="space-y-2"><p className="flex justify-between items-center text-lg"><span className="font-semibold">Desconto (%):</span><span className="font-bold text-green-600">{proposalData.discountRate}%</span></p><p className="flex justify-between items-center text-lg"><span className="font-semibold">Preço BC (R$/kWh):</span><span className="font-bold text-green-600">{formatCurrency(calculated.bcPrice)}</span></p><p className="flex justify-between items-center text-2xl border-t pt-2"><span className="font-black">Custo Médio (Mensal):</span><span className="font-black text-green-700">{formatCurrency(calculated.bcMonthlyCost)}</span></p></div></div>
+                        </div>
+                        <div className="mt-8 bg-blue-600 text-white p-6 rounded-lg text-center shadow-lg"><p className="text-2xl font-semibold mb-2">Economia Mensal (Bandeira Verde):</p><p className="text-5xl font-black">{formatCurrency(calculated.monthlyEconomy)}</p><p className="text-xl mt-4 font-semibold">Economia Anual Sem Investimento:</p><p className="text-4xl font-black text-yellow-300">{formatCurrency(calculated.annualEconomy)}</p></div>
+                        <div className="mt-8"><h3 className="text-2xl font-bold mb-4 text-gray-800 border-l-4 border-blue-400 pl-3">O que é a Bandeira Tarifária?</h3><p className="text-gray-700 mb-4">Assim como um semáforo, as cores mostram o custo da energia a cada período. <strong>Com a BC Energia, você está protegido das variações das bandeiras tarifárias.</strong> Mesmo quando uma bandeira tarifária está em vigor, você continua economizando.</p><div className="overflow-x-auto"><table className="min-w-full bg-white rounded-lg shadow-md"><thead><tr className="bg-gray-200 text-gray-700 uppercase text-sm leading-normal"><th className="py-3 px-6 text-left">Cor</th><th className="py-3 px-6 text-left">Significado</th><th className="py-3 px-6 text-left">Impacto na Conta</th></tr></thead><tbody className="text-gray-600 text-sm font-light"><tr className="border-b border-gray-200 hover:bg-gray-100"><td className="py-3 px-6 font-bold text-green-600">Verde</td><td className="py-3 px-6">Condições normais de geração</td><td className="py-3 px-6">Nenhuma cobrança extra</td></tr><tr className="border-b border-gray-200 hover:bg-gray-100"><td className="py-3 px-6 font-bold text-yellow-600">Amarela</td><td className="py-3 px-6">Geração mais cara</td><td className="py-3 px-6">Taxa adicional</td></tr><tr className="border-b border-gray-200 hover:bg-gray-100"><td className="py-3 px-6 font-bold text-red-600">Vermelha I</td><td className="py-3 px-6">Geração muito cara</td><td className="py-3 px-6">Custo extra mais elevado</td></tr><tr className="hover:bg-gray-100"><td className="py-3 px-6 font-bold text-red-800">Vermelha II</td><td className="py-3 px-6">Geração em estado crítico</td><td className="py-3 px-6">Custo extra máximo</td></tr></tbody></table></div></div>
                     </div>
-                </section>
-
-                <section className="text-center mb-10">
-                    <p className="text-xl text-gray-700 font-light mb-4">Com a solução de energia Sent, sua empresa alcançará:</p>
-                    <div className="bg-[#FF3399] text-white p-6 md:p-8 rounded-xl shadow-lg transform hover:scale-[1.02] transition duration-300">
-                        <h3 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-2">ECONOMIA ANUAL DE</h3>
-                        <p className="text-5xl md:text-7xl font-black">{formatCurrency(savingsResult.annualSaving)}</p>
-                        <p className="text-xl md:text-2xl font-semibold mt-2">
-                          (Desconto efetivo de {savingsResult.effectiveAnnualDiscountPercentage.toFixed(1)}%)
-                        </p>
-                    </div>
-                </section>
-
-                <section className="mb-10">
-                    <h3 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Análise Financeira Detalhada</h3>
-                    <div className="overflow-x-auto rounded-lg border border-gray-200">
-                        <table className="comparison-table w-full text-sm text-gray-900">
-                            <thead>
-                                <tr className="bg-gray-100">
-                                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', backgroundColor: '#f9fafb' }}>Cenário de Fornecimento</th>
-                                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', backgroundColor: '#f9fafb' }}>Custo Mensal Estimado</th>
-                                    <th style={{ padding: '0.75rem', textAlign: 'right', borderBottom: '1px solid #e5e7eb', fontWeight: 600, color: '#374151', backgroundColor: '#f9fafb' }}>Diferença vs. Custo Antes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td data-label="Cenário de Fornecimento">Custo Atual (Antes da Sent)</td>
-                                    <td data-label="Custo Mensal Estimado" className="font-bold">{formatCurrency(custoAtual)}</td>
-                                    <td data-label="Diferença vs. Custo Antes" className="text-right text-gray-600">{formatCurrency(0)}</td>
-                                </tr>
-                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td data-label="Cenário de Fornecimento">Custo com a Concorrente (Ex: Enersim)</td>
-                                    <td data-label="Custo Mensal Estimado">{formatCurrency(custoConcorrente)}</td>
-                                    <td data-label="Diferença vs. Custo Antes" className="text-right text-red-600 font-medium">Economia de {formatCurrency(custoAtual - custoConcorrente)}</td>
-                                </tr>
-                                <tr className="text-[#FF3399] bg-[#FF3399]/10" style={{ fontWeight: 700, backgroundColor: '#fff0f5' }}>
-                                    <td data-label="Cenário de Fornecimento">Proposta <span className="font-extrabold">Sent</span></td>
-                                    <td data-label="Custo Mensal Estimado" className="font-extrabold text-2xl">{formatCurrency(custoComSent)}</td>
-                                    <td data-label="Diferença vs. Custo Antes" className="text-right text-green-700 font-extrabold">Economia de {formatCurrency(economiaMensal)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="mt-6 p-4 bg-gray-100 rounded-lg text-center">
-                        <p className="text-lg font-semibold text-gray-800">
-                            A diferença entre a proposta <span className="text-[#FF3399]">Sent</span> e a melhor alternativa é de 
-                            <span className="text-[#FF3399] font-extrabold"> {formatCurrency(diferencaVsConcorrente)} mensais</span>.
-                        </p>
-                    </div>
-                </section>
-
-                <section className="mb-8 p-6 bg-[#FF3399] rounded-xl text-white text-center">
-                    <h4 className="text-xl md:text-2xl font-bold mb-3">Maximize Sua Economia Agora!</h4>
-                    <p className="mb-4">Com o serviço Sent, você garante a melhor condição de mercado, segurança e previsibilidade no seu custo de energia.</p>
-                    <button className="bg-white text-[#FF3399] hover:bg-gray-200 transition duration-150 font-bold py-3 px-8 rounded-full shadow-lg">
-                        FALE CONOSCO E FECHE O SEU CONTRATO
-                    </button>
-                </section>
-
-                <footer className="pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
-                    <p>Proposta elaborada por Sent Energia | Seu Parceiro em Energia Inteligente.</p>
-                    <p>{savingsResult.discountDescription}</p>
-                    <p>Os valores são estimativas baseadas no consumo médio fornecido e podem sofrer pequenas variações de acordo com a tarifa e demanda da distribuidora local.</p>
-                </footer>
+                </div>
             </div>
-             <div className="fixed bottom-6 right-6 z-50">
-                <Button onClick={() => setIsDownloadDialogOpen(true)} size="lg" className="rounded-full shadow-lg h-16 w-auto px-6">
+
+            <div className="fixed bottom-6 right-6 z-50">
+                <Button onClick={handleDownloadPDF} size="lg" className="rounded-full shadow-lg h-16 w-auto px-6">
                     <Download className="mr-3 h-6 w-6" />
                     <div className="flex flex-col items-start">
                         <span className="text-base font-bold">Baixar PDF</span>
