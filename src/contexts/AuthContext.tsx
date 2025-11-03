@@ -40,39 +40,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // --- FCM Logic ---
   const requestNotificationPermission = useCallback(async (userId: string) => {
-    if (typeof window === 'undefined' || !messaging) return;
+    if (typeof window === 'undefined' || !messaging || !('Notification' in window)) return;
 
-    console.log('Requesting notification permission...');
     try {
-      const permission = await Notification.requestPermission();
-      
-      if (permission === 'granted') {
+      if (Notification.permission === 'granted') {
         const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
         if (!vapidKey) {
-            console.error("VAPID key não encontrada nas variáveis de ambiente.");
-            return;
+          console.error("VAPID key não encontrada nas variáveis de ambiente.");
+          return;
         }
-
+        
         const currentToken = await getToken(messaging, { vapidKey });
         if (currentToken) {
-          console.log('FCM Token obtained:', currentToken);
           const userDocRef = doc(db, "users", userId);
-          // Check if token is already saved to avoid unnecessary writes
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists() && userDoc.data().fcmToken !== currentToken) {
             await updateDoc(userDocRef, { fcmToken: currentToken });
-            console.log('FCM Token saved to Firestore.');
           }
-        } else {
-          console.log('No registration token available. Request permission to generate one.');
         }
-      } else {
-        console.log('Unable to get permission to show notifications.');
       }
     } catch (err) {
-      console.error('An error occurred while retrieving token or permission. ', err);
+      console.error('An error occurred while retrieving token. ', err);
     }
   }, []);
+
 
   useEffect(() => {
     if (typeof window !== 'undefined' && messaging) {
@@ -296,7 +287,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
         await refreshUsers();
-        // Request notification permission for all logged-in users.
         await requestNotificationPermission(user.uid);
       } else {
         setFirebaseUser(null);
