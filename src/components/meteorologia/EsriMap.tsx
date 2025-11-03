@@ -157,9 +157,9 @@ const ReportsLegend = () => {
         }}>
             <b>Relatos</b>
             <div><img src="https://static.wixstatic.com/media/c003a9_38c6ec164e3742dab2237816e4ff8c95~mv2.png" width="16" alt="Vento leve" /> Vento 80–100km/h</div>
-            <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento >100km/h</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_3fc6c303cb364c5db3595e4203c1888e~mv2.png" width="16" alt="Vento forte" /> Vento &gt;100km/h</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_70be04c630a64abca49711a423da779b~mv2.png" width="16" alt="Granizo pequeno" /> Granizo &lt; 4cm</div>
-            <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16" alt="Granizo grande" /> Granizo > 4cm</div>
+            <div><img src="https://static.wixstatic.com/media/c003a9_946684b74c234c2287a153a6b6c077fe~mv2.png" width="16" alt="Granizo grande" /> Granizo &gt; 4cm</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_9f22188e065e4424a1f8ee3a3afeffde~mv2.png" width="16" alt="Tornado fraco" /> Tornado &lt; EF2</div>
             <div><img src="https://static.wixstatic.com/media/c003a9_3a647b1160024b55bb3ecc148df1309f~mv2.png" width="16" alt="Tornado forte" /> Tornado ≥ EF2</div>
         </div>
@@ -271,7 +271,7 @@ const MeteoTilesControls = ({ map, ImageryLayer, esriRef }: { map: __esri.Map | 
   const [capeVisible, setCapeVisible] = useState(false);
   const [srhVisible, setSrhVisible] = useState(false);
   const [capeOpacity, setCapeOpacity] = useState(70);
-  const [srhOpacity, setSrhOpacity] = useState(70);
+  const [srhOpacity, setSrhVisible] = useState(70);
   const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
