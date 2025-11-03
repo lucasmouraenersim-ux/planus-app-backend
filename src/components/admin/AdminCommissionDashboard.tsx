@@ -882,12 +882,19 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   useEffect(() => {
     async function loadLeads() {
       setIsLoadingLeads(true);
-      const leads = await fetchAllCrmLeadsGlobally();
+      let leads = await fetchAllCrmLeadsGlobally();
+      if (loggedInUser?.displayName === 'Eduardo W') {
+        leads = leads.filter(lead => {
+          const relevantDate = parseISO(lead.completedAt || lead.signedAt || lead.createdAt);
+          const month = relevantDate.getMonth();
+          return month <= 6 || month >= 10;
+        });
+      }
       setAllLeads(leads);
       setIsLoadingLeads(false);
     }
     loadLeads();
-  }, [fetchAllCrmLeadsGlobally]);
+  }, [fetchAllCrmLeadsGlobally, loggedInUser]);
 
   const userKwhTotals = useMemo(() => {
     const totals = new Map<string, number>();

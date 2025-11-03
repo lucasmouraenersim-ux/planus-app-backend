@@ -118,12 +118,22 @@ export default function GoalsPage() {
     const start = startOfMonth(selectedMonth);
     const end = endOfMonth(selectedMonth);
     const stagesToInclude: StageId[] = ['contrato', 'conformidade', 'assinado', 'finalizado'];
-    return allLeads.filter(lead => {
+    
+    let leadsToProcess = allLeads;
+    if (loggedInUser?.displayName === 'Eduardo W') {
+        leadsToProcess = allLeads.filter(lead => {
+            const relevantDate = parseISO(lead.completedAt || lead.signedAt || lead.createdAt);
+            const month = relevantDate.getMonth(); // 0-11
+            return month <= 6 || month >= 10; // 6 is July, 10 is November
+        });
+    }
+
+    return leadsToProcess.filter(lead => {
       const relevantDateStr = lead.completedAt || lead.signedAt || lead.lastContact;
       const relevantDate = parseISO(relevantDateStr);
       return stagesToInclude.includes(lead.stageId) && isWithinInterval(relevantDate, { start, end });
     });
-  }, [allLeads, selectedMonth]);
+  }, [allLeads, selectedMonth, loggedInUser]);
 
   const assignedLeads = useMemo(() => {
     const assigned: { [key in CompanyGoal['id']]?: LeadWithId[] } = {};
@@ -171,15 +181,6 @@ export default function GoalsPage() {
       toast({ title: "Metas Atualizadas", description: "As metas das empresas e a meta global foram salvas." });
   };
   
-  if (loggedInUser?.displayName === 'Eduardo W') {
-    return (
-        <div className="container mx-auto p-4 md:p-8 space-y-6 flex flex-col items-center justify-center h-screen">
-            <ShieldAlert className="w-16 h-16 text-destructive" />
-            <h1 className="text-2xl font-bold mt-4">Acesso Restrito</h1>
-            <p className="text-muted-foreground">Esta seção não está disponível para o seu usuário.</p>
-        </div>
-    );
-  }
 
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
