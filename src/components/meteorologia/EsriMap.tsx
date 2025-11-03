@@ -1,3 +1,4 @@
+
 // src/components/meteorologia/EsriMap.tsx
 "use client";
 
@@ -271,7 +272,7 @@ const MeteoTilesControls = ({ map, ImageryLayer, esriRef }: { map: __esri.Map | 
   const [capeVisible, setCapeVisible] = useState(false);
   const [srhVisible, setSrhVisible] = useState(false);
   const [capeOpacity, setCapeOpacity] = useState(70);
-  const [srhOpacity, setSrhVisible] = useState(70);
+  const [srhOpacity, setSrhOpacity] = useState(70);
   const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
