@@ -877,6 +877,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const updateWithdrawalForm = useForm<UpdateWithdrawalFormData>({ resolver: zodResolver(updateWithdrawalFormSchema) });
 
   const canEdit = useMemo(() => userAppRole === 'superadmin' || userAppRole === 'admin', [userAppRole]);
+  const showSensitiveTabs = useMemo(() => loggedInUser.displayName !== 'Eduardo W', [loggedInUser]);
   
   useEffect(() => {
     async function loadLeads() {
@@ -1314,9 +1315,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         <TabsList className="mb-4">
           <TabsTrigger value="dashboard"><Activity className="mr-2 h-4 w-4"/>Dashboard</TabsTrigger>
           <TabsTrigger value="users"><Users className="mr-2 h-4 w-4"/>Usuários</TabsTrigger>
-          <TabsTrigger value="commissions"><ClipboardList className="mr-2 h-4 w-4"/>Comissões por Empresas</TabsTrigger>
-          <TabsTrigger value="management"><Building className="mr-2 h-4 w-4"/>Gestão da Empresa</TabsTrigger>
-          {userAppRole === 'superadmin' && (
+          {showSensitiveTabs && <TabsTrigger value="commissions"><ClipboardList className="mr-2 h-4 w-4"/>Comissões por Empresas</TabsTrigger>}
+          {showSensitiveTabs && <TabsTrigger value="management"><Building className="mr-2 h-4 w-4"/>Gestão da Empresa</TabsTrigger>}
+          {userAppRole === 'superadmin' && showSensitiveTabs && (
             <TabsTrigger value="personal_finance"><PiggyBank className="mr-2 h-4 w-4"/>Finanças Pessoais</TabsTrigger>
           )}
           <TabsTrigger value="withdrawals"><WalletCards className="mr-2 h-4 w-4"/>Saques</TabsTrigger>
@@ -1535,7 +1536,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             <CompanyManagementTab leads={allLeads} tableData={[]} />
         </TabsContent>
         
-        {userAppRole === 'superadmin' && (
+        {userAppRole === 'superadmin' && showSensitiveTabs && (
           <TabsContent value="personal_finance">
             <PersonalFinanceTab monthlyProLabore={(loggedInUser.personalFinance?.revenues.find(r => r.description.toLowerCase().includes('pró-labore'))?.amount || 0)} user={loggedInUser} onUpdate={handleUpdatePersonalFinance} />
           </TabsContent>

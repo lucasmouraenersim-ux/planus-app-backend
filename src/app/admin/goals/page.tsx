@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon, Rocket } from 'lucide-react';
+import { Target, DollarSign, Zap, Edit, Check, Users, TrendingUp, Calendar as CalendarIcon, Rocket, ShieldAlert } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, getDaysInMonth, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { LeadWithId, StageId } from '@/types/crm';
@@ -55,7 +55,7 @@ const initialCompanyGoalsData: Omit<CompanyGoal, 'targetValue' | 'kwhTarget'>[] 
 
 
 export default function GoalsPage() {
-  const { fetchAllCrmLeadsGlobally } = useAuth();
+  const { fetchAllCrmLeadsGlobally, loggedInUser } = useAuth();
   const { toast } = useToast();
   const [allLeads, setAllLeads] = useState<LeadWithId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -171,6 +171,16 @@ export default function GoalsPage() {
       toast({ title: "Metas Atualizadas", description: "As metas das empresas e a meta global foram salvas." });
   };
   
+  if (loggedInUser?.displayName === 'Eduardo W') {
+    return (
+        <div className="container mx-auto p-4 md:p-8 space-y-6 flex flex-col items-center justify-center h-screen">
+            <ShieldAlert className="w-16 h-16 text-destructive" />
+            <h1 className="text-2xl font-bold mt-4">Acesso Restrito</h1>
+            <p className="text-muted-foreground">Esta seção não está disponível para o seu usuário.</p>
+        </div>
+    );
+  }
+
   const PacingMetricsCard = ({ companyId }: { companyId: CompanyGoal['id'] }) => {
     const company = getCompanyGoalById(companyId);
     const assignedLeadsForCompany = assignedLeads[companyId] || [];
