@@ -203,7 +203,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
-                         <SidebarMenuItem><Link href="/ranking-previsoes"><SidebarMenuButton tooltip="Placar" isActive={currentPathname === '/ranking-previsoes'}><Trophy />Placar</SidebarMenuButton></Link></SidebarMenuItem>
                          
                          {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
                             <SidebarMenuItem>
@@ -216,7 +215,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          )}
 
                          {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/photo-requests"><SidebarMenuButton tooltip="Edição de Fotos" isActive={currentPathname === '/photo-requests'}><ImageIcon />Edição de Fotos</SidebarMenuButton></Link></SidebarMenuItem>)}
                          <SidebarMenuItem><Link href="/profile"><SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}><CircleUserRound />Perfil</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/sobre"><SidebarMenuButton tooltip="Sobre o App" isActive={currentPathname.startsWith('/sobre')}><Info />Sobre</SidebarMenuButton></Link></SidebarMenuItem>
                     </SidebarMenu>

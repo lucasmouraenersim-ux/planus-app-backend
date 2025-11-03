@@ -53,25 +53,25 @@ const EnergySection = () => {
     useEffect(() => {
       const fetchStats = async () => {
         try {
-          console.log('🚀 Iniciando busca de dados...');
+          console.log('🔍 === INICIANDO DEBUG CRM ===');
           setIsLoading(true);
           setError(null);
           
           const result = await getLandingPageStats();
-          console.log('📊 Resultado da busca:', result);
           
           if (result.success && result.stats) {
             setStats(result.stats);
-            console.log('✅ Dados atualizados:', result.stats);
+            console.log('✅ DADOS PÚBLICOS CARREGADOS:', result.stats);
           } else {
             setError('Erro ao carregar dados');
             console.error('❌ Erro na resposta:', result);
           }
         } catch (error) {
-          console.error('❌ Erro ao buscar dados:', error);
+          console.error("❌ ERRO AO BUSCAR DADOS PÚBLICOS:", error);
           setError('Erro ao carregar dados');
         } finally {
           setIsLoading(false);
+          console.log('🔍 === FIM DEBUG CRM ===');
         }
       };
       
@@ -385,28 +385,6 @@ const LandingPage = () => {
                 <Zap className="mr-2 h-4 w-4"/>
                 Economize Energia
             </Button>
-            <Button 
-                variant={selectedApp === 'foto' ? 'default' : 'ghost'} 
-                onClick={() => setSelectedApp('foto')}
-                className="transition-all"
-            >
-                <Camera className="mr-2 h-4 w-4"/>
-                Melhore sua Foto
-            </Button>
-            <Button 
-                variant={selectedApp === 'forex' ? 'default' : 'ghost'} 
-                onClick={() => setSelectedApp('forex')}
-                className="transition-all"
-            >
-                <LineChart className="mr-2 h-4 w-4"/>
-                Invista em Forex
-            </Button>
-            <Link href="/meteorologia" passHref>
-              <Button variant='ghost' className="transition-all">
-                  <CloudRain className="mr-2 h-4 w-4"/>
-                  Meteorologia BR
-              </Button>
-            </Link>
         </nav>
       </header>
 
