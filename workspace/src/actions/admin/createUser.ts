@@ -16,7 +16,6 @@ const CreateUserInputSchema = z.object({
   displayName: z.string().optional(),
   email: z.string().email("Email inválido."),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
-  phone: z.string().optional(),
   documento: z.string().min(11, "CPF/CNPJ deve ter pelo menos 11 dígitos.").max(18, "Formato de CPF/CNPJ inválido."),
   type: z.enum(['admin', 'superadmin', 'vendedor', 'prospector', 'advogado']),
 });
