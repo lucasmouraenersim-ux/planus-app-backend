@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action for an administrator to create a new user.
@@ -79,11 +80,9 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
 
 
     // 4. Create user document in Firestore
-    const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
+    const newUserForFirestore: Omit<FirestoreUser, 'uid' | 'cpf' | 'cnpj'> & { cpf?: string, cnpj?: string } = {
       email: input.email,
       displayName: userRecord.displayName || input.email.split('@')[0],
-      cpf: normalizedDoc.length === 11 ? normalizedDoc : undefined,
-      cnpj: normalizedDoc.length === 14 ? normalizedDoc : undefined,
       type: finalUserType as UserType,
       createdAt: admin.firestore.Timestamp.now(),
       photoURL: `https://placehold.co/40x40.png?text=${(userRecord.displayName || input.email).charAt(0).toUpperCase()}`,
@@ -96,6 +95,13 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       canViewCareerPlan: !isSuperAdminEmail,
       assignmentLimit: 2, // Default limit for new users
     };
+
+    // Conditionally add cpf or cnpj to avoid 'undefined' values
+    if (normalizedDoc.length === 11) {
+      newUserForFirestore.cpf = normalizedDoc;
+    } else if (normalizedDoc.length === 14) {
+      newUserForFirestore.cnpj = normalizedDoc;
+    }
     
     await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore);
     
@@ -113,7 +119,9 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
   } catch (error: any) {
     console.error("[CREATE_USER_ACTION] Critical error:", error);
     let message = "Ocorreu um erro inesperado ao criar o usuário.";
-    if (error.code === 'auth/email-already-exists') {
+    if (error instanceof Error && error.message.includes('Firestore document')) {
+        message = `Erro de banco de dados: ${error.message}`;
+    } else if (error.code === 'auth/email-already-exists') {
       message = "Este email já está em uso.";
     } else if (error.code === 'auth/invalid-password') {
       message = "A senha fornecida é inválida. Deve ter pelo menos 6 caracteres.";
