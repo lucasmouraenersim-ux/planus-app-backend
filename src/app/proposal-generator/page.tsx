@@ -38,6 +38,7 @@ const formSchema = z.object({
   clienteCnpjCpf: z.string().optional(),
   codigoClienteInstalacao: z.string().optional().describe("Unidade Consumidora (UC)"),
   item1Quantidade: z.string().min(1, "Consumo KWh é obrigatório.").refine(val => !isNaN(parseFloat(val.replace('.', '').replace(',', '.'))), { message: "Consumo KWh deve ser um número válido." }),
+  currentTariff: z.string().min(1, "Tarifa é obrigatória.").refine(val => !isNaN(parseFloat(val.replace('.', '').replace(',', '.'))), { message: "A tarifa deve ser um número válido." }),
   ligacao: z.enum(['MONOFASICO', 'BIFASICO', 'TRIFASICO', 'NAO_INFORMADO', '']).optional().describe("Tipo de Fornecimento"),
   classificacao: z.string().optional().describe("Classe de Consumo"),
   
@@ -105,6 +106,7 @@ function ProposalGeneratorPageContent() {
       clienteCnpjCpf: "",
       codigoClienteInstalacao: "",
       item1Quantidade: initialKwhFromUrl || "1500",
+      currentTariff: "0.98",
       ligacao: "TRIFASICO",
       classificacao: "RESIDENCIAL-CONVENCIONAL BAIXA TENSAO B1",
       clienteCep: "",
@@ -123,12 +125,13 @@ function ProposalGeneratorPageContent() {
   const cepValue = form.watch("clienteCep");
   const kwhValue = form.watch("item1Quantidade");
   const ufValue = form.watch("clienteUF");
+  const tariffValue = form.watch("currentTariff");
 
   // Calcular economia baseada nas configurações atuais
   const savingsResult = useMemo(() => {
     const kwh = parseFloat(kwhValue.replace('.', '').replace(',', '.')) || 0;
-    const kwhToReaisFactor = 1.0907;
-    const billAmount = kwh * kwhToReaisFactor;
+    const tariff = parseFloat(tariffValue.replace(',', '.')) || 0;
+    const billAmount = kwh * tariff;
     
     const selectedState = statesData.find(s => s.abbreviation === ufValue);
     
@@ -144,7 +147,7 @@ function ProposalGeneratorPageContent() {
     }
     
     return calculateSavings(billAmount, discountConfig, ufValue);
-  }, [kwhValue, ufValue, discountConfig]);
+  }, [kwhValue, ufValue, tariffValue, discountConfig]);
 
   useEffect(() => {
     const kwhFromUrl = searchParams.get('item1Quantidade');
@@ -436,20 +439,35 @@ function ProposalGeneratorPageContent() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="item1Quantidade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Consumo Médio Mensal (KWh)</FormLabel>
-                      <FormControl>
-                        <Input type="text" placeholder="Ex: 1500" {...field} />
-                      </FormControl>
-                      <FormDescription>Este valor preencherá o "Consumo em kWh" e baseará outros cálculos.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                    control={form.control}
+                    name="item1Quantidade"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Consumo Médio Mensal (KWh)</FormLabel>
+                        <FormControl>
+                            <Input type="text" placeholder="Ex: 1500" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="currentTariff"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Tarifa Vigente (R$/kWh)</FormLabel>
+                            <FormControl>
+                                <Input type="text" placeholder="Ex: 0,98" {...field} />
+                            </FormControl>
+                            <FormDescription className="text-xs">Esta tarifa será a base para o cálculo da conta sem desconto.</FormDescription>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                </div>
                 <FormField
                   control={form.control}
                   name="ligacao"

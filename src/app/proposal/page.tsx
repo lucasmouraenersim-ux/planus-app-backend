@@ -45,14 +45,15 @@ function ProposalPageContent() {
     
     // Pre-fill from URL params
     useEffect(() => {
-        const clientNameFromUrl = searchParams.get('clienteNome');
-        const consumptionFromUrl = searchParams.get('item1Quantidade');
-        if (clientNameFromUrl) {
-            setProposalData(prev => ({...prev, clientName: clientNameFromUrl}));
-        }
-        if (consumptionFromUrl) {
-             setProposalData(prev => ({...prev, avgConsumption: parseFloat(consumptionFromUrl) || 0}));
-        }
+        setProposalData(prev => ({
+            ...prev,
+            clientName: searchParams.get('clienteNome') || prev.clientName,
+            avgConsumption: parseFloat(searchParams.get('item1Quantidade') || String(prev.avgConsumption)),
+            currentPrice: parseFloat(searchParams.get('currentTariff') || String(prev.currentPrice)),
+            discountRate: parseFloat(searchParams.get('fixedRate') || searchParams.get('promotionalRate') || String(prev.discountRate)),
+            clientCpfCnpj: searchParams.get('clienteCnpjCpf') || prev.clientCpfCnpj,
+            consumerUnit: `${searchParams.get('clienteRua') || ''}, ${searchParams.get('clienteNumero') || ''} - ${searchParams.get('clienteCidade') || ''}/${searchParams.get('clienteUF') || ''}` || prev.consumerUnit,
+        }));
     }, [searchParams]);
 
     // Perform calculations when data changes
@@ -97,7 +98,6 @@ function ProposalPageContent() {
                 html2canvas: {
                   scale: 0.6 // Scale down to fit A4
                 },
-                // width and windowWidth are not standard in jspdf.html options. Using scale is better.
             });
         }
     };
