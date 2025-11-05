@@ -1,8 +1,9 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -69,7 +70,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload, Map
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -1202,6 +1203,20 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     });
   }, [allLeads, dateRange]);
 
+  const leadsByState = useMemo(() => {
+    const finalizedLeads = filteredLeads.filter(l => l.stageId === 'finalizado');
+    const stateCounts = finalizedLeads.reduce((acc, lead) => {
+      const state = lead.uf || 'N/A';
+      acc[state] = (acc[state] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(stateCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredLeads]);
+
+
   const aggregatedMetrics = useMemo(() => {
     const paidCommissions = withdrawalRequests.filter(w => w.status === 'concluido').reduce((sum, w) => sum + w.amount, 0);
     const pendingCommissions = withdrawalRequests.filter(w => w.status === 'pendente').reduce((sum, w) => sum + w.amount, 0);
@@ -1392,6 +1407,32 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                   </CardContent>
               </Card>
           </div>
+
+           <Card className="bg-card/70 backdrop-blur-lg border">
+                <CardHeader>
+                    <CardTitle className="text-primary flex items-center"><Map className="mr-2 h-5 w-5"/>Leads Finalizados por Estado</CardTitle>
+                    <CardDescription>Número de leads finalizados por estado no período selecionado.</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[350px]">
+                    {leadsByState.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={leadsByState} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border)/0.5)" />
+                                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                                <RechartsTooltip
+                                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
+                                    labelStyle={{ color: "hsl(var(--foreground))" }}
+                                    formatter={(value: number) => [`${value} leads`, 'Finalizados']}
+                                />
+                                <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <p className="text-center text-muted-foreground pt-10">Nenhum lead finalizado com estado definido no período.</p>
+                    )}
+                </CardContent>
+            </Card>
 
           <Card className="bg-card/70 backdrop-blur-lg border">
               <CardHeader>

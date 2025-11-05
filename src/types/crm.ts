@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export type StageId =
@@ -70,6 +71,8 @@ export interface LeadDocumentData {
   cpf?: string; // New: CPF para Pessoa Física
   cnpj?: string; // New: CNPJ para Pessoa Jurídica
   stateRegistration?: string; // New: Inscrição Estadual para PJ
+  uf?: string; // New: Estado (UF) do cliente
+  tariff?: number; // New: Tarifa de energia do cliente
 
   // Fields for Import/Export
   codigoClienteInstalacao?: string; // 'Instalação' from CSV
@@ -109,6 +112,9 @@ export interface LeadDocumentData {
   scoreJustification?: string;
   nextActionSuggestion?: string;
   lastAnalyzedAt?: Timestamp | string;
+  financialStatus?: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
+  recorrenciaPaga?: boolean;
+  paidRecurrenceMonths?: string[];
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt' | 'lastAnalyzedAt'> {

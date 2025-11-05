@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,6 +7,7 @@ import { z } from "zod";
 import type { LeadDocumentData, StageId, LeadSource } from '@/types/crm';
 import { STAGE_IDS, LEAD_SOURCES } from '@/types/crm'; // Import defined arrays
 import type { FirestoreUser } from '@/types/user';
+import { statesData } from '@/data/state-data';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +70,16 @@ const leadFormSchema = z.object({
   leadSource: z.enum(LEAD_SOURCES).optional(),
   phone: z.string().optional(),
   email: z.string().email("O email fornecido é inválido.").optional().or(z.literal('')),
+  uf: z.string().optional(),
+  tariff: z.preprocess(
+    (val) => {
+      const strVal = String(val || "").trim();
+      if (strVal === '') return null;
+      const num = parseFloat(strVal.replace(",", "."));
+      return isNaN(num) ? null : num;
+    },
+    z.number().min(0).optional().nullable()
+  ),
   
   cpf: z.string().optional(),
   cnpj: z.string().optional(),
@@ -125,6 +137,8 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
       leadSource: initialData?.leadSource || undefined,
       phone: initialData?.phone || "",
       email: initialData?.email || "",
+      uf: initialData?.uf || "",
+      tariff: initialData?.tariff ?? undefined,
       correctionReason: initialData?.correctionReason || "",
       customerType: initialData?.customerType,
       cpf: initialData?.cpf || "",
@@ -299,6 +313,35 @@ export function LeadForm({ onSubmit, onCancel, initialData, isSubmitting, allUse
                         <FormMessage />
                         </FormItem>
                     )}
+                    />
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                    control={form.control}
+                    name="tariff"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Tarifa (R$/kWh)</FormLabel>
+                        <FormControl><Input type="number" step="0.001" placeholder="Ex: 0.98" {...field} value={field.value ?? ''} /></FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="uf"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Estado (UF)</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione o estado" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {statesData.map(state => <SelectItem key={state.code} value={state.abbreviation}>{state.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                 </div>
                 <FormField
