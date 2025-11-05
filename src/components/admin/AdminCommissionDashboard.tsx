@@ -3,7 +3,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -886,7 +886,8 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       let leads = await fetchAllCrmLeadsGlobally();
       if (loggedInUser?.displayName === 'Eduardo W') {
         leads = leads.filter(lead => {
-          const relevantDate = parseISO(lead.completedAt || lead.signedAt || lead.createdAt);
+          if (!lead.completedAt && !lead.signedAt) return false;
+          const relevantDate = parseISO(lead.completedAt || lead.signedAt!);
           const month = relevantDate.getMonth();
           return month <= 6 || month >= 10;
         });
