@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import type { AppUser } from '@/types/user';
@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Loader2, Target as TargetIcon } from 'lucide-react';
+import { DollarSign, Users, Zap, LineChart, Network, Briefcase, Loader2, Target as TargetIcon, CalendarIcon } from 'lucide-react';
 import { Progress } from '../ui/progress';
 
 interface SellerCommissionDashboardProps {
@@ -27,13 +27,13 @@ interface SellerCommissionDashboardProps {
 
 export default function SellerCommissionDashboard({ loggedInUser, leads, isLoading }: SellerCommissionDashboardProps) {
   const { allFirestoreUsers } = useAuth();
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const formatCurrency = (value: number | undefined) => value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || "R$ 0,00";
 
   const { performanceMetrics, costAssistance } = useMemo(() => {
-    const now = new Date();
     const getMonthKey = (date: Date) => format(date, 'yyyy-MM');
-    const currentMonthKey = getMonthKey(now);
+    const currentMonthKey = getMonthKey(selectedMonth); // Use selectedMonth
 
     let activeLeads = 0;
     let finalizedThisMonthCount = 0;
@@ -68,7 +68,6 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
       if (l.stageId === 'finalizado') {
         const completedDate = l.completedAt ? parseISO(l.completedAt) : null;
         
-        // CORREÇÃO: Usar sellerName para verificar o dono do lead para a ajuda de custo
         if (leadSellerNameLower === loggedInSellerNameLower) {
             personalFinalizedKwhAllTime += (l.kwh || 0);
         }
@@ -77,13 +76,10 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
           finalizedThisMonthCount++;
           valueFinalizedThisMonth += (l.valueAfterDiscount || 0);
           
-          // CORREÇÃO: Usar sellerName para ganhos pessoais
           if (leadSellerNameLower === loggedInSellerNameLower) {
             const userCommissionRate = loggedInUser.commissionRate || (l.value > 20000 ? 50 : 40);
             personalGainsThisMonth += (l.valueAfterDiscount || 0) * (userCommissionRate / 100);
           } else {
-            // A lógica de ganhos de rede parece estar usando userId, o que pode ser mantido
-            // se a hierarquia (uplineUid) estiver correta.
             const sellerLevel = downlineLevelMap.get(l.userId);
             if (sellerLevel && commissionRates[sellerLevel]) {
               networkGainsThisMonth += (l.valueAfterDiscount || 0) * commissionRates[sellerLevel];
@@ -93,7 +89,6 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
       }
     });
 
-    // Cost Assistance Calculation
     const totalGoalKwh = 20000;
     const progressPercentage = Math.min((personalFinalizedKwhAllTime / totalGoalKwh) * 100, 100);
     const milestonesReached = Math.floor(personalFinalizedKwhAllTime / 5000);
@@ -116,7 +111,7 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
       performanceMetrics: { activeLeads, finalizedThisMonth: finalizedThisMonthCount, valueFinalizedThisMonth, personalGainsThisMonth, networkGainsThisMonth },
       costAssistance
     };
-  }, [leads, loggedInUser, allFirestoreUsers]);
+  }, [leads, loggedInUser, allFirestoreUsers, selectedMonth]);
   
   const getStageBadgeStyle = (stageId: StageId) => {
     const stageConfig = STAGES_CONFIG.find(s => s.id === stageId);
@@ -152,6 +147,19 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
             </Button>
         </Link>
       </header>
+
+      {/* Month Selector */}
+      <div className="flex justify-center items-center gap-4">
+        <Button variant="outline" size="icon" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+          <CalendarIcon className="h-4 w-4" />
+        </Button>
+        <h2 className="text-2xl font-semibold text-center text-primary capitalize">
+          {format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+        </h2>
+        <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+          <CalendarIcon className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Resumo de Comissões e Saldos */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
