@@ -70,7 +70,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload, Map
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload, Map as MapIcon
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -1410,7 +1410,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
            <Card className="bg-card/70 backdrop-blur-lg border">
                 <CardHeader>
-                    <CardTitle className="text-primary flex items-center"><Map className="mr-2 h-5 w-5"/>Leads Finalizados por Estado</CardTitle>
+                    <CardTitle className="text-primary flex items-center"><MapIcon className="mr-2 h-5 w-5"/>Leads Finalizados por Estado</CardTitle>
                     <CardDescription>Número de leads finalizados por estado no período selecionado.</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[350px]">
