@@ -56,15 +56,20 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
     };
     if (loggedInUser) buildDownlineMap(loggedInUser.uid);
 
+    const loggedInSellerNameLower = (loggedInUser.displayName || '').trim().toLowerCase();
+
     leads.forEach(l => {
       if (!['assinado', 'finalizado', 'perdido', 'cancelado'].includes(l.stageId)) {
         activeLeads++;
       }
+      
+      const leadSellerNameLower = (l.sellerName || '').trim().toLowerCase();
 
       if (l.stageId === 'finalizado') {
         const completedDate = l.completedAt ? parseISO(l.completedAt) : null;
         
-        if (l.userId === loggedInUser.uid) {
+        // CORREÇÃO: Usar sellerName para verificar o dono do lead para a ajuda de custo
+        if (leadSellerNameLower === loggedInSellerNameLower) {
             personalFinalizedKwhAllTime += (l.kwh || 0);
         }
 
@@ -72,10 +77,13 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
           finalizedThisMonthCount++;
           valueFinalizedThisMonth += (l.valueAfterDiscount || 0);
           
-          if (l.userId === loggedInUser.uid) {
+          // CORREÇÃO: Usar sellerName para ganhos pessoais
+          if (leadSellerNameLower === loggedInSellerNameLower) {
             const userCommissionRate = loggedInUser.commissionRate || (l.value > 20000 ? 50 : 40);
             personalGainsThisMonth += (l.valueAfterDiscount || 0) * (userCommissionRate / 100);
           } else {
+            // A lógica de ganhos de rede parece estar usando userId, o que pode ser mantido
+            // se a hierarquia (uplineUid) estiver correta.
             const sellerLevel = downlineLevelMap.get(l.userId);
             if (sellerLevel && commissionRates[sellerLevel]) {
               networkGainsThisMonth += (l.valueAfterDiscount || 0) * commissionRates[sellerLevel];
@@ -239,7 +247,7 @@ export default function SellerCommissionDashboard({ loggedInUser, leads, isLoadi
                   leads.slice(0, 5).map(lead => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.name}</TableCell>
-                      <TableCell>{lead.userId === loggedInUser.uid ? "Você" : lead.sellerName}</TableCell>
+                      <TableCell>{lead.sellerName === loggedInUser.displayName ? "Você" : lead.sellerName}</TableCell>
                       <TableCell>{formatCurrency(lead.valueAfterDiscount)}</TableCell>
                       <TableCell>{lead.kwh} kWh</TableCell>
                       <TableCell><span className={`px-2 py-0.5 text-xs rounded-full ${getStageBadgeStyle(lead.stageId)}`}>{STAGES_CONFIG.find(s=>s.id === lead.stageId)?.title || lead.stageId}</span></TableCell>

@@ -31,44 +31,30 @@ function SellerDashboardPageContent() {
     }
   
     setIsLoadingLeads(true);
-
-    const downlineUids = allFirestoreUsers
-        .filter(u => u.uplineUid === appUser.uid)
-        .map(u => u.uid);
-
-    const allTeamUids = [appUser.uid, ...downlineUids];
     
-    // A query 'in' é limitada a 30 itens. Se a equipe for maior, precisará de múltiplas queries.
-    if (allTeamUids.length > 30) {
-        console.warn("A equipe excede 30 membros, a consulta de leads pode estar incompleta.");
-        // Implementar lógica de múltiplas queries se necessário
-    }
-    
-    const leadsQuery = query(collection(db, 'crm_leads'), where('userId', 'in', allTeamUids));
+    // CORREÇÃO: Usar a mesma estratégia da página de Ranking
+    // Busca TODOS os leads e filtra por sellerName (nome do vendedor)
+    fetchAllCrmLeadsGlobally().then(allLeads => {
+        const sellerNameLower = (appUser.displayName || '').trim().toLowerCase();
+        
+        // Filtra os leads que pertencem ao vendedor logado ou à sua downline
+        const downlineUids = allFirestoreUsers
+            .filter(u => u.uplineUid === appUser.uid)
+            .map(u => u.uid);
 
-    const unsubscribe = onSnapshot(leadsQuery, (snapshot) => {
-        const fetchedLeads: LeadWithId[] = [];
-        snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            fetchedLeads.push({
-                id: docSnap.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
-                lastContact: (data.lastContact as Timestamp)?.toDate().toISOString(),
-                signedAt: data.signedAt ? (data.signedAt as Timestamp).toDate().toISOString() : undefined,
-                completedAt: data.completedAt ? (data.completedAt as Timestamp).toDate().toISOString() : undefined,
-            } as LeadWithId);
-        });
-        setLeads(fetchedLeads);
+        const myLeads = allLeads.filter(lead => 
+            (lead.sellerName?.trim().toLowerCase() === sellerNameLower) || 
+            (downlineUids.includes(lead.userId))
+        );
+
+        setLeads(myLeads);
         setIsLoadingLeads(false);
-    }, (error) => {
-        console.error("❌ ERRO ao buscar leads em tempo real:", error);
+    }).catch(error => {
+        console.error("❌ ERRO ao buscar leads no painel do vendedor:", error);
         setIsLoadingLeads(false);
     });
 
-    return () => unsubscribe(); // Limpa o listener ao desmontar o componente
-
-  }, [appUser, allFirestoreUsers, isLoadingAuth]);
+  }, [appUser, allFirestoreUsers, isLoadingAuth, fetchAllCrmLeadsGlobally]);
   
 
   if (isLoadingAuth || isLoadingLeads) {
