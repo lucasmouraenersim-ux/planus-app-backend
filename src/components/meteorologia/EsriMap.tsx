@@ -10,19 +10,8 @@ import React, {
 import { createRoot, Root } from 'react-dom/client';
 import * as turf from '@turf/turf';
 
-import { createPortal } from 'react-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -33,17 +22,13 @@ import {
 import { Label } from '@/components/ui/label';
 import {
   Pencil,
-  Menu,
   MapPin,
   X,
   PlusCircle,
-  Calendar as CalendarIcon,
   Wind,
   CloudHail,
   Tornado,
   LogOut,
-  Layers,
-  AlertTriangle,
   Send,
   Loader2,
   Search as SearchIcon,
@@ -54,9 +39,6 @@ import {
 import {
   collection,
   addDoc,
-  query,
-  where,
-  onSnapshot,
   Timestamp,
   serverTimestamp,
   setDoc,
@@ -106,8 +88,6 @@ const hazardOptions = [
   { value: 'wind', label: 'Vento', icon: Wind },
   { value: 'tornado', label: 'Tornado', icon: Tornado },
 ] as const;
-
-const prevotsLevelOptions = [1, 2, 3, 4, 5];
 
 const SideMenu = ({ onLogout }: { onLogout: () => void }) => {
   const menuItems = [
@@ -605,6 +585,9 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
   const esriModulesRef = useRef<any>({});
   const drawControlsContainerRef = useRef<HTMLDivElement | null>(null);
   const drawUiRootRef = useRef<Root | null>(null);
+  const menuRootRef = useRef<Root | null>(null);
+  const meteoRootRef = useRef<Root | null>(null);
+  const mapInitializedRef = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [brazilBoundary, setBrazilBoundary] = useState<any>(null);
@@ -687,7 +670,10 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
 
   useEffect(() => {
     fetch('https://raw.githubusercontent.com/LucasMouraChaser/brasilunificado/main/brasilunificado.geojson')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         const firstValid = data.features.find(
           (feature: any) =>
@@ -700,7 +686,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
           console.error('❌ Nenhum polígono válido no GeoJSON do Brasil.');
         }
       })
-      .catch((error) => console.error('❌ Erro ao carregar GeoJSON de municípios:', error));
+      .catch((error) => console.error('❌ Erro ao carregar contorno do Brasil:', error));
   }, []);
 
   useEffect(() => {
@@ -892,6 +878,9 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [isReportMode]);
 
+  const MUNICIPIOS_URL =
+    'https://raw.githubusercontent.com/LucasMouraChaser/simplaoosmunicipio/bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplificado.geojson';
+
   const initMap = useCallback(async () => {
     if (!mapDivRef.current || !brazilBoundary || viewRef.current) return;
 
@@ -1008,10 +997,11 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         visible: false,
       });
 
-      fetch(
-        'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geo1_municipio_2010_br.json'
-      )
-        .then((res) => res.json())
+      fetch(MUNICIPIOS_URL)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           const municipioGraphics = data.features.map(
             (feature: any) =>
@@ -1050,28 +1040,22 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
       view.popup.autoOpenEnabled = false;
 
       const basemapGallery = new BasemapGallery({ view });
-
-      view.ui.add(
-        new Expand({
-          view,
-          content: basemapGallery,
-          expandIconClass: 'esri-icon-basemap',
-          group: 'top-left',
-        }),
-        'top-left'
-      );
+      const basemapExpand = new Expand({
+        view,
+        content: basemapGallery,
+        expandIconClass: 'esri-icon-basemap',
+        group: 'top-left',
+      });
+      view.ui.add(basemapExpand, 'top-left');
 
       const layerList = new LayerList({ view });
-
-      view.ui.add(
-        new Expand({
-          view,
-          content: layerList,
-          expandIconClass: 'esri-icon-layers',
-          group: 'top-left',
-        }),
-        'top-left'
-      );
+      const layerExpand = new Expand({
+        view,
+        content: layerList,
+        expandIconClass: 'esri-icon-layers',
+        group: 'top-left',
+      });
+      view.ui.add(layerExpand, 'top-left');
 
       const sketchVM = new SketchViewModel({
         view,
@@ -1086,7 +1070,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         setIsDrawing(false);
         const attributes = (sketchViewModelRef.current as any)._creationAttributes ?? {};
 
-        addPolygon({
+        const result = addPolygon({
           graphic: event.graphic,
           attributes,
           brazilBoundary,
@@ -1096,13 +1080,21 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
           Polygon,
           webMercatorUtils,
         });
+
+        if (result) {
+          const targetLayerId = attributes.hazard || attributes.type;
+          const targetLayer = graphicsLayersRef.current[targetLayerId as string];
+          if (targetLayer && !targetLayer.graphics.includes(result)) {
+            targetLayer.add(result);
+          }
+        }
       });
 
       sketchVM.on('update', (event: __esri.SketchViewModelUpdateEvent) => {
         if (event.state !== 'complete') return;
 
         event.graphics.forEach((graphic) => {
-          const { hazard, level, type } = graphic.attributes;
+          const { hazard, level, type } = graphic.attributes as any;
           const geographicGeom = webMercatorUtils.webMercatorToGeographic(
             graphic.geometry
           ) as __esri.Polygon;
@@ -1129,7 +1121,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
 
           graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
           updatePolygon(graphic, graphic.attributes);
-          console.log(`✅ Polígono atualizado.`);
+          console.log('✅ Polígono atualizado.');
         });
       });
 
@@ -1170,9 +1162,9 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         expandIconClass: 'esri-icon-menu',
         group: 'top-left',
       });
-
-      const menuRoot = createRoot(menuContainer);
-      menuRoot.render(<SideMenu onLogout={onLogout} />);
+      menuRootRef.current = createRoot(menuContainer);
+      menuRootRef.current.render(<SideMenu onLogout={onLogout} />);
+      view.ui.add(menuExpand, 'top-left');
 
       const meteoTilesContainer = document.createElement('div');
       const meteoTilesExpand = new Expand({
@@ -1182,67 +1174,92 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         group: 'top-right',
         expanded: true,
       });
-
-      const meteoRoot = createRoot(meteoTilesContainer);
-      meteoRoot.render(
+      meteoRootRef.current = createRoot(meteoTilesContainer);
+      meteoRootRef.current.render(
         <MeteoTilesControls
           map={map}
           ImageryLayer={esriModulesRef.current.ImageryLayer}
         />
       );
-
-      drawControlsContainerRef.current = document.createElement('div');
-      drawControlsContainerRef.current.id = 'draw-controls-container-internal';
+      view.ui.add(meteoTilesExpand, 'top-right');
 
       if (userAppRole === 'superadmin' || userAppRole === 'admin') {
+        drawControlsContainerRef.current = document.createElement('div');
+        drawControlsContainerRef.current.id = 'draw-controls-container-internal';
+
         drawUiRootRef.current = createRoot(drawControlsContainerRef.current);
-
-        view.ui.add(
-          new Expand({
-            view,
-            content: drawControlsContainerRef.current,
-            expandIconClass: 'esri-icon-edit',
-            group: 'top-left',
-          }),
-          'top-left'
-        );
+        const drawExpand = new Expand({
+          view,
+          content: drawControlsContainerRef.current,
+          expandIconClass: 'esri-icon-edit',
+          group: 'top-left',
+        });
+        view.ui.add(drawExpand, 'top-left');
       }
-
-      view.ui.add(menuExpand, 'top-left');
-      view.ui.add(meteoTilesExpand, 'top-right');
     } catch (error) {
       console.error('Erro ao carregar o mapa da Esri:', error);
       setIsLoading(false);
     }
-  }, [brazilBoundary, onLogout, selectedModel, selectedHazardForDisplay, userAppRole, isReportMode, forecastDate]);
+  }, [brazilBoundary, onLogout, userAppRole]);
 
   useEffect(() => {
+    if (!brazilBoundary || mapInitializedRef.current) return;
     initMap();
+    mapInitializedRef.current = true;
 
     return () => {
       viewRef.current?.destroy();
       viewRef.current = null;
 
+      menuRootRef.current?.unmount();
+      menuRootRef.current = null;
+
+      meteoRootRef.current?.unmount();
+      meteoRootRef.current = null;
+
       if (drawUiRootRef.current) {
         drawUiRootRef.current.unmount();
         drawUiRootRef.current = null;
       }
+
+      drawControlsContainerRef.current?.remove();
+      drawControlsContainerRef.current = null;
+
+      Object.values(graphicsLayersRef.current).forEach((layer) => {
+        layer.removeAll?.();
+      });
+      graphicsLayersRef.current = {};
+
+      mapInitializedRef.current = false;
     };
-  }, [initMap]);
+  }, [brazilBoundary, initMap]);
 
   useEffect(() => {
     if (!drawUiRootRef.current || !drawControlsContainerRef.current) return;
     if (!(userAppRole === 'superadmin' || userAppRole === 'admin')) return;
 
-    drawUiRootRef.current.render(
+    const content = isDrawUIOpen ? (
       <DrawUI
         onStartDrawing={handleStartDrawing}
         onCancel={handleCancelDrawing}
         activeHazard={selectedHazardForDisplay}
         isDrawingActive={isDrawing}
       />
+    ) : (
+      <div className="px-2 py-1 text-xs text-gray-300">
+        Clique em &quot;Desenhar Risco&quot; para abrir os controles.
+      </div>
     );
-  }, [handleCancelDrawing, handleStartDrawing, isDrawing, selectedHazardForDisplay, userAppRole]);
+
+    drawUiRootRef.current.render(content);
+  }, [
+    handleCancelDrawing,
+    handleStartDrawing,
+    isDrawing,
+    isDrawUIOpen,
+    selectedHazardForDisplay,
+    userAppRole,
+  ]);
 
   const handleSaveReport = useCallback(async () => {
     if (!newReport.location) {
@@ -1285,7 +1302,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     if (!graphic || !sketchVM) return;
 
     const targetLayerId =
-      graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard;
+      (graphic.attributes.type === 'prevots' ? 'prevots' : graphic.attributes.hazard) as string;
     const targetLayer = graphicsLayersRef.current[targetLayerId];
 
     if (targetLayer) {
@@ -1445,20 +1462,6 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
           {countdown}
         </span>
       </div>
-
-      {isDrawUIOpen &&
-        drawControlsContainerRef.current &&
-        userAppRole &&
-        (userAppRole === 'superadmin' || userAppRole === 'admin') &&
-        createPortal(
-          <DrawUI
-            onStartDrawing={handleStartDrawing}
-            onCancel={handleCancelDrawing}
-            activeHazard={selectedHazardForDisplay}
-            isDrawingActive={isDrawing}
-          />,
-          drawControlsContainerRef.current
-        )}
 
       <div
         className="absolute"
