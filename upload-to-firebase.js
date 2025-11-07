@@ -1,7 +1,6 @@
 // Script para fazer upload dos tiles para Firebase Storage
 import { initializeApp } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import fetch from 'node-fetch'; // Import node-fetch
 import fs from 'fs'; // Import fs to read files from disk
 
 const firebaseConfig = {
