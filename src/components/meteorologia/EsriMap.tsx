@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, {
@@ -687,7 +686,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
   }, []);
 
   useEffect(() => {
-    fetch('https://cdn.jsdelivr.net/gh/LucasMouraChaser/brasilunificado@main/brasilunificado.geojson')
+    fetch('https://raw.githubusercontent.com/LucasMouraChaser/brasilunificado/main/brasilunificado.geojson')
       .then((res) => res.json())
       .then((data) => {
         const firstValid = data.features.find(
@@ -701,7 +700,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
           console.error('❌ Nenhum polígono válido no GeoJSON do Brasil.');
         }
       })
-      .catch((error) => console.error('❌ Erro ao carregar contorno do Brasil:', error));
+      .catch((error) => console.error('❌ Erro ao carregar GeoJSON de municípios:', error));
   }, []);
 
   useEffect(() => {
@@ -1010,7 +1009,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
       });
 
       fetch(
-        'https://cdn.jsdelivr.net/gh/LucasMouraChaser/simplaoosmunicipio@bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplificado.geojson'
+        'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geo1_municipio_2010_br.json'
       )
         .then((res) => res.json())
         .then((data) => {
@@ -1446,6 +1445,20 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
           {countdown}
         </span>
       </div>
+
+      {isDrawUIOpen &&
+        drawControlsContainerRef.current &&
+        userAppRole &&
+        (userAppRole === 'superadmin' || userAppRole === 'admin') &&
+        createPortal(
+          <DrawUI
+            onStartDrawing={handleStartDrawing}
+            onCancel={handleCancelDrawing}
+            activeHazard={selectedHazardForDisplay}
+            isDrawingActive={isDrawing}
+          />,
+          drawControlsContainerRef.current
+        )}
 
       <div
         className="absolute"
