@@ -1,3 +1,5 @@
+// src/components/meteorologia/polygon-manager.ts
+
 import type { Feature } from '@turf/turf';
 
 type EsriPolygon = __esri.Polygon;
