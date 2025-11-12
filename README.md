@@ -35,3 +35,4 @@ Se a sua implantação no Firebase App Hosting falhar com um erro como `package.
 # sent-app-backend
 
 Backend configurado para implantação estável.
+

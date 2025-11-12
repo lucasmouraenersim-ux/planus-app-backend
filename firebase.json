@@ -8,15 +8,16 @@
   },
   "apphosting": {
     "backends": {
-      "planus-app-backend": {
+      "sent-app-backend": {
         "location": "us-central1",
         "appYaml": "apphosting.yaml"
       }
     },
     "targets": {
       "sent": [
-        "planus-app-backend"
+        "sent-app-backend"
       ]
     }
   }
 }
+
