@@ -45,28 +45,27 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     }
 
     useEffect(() => {
-        if (!isLoadingAuth) {
-            const isAuthPage = pathname === '/login' || pathname === '/register';
-            const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade' || pathname === '/photo-requests';
-            const isTrainingPage = pathname === '/training';
+      if (isLoadingAuth) {
+        return; // Do nothing while loading
+      }
 
-            if (appUser) { // User is logged in
-                if (userAppRole === 'prospector' && !isTrainingPage) {
-                    router.replace('/training');
-                    return;
-                }
-                
-                if (isAuthPage) {
-                    if (pathname !== '/') {
-                        router.replace('/dashboard');
-                    }
-                }
-            } else { // User is not logged in
-                if (!isAuthPage && !isPublicPage) {
-                    router.replace('/login');
-                }
-            }
+      const isAuthPage = pathname === '/login' || pathname === '/register';
+      const isPublicPage = pathname === '/' || pathname === '/politica-de-privacidade' || pathname === '/photo-requests';
+      const isTrainingPage = pathname === '/training';
+
+      if (appUser) {
+        // User is logged in
+        if (userAppRole === 'prospector' && !isTrainingPage) {
+          router.replace('/training');
+        } else if (isAuthPage) {
+          router.replace('/dashboard');
         }
+      } else {
+        // User is not logged in
+        if (!isAuthPage && !isPublicPage) {
+          router.replace('/login');
+        }
+      }
     }, [isLoadingAuth, appUser, userAppRole, pathname, router]);
     
     if (isLoadingAuth) {
