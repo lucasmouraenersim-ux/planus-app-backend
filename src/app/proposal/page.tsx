@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 
@@ -271,6 +272,7 @@ function ProposalPageContent() {
   return (
     <div className="font-sans bg-gray-100 p-4 md:p-8">
       <div id="proposal-container" className="mx-auto max-w-5xl space-y-6">
+        ...
       </div>
       <div className="fixed bottom-6 right-6 z-50">
         <Button onClick={handleDownloadPDF} size="lg" className="h-16 w-auto rounded-full px-6 shadow-lg">
@@ -284,8 +286,12 @@ function ProposalPageContent() {
     </div>
   );
 }
-
 export default function ProposalPage() {
   return (
     <Suspense fallback={<div>Carregando proposta...</div>}>
       <ProposalPageContent />
+    </Suspense>
+  );
+}
+
+    
