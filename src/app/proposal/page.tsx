@@ -111,22 +111,22 @@ const commercializerCatalog: Commercializer[] = [
 
 const plants = [
   {
-    name: "Complexo Solar Buriti",
-    location: "Caldas Novas • Goiás",
-    capacity: "4,8 MWp",
-    image: "/proposal/usina-1.jpg",
+    name: "Complexo Solar Ceilandia - DF",
+    location: "Ceilândia • Distrito Federal",
+    capacity: "Capacidade não informada",
+    image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/56c15b3f8997df4f7ffae93fc2aae20df5505afc/Complexo-solar-Ceilandia-DF-1-768x465.jpg",
   },
   {
-    name: "Complexo Fotovoltaico Veredas",
-    location: "Unaí • Minas Gerais",
-    capacity: "6,2 MWp",
-    image: "/proposal/usina-2.jpg",
+    name: "Complexo Solar Janaúba - MG",
+    location: "Janaúba • Minas Gerais",
+    capacity: "1,5 GWp",
+    image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/56c15b3f8997df4f7ffae93fc2aae20df5505afc/maior-energia-solar-brasil-mg-ciclovivo.jpg",
   },
   {
-    name: "Complexo Planus Rio Araguaia",
-    location: "Barra do Garças • Mato Grosso",
-    capacity: "5,5 MWp",
-    image: "/proposal/capa-planus.png",
+    name: "Complexo GDSun",
+    location: "Localização não informada",
+    capacity: "Comercializador: GDSun",
+    image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/56c15b3f8997df4f7ffae93fc2aae20df5505afc/maior-energia-solar-brasil-mg-ciclovivo.jpg",
   },
 ];
 
@@ -411,7 +411,7 @@ function ProposalPageContent() {
         <div ref={proposalRef} className="space-y-6">
           <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
             <Image
-              src="/proposal/capa-planus.png"
+              src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
               alt="Capa proposta Planus Energia"
               fill
               priority
@@ -496,7 +496,7 @@ function ProposalPageContent() {
                   <div className="space-y-1 p-4">
                     <p className="text-sm font-semibold text-slate-800">{plant.name}</p>
                     <p className="text-xs text-slate-500">{plant.location}</p>
-                    <p className="text-xs font-medium text-sky-600">Capacidade: {plant.capacity}</p>
+                    <p className="text-xs font-medium text-sky-600">{plant.capacity}</p>
                   </div>
                 </div>
               ))}
@@ -511,7 +511,7 @@ function ProposalPageContent() {
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
               {commercializerCatalog.map((item) => (
                 <div key={item.name} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-4 flex justify-center h-16 items-center">
+                  <div className="mb-4 flex h-16 items-center justify-center">
                     <Image
                       src={item.logo}
                       alt={`Logo ${item.name}`}
@@ -603,7 +603,7 @@ function ProposalPageContent() {
                   Comercializadora responsável pela entrega
                 </h3>
                 {selectedCommercializer?.logo ? (
-                  <div className="mt-4 flex justify-center h-16 items-center">
+                  <div className="mt-4 flex h-16 items-center justify-center">
                     <Image
                       src={selectedCommercializer.logo}
                       alt={`Logo ${selectedCommercializer.name}`}
@@ -718,5 +718,3 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
-
-    
