@@ -29,7 +29,7 @@ export async function getLeadsForTeam(userId: string): Promise<LeadWithId[]> {
     }
 
     try {
-        const adminDb = await initializeAdmin();
+        const { db: adminDb } = await initializeAdmin();
         const team = await getTeamForUser(userId); // Fetches downline
 
         // Include the leader themselves in the list of UIDs to query

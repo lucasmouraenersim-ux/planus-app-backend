@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action for an administrator to delete a user.
@@ -21,8 +22,7 @@ export type DeleteUserOutput = z.infer<typeof DeleteUserOutputSchema>;
 
 export async function deleteUser(userId: DeleteUserInput): Promise<DeleteUserOutput> {
   try {
-    const adminDb = await initializeAdmin();
-    const adminAuth = admin.auth();
+    const { db: adminDb, auth: adminAuth } = await initializeAdmin();
 
     // 1. Delete user from Firebase Authentication
     await adminAuth.deleteUser(userId);
@@ -64,7 +64,7 @@ export async function deleteUser(userId: DeleteUserInput): Promise<DeleteUserOut
     if (error.code === 'auth/user-not-found') {
       message = "Usuário não encontrado na autenticação. Tentando limpar apenas os dados do Firestore.";
       try {
-        const adminDb = await initializeAdmin();
+        const { db: adminDb } = await initializeAdmin();
         const userDocRef = adminDb.collection("users").doc(userId);
         await userDocRef.delete();
         message += " Documento do Firestore foi excluído."

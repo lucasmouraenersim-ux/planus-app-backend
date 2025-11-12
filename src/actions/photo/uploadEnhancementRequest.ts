@@ -45,7 +45,7 @@ function getFileExtensionFromDataUri(dataUri: string): string {
 
 export async function uploadEnhancementRequest(input: UploadRequestInput): Promise<UploadRequestOutput> {
   try {
-    const { db, auth: adminAuth } = await initializeAdmin();
+    const { db: adminDb, auth: adminAuth } = await initializeAdmin();
     
     let user: UserRecord;
     try {
@@ -55,7 +55,7 @@ export async function uploadEnhancementRequest(input: UploadRequestInput): Promi
         return { success: false, message: "Usuário não encontrado." };
     }
 
-    const requestsRef = db.collection('photoEnhancementRequests');
+    const requestsRef = adminDb.collection('photoEnhancementRequests');
     const newRequestRef = requestsRef.doc(); // Create a new document reference to get the ID
     const requestId = newRequestRef.id;
     

@@ -30,7 +30,7 @@ const summarizeChatFlow = ai.defineFlow(
         outputSchema: SummarizeChatOutputSchema
     },
     async (leadId) => {
-        const adminDb = await initializeAdmin();
+        const { db: adminDb } = await initializeAdmin();
         const chatDocRef = adminDb.collection("crm_lead_chats").doc(leadId);
         const chatDoc = await chatDocRef.get();
 

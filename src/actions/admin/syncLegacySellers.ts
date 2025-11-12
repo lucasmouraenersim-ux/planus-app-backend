@@ -18,7 +18,7 @@ function normalizeName(name: string | null | undefined): string {
 
 export async function syncLegacySellers(): Promise<{ success: boolean; message: string }> {
   try {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     const leadsRef = adminDb.collection('crm_leads');
     const usersRef = adminDb.collection('users');
     let leadsReattributedSuperFacil = 0;

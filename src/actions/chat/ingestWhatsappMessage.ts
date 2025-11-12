@@ -24,7 +24,7 @@ export type IngestWhatsappMessageOutput = z.infer<typeof IngestWhatsappMessageOu
 // --- Main Server Action ---
 
 export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput): Promise<IngestWhatsappMessageOutput> {
-  const adminDb = await initializeAdmin();
+  const { db: adminDb } = await initializeAdmin();
 
   try {
       const entry = payload.entry?.[0];

@@ -95,7 +95,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
   }
   
   try {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     const fileContent = await file.text();
     
     return new Promise((resolve) => {

@@ -17,7 +17,7 @@ export async function getWithdrawalHistoryForUser(userId: string): Promise<Withd
   }
 
   try {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     // Removed orderBy('requestedAt', 'desc') to avoid composite index requirement.
     // Sorting will be done on the client-side.
     const q = adminDb.collection('withdrawal_requests').where('userId', '==', userId);

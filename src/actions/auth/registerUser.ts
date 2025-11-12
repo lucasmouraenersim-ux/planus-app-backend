@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server action to register a new user.
@@ -27,8 +28,7 @@ export type RegisterUserOutput = z.infer<typeof RegisterUserOutputSchema>;
 
 export async function registerUser(input: RegisterUserInput): Promise<RegisterUserOutput> {
   try {
-    const adminDb = await initializeAdmin();
-    const adminAuth = admin.auth();
+    const { db: adminDb, auth: adminAuth } = await initializeAdmin();
 
     // 1. Check if email is already in use
     try {

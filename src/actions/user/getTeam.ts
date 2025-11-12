@@ -1,3 +1,4 @@
+
 'use server';
 
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -26,7 +27,7 @@ export async function getTeamForUser(userId: string): Promise<FirestoreUser[]> {
     }
 
     try {
-        const adminDb = await initializeAdmin();
+        const { db: adminDb } = await initializeAdmin();
         const usersSnapshot = await adminDb.collection('users').get();
         
         const allUsersByUid = new Map<string, FirestoreUser>();

@@ -48,7 +48,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
           const errors: string[] = [];
 
           try {
-            const adminDb: Firestore = await initializeAdmin();
+            const { db: adminDb } = await initializeAdmin();
             const leadsRef = collection(adminDb, "crm_leads");
             
             const BATCH_SIZE = 400;

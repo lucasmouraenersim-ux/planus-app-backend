@@ -7,7 +7,7 @@ import { subWeeks } from 'date-fns';
 
 export async function processOldWithdrawals(): Promise<{ success: boolean; message: string; count: number }> {
   try {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     const withdrawalsRef = adminDb.collection('withdrawal_requests');
 
     // Calculate the date one week ago

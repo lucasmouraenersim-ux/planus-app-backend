@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow to analyze a lead, providing a score and next action suggestion.
@@ -63,7 +64,7 @@ const analyzeLeadFlow = ai.defineFlow(
     outputSchema: AnalyzeLeadOutputSchema,
   },
   async (leadId) => {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     
     // 1. Fetch Lead and Chat data
     const leadDocRef = adminDb.collection("crm_leads").doc(leadId);

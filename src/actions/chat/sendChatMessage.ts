@@ -40,7 +40,7 @@ export type SendChatMessageOutput = z.infer<typeof SendChatMessageOutputSchema>;
 
 
 export async function sendChatMessage({ leadId, phone, text, sender, type = 'text', mediaUrl }: SendChatMessageInput): Promise<SendChatMessageOutput> {
-  const adminDb = await initializeAdmin();
+  const { db: adminDb } = await initializeAdmin();
   console.log(`[SEND_CHAT_ACTION] Initiated for leadId: '${leadId}' of type '${type}' with text: "${text}"`);
 
   const leadRef = adminDb.collection("crm_leads").doc(leadId);
