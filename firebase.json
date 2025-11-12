@@ -14,5 +14,14 @@
         "appYaml": "apphosting.yaml"
       }
     }
+  },
+  "targets": {
+    "energisa-invoice-editor": {
+      "apphosting": {
+        "app": [
+          "studio"
+        ]
+      }
+    }
   }
 }
