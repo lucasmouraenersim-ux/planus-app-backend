@@ -25,10 +25,10 @@ Se a sua implantação no Firebase App Hosting falhar com um erro indicando que 
 
 **Como Corrigir:**
 
-1.  **Verifique o nome da pasta no seu repositório do GitHub:** Abra seu repositório no site do GitHub e verifique o nome exato da pasta que contém os arquivos `package.json`, `next.config.ts`, etc.
+1.  **Verifique o nome da pasta no seu repositório do GitHub:** Abra seu repositório no site do GitHub e verifique o nome exato da pasta que contém os arquivos `package.json`, `next.config.ts`, etc. Se os arquivos estiverem na raiz, você usará `/` no próximo passo.
 2.  **Ajuste o Diretório Raiz no Firebase:**
     *   Acesse o painel do [Firebase App Hosting](https://console.firebase.google.com/project/energisa-invoice-editor/hosting/backends).
     *   Clique nos três pontos (⋮) ao lado do seu backend (ex: `studio`) e selecione **"Editar back-end"**.
     *   Encontre o campo **"Diretório raiz do app"**.
-    *   Altere o valor de `/` para `/<nome-da-sua-pasta-no-github>` (por exemplo, se a pasta se chamar `meu-app`, digite `/meu-app`).
+    *   Altere o valor para o caminho correto. Se seus arquivos estão em uma pasta chamada `meu-app`, digite `/meu-app`. Se eles estão na raiz do repositório, digite `/`.
 3.  **Salve as alterações.** Uma nova implantação será iniciada automaticamente, e agora ela deverá encontrar os arquivos do projeto e ser concluída com sucesso.
