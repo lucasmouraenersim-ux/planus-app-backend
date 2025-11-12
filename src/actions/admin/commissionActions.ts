@@ -2,7 +2,7 @@
 'use server';
 
 import { z } from 'zod';
-import Papa from 'papaparse';
+import Papa, { ParseError } from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import type { Firestore } from 'firebase-admin/firestore';
 
@@ -124,7 +124,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
             resolve({ success: false, message: `Erro de Servidor: ${errorMessage}` });
           }
         },
-        error: (err) => {
+        error: (err: ParseError) => {
           console.error("[IMPORT_RECURRENCE] PapaParse error:", err);
           resolve({ success: false, message: `Erro ao processar CSV: ${err.message}` });
         },
