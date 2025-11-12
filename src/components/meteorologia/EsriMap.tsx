@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, {
@@ -232,7 +233,7 @@ const ReportsLegend = () => (
         width="16"
         alt="Vento forte"
       />{' '}
-      Vento >100km/h
+      Vento &gt;100km/h
     </div>
     <div>
       <img
@@ -240,7 +241,7 @@ const ReportsLegend = () => (
         width="16"
         alt="Granizo pequeno"
       />{' '}
-      Granizo < 4cm
+      Granizo &lt; 4cm
     </div>
     <div>
       <img
@@ -248,7 +249,7 @@ const ReportsLegend = () => (
         width="16"
         alt="Granizo grande"
       />{' '}
-      Granizo > 4cm
+      Granizo &gt; 4cm
     </div>
     <div>
       <img
@@ -256,7 +257,7 @@ const ReportsLegend = () => (
         width="16"
         alt="Tornado fraco"
       />{' '}
-      Tornado < EF2
+      Tornado &lt; EF2
     </div>
     <div>
       <img
@@ -605,6 +606,8 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
   const esriModulesRef = useRef<any>({});
   const drawControlsContainerRef = useRef<HTMLDivElement | null>(null);
   const drawUiRootRef = useRef<Root | null>(null);
+  const menuRootRef = useRef<Root | null>(null);
+  const meteoRootRef = useRef<Root | null>(null);
   const mapInitializedRef = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -896,8 +899,12 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [isReportMode]);
 
+  const MUNICIPIOS_URL =
+    'https://raw.githubusercontent.com/LucasMouraChaser/simplaoosmunicipio/bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplificado.geojson';
+
   const initMap = useCallback(async () => {
-    if (!mapDivRef.current || !brazilBoundary || viewRef.current) return;
+    if (!mapDivRef.current || !brazilBoundary || mapInitializedRef.current) return;
+    mapInitializedRef.current = true;
 
     try {
       loadCss();
@@ -1108,7 +1115,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         if (event.state !== 'complete') return;
 
         event.graphics.forEach((graphic) => {
-          const { hazard, level, type } = graphic.attributes;
+          const { hazard, level, type } = graphic.attributes as any;
           const geographicGeom = webMercatorUtils.webMercatorToGeographic(
             graphic.geometry
           ) as __esri.Polygon;
@@ -1135,7 +1142,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
 
           graphic.geometry = webMercatorUtils.geographicToWebMercator(esriPolygon);
           updatePolygon(graphic, graphic.attributes);
-          console.log(`✅ Polígono atualizado.`);
+          console.log('✅ Polígono atualizado.');
         });
       });
 
@@ -1176,8 +1183,8 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         expandIconClass: 'esri-icon-menu',
         group: 'top-left',
       });
-      const menuRoot = createRoot(menuContainer);
-      menuRoot.render(<SideMenu onLogout={onLogout} />);
+      menuRootRef.current = createRoot(menuContainer);
+      menuRootRef.current.render(<SideMenu onLogout={onLogout} />);
       view.ui.add(menuExpand, 'top-left');
 
       const meteoTilesContainer = document.createElement('div');
@@ -1188,18 +1195,19 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         group: 'top-right',
         expanded: true,
       });
-      const meteoRoot = createRoot(meteoTilesContainer);
-      meteoRoot.render(
+      meteoRootRef.current = createRoot(meteoTilesContainer);
+      meteoRootRef.current.render(
         <MeteoTilesControls
           map={map}
           ImageryLayer={esriModulesRef.current.ImageryLayer}
         />
       );
       view.ui.add(meteoTilesExpand, 'top-right');
-      
+
       if (userAppRole === 'superadmin' || userAppRole === 'admin') {
         drawControlsContainerRef.current = document.createElement('div');
         drawControlsContainerRef.current.id = 'draw-controls-container-internal';
+
         drawUiRootRef.current = createRoot(drawControlsContainerRef.current);
         const drawExpand = new Expand({
           view,
@@ -1209,43 +1217,57 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
         });
         view.ui.add(drawExpand, 'top-left');
       }
-
     } catch (error) {
       console.error('Erro ao carregar o mapa da Esri:', error);
       setIsLoading(false);
     }
   }, [brazilBoundary, onLogout, userAppRole]);
-
-  useEffect(() => {
-    if (!brazilBoundary || mapInitializedRef.current) return;
-    initMap();
-    mapInitializedRef.current = true;
-
-    return () => {
-      viewRef.current?.destroy();
-      viewRef.current = null;
-    };
-  }, [brazilBoundary, initMap]);
   
   useEffect(() => {
-      if (!drawUiRootRef.current || !drawControlsContainerRef.current) return;
-      if (userAppRole !== 'superadmin' && userAppRole !== 'admin') return;
+    if (!brazilBoundary) return;
+    initMap();
 
-      const content = isDrawUIOpen ? (
-          <DrawUI
-              onStartDrawing={handleStartDrawing}
-              onCancel={handleCancelDrawing}
-              activeHazard={selectedHazardForDisplay}
-              isDrawingActive={isDrawing}
-          />
-      ) : (
-          <div className="p-2 text-sm text-white">Clique para abrir os controles de desenho.</div>
-      );
+    return () => {
+      if (viewRef.current) {
+        viewRef.current.destroy();
+        viewRef.current = null;
+      }
       
-      drawUiRootRef.current.render(content);
+      menuRootRef.current?.unmount();
+      meteoRootRef.current?.unmount();
+      drawUiRootRef.current?.unmount();
 
-  }, [isDrawUIOpen, handleStartDrawing, handleCancelDrawing, isDrawing, selectedHazardForDisplay, userAppRole]);
+      mapInitializedRef.current = false;
+    };
+  }, [brazilBoundary, initMap]);
 
+
+  useEffect(() => {
+    if (!drawUiRootRef.current || !drawControlsContainerRef.current) return;
+    if (!(userAppRole === 'superadmin' || userAppRole === 'admin')) return;
+
+    const content = isDrawUIOpen ? (
+      <DrawUI
+        onStartDrawing={handleStartDrawing}
+        onCancel={handleCancelDrawing}
+        activeHazard={selectedHazardForDisplay}
+        isDrawingActive={isDrawing}
+      />
+    ) : (
+      <div className="px-2 py-1 text-xs text-gray-300">
+        Clique em &quot;Desenhar Risco&quot; para abrir os controles.
+      </div>
+    );
+
+    drawUiRootRef.current.render(content);
+  }, [
+    handleCancelDrawing,
+    handleStartDrawing,
+    isDrawing,
+    isDrawUIOpen,
+    selectedHazardForDisplay,
+    userAppRole,
+  ]);
 
   const handleSaveReport = useCallback(async () => {
     if (!newReport.location) {
