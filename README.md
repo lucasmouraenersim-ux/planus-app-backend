@@ -19,19 +19,16 @@ Abra [http://localhost:9004](http://localhost:9004) no seu navegador para ver o 
 
 ## Troubleshooting
 
-### Build falha com "package.json not found" ou "missing required build step fetch"
+### Build falha com "package.json not found"
 
-Se a sua implantação no Firebase App Hosting falhar com um erro como `package.json not found` ou `missing required build step fetch`, isso geralmente significa que os arquivos do projeto estão dentro de uma subpasta no seu repositório do GitHub, em vez de na raiz.
+Se a sua implantação no Firebase App Hosting falhar com o erro `package.json not found`, isso significa que os arquivos do projeto estão dentro de uma subpasta no seu repositório do GitHub, em vez de estarem na raiz.
 
 **Como Corrigir:**
 
-1.  **Verifique seu repositório no GitHub:** Vá para a página do seu repositório e veja se todos os arquivos (`package.json`, `src`, `next.config.ts`, etc.) estão na página inicial ou se estão dentro de uma pasta (por exemplo, uma pasta chamada `sent-app-backend`).
+1.  **Verifique seu repositório no GitHub:** Vá para a página do seu repositório e confirme o nome da pasta onde todos os arquivos do projeto (`package.json`, `src`, `next.config.ts`, etc.) estão localizados.
 2.  **Ajuste o Diretório Raiz no Firebase:**
     *   Acesse o painel do [Firebase App Hosting](https://console.firebase.google.com/project/energisa-invoice-editor/hosting/backends).
-    *   Clique nos três pontos (⋮) ao lado do seu backend `sent-app-backend` e selecione **"Editar back-end"**.
+    *   Clique nos três pontos (⋮) ao lado do seu backend `studio` e selecione **"Editar back-end"**.
     *   Encontre o campo **"Diretório raiz do app"**.
     *   Altere o valor de `/` para o nome da pasta onde seu código está. Por exemplo, se a pasta for `sent-app-backend`, o valor deve ser `/sent-app-backend`.
-3.  **Salve as alterações.** O Firebase iniciará uma nova implantação, que agora deverá encontrar os arquivos e ser concluída com sucesso.
-# sent-app-backend
-
-Backend configurado para implantação estável.
+3.  **Salve as alterações.** Uma nova implantação será iniciada automaticamente, e agora ela deverá encontrar os arquivos e ser concluída com sucesso.

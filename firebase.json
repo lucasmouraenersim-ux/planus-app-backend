@@ -9,14 +9,14 @@
   },
   "apphosting": {
     "backends": {
-      "sent-app-backend": {
+      "studio": {
         "location": "us-central1",
         "appYaml": "apphosting.yaml"
       }
     },
     "targets": {
       "sent": [
-        "sent-app-backend"
+        "studio"
       ]
     }
   }
