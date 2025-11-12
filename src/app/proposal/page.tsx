@@ -126,7 +126,7 @@ const plants = [
     name: "Complexo GDSun",
     location: "Localização não informada",
     capacity: "Comercializador: GDSun",
-    image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/56c15b3f8997df4f7ffae93fc2aae20df5505afc/maior-energia-solar-brasil-mg-ciclovivo.jpg",
+    image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/images%20(1).jpg",
   },
 ];
 
