@@ -4,7 +4,6 @@
 import { z } from 'zod';
 import Papa from 'papaparse';
 import { initializeAdmin } from '@/lib/firebase/admin';
-import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import type { Firestore } from 'firebase-admin/firestore';
 
 
@@ -49,12 +48,12 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
 
           try {
             const { db: adminDb } = await initializeAdmin();
-            const leadsRef = collection(adminDb, "crm_leads");
+            const leadsRef = adminDb.collection("crm_leads");
             
             const BATCH_SIZE = 400;
 
             for (let i = 0; i < results.data.length; i += BATCH_SIZE) {
-              const batch = writeBatch(adminDb);
+              const batch = adminDb.batch();
               const chunk = results.data.slice(i, i + BATCH_SIZE);
 
               for (const row of chunk) {
@@ -76,16 +75,16 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
                 let q;
                 if (documento && documento.replace(/\D/g, '').length >= 11) {
                   const normalizedDoc = documento.replace(/\D/g, '');
-                  q = query(leadsRef, where(normalizedDoc.length === 11 ? 'cpf' : 'cnpj', '==', normalizedDoc));
+                  q = leadsRef.where(normalizedDoc.length === 11 ? 'cpf' : 'cnpj', '==', normalizedDoc);
                 } else if (cliente) {
-                  q = query(leadsRef, where('name', '==', cliente));
+                  q = leadsRef.where('name', '==', cliente);
                 } else {
                    invalidRowCount++;
                    continue;
                 }
 
                 try {
-                  const querySnapshot = await getDocs(q);
+                  const querySnapshot = await q.get();
                   if (!querySnapshot.empty) {
                     const leadDoc = querySnapshot.docs[0];
                     batch.update(leadDoc.ref, { recorrenciaPaga: isPaid });
