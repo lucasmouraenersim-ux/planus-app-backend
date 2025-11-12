@@ -25,10 +25,10 @@ Se a sua implantação no Firebase App Hosting falhar com o erro `package.json n
 
 **Como Corrigir:**
 
-1.  **Verifique seu repositório no GitHub:** Vá para a página do seu repositório e confirme o nome da pasta onde todos os arquivos do projeto (`package.json`, `src`, `next.config.ts`, etc.) estão localizados.
+1.  **Verifique seu repositório no GitHub:** O seu código está dentro do repositório/pasta chamado `planus-app-backend`.
 2.  **Ajuste o Diretório Raiz no Firebase:**
     *   Acesse o painel do [Firebase App Hosting](https://console.firebase.google.com/project/energisa-invoice-editor/hosting/backends).
-    *   Clique nos três pontos (⋮) ao lado do seu backend `studio` e selecione **"Editar back-end"**.
+    *   Clique nos três pontos (⋮) ao lado do seu backend (ex: `studio` ou o nome do backend que você criou) e selecione **"Editar back-end"**.
     *   Encontre o campo **"Diretório raiz do app"**.
-    *   Altere o valor de `/` para o nome da pasta onde seu código está. Por exemplo, se a pasta for `sent-app-backend`, o valor deve ser `/sent-app-backend`.
-3.  **Salve as alterações.** Uma nova implantação será iniciada automaticamente, e agora ela deverá encontrar os arquivos e ser concluída com sucesso.
+    *   Altere o valor de `/` para `/planus-app-backend`.
+3.  **Salve as alterações.** Uma nova implantação será iniciada automaticamente, e agora ela deverá encontrar os arquivos do projeto e ser concluída com sucesso.
