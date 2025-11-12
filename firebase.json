@@ -8,7 +8,7 @@
   },
   "apphosting": {
     "backends": {
-      "planus-app-backend": {
+      "studio": {
         "location": "us-central1",
         "appYaml": "apphosting.yaml"
       }
