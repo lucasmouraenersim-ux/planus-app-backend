@@ -124,7 +124,7 @@ export async function importRecurrenceStatusFromCSV(formData: FormData): Promise
             resolve({ success: false, message: `Erro de Servidor: ${errorMessage}` });
           }
         },
-        error: (err: ParseError) => {
+        error: (err: Error) => {
           console.error("[IMPORT_RECURRENCE] PapaParse error:", err);
           resolve({ success: false, message: `Erro ao processar CSV: ${err.message}` });
         },
