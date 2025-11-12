@@ -448,7 +448,7 @@ function ProposalPageContent() {
         <div ref={proposalRef} className="space-y-6">
           <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
             <Image
-              src="/proposal/capa-planus.png"
+              src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
               alt="Capa proposta Planus Energia"
               fill
               priority
@@ -468,7 +468,7 @@ function ProposalPageContent() {
 
               <div className="mt-16 flex flex-col items-center gap-4">
                 <Image
-                  src="/proposal/logo-planus.png"
+                  src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
                   alt="Logo Planus Energia"
                   width={120}
                   height={120}
@@ -501,7 +501,7 @@ function ProposalPageContent() {
                   A Planus Energia integra um ecossistema de empresas especializadas em soluções de energia limpas, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões e preservando recursos naturais.
                 </p>
               </div>
-              <Image src="/proposal/logo-planus.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
+              <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
@@ -805,4 +805,3 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
-
