@@ -201,7 +201,9 @@ function ProposalGeneratorPageContent() {
     const fetchAddress = async (cep: string) => {
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        if (!response.ok) throw new Error("Erro ao buscar CEP");
+        if (!response.ok) {
+          throw new Error("Erro ao buscar CEP");
+        }
         const data = await response.json();
         if (data.erro) {
           toast({
@@ -232,6 +234,7 @@ function ProposalGeneratorPageContent() {
         });
       }
     };
+
     if (cepValue) {
       const cleanedCep = cepValue.replace(/\D/g, "");
       if (cleanedCep.length === 8) {
@@ -260,10 +263,15 @@ function ProposalGeneratorPageContent() {
     (Object.keys(values) as Array<keyof ProposalFormData>).forEach((key) => {
       const value = values[key];
       if (value !== undefined && value !== null && String(value).trim() !== "") {
-        queryParams.set(key, String(value));
+        if (typeof value === "boolean") {
+          queryParams.set(key, String(value));
+        } else {
+          queryParams.set(key, String(value));
+        }
       }
     });
     queryParams.set("comFidelidade", String(form.getValues("comFidelidade")));
+
     router.push(`/proposal?${queryParams.toString()}`);
   }
 
@@ -281,7 +289,355 @@ function ProposalGeneratorPageContent() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Form fields will be rendered here */}
+              <FormField
+                control={form.control}
+                name="clienteNome"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome do Cliente / Razão Social</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Mercado Mix LTDA" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clienteCnpjCpf"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF/CNPJ</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: 123.456.789-00 ou XX.XXX.XXX/XXXX-XX" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clienteCep"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CEP</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: 78890-000 ou 78890000" {...field} />
+                    </FormControl>
+                    <FormDescription>Digite o CEP para buscar o endereço automaticamente.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clienteRua"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rua</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Rua Caminho do Sol" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="clienteNumero"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Número</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="clienteComplemento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Complemento</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: QD18 LT11, APTO 101" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="clienteBairro"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bairro</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Rota do Sol" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="clienteCidade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cidade</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Sorriso" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="clienteUF"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UF</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: MT" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="codigoClienteInstalacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unidade Consumidora (UC)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: 6555432" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="distribuidora"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Distribuidora Local</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Neoenergia Brasília" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="comercializadora"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Comercializadora Responsável</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a comercializadora" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {comercializadoras.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="item1Quantidade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Consumo Médio Mensal (KWh)</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Ex: 1500" {...field} />
+                      </FormControl>
+                      <FormDescription>Preenche o consumo base da proposta.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="currentTariff"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tarifa Vigente (R$/kWh)</FormLabel>
+                      <FormControl>
+                        <Input type="text" placeholder="Ex: 0,98" {...field} />
+                      </FormControl>
+                      <FormDescription>Esta tarifa será usada como referência para o cálculo sem desconto.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="ligacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Fornecimento</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="MONOFASICO">Monofásico</SelectItem>
+                        <SelectItem value="BIFASICO">Bifásico</SelectItem>
+                        <SelectItem value="TRIFASICO">Trifásico</SelectItem>
+                        <SelectItem value="NAO_INFORMADO">Não especificado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="classificacao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Classe de Consumo</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: RESIDENCIAL-CONVENCIONAL BAIXA TENSAO B1" {...field} />
+                    </FormControl>
+                    <FormDescription>Ex: RESIDENCIAL, COMERCIAL, INDUSTRIAL, etc.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cobreBandeira"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>A proposta cobre bandeiras tarifárias?</FormLabel>
+                    <FormControl>
+                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-row space-x-4">
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="sim" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Sim</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="nao" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Não</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormDescription>
+                      Define se a comercializadora absorve ou repassa as bandeiras tarifárias ao cliente.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="isencaoIcmsEnergiaGerada"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Há isenção de ICMS na Energia Gerada?</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-row space-x-4"
+                      >
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="sim" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Sim</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="nao" />
+                          </FormControl>
+                          <FormLabel className="font-normal">Não</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormDescription>
+                      Isto afeta a tarifa exibida para a "Energia Ativa Injetada" na fatura.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="item3Valor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contribuição de Iluminação Pública (R$)</FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="Ex: 13,75" {...field} />
+                    </FormControl>
+                    <FormDescription>Valor manual da CIP/COSIP.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="valorProducaoPropria"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor da Energia Ativa Injetada (R$)</FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="Ex: 146,60" {...field} />
+                    </FormControl>
+                    <FormDescription>Valor em R$ da energia injetada (produção própria).</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="comFidelidade"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-background/50 p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Incluir Fidelidade na Proposta?</FormLabel>
+                      <FormDescription>
+                        Afeta as regras de desconto aplicadas na simulação.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                Gerar Proposta Final
+              </Button>
             </form>
           </Form>
         </CardContent>
