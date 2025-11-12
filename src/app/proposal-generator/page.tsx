@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,12 +31,30 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 
 const comercializadoras = [
-  { label: "BC Energia", value: "BC Energia" },
-  { label: "Bolt Energy", value: "Bolt Energy" },
-  { label: "Cenergy", value: "Cenergy" },
-  { label: "Serena Energia", value: "Serena Energia" },
-  { label: "Bowe Holding", value: "Bowe Holding" },
-  { label: "Fit Energia", value: "Fit Energia" },
+  {
+    label: "BC Energia",
+    value: "BC Energia",
+  },
+  {
+    label: "Bolt Energy",
+    value: "Bolt Energy",
+  },
+  {
+    label: "Cenergy",
+    value: "Cenergy",
+  },
+  {
+    label: "Serena Energia",
+    value: "Serena Energia",
+  },
+  {
+    label: "Bowe Holding",
+    value: "Bowe Holding",
+  },
+  {
+    label: "Fit Energia",
+    value: "Fit Energia",
+  },
 ];
 
 const formSchema = z.object({
@@ -57,11 +76,20 @@ const formSchema = z.object({
     .refine((val) => !isNaN(parseFloat(val.replace(".", "").replace(",", "."))), {
       message: "A tarifa deve ser um número válido.",
     }),
-  ligacao: z.enum(["MONOFASICO", "BIFASICO", "TRIFASICO", "NAO_INFORMADO", ""]).optional(),
-  classificacao: z.string().optional(),
+  ligacao: z
+    .enum(["MONOFASICO", "BIFASICO", "TRIFASICO", "NAO_INFORMADO", ""])
+    .optional()
+    .describe("Tipo de Fornecimento"),
+  classificacao: z.string().optional().describe("Classe de Consumo"),
   distribuidora: z.string().optional().describe("Distribuidora local"),
-  comercializadora: z.string().min(1, "Selecione a comercializadora responsável pela proposta."),
-  cobreBandeira: z.enum(["sim", "nao"]).default("sim"),
+  comercializadora: z
+    .string()
+    .min(1, "Selecione a comercializadora responsável pela proposta."),
+  cobreBandeira: z
+    .enum(["sim", "nao"])
+    .default("sim")
+    .describe("A proposta cobre bandeira tarifária?"),
+
   clienteCep: z
     .string()
     .optional()
@@ -75,6 +103,7 @@ const formSchema = z.object({
   clienteBairro: z.string().optional(),
   clienteCidade: z.string().optional(),
   clienteUF: z.string().optional(),
+
   item3Valor: z
     .string()
     .optional()
@@ -89,8 +118,11 @@ const formSchema = z.object({
       (val) => val === "" || !isNaN(parseFloat(val.replace(".", "").replace(",", "."))),
       { message: "Valor da produção própria deve ser um número válido ou vazio." },
     ),
-  isencaoIcmsEnergiaGerada: z.enum(["sim", "nao"]).default("nao"),
-  comFidelidade: z.boolean().default(true),
+  isencaoIcmsEnergiaGerada: z
+    .enum(["sim", "nao"])
+    .default("nao")
+    .describe("Há isenção de ICMS na Energia Gerada?"),
+  comFidelidade: z.boolean().default(true).describe("A proposta inclui fidelidade?"),
 });
 
 type ProposalFormData = z.infer<typeof formSchema>;
@@ -99,6 +131,7 @@ function ProposalGeneratorPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+
   const initialKwhFromUrl = searchParams.get("item1Quantidade");
   const initialUfFromUrl = searchParams.get("clienteUF");
 
