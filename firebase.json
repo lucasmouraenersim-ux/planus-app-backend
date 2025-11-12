@@ -5,5 +5,13 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "apphosting": {
+    "backends": {
+      "sent-app-backend": {
+        "location": "us-central1",
+        "appYaml": "apphosting.yaml"
+      }
+    }
   }
 }
