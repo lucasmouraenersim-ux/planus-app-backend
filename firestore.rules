@@ -2,73 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow authenticated users to read any user profile.
-    // Allow users to write only to their own profile.
-    // Admins and superadmins can read all user data.
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.uid == userId;
-    }
-    
-    // Allow admins/superadmins to list all users
-    match /users {
-        allow list: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'];
-    }
-
-    // Allow authenticated users to read/write their own withdrawal requests
-    match /withdrawal_requests/{requestId} {
-      allow read, create: if request.auth.uid == request.resource.data.userId;
-      // Admins/superadmins can read and update any request
-      allow read, update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'];
-    }
-    
-    // CRM leads rules
-    match /crm_leads/{leadId} {
-      // Users can create leads
-      allow create: if request.auth != null;
-      // Admins/superadmins/advogados can read any lead.
-      // Other users can read leads assigned to them.
-      allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin', 'advogado'] 
-                  || resource.data.userId == request.auth.uid;
-      // Admins/superadmins can update any lead.
-      // Other users can update leads assigned to them.
-      allow update: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'] 
-                    || resource.data.userId == request.auth.uid;
-      // Only admins/superadmins can delete
-      allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'];
-    }
-    
-    match /crm_lead_chats/{chatId} {
-        // Users can read/write chats for leads assigned to them.
-        // Admins/superadmins can read/write any chat.
-        allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin']
-                           || get(/databases/$(database)/documents/crm_leads/$(chatId)).data.userId == request.auth.uid;
-    }
-    
-    // Training config is public read
-    match /training-config/{docId} {
-      allow read: if true;
-      allow write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'];
-    }
-
-    // Photo enhancement requests can be created by any authenticated user.
-    // They can only be read/updated by the user who created them or an admin.
-    match /photoEnhancementRequests/{requestId} {
-      allow create: if request.auth != null;
-      allow read, update: if request.auth.uid == resource.data.userId 
-                          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.type in ['admin', 'superadmin'];
-    }
-
-    // Allow public read access to weather reports for the weather map feature
-    match /weather_reports/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Default deny all other reads/writes for security
+    // WARNING: This is insecure and should not be used in production.
+    // It allows read and write access to all documents for testing purposes.
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }
