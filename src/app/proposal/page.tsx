@@ -7,7 +7,7 @@ import Image from "next/image";
 import jsPDF from "jspdf";
 
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, Droplets } from "lucide-react";
 
 type ProposalState = {
   proposalCode: string;
@@ -22,12 +22,24 @@ type ProposalState = {
   coversTariffFlag: boolean;
 };
 
+type FlagSavings = {
+  monthly: number;
+  annual: number;
+  discount: number;
+};
+
 type CalculatedValues = {
   avgMonthlyCost: number;
   bcPrice: number;
   bcMonthlyCost: number;
   monthlyEconomy: number;
   annualEconomy: number;
+  flagSavings?: {
+    green: FlagSavings;
+    yellow: FlagSavings;
+    red1: FlagSavings;
+    red2: FlagSavings;
+  };
 };
 
 type Commercializer = {
@@ -130,6 +142,7 @@ const plants = [
   },
 ];
 
+
 function ProposalPageContent() {
   const searchParams = useSearchParams();
   const proposalRef = useRef<HTMLDivElement>(null);
@@ -197,14 +210,36 @@ function ProposalPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    const { avgConsumption, currentPrice, discountRate } = proposalData;
-    const discountDecimal = discountRate / 100;
-
+    const { avgConsumption, currentPrice, discountRate, coversTariffFlag } = proposalData;
     const avgMonthlyCost = avgConsumption * currentPrice;
-    const bcPrice = currentPrice * (1 - discountDecimal);
+
+    // Base calculation (same as Green flag)
+    const baseDiscountDecimal = discountRate / 100;
+    const bcPrice = currentPrice * (1 - baseDiscountDecimal);
     const bcMonthlyCost = avgConsumption * bcPrice;
     const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
     const annualEconomy = monthlyEconomy * 12;
+
+    let flagSavings: CalculatedValues['flagSavings'] | undefined = undefined;
+
+    if (coversTariffFlag) {
+        const calculateFlagSaving = (bonusPercent: number): FlagSavings => {
+            const totalDiscount = (discountRate + bonusPercent) / 100;
+            const monthlySaving = avgMonthlyCost * totalDiscount;
+            return {
+                monthly: monthlySaving,
+                annual: monthlySaving * 12,
+                discount: discountRate + bonusPercent,
+            };
+        };
+
+        flagSavings = {
+            green: calculateFlagSaving(0),
+            yellow: calculateFlagSaving(3),
+            red1: calculateFlagSaving(6),
+            red2: calculateFlagSaving(9),
+        };
+    }
 
     setCalculated({
       avgMonthlyCost,
@@ -212,8 +247,10 @@ function ProposalPageContent() {
       bcMonthlyCost,
       monthlyEconomy,
       annualEconomy,
+      flagSavings,
     });
   }, [proposalData]);
+
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value, type } = event.target;
@@ -411,7 +448,7 @@ function ProposalPageContent() {
         <div ref={proposalRef} className="space-y-6">
           <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
             <Image
-              src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
+              src="/proposal/capa-planus.png"
               alt="Capa proposta Planus Energia"
               fill
               priority
@@ -431,7 +468,7 @@ function ProposalPageContent() {
 
               <div className="mt-16 flex flex-col items-center gap-4">
                 <Image
-                  src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
+                  src="/proposal/logo-planus.png"
                   alt="Logo Planus Energia"
                   width={120}
                   height={120}
@@ -464,7 +501,7 @@ function ProposalPageContent() {
                   A Planus Energia integra um ecossistema de empresas especializadas em soluções de energia limpas, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões e preservando recursos naturais.
                 </p>
               </div>
-              <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
+              <Image src="/proposal/logo-planus.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
@@ -597,6 +634,56 @@ function ProposalPageContent() {
               </div>
             </div>
 
+            {calculated.flagSavings && (
+                <div className="mt-8">
+                    <h3 className="text-2xl font-bold text-slate-900 flex items-center">
+                        <Droplets className="mr-3 h-6 w-6 text-sky-600" />
+                        Economia Adicional com Bandeiras
+                    </h3>
+                    <p className="mt-2 text-sm text-slate-600">
+                        Quando a bandeira tarifária não é verde, seu desconto aumenta! Veja a projeção de economia mensal em cada cenário:
+                    </p>
+                    <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                        <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                            <thead className="bg-slate-100 text-slate-700">
+                                <tr>
+                                    <th className="px-6 py-3 font-semibold">Bandeira</th>
+                                    <th className="px-6 py-3 font-semibold">Seu Desconto</th>
+                                    <th className="px-6 py-3 font-semibold">Economia Mensal</th>
+                                    <th className="px-6 py-3 font-semibold">Economia Anual</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 text-slate-600">
+                                <tr className="bg-green-50">
+                                    <td className="px-6 py-3 font-semibold text-green-700">Verde</td>
+                                    <td className="px-6 py-3">{calculated.flagSavings.green.discount.toFixed(1)}%</td>
+                                    <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.green.monthly)}</td>
+                                    <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.green.annual)}</td>
+                                </tr>
+                                <tr className="bg-yellow-50">
+                                    <td className="px-6 py-3 font-semibold text-yellow-700">Amarela</td>
+                                    <td className="px-6 py-3">{calculated.flagSavings.yellow.discount.toFixed(1)}%</td>
+                                    <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.yellow.monthly)}</td>
+                                    <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.yellow.annual)}</td>
+                                </tr>
+                                <tr className="bg-red-50">
+                                    <td className="px-6 py-3 font-semibold text-red-700">Vermelha I</td>
+                                    <td className="px-6 py-3">{calculated.flagSavings.red1.discount.toFixed(1)}%</td>
+                                    <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red1.monthly)}</td>
+                                    <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red1.annual)}</td>
+                                </tr>
+                                 <tr className="bg-red-100">
+                                    <td className="px-6 py-3 font-semibold text-red-800">Vermelha II</td>
+                                    <td className="px-6 py-3">{calculated.flagSavings.red2.discount.toFixed(1)}%</td>
+                                    <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red2.monthly)}</td>
+                                    <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red2.annual)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             <div className="mt-8 grid gap-6 lg:grid-cols-[2fr_3fr]">
               <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-slate-900">
@@ -634,7 +721,7 @@ function ProposalPageContent() {
               </div>
 
               <div className="rounded-xl bg-sky-600 p-6 text-center text-white shadow-lg">
-                <p className="text-lg font-semibold">Economia Mensal Projetada</p>
+                <p className="text-lg font-semibold">Economia Mensal Projetada (Bandeira Verde)</p>
                 <p className="text-5xl font-black">{formatCurrency(calculated.monthlyEconomy)}</p>
                 <p className="mt-6 text-base font-semibold uppercase tracking-widest text-sky-100">
                   Economia Anual Sem Investimento
@@ -719,4 +806,3 @@ export default function ProposalPage() {
   );
 }
 
-    
