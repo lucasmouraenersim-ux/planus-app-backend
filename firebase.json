@@ -13,11 +13,6 @@
         "location": "us-central1",
         "appYaml": "apphosting.yaml"
       }
-    },
-    "targets": {
-      "sent": [
-        "studio"
-      ]
     }
   }
 }
