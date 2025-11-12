@@ -6,12 +6,6 @@ const nextConfig: NextConfig = {
   serverActions: {
     bodySizeLimit: '5mb',
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: [
       {
