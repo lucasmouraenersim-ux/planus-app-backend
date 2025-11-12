@@ -431,7 +431,7 @@ function ProposalPageContent() {
 
               <div className="mt-16 flex flex-col items-center gap-4">
                 <Image
-                  src="/proposal/logo-planus.png"
+                  src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
                   alt="Logo Planus Energia"
                   width={120}
                   height={120}
@@ -464,7 +464,7 @@ function ProposalPageContent() {
                   A Planus Energia integra um ecossistema de empresas especializadas em soluções de energia limpas, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões e preservando recursos naturais.
                 </p>
               </div>
-              <Image src="/proposal/logo-planus.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
+              <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
             </div>
 
             <div className="mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
@@ -496,7 +496,7 @@ function ProposalPageContent() {
                   <div className="space-y-1 p-4">
                     <p className="text-sm font-semibold text-slate-800">{plant.name}</p>
                     <p className="text-xs text-slate-500">{plant.location}</p>
-                    <p className="text-xs font-medium text-sky-600">{plant.capacity}</p>
+                    <p className="text-xs font-medium text-sky-600">Capacidade: {plant.capacity}</p>
                   </div>
                 </div>
               ))}
@@ -718,3 +718,5 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
+
+    
