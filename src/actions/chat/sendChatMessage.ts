@@ -110,7 +110,17 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
   if (sender === 'user') {
       if (!phone || phone.trim() === '') {
           console.log(`[SEND_CHAT_ACTION] Message for ${leadId} saved to history, but lead has no phone number. Not sending to WhatsApp.`);
-          return { success: true, message: 'Message saved, but lead has no phone number to send to.', chatMessage: savedChatMessage, showCallPrompt };
+          return {
+            success: true,
+            message: 'Message saved, but lead has no phone number to send to.',
+            chatMessage: {
+              ...savedChatMessage,
+              timestamp: typeof savedChatMessage.timestamp === 'string' 
+                ? savedChatMessage.timestamp 
+                : savedChatMessage.timestamp.toDate().toISOString()
+            },
+            showCallPrompt
+          };
       }
       
       console.log(`[SEND_CHAT_ACTION] Attempting to send WhatsApp message to ${phone}.`);
@@ -133,10 +143,30 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
 
       if (!whatsappResult.success) {
           console.error(`[SEND_CHAT_ACTION] WhatsApp send failed for ${leadId}:`, whatsappResult.error);
-          return { success: false, message: `Failed to send WhatsApp message: ${whatsappResult.error}`, chatMessage: savedChatMessage, showCallPrompt: false };
+          return { 
+            success: false, 
+            message: `Failed to send WhatsApp message: ${whatsappResult.error}`,
+            chatMessage: {
+              ...savedChatMessage,
+              timestamp: typeof savedChatMessage.timestamp === 'string' 
+                ? savedChatMessage.timestamp 
+                : savedChatMessage.timestamp.toDate().toISOString()
+            },
+            showCallPrompt: false 
+          };
       }
       console.log(`[SEND_CHAT_ACTION] WhatsApp message sent successfully for lead ${leadId}.`);
   }
   
-  return { success: true, message: 'Message sent and saved successfully.', chatMessage: savedChatMessage, showCallPrompt };
+  return { 
+    success: true, 
+    message: 'Message sent and saved successfully.',
+    chatMessage: {
+      ...savedChatMessage,
+      timestamp: typeof savedChatMessage.timestamp === 'string' 
+        ? savedChatMessage.timestamp 
+        : savedChatMessage.timestamp.toDate().toISOString()
+    },
+    showCallPrompt 
+  };
 }
