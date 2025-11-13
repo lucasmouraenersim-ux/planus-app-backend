@@ -27,7 +27,7 @@ export async function getWithdrawalHistoryForUser(userId: string): Promise<Withd
       return [];
     }
 
-    const requests = querySnapshot.docs.map(doc => {
+    const requests: WithdrawalRequestWithId[] = querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
