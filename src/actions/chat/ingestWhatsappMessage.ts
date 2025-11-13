@@ -74,7 +74,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               
               console.log(`[INGEST_ACTION] Message from new number received. Creating new lead for validation for ${from}.`);
               
-              const now = admin.firestore.Timestamp.now();
+              const now = admin.firestore.Timestamp.now() as any;
 
               const leadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'createdAt' | 'lastContact'> & { createdAt: admin.firestore.Timestamp; lastContact: admin.firestore.Timestamp } = {
                   name: contactName || from,
@@ -108,7 +108,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
                   text: messageText,
                   sender: 'lead',
                   type: 'text', 
-                  timestamp: admin.firestore.Timestamp.now(),
+                  timestamp: admin.firestore.Timestamp.now() as any,
               };
               
               const finalMessage = {
@@ -117,7 +117,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               };
               
               batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(finalMessage) }, { merge: true });
-              batch.update(leadRefToUpdate, { lastContact: admin.firestore.Timestamp.now() });
+              batch.update(leadRefToUpdate, { lastContact: admin.firestore.Timestamp.now() as any });
 
               await batch.commit();
               console.log(`[INGEST_ACTION] Message saved and lastContact updated for lead ${leadId}.`);

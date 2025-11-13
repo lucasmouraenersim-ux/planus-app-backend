@@ -49,7 +49,7 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
   }
 
   try {
-    const adminDb = await initializeAdmin();
+    const { db: adminDb } = await initializeAdmin();
     const fileContent = await file.text();
     
     return new Promise((resolve) => {
@@ -121,8 +121,8 @@ export async function uploadAndProcessLeads(formData: FormData): Promise<ActionR
               userId: 'unassigned',
               kwh: isNaN(consumoKwh) ? 0 : consumoKwh,
               value: isNaN(mediaFatura) ? 0 : mediaFatura,
-              createdAt: admin.firestore.Timestamp.now(),
-              lastContact: admin.firestore.Timestamp.now(),
+              createdAt: admin.firestore.Timestamp.now() as any,
+              lastContact: admin.firestore.Timestamp.now() as any,
               leadSource: 'Importação CSV' as const,
             };
 

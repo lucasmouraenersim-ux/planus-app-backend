@@ -108,7 +108,7 @@ const analyzeLeadFlow = ai.defineFlow(
       leadScore: analysisResult.leadScore,
       scoreJustification: analysisResult.scoreJustification,
       nextActionSuggestion: analysisResult.nextActionSuggestion,
-      lastAnalyzedAt: admin.firestore.Timestamp.now(),
+      lastAnalyzedAt: admin.firestore.Timestamp.now() as any,
     });
     
     // 5. Return the result to the client

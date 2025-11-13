@@ -177,7 +177,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       discountPercentage = (1 - (valorFaturado / valorOriginal)) * 100;
                   }
                   
-                  const leadDataObject: Partial<Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'>> & { lastContact: admin.firestore.Timestamp, signedAt?: admin.firestore.Timestamp, completedAt?: admin.firestore.Timestamp } = {
+                  const leadDataObject: Partial<Omit<LeadDocumentData, 'createdAt' | 'lastContact'>> & { lastContact: admin.firestore.Timestamp, signedAt?: admin.firestore.Timestamp, completedAt?: admin.firestore.Timestamp } = {
                       name: data.cliente,
                       sellerName: data.vendedor,
                       cpf: normalizedDocument.length === 11 ? normalizedDocument : undefined,
@@ -191,10 +191,10 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       valueAfterDiscount: valorFaturado,
                       discountPercentage: discountPercentage,
                       stageId,
-                      signedAt: signedAtDate,
-                      completedAt: completedAtDate,
+                      signedAt: signedAtDate as any,
+                      completedAt: completedAtDate as any,
                       saleReferenceDate: data['data referencia venda'],
-                      lastContact: parseCsvDate(data['atualizado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
+                      lastContact: (parseCsvDate(data['atualizado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now()) as any,
                   };
 
                   const cleanLeadData = Object.fromEntries(
@@ -210,7 +210,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       const docRef = adminDb.collection("crm_leads").doc();
                       const createData = {
                         ...cleanLeadData,
-                        createdAt: parseCsvDate(data['criado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now(),
+                        createdAt: (parseCsvDate(data['criado em'], 'dd/MM/yyyy HH:mm') || admin.firestore.Timestamp.now()) as any,
                         userId: 'unassigned',
                         needsAdminApproval: false,
                         commissionPaid: false,

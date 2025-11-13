@@ -88,11 +88,11 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
       type: type,
       ...(mediaUrl && { mediaUrl: mediaUrl }),
       ...(transcription && { transcription: transcription }),
-      timestamp: admin.firestore.Timestamp.now(),
+      timestamp: admin.firestore.Timestamp.now() as any,
   };
   
   batch.set(chatDocRef, { messages: admin.firestore.FieldValue.arrayUnion(newMessage) }, { merge: true });
-  batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() });
+  batch.update(leadRef, { lastContact: admin.firestore.Timestamp.now() as any });
 
   try {
       await batch.commit();
