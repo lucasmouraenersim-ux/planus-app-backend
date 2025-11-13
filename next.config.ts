@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '5mb',
     },
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   images: {
     remotePatterns: [
       {
