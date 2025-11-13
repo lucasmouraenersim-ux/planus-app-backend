@@ -7,7 +7,6 @@
 import { z } from 'zod';
 import admin from 'firebase-admin';
 import type { LeadDocumentData, ChatMessage, StageId } from '@/types/crm';
-import type { Timestamp } from 'firebase-admin/firestore';
 import { initializeAdmin } from '@/lib/firebase/admin';
 
 
@@ -77,7 +76,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               
               const now = admin.firestore.Timestamp.now();
 
-              const leadData: Omit<LeadDocumentData, 'id' | 'signedAt'> = {
+              const leadData: Omit<LeadDocumentData, 'id' | 'signedAt' | 'createdAt' | 'lastContact'> & { createdAt: admin.firestore.Timestamp; lastContact: admin.firestore.Timestamp } = {
                   name: contactName || from,
                   phone: normalizedPhone,
                   email: '',
@@ -105,7 +104,7 @@ export async function ingestWhatsappMessage(payload: IngestWhatsappMessageInput)
               const leadRefToUpdate = adminDb.collection("crm_leads").doc(leadId);
               
               // Force type to 'text' for frontend compatibility, as per the suggestion
-              const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: Timestamp } = {
+              const newMessage: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp: admin.firestore.Timestamp } = {
                   text: messageText,
                   sender: 'lead',
                   type: 'text', 

@@ -322,7 +322,7 @@ export async function updateUser(userId: string, updates: Partial<Omit<Firestore
 
 // --- Wallet / Commission Functions ---
 export async function requestWithdrawal(userId: string, userEmail: string, userName: string, amount: number, pixKeyType: PixKeyType, pixKey: string, withdrawalType: WithdrawalType): Promise<string | null> {
-  const newRequest: WithdrawalRequestData = { userId, userEmail, userName, amount, pixKeyType, pixKey, withdrawalType, status: 'pendente', requestedAt: Timestamp.now() };
+  const newRequest: Omit<WithdrawalRequestData, 'requestedAt'> & { requestedAt: Timestamp } = { userId, userEmail, userName, amount, pixKeyType, pixKey, withdrawalType, status: 'pendente', requestedAt: Timestamp.now() };
   const docRef = await addDoc(collection(db, "withdrawal_requests"), newRequest);
   return docRef.id;
 }

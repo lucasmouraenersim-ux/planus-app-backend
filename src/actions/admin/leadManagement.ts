@@ -177,7 +177,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       discountPercentage = (1 - (valorFaturado / valorOriginal)) * 100;
                   }
                   
-                  const leadDataObject: Partial<LeadDocumentData> = {
+                  const leadDataObject: Partial<Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'> & { lastContact: admin.firestore.Timestamp }> = {
                       name: data.cliente,
                       sellerName: data.vendedor,
                       cpf: normalizedDocument.length === 11 ? normalizedDocument : undefined,

@@ -85,7 +85,7 @@ export async function uploadEnhancementRequest(input: UploadRequestInput): Promi
       originalImageUrl,
       enhancementType: input.enhancementType,
       status: 'pending' as 'pending' | 'completed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp() as admin.firestore.Timestamp,
       enhancedImageUrl: null,
     };
 

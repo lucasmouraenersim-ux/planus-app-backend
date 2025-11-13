@@ -79,13 +79,13 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
 
 
     // 4. Create user document in Firestore
-    const newUserForFirestore: Omit<FirestoreUser, 'uid' | 'cpf' | 'cnpj'> & { cpf?: string, cnpj?: string } = {
+    const newUserForFirestore: Omit<FirestoreUser, 'uid' | 'cpf' | 'cnpj' | 'createdAt'> & { cpf?: string, cnpj?: string, createdAt: admin.firestore.Timestamp } = {
       email: input.email,
       displayName: userRecord.displayName || input.email.split('@')[0],
       type: finalUserType as UserType,
       createdAt: admin.firestore.Timestamp.now(),
       photoURL: `https://placehold.co/40x40.png?text=${(userRecord.displayName || input.email).charAt(0).toUpperCase()}`,
-      phone: input.phone ? input.phone.replace(/\D/g, '') : '',
+      phone: (input as any).phone ? (input as any).phone.replace(/\D/g, '') : '',
       personalBalance: 0,
       mlmBalance: 0,
       commissionRate: 40,

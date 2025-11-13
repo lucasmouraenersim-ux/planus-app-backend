@@ -50,7 +50,7 @@ export async function registerUser(input: RegisterUserInput): Promise<RegisterUs
     });
 
     // 3. Create user document in Firestore with 'vendedor' as default type
-    const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
+    const newUserForFirestore: Omit<FirestoreUser, 'uid' | 'createdAt'> & { createdAt: admin.firestore.Timestamp } = {
       email: input.email,
       displayName: input.name,
       type: 'vendedor' as UserType, // Default new users to 'vendedor'

@@ -5,7 +5,6 @@
  */
 import admin from 'firebase-admin';
 import { z } from 'zod';
-import type { Timestamp } from 'firebase-admin/firestore';
 import { sendWhatsappMessage } from '@/actions/whatsapp/sendWhatsappMessage';
 import type { ChatMessage, LeadDocumentData, StageId } from '@/types/crm';
 import { initializeAdmin } from '@/lib/firebase/admin';
@@ -82,7 +81,7 @@ export async function sendChatMessage({ leadId, phone, text, sender, type = 'tex
     }
   }
 
-  const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: Timestamp } = {
+  const newMessage: Omit<ChatMessage, 'timestamp'> & { timestamp: admin.firestore.Timestamp } = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       text,
       sender,
