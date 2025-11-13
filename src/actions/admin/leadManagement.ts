@@ -177,7 +177,7 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
                       discountPercentage = (1 - (valorFaturado / valorOriginal)) * 100;
                   }
                   
-                  const leadDataObject: Partial<Omit<LeadDocumentData, 'createdAt' | 'lastContact'>> & { lastContact: admin.firestore.Timestamp, signedAt?: admin.firestore.Timestamp, completedAt?: admin.firestore.Timestamp } = {
+                  const leadDataObject: Partial<Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt'>> & { lastContact: admin.firestore.Timestamp, signedAt?: admin.firestore.Timestamp, completedAt?: admin.firestore.Timestamp } = {
                       name: data.cliente,
                       sellerName: data.vendedor,
                       cpf: normalizedDocument.length === 11 ? normalizedDocument : undefined,
@@ -242,5 +242,3 @@ export async function importLeadsFromCSV(formData: FormData): Promise<ActionResu
     return { success: false, message: `Erro crítico no servidor: ${errorMessage}` };
   }
 }
-
-    
