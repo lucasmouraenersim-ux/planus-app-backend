@@ -4,8 +4,9 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+
 
 import { Button } from "@/components/ui/button";
 import { Download, Droplets, Loader2 } from "lucide-react";
@@ -283,76 +284,44 @@ function ProposalPageContent() {
   const handleDownloadPDF = async () => {
     const content = proposalRef.current;
     if (!content || isGeneratingPDF) return;
-
+  
     setIsGeneratingPDF(true);
-
+  
     try {
-      // Captura o conteúdo com alta qualidade
       const canvas = await html2canvas(content, {
-        scale: 2, // Alta resolução para qualidade
-        useCORS: true, // Para imagens externas (logos, capa, etc)
-        allowTaint: false,
-        backgroundColor: "#f3f4f6", // Cor de fundo igual ao sistema
+        scale: 3, // Increased scale for better quality
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#f3f4f6",
         logging: false,
-        width: content.scrollWidth,
-        height: content.scrollHeight,
-        windowWidth: content.scrollWidth,
-        windowHeight: content.scrollHeight,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX,
+        windowWidth: document.documentElement.scrollWidth,
+        windowHeight: document.documentElement.scrollHeight,
       });
-
-      const imgData = canvas.toDataURL("image/png", 1.0); // PNG com qualidade máxima
-
-      // Dimensões do PDF A4 em mm
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-
-      // Calcula a proporção mantendo aspect ratio
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-
-      // Converte pixels para mm (assumindo 96 DPI)
-      const imgWidthMM = (imgWidth * 25.4) / 96 / 2; // Dividir por 2 por causa do scale
-      const imgHeightMM = (imgHeight * 25.4) / 96 / 2;
-
-      // Calcula a escala para caber na largura do PDF
-      const scale = pdfWidth / imgWidthMM;
-      const scaledHeight = imgHeightMM * scale;
-
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-      });
-
-      // Calcula quantas páginas serão necessárias
-      let heightLeft = scaledHeight;
+  
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+  
       let position = 0;
-      let page = 0;
-
-      // Adiciona a imagem em páginas
-      while (heightLeft > 0) {
-        if (page > 0) {
-          pdf.addPage();
-        }
-        
-        pdf.addImage(
-          imgData,
-          "PNG",
-          0,
-          position,
-          pdfWidth,
-          scaledHeight,
-          undefined,
-          "FAST"
-        );
-        
-        heightLeft -= pdfHeight;
-        position -= pdfHeight;
-        page++;
+  
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgData = canvas.toDataURL("image/png");
+  
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+  
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
-
+      
       pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+  
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF. Por favor, tente novamente.");
