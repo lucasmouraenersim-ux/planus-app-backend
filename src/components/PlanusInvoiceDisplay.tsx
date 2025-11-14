@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState, useEffect } from 'react';
 import type { InvoiceData } from '@/types/invoice';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -43,46 +44,55 @@ const IconItem: React.FC<{ icon: React.ElementType; label: string; value: string
 );
 
 export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }> = ({ invoiceData }) => {
-  if (!invoiceData) {
+  const [localInvoiceData, setLocalInvoiceData] = useState<InvoiceData | null>(null);
+
+  useEffect(() => {
+    if (invoiceData) {
+      // Create a local, mutable copy of the invoice data
+      setLocalInvoiceData({ ...invoiceData });
+    }
+  }, [invoiceData]);
+
+  if (!localInvoiceData) {
     return <div className="p-4 text-center text-muted-foreground">Carregando dados da fatura Planus...</div>;
   }
 
   const today = new Date();
   const dataAtualFormatada = format(today, 'dd/MM/yyyy', { locale: ptBR });
-  const refMesAno = invoiceData.mesAnoReferencia ? invoiceData.mesAnoReferencia.toUpperCase() : format(today, 'MMM/yyyy', { locale: ptBR }).toUpperCase();
-  const dataVencimentoFormatada = invoiceData.dataVencimento || format(new Date(today.setDate(today.getDate() + 10)), 'dd/MM/yyyy', { locale: ptBR });
+  const refMesAno = localInvoiceData.mesAnoReferencia ? localInvoiceData.mesAnoReferencia.toUpperCase() : format(today, 'MMM/yyyy', { locale: ptBR }).toUpperCase();
+  const dataVencimentoFormatada = localInvoiceData.dataVencimento || format(new Date(today.setDate(today.getDate() + 10)), 'dd/MM/yyyy', { locale: ptBR });
   
-  const uc = invoiceData.codigoClienteInstalacao || "N/A";
-  const supplyTypeSelected = invoiceData.ligacao || "N/A";
-  const numeroBoleto = invoiceData.boweNumeroBoleto || "S/N"; 
+  const uc = localInvoiceData.codigoClienteInstalacao || "N/A";
+  const supplyTypeSelected = localInvoiceData.ligacao || "N/A";
+  const numeroBoleto = localInvoiceData.boweNumeroBoleto || "S/N"; 
   
-  const totalAPagarComDescontoPlanus = formatCurrency(invoiceData.valorTotalFatura);
-  const clientName = invoiceData.clienteNome || "N/A";
-  const cpfCnpj = invoiceData.clienteCnpjCpf || "N/A";
-  const localidadeCliente = `${invoiceData.clienteCidadeUF || "N/A"}`;
+  const totalAPagarComDescontoPlanus = formatCurrency(localInvoiceData.valorTotalFatura);
+  const clientName = localInvoiceData.clienteNome || "N/A";
+  const cpfCnpj = localInvoiceData.clienteCnpjCpf || "N/A";
+  const localidadeCliente = `${localInvoiceData.clienteCidadeUF || "N/A"}`;
 
-  const valorTotalFaturaBruto = formatCurrency(invoiceData.boweAntesValor); 
-  const economiaMensal = formatCurrency(invoiceData.boweEconomiaMensalValor);
-  const economiaAcumuladaCalculada = formatCurrency(invoiceData.boweEconomiaAcumuladaValor); 
-  const reducaoCO2 = invoiceData.boweReducaoCO2Valor || "0 t"; 
-  const arvoresPlantadas = invoiceData.boweArvoresPlantadasValor || "0"; 
+  const valorTotalFaturaBruto = formatCurrency(localInvoiceData.boweAntesValor); 
+  const economiaMensal = formatCurrency(localInvoiceData.boweEconomiaMensalValor);
+  const economiaAcumuladaCalculada = formatCurrency(localInvoiceData.boweEconomiaAcumuladaValor); 
+  const reducaoCO2 = localInvoiceData.boweReducaoCO2Valor || "0 t"; 
+  const arvoresPlantadas = localInvoiceData.boweArvoresPlantadasValor || "0"; 
 
-  const cipLabelText = invoiceData.item3Desc ? invoiceData.item3Desc.replace("Contrib de Ilum Pub", "CIP").split('(')[0].trim() : "CIP";
-  const custosDistribuidoraPage2 = formatCurrency(invoiceData.boweCustosDistribuidoraValor);
-  const kwhConsumoEfetivo = formatNumber(invoiceData.item1Quantidade, 2);
-  const energiaEletricaValorUnitarioPlanus = formatNumber(invoiceData.boweEnergiaEletricaTarifa, 6); // Changed to formatNumber
-  const energiaEletricaValorTotalPlanus = formatCurrency(invoiceData.boweEnergiaEletricaValor);
-  const restituicaoPisCofins = formatCurrency(invoiceData.boweRestituicaoPisCofinsValor);
-  const creditosPlanus = formatCurrency(invoiceData.boweCreditosValor); 
+  const cipLabelText = localInvoiceData.item3Desc ? localInvoiceData.item3Desc.replace("Contrib de Ilum Pub", "CIP").split('(')[0].trim() : "CIP";
+  const custosDistribuidoraPage2 = formatCurrency(localInvoiceData.boweCustosDistribuidoraValor);
+  const kwhConsumoEfetivo = formatNumber(localInvoiceData.item1Quantidade, 2);
+  const energiaEletricaValorUnitarioPlanus = formatNumber(localInvoiceData.boweEnergiaEletricaTarifa, 6); // Changed to formatNumber
+  const energiaEletricaValorTotalPlanus = formatCurrency(localInvoiceData.boweEnergiaEletricaValor);
+  const restituicaoPisCofins = formatCurrency(localInvoiceData.boweRestituicaoPisCofinsValor);
+  const creditosPlanus = formatCurrency(localInvoiceData.boweCreditosValor); 
   
-  const energisaTariffComTributos = formatNumber(parseFloat(invoiceData.item1Tarifa || "0"), 6); // Changed to formatNumber
-  const semPlanusCustoEnergia = formatCurrency(invoiceData.boweSemBowCustosDistribuidoraValor); 
-  const semPlanusCustoDisponibilidade = formatCurrency(invoiceData.boweSemBowDemaisCustosValor); 
-  const semPlanusIluminacaoPublicaValor = formatCurrency(invoiceData.item3Valor); 
-  const semPlanusTotal = formatCurrency(invoiceData.boweAntesValor); 
+  const energisaTariffComTributos = formatNumber(parseFloat(localInvoiceData.item1Tarifa || "0"), 6); // Changed to formatNumber
+  const semPlanusCustoEnergia = formatCurrency(localInvoiceData.boweSemBowCustosDistribuidoraValor); 
+  const semPlanusCustoDisponibilidade = formatCurrency(localInvoiceData.boweSemBowDemaisCustosValor); 
+  const semPlanusIluminacaoPublicaValor = formatCurrency(localInvoiceData.item3Valor); 
+  const semPlanusTotal = formatCurrency(localInvoiceData.boweAntesValor); 
 
-  const pixCode = invoiceData.bowePixCodigo || `00190.00009 03730.402009 00007.813173 1 1031000${parseFloat(invoiceData.valorTotalFatura || "0").toFixed(2).replace('.', '').padStart(10, '0')}`;
-  const beneficiario = invoiceData.bowePixBeneficiario || `Beneficiário: Empresa Vendedora simulacao - CNPJ: XX.XXX.XXX/0001-XX`;
+  const pixCode = localInvoiceData.bowePixCodigo || `00190.00009 03730.402009 00007.813173 1 1031000${parseFloat(localInvoiceData.valorTotalFatura || "0").toFixed(2).replace('.', '').padStart(10, '0')}`;
+  const beneficiario = localInvoiceData.bowePixBeneficiario || `Beneficiário: Empresa Vendedora simulacao - CNPJ: XX.XXX.XXX/0001-XX`;
 
 
   return (
@@ -117,7 +127,7 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
         <div className="mb-6 pb-4 border-b border-gray-200 text-sm">
           <p><strong className="font-semibold text-gray-700">Nome/Razão Social do Titular:</strong> <span className="uppercase font-medium text-gray-900">{clientName}</span></p>
           <p><strong className="font-semibold text-gray-700">CPF/CNPJ:</strong> {cpfCnpj}</p>
-          <p><strong className="font-semibold text-gray-700">Endereço:</strong> {invoiceData.clienteEndereco || "N/A"}</p>
+          <p><strong className="font-semibold text-gray-700">Endereço:</strong> {localInvoiceData.clienteEndereco || "N/A"}</p>
           <p><strong className="font-semibold text-gray-700">Localidade:</strong> {localidadeCliente}</p>
         </div>
 
@@ -150,7 +160,7 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
               <tbody>
                 <tr className="border-b border-gray-200">
                   <td className="p-2">Custos da distribuidora ({cipLabelText})</td>
-                  <td className="p-2 text-right">{formatNumber(invoiceData.item1Quantidade,0)} kWh + {cipLabelText}</td>
+                  <td className="p-2 text-right">{formatNumber(localInvoiceData.item1Quantidade,0)} kWh + {cipLabelText}</td>
                   <td className="p-2 text-right">Variado</td>
                   <td className="p-2 text-right">{custosDistribuidoraPage2}</td>
                 </tr>
@@ -185,7 +195,7 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
 
         {/* Observação */}
         <div className="mb-8 p-3 bg-gray-50 rounded-md text-sm text-gray-600">
-          <strong className="text-gray-700">Observação:</strong> {invoiceData.boweObservacao || "Valores simulados. A economia real pode variar. Contate um consultor para mais detalhes."}
+          <strong className="text-gray-700">Observação:</strong> {localInvoiceData.boweObservacao || "Valores simulados. A economia real pode variar. Contate um consultor para mais detalhes."}
         </div>
 
         {/* Footer Grid */}
@@ -217,7 +227,7 @@ export const PlanusInvoiceDisplay: React.FC<{ invoiceData: InvoiceData | null }>
                   </tr>
                   <tr className="border-b border-gray-200">
                     <td className="p-1.5">Custos da distribuidora (Disponibilidade)</td>
-                    <td className="p-1.5 text-right">{formatNumber(invoiceData.item1Quantidade,0)} kWh</td>
+                    <td className="p-1.5 text-right">{formatNumber(localInvoiceData.item1Quantidade,0)} kWh</td>
                     <td className="p-1.5 text-right">R$ {energisaTariffComTributos}</td>
                     <td className="p-1.5 text-right">{semPlanusCustoDisponibilidade}</td>
                   </tr>
