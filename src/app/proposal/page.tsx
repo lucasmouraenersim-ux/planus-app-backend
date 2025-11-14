@@ -4,8 +4,8 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import html2pdf from "html2pdf.js";
-
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 import { Button } from "@/components/ui/button";
 import { Download, Droplets, Loader2 } from "lucide-react";
@@ -142,42 +142,6 @@ const plants = [
     image: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/images%20(1).jpg",
   },
 ];
-
-const PDFStyles = () => (
-  <style jsx global>{`
-    .pdf-page-break {
-      page-break-before: always;
-      page-break-inside: avoid;
-    }
-    .pdf-no-break {
-      page-break-inside: avoid;
-    }
-    .pdf-cover-page {
-      margin: 0 !important;
-      padding: 0 !important;
-      page-break-after: always;
-    }
-    h2,
-    h3 {
-      page-break-after: avoid;
-    }
-    img {
-      page-break-inside: avoid;
-    }
-    table {
-      page-break-inside: avoid;
-    }
-    @media print {
-      .no-print {
-        display: none !important;
-      }
-      .pdf-cover-page {
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-    }
-  `}</style>
-);
 
 function ProposalPageContent() {
   const searchParams = useSearchParams();
@@ -316,72 +280,67 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-    if (isGeneratingPDF) return;
+    if (isGeneratingPDF || !proposalRef.current) return;
     setIsGeneratingPDF(true);
+
+    const content = proposalRef.current;
+    
     try {
-      const content = proposalRef.current;
-      if (!content) return;
-      
-      const coverPage = content.querySelector('.pdf-cover-page');
-      const allContent = content.cloneNode(true) as HTMLElement;
-      
-      const tempCoverContainer = document.createElement('div');
-      if (coverPage) {
-        tempCoverContainer.appendChild(coverPage.cloneNode(true));
-      }
+        const canvas = await html2canvas(content, {
+            scale: 2,
+            useCORS: true,
+        });
 
-      const coverOptions = {
-        margin: 0,
-        filename: `Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-      };
+        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
 
-      const contentOptions = {
-        margin: [15, 15, 15, 15],
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.pdf-page-break', avoid: ['.pdf-no-break', 'img', 'table', 'tr', 'h2', 'h3'] }
-      };
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        const contentWidth = content.offsetWidth;
+        const contentHeight = content.offsetHeight;
+        
+        // Calculate the aspect ratio of the captured image
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = imgHeight / imgWidth;
+        
+        const pdfImageHeight = pageWidth * ratio;
+        
+        let position = 0;
+        let heightLeft = pdfImageHeight;
 
-      const pdfInstance = await html2pdf().set(coverOptions).from(coverPage || tempCoverContainer).toPdf().get('pdf');
-      
-      const coverInClone = allContent.querySelector('.pdf-cover-page');
-      if (coverInClone) {
-        coverInClone.remove();
-      }
-      
-      const remainingPdf = await html2pdf().set(contentOptions).from(allContent).toPdf().get('pdf');
-      const totalPages = remainingPdf.internal.getNumberOfPages();
-      
-      for (let i = 1; i <= totalPages; i++) {
-        pdfInstance.addPage();
-        const page = remainingPdf.getPage(i);
-        // This is a simplified representation. Actual content copying is more complex with jsPDF.
-        // A common strategy is to get the canvas/image from each page and add it.
-        // The `html2pdf` library handles this internally, but combining PDFs this way is tricky.
-        // Let's assume a simplified approach for demonstration; a more robust solution might be needed.
-        // A better way would be to generate two PDFs and merge them, but that's complex on the client.
-        // The approach of adding page content is not directly supported by jsPDF like this.
-        // The correct way would be to render each part to an image and add images.
-        // The current implementation here will have issues.
-        // A corrected logic would be:
-        const pageCanvas = await html2pdf().set({ ...contentOptions, pagebreak: { mode: 'avoid-all' } }).from(allContent).toContainer().get('canvas');
-        pdfInstance.addImage(pageCanvas.toDataURL(), 'PNG', 15, 15, 180, 267);
-      }
-  
-      pdfInstance.save();
+        // Add first page (cover) without margin
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pdfImageHeight);
+        heightLeft -= pageHeight;
+        
+        // Add subsequent pages with margins
+        const margin = 15;
+        const contentWidthWithMargin = pageWidth - margin * 2;
+        const contentHeightWithMargin = pageHeight - margin * 2;
+        const scaledPdfImageHeightWithMargin = contentWidthWithMargin * ratio;
+
+        while (heightLeft > 0) {
+            position += pageHeight; // Move to the start of the content on the image for the next page
+            pdf.addPage();
+            // The y-position inside addImage should be negative to "scroll" the image up
+            pdf.addImage(imgData, 'JPEG', margin, -position + margin, contentWidthWithMargin, pdfImageHeight);
+            heightLeft -= contentHeightWithMargin;
+        }
+
+        pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, '_')}.pdf`);
 
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF. Por favor, tente novamente.");
+        console.error("Error generating PDF:", error);
+        alert("Erro ao gerar PDF. Tente novamente.");
     } finally {
-      setIsGeneratingPDF(false);
+        setIsGeneratingPDF(false);
     }
   };
-
 
   const selectedCommercializer = useMemo(
     () =>
@@ -396,7 +355,38 @@ function ProposalPageContent() {
 
   return (
     <>
-      <PDFStyles />
+      <style jsx global>{`
+        .pdf-page-break {
+          page-break-before: always;
+          page-break-inside: avoid;
+        }
+        .pdf-no-break {
+          page-break-inside: avoid;
+        }
+        .pdf-cover-page {
+          margin: 0 !important;
+          padding: 0 !important;
+          page-break-after: always;
+        }
+        h2, h3 {
+          page-break-after: avoid;
+        }
+        img {
+          page-break-inside: avoid;
+        }
+        table {
+          page-break-inside: avoid;
+        }
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .pdf-cover-page {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
+      `}</style>
       <div className="font-sans bg-gray-100 p-4 md:p-8">
         <div id="proposal-container" className="mx-auto max-w-5xl">
           <div className="no-print rounded-xl border-t-8 border-sky-600 bg-white p-6 md:p-8">
@@ -594,19 +584,19 @@ function ProposalPageContent() {
                     </div>
         
                     <div className="pdf-no-break mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-lg bg-sky-50 p-4">
+                    <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
                         <p className="text-3xl font-black text-sky-900">+5.500</p>
                         <p className="text-sm text-slate-600">Clientes atendidos nas soluções Planus</p>
                     </div>
-                    <div className="rounded-lg bg-sky-50 p-4">
+                    <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
                         <p className="text-3xl font-black text-sky-900">+R$ 480 mi</p>
                         <p className="text-sm text-slate-600">Economia gerada nos últimos 10 anos</p>
                     </div>
-                    <div className="rounded-lg bg-sky-50 p-4">
+                    <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
                         <p className="text-3xl font-black text-sky-900">+230 GWh</p>
                         <p className="text-sm text-slate-600">Energia limpa gerada pelas nossas usinas</p>
                     </div>
-                    <div className="rounded-lg bg-sky-50 p-4">
+                    <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
                         <p className="text-3xl font-black text-sky-900">ESG</p>
                         <p className="text-sm text-slate-600">+15 mil toneladas de CO₂ evitadas</p>
                     </div>
