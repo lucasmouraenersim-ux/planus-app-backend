@@ -4,8 +4,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { useReactToPdf } from 'react-to-pdf';
 
 
 import { Button } from "@/components/ui/button";
@@ -147,7 +146,7 @@ const plants = [
 
 function ProposalPageContent() {
   const searchParams = useSearchParams();
-  const proposalRef = useRef<HTMLDivElement>(null);
+  const { toPdf, targetRef } = useReactToPdf({filename: "proposta.pdf", page: { margin: 0, orientation: 'portrait' }});
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [proposalData, setProposalData] = useState<ProposalState>({
@@ -282,52 +281,10 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-    const content = proposalRef.current;
-    if (!content || isGeneratingPDF) return;
-  
+    if (isGeneratingPDF) return;
     setIsGeneratingPDF(true);
-  
-    try {
-      const canvas = await html2canvas(content, {
-        scale: 3, // Increased scale for better quality
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#f3f4f6",
-        logging: false,
-        scrollY: -window.scrollY,
-        scrollX: -window.scrollX,
-        windowWidth: document.documentElement.scrollWidth,
-        windowHeight: document.documentElement.scrollHeight,
-      });
-  
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-  
-      let position = 0;
-  
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgData = canvas.toDataURL("image/png");
-  
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-  
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-      
-      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-  
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF. Por favor, tente novamente.");
-    } finally {
-      setIsGeneratingPDF(false);
-    }
+    await toPdf();
+    setIsGeneratingPDF(false);
   };
 
   const selectedCommercializer = useMemo(
@@ -478,7 +435,7 @@ function ProposalPageContent() {
           </div>
         </div>
 
-        <div ref={proposalRef} className="space-y-6">
+        <div ref={targetRef} className="space-y-6">
           <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
             <Image
               src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
