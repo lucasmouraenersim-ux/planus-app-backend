@@ -323,50 +323,90 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-    if (isGeneratingPDF) return;
-    setIsGeneratingPDF(true);
-    try {
-      const content = proposalRef.current;
-      if (!content) return;
-      // Captura com as configurações das páginas A4
-      const canvas = await html2canvas(content, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: 794, // 210mm em pixels (96 DPI)
-        windowWidth: 794,
-      });
-      const imgData = canvas.toDataURL("image/png", 1.0);
-          const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-      const imgWidth = 210; // A4 width
-      const imgHeight = (canvas.height * 210) / canvas.width;
-      const pageHeight = 297; // A4 height
-          let heightLeft = imgHeight;
-      let position = 0;
-      // Primeira página
-      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      // Páginas adicionais
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+  if (isGeneratingPDF) return;
+  setIsGeneratingPDF(true);
+  try {
+    const content = proposalRef.current;
+    if (!content) return;
+    // Scroll para o topo
+    window.scrollTo(0, 0);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Captura com alta qualidade
+    const canvas = await html2canvas(content, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#f3f4f6",
+      logging: false,
+      imageTimeout: 0,
+    });
+    const imgData = canvas.toDataURL("image/png", 1.0);
+    // Cria o PDF
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+    // Dimensões
+    const pageWidth = 210; // A4 em mm
+    const pageHeight = 297; // A4 em mm
+    const margin = 10; // Margem em mm
+    // Calcula dimensões da imagem
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    // Área útil da página (com margens)
+    const contentWidth = pageWidth - (margin * 2);
+    const contentHeight = pageHeight - (margin * 2);
+    // Escala para caber na largura com margem
+    const scale = contentWidth / imgWidth;
+    const scaledWidth = contentWidth;
+    const scaledHeight = imgHeight * scale;
+    let yPosition = 0;
+    let pageNumber = 0;
+    // Adiciona páginas
+    while (yPosition < scaledHeight) {
+      if (pageNumber > 0) {
         pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
       }
-      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF. Por favor, tente novamente.");
-    } finally {
-      setIsGeneratingPDF(false);
+      // Calcula a porção da imagem para esta página
+      const sourceY = yPosition / scale;
+      const sourceHeight = Math.min(contentHeight / scale, (imgHeight - sourceY));
+      // Cria um canvas temporário para recortar a porção correta
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = imgWidth;
+      tempCanvas.height = sourceHeight;
+      if (tempCtx) {
+        tempCtx.drawImage(
+          canvas,
+          0, sourceY,           // Fonte: x, y
+          imgWidth, sourceHeight, // Fonte: largura, altura
+          0, 0,                  // Destino: x, y
+          imgWidth, sourceHeight  // Destino: largura, altura
+        );
+        const pageImgData = tempCanvas.toDataURL("image/png", 1.0);
+        const pageImgHeight = sourceHeight * scale;
+        // Adiciona a imagem com margem
+        pdf.addImage(
+          pageImgData,
+          "PNG",
+          margin,
+          margin,
+          scaledWidth,
+          pageImgHeight
+        );
+      }
+      yPosition += contentHeight;
+      pageNumber++;
     }
-  };
+    pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+  } catch (error) {
+    console.error("Erro ao gerar PDF:", error);
+    alert("Erro ao gerar PDF. Por favor, tente novamente.");
+  } finally {
+    setIsGeneratingPDF(false);
+  }};
 
 
   const selectedCommercializer = useMemo(
@@ -942,3 +982,5 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
+
+    
