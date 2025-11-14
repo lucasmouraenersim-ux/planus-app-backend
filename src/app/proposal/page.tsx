@@ -4,7 +4,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useReactToPdf } from 'react-to-pdf';
+import { usePDF } from 'react-to-pdf';
 
 
 import { Button } from "@/components/ui/button";
@@ -146,7 +146,7 @@ const plants = [
 
 function ProposalPageContent() {
   const searchParams = useSearchParams();
-  const { toPdf, targetRef } = useReactToPdf({filename: "proposta.pdf", page: { margin: 0, orientation: 'portrait' }});
+  const { toPDF, targetRef } = usePDF({filename: "proposta.pdf"});
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [proposalData, setProposalData] = useState<ProposalState>({
@@ -283,7 +283,7 @@ function ProposalPageContent() {
   const handleDownloadPDF = async () => {
     if (isGeneratingPDF) return;
     setIsGeneratingPDF(true);
-    await toPdf();
+    await toPDF();
     setIsGeneratingPDF(false);
   };
 
