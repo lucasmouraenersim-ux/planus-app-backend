@@ -4,7 +4,8 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { usePDF } from 'react-to-pdf';
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 
 import { Button } from "@/components/ui/button";
@@ -143,10 +144,24 @@ const plants = [
   },
 ];
 
+const PDFStyles = () => (
+  <style jsx global>{`
+    @media print {
+      .page-break {
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+      .no-break {
+        page-break-inside: avoid;
+      }
+    }
+  `}</style>
+);
+
 
 function ProposalPageContent() {
   const searchParams = useSearchParams();
-  const { toPDF, targetRef } = usePDF({filename: "proposta.pdf"});
+  const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [proposalData, setProposalData] = useState<ProposalState>({
@@ -281,11 +296,61 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-    if (isGeneratingPDF) return;
+    const content = proposalRef.current;
+    if (!content || isGeneratingPDF) return;
     setIsGeneratingPDF(true);
-    await toPDF();
-    setIsGeneratingPDF(false);
+    try {
+      // Scroll para o topo para captura correta
+      window.scrollTo(0, 0);
+          // Aguarda renderização
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const canvas = await html2canvas(content, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#f3f4f6",
+        logging: false,
+        imageTimeout: 0,
+        removeContainer: false,
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+          // Configurações A4
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+      const pageWidth = 210; // A4 width mm
+      const pageHeight = 297; // A4 height mm
+      const marginTop = 10; // Margem superior
+      const marginBottom = 10; // Margem inferior
+      const contentHeight = pageHeight - marginTop - marginBottom;
+      // Calcula dimensões
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = marginTop;
+      let page = 1;
+      // Primeira página
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= contentHeight;
+      // Páginas subsequentes com margem
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = -(contentHeight * page) + marginTop;
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= contentHeight;
+        page++;
+      }
+      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF. Por favor, tente novamente.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
+
 
   const selectedCommercializer = useMemo(
     () =>
@@ -300,6 +365,7 @@ function ProposalPageContent() {
 
   return (
     <div className="font-sans bg-gray-100 p-4 md:p-8">
+      <PDFStyles />
       <div id="proposal-container" className="mx-auto max-w-5xl space-y-6">
         <div className="rounded-xl border-t-8 border-sky-600 bg-white p-6 md:p-8">
           <h2 className="mb-6 text-3xl font-bold text-gray-800">
@@ -435,8 +501,8 @@ function ProposalPageContent() {
           </div>
         </div>
 
-        <div ref={targetRef} className="space-y-6">
-          <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
+        <div ref={proposalRef} className="space-y-6">
+          <div className="page-break relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
             <Image
               src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
               alt="Capa proposta Planus Energia"
@@ -483,7 +549,7 @@ function ProposalPageContent() {
             </div>
           </div>
 
-          <div className="rounded-xl bg-white p-8 md:p-12">
+          <div className="page-break rounded-xl bg-white p-8 md:p-12">
             <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-4xl font-extrabold text-slate-900">Quem Somos</h2>
@@ -558,7 +624,7 @@ function ProposalPageContent() {
             </div>
           </div>
 
-          <div className="rounded-xl bg-white p-8 md:p-12">
+          <div className="page-break rounded-xl bg-white p-8 md:p-12">
             <h2 className="text-4xl font-extrabold text-sky-900">Proposta Comercial</h2>
             <p className="mt-2 text-lg text-slate-600">
               Geração Distribuída • Energia por Assinatura • PPA Planus
@@ -812,3 +878,5 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
+
+    
