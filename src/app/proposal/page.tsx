@@ -4,8 +4,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import html2pdf from "html2pdf.js";
 
 
 import { Button } from "@/components/ui/button";
@@ -146,40 +145,26 @@ const plants = [
 
 const PDFStyles = () => (
   <style jsx global>{`
-    @page {
-      size: A4;
-      margin: 0;
-    }
-    .a4-page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 15mm 20mm;
-      margin: 0 auto 20px auto;
-      background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      box-sizing: border-box;
-      page-break-after: always;
+    .pdf-page-break {
+      page-break-before: always;
       page-break-inside: avoid;
     }
-    .a4-page:last-child {
-      margin-bottom: 0;
+    .pdf-no-break {
+      page-break-inside: avoid;
+    }
+    h2,
+    h3 {
+      page-break-after: avoid;
+    }
+    img {
+      page-break-inside: avoid;
+    }
+    table {
+      page-break-inside: avoid;
     }
     @media print {
-      body {
-        background: white;
-      }
-      .a4-page {
-        margin: 0;
-        box-shadow: none;
-        page-break-after: always;
-      }
       .no-print {
         display: none !important;
-      }
-    }
-    @media screen {
-      body {
-        background: #f3f4f6;
       }
     }
   `}</style>
@@ -323,90 +308,48 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-  if (isGeneratingPDF) return;
-  setIsGeneratingPDF(true);
-  try {
-    const content = proposalRef.current;
-    if (!content) return;
-    // Scroll para o topo
-    window.scrollTo(0, 0);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    // Captura com alta qualidade
-    const canvas = await html2canvas(content, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#f3f4f6",
-      logging: false,
-      imageTimeout: 0,
-    });
-    const imgData = canvas.toDataURL("image/png", 1.0);
-    // Cria o PDF
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-      compress: true,
-    });
-    // Dimensões
-    const pageWidth = 210; // A4 em mm
-    const pageHeight = 297; // A4 em mm
-    const margin = 10; // Margem em mm
-    // Calcula dimensões da imagem
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    // Área útil da página (com margens)
-    const contentWidth = pageWidth - (margin * 2);
-    const contentHeight = pageHeight - (margin * 2);
-    // Escala para caber na largura com margem
-    const scale = contentWidth / imgWidth;
-    const scaledWidth = contentWidth;
-    const scaledHeight = imgHeight * scale;
-    let yPosition = 0;
-    let pageNumber = 0;
-    // Adiciona páginas
-    while (yPosition < scaledHeight) {
-      if (pageNumber > 0) {
-        pdf.addPage();
-      }
-      // Calcula a porção da imagem para esta página
-      const sourceY = yPosition / scale;
-      const sourceHeight = Math.min(contentHeight / scale, (imgHeight - sourceY));
-      // Cria um canvas temporário para recortar a porção correta
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = imgWidth;
-      tempCanvas.height = sourceHeight;
-      if (tempCtx) {
-        tempCtx.drawImage(
-          canvas,
-          0, sourceY,           // Fonte: x, y
-          imgWidth, sourceHeight, // Fonte: largura, altura
-          0, 0,                  // Destino: x, y
-          imgWidth, sourceHeight  // Destino: largura, altura
-        );
-        const pageImgData = tempCanvas.toDataURL("image/png", 1.0);
-        const pageImgHeight = sourceHeight * scale;
-        // Adiciona a imagem com margem
-        pdf.addImage(
-          pageImgData,
-          "PNG",
-          margin,
-          margin,
-          scaledWidth,
-          pageImgHeight
-        );
-      }
-      yPosition += contentHeight;
-      pageNumber++;
+    if (isGeneratingPDF) return;
+    setIsGeneratingPDF(true);
+    try {
+      const content = proposalRef.current;
+      if (!content) return;
+  
+      // Configurações do html2pdf
+      const options = {
+        margin: [15, 15, 15, 15], // top, right, bottom, left em mm
+        filename: `Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`,
+        image: {
+          type: 'jpeg',
+          quality: 0.98,
+        },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+          compress: true,
+        },
+        pagebreak: {
+          mode: ['avoid-all', 'css', 'legacy'],
+          before: '.pdf-page-break',
+          avoid: ['.pdf-no-break', 'img', 'table', 'tr', 'h2', 'h3'],
+        },
+      };
+  
+      // Gera o PDF
+      await html2pdf().set(options).from(content).save();
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF. Por favor, tente novamente.");
+    } finally {
+      setIsGeneratingPDF(false);
     }
-    pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-  } catch (error) {
-    console.error("Erro ao gerar PDF:", error);
-    alert("Erro ao gerar PDF. Por favor, tente novamente.");
-  } finally {
-    setIsGeneratingPDF(false);
-  }};
+  };
 
 
   const selectedCommercializer = useMemo(
@@ -422,44 +365,7 @@ function ProposalPageContent() {
 
   return (
     <>
-      <style jsx global>{`
-        @page {
-          size: A4;
-          margin: 0;
-        }
-        .a4-page {
-          width: 210mm;
-          min-height: 297mm;
-          padding: 15mm 20mm;
-          margin: 0 auto 20px auto;
-          background: white;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          box-sizing: border-box;
-          page-break-after: always;
-          page-break-inside: avoid;
-        }
-        .a4-page:last-child {
-          margin-bottom: 0;
-        }
-        @media print {
-          body {
-            background: white;
-          }
-          .a4-page {
-            margin: 0;
-            box-shadow: none;
-            page-break-after: always;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-        @media screen {
-          body {
-            background: #f3f4f6;
-          }
-        }
-      `}</style>
+      <PDFStyles />
       <div className="font-sans bg-gray-100 p-4 md:p-8">
         <div id="proposal-container" className="mx-auto max-w-5xl">
           <div className="no-print rounded-xl border-t-8 border-sky-600 bg-white p-6 md:p-8">
@@ -596,57 +502,55 @@ function ProposalPageContent() {
             </div>
           </div>
   
-          <div ref={proposalRef}>
-            <div className="a4-page !p-0 !min-h-[297mm] flex">
-                <div className="relative flex flex-1 flex-col justify-between overflow-hidden bg-slate-900 text-white">
+          <div ref={proposalRef} className="space-y-6">
+            <div className="pdf-no-break relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
+                <Image
+                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
+                alt="Capa proposta Planus Energia"
+                fill
+                priority
+                className="object-cover"
+                />
+                <div className="absolute inset-0 bg-slate-900/70" />
+    
+                <div className="relative flex flex-col items-center justify-between px-6 py-10 text-center md:px-16 md:py-16">
+                <div className="flex w-full items-start justify-between text-sm md:text-base">
+                    <span className="font-light uppercase tracking-wide text-sky-200">
+                    Proposta Comercial Planus Energia
+                    </span>
+                    <span className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-sky-100">
+                    Código: {proposalData.proposalCode}
+                    </span>
+                </div>
+    
+                <div className="mt-16 flex flex-col items-center gap-4">
                     <Image
-                    src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
-                    alt="Capa proposta Planus Energia"
-                    fill
-                    priority
-                    className="object-cover"
+                    src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
+                    alt="Logo Planus Energia"
+                    width={120}
+                    height={120}
+                    className="drop-shadow-lg"
                     />
-                    <div className="absolute inset-0 bg-slate-900/70" />
-        
-                    <div className="relative flex flex-col items-center justify-between px-6 py-10 text-center md:px-16 md:py-16">
-                    <div className="flex w-full items-start justify-between text-sm md:text-base">
-                        <span className="font-light uppercase tracking-wide text-sky-200">
-                        Proposta Comercial Planus Energia
-                        </span>
-                        <span className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-sky-100">
-                        Código: {proposalData.proposalCode}
-                        </span>
-                    </div>
-        
-                    <div className="mt-16 flex flex-col items-center gap-4">
-                        <Image
-                        src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
-                        alt="Logo Planus Energia"
-                        width={120}
-                        height={120}
-                        className="drop-shadow-lg"
-                        />
-                        <h1 className="text-5xl font-black tracking-tight md:text-7xl">
-                        Energia por Assinatura
-                        </h1>
-                        <h2 className="text-2xl font-light text-sky-100 md:text-3xl">
-                        Soluções completas em geração distribuída
-                        </h2>
-                    </div>
-        
-                    <div className="mt-24 flex flex-col items-center gap-3">
-                        <p className="text-lg font-light text-sky-100 md:text-2xl">
-                        Geramos valor com a nossa energia, entregue sob medida para sua operação.
-                        </p>
-                        <p className="text-sm uppercase tracking-[0.3em] text-sky-200">
-                        Planus Energia • Geração Distribuída • Mercado Livre
-                        </p>
-                    </div>
-                    </div>
+                    <h1 className="text-5xl font-black tracking-tight md:text-7xl">
+                    Energia por Assinatura
+                    </h1>
+                    <h2 className="text-2xl font-light text-sky-100 md:text-3xl">
+                    Soluções completas em geração distribuída
+                    </h2>
+                </div>
+    
+                <div className="mt-24 flex flex-col items-center gap-3">
+                    <p className="text-lg font-light text-sky-100 md:text-2xl">
+                    Geramos valor com a nossa energia, entregue sob medida para sua operação.
+                    </p>
+                    <p className="text-sm uppercase tracking-[0.3em] text-sky-200">
+                    Planus Energia • Geração Distribuída • Mercado Livre
+                    </p>
+                </div>
                 </div>
             </div>
   
-            <div className="a4-page">
+            <div className="pdf-page-break rounded-xl bg-white p-8 md:p-12">
                 <div>
                     <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -658,7 +562,7 @@ function ProposalPageContent() {
                     <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
                     </div>
         
-                    <div className="mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="pdf-no-break mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-lg bg-sky-50 p-4">
                         <p className="text-3xl font-black text-sky-900">+5.500</p>
                         <p className="text-sm text-slate-600">Clientes atendidos nas soluções Planus</p>
@@ -680,7 +584,7 @@ function ProposalPageContent() {
                     <h3 className="mt-12 text-2xl font-bold text-slate-900">Algumas de nossas usinas</h3>
                     <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     {plants.map((plant) => (
-                        <div key={plant.name} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                        <div key={plant.name} className="pdf-no-break overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                         <div className="relative h-40 w-full">
                             <Image src={plant.image} alt={plant.name} fill className="object-cover" />
                         </div>
@@ -701,7 +605,7 @@ function ProposalPageContent() {
                     </p>
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                     {commercializerCatalog.map((item) => (
-                        <div key={item.name} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div key={item.name} className="pdf-no-break rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <div className="mb-4 flex h-16 items-center justify-center">
                             <Image
                             src={item.logo}
@@ -723,7 +627,7 @@ function ProposalPageContent() {
                 </div>
             </div>
   
-            <div className="a4-page">
+            <div className="pdf-page-break rounded-xl bg-white p-8 md:p-12">
                 <div>
                     <h2 className="text-4xl font-extrabold text-sky-900">Proposta Comercial</h2>
                     <p className="mt-2 text-lg text-slate-600">
@@ -791,7 +695,7 @@ function ProposalPageContent() {
                     </div>
         
                     {calculated.flagSavings && (
-                        <div className="mt-8">
+                        <div className="pdf-no-break mt-8">
                             <h3 className="text-2xl font-bold text-slate-900 flex items-center">
                                 <Droplets className="mr-3 h-6 w-6 text-sky-600" />
                                 Economia Adicional com Bandeiras
@@ -799,7 +703,7 @@ function ProposalPageContent() {
                             <p className="mt-2 text-sm text-slate-600">
                                 Quando a bandeira tarifária não é verde, seu desconto aumenta! Veja a projeção de economia mensal em cada cenário:
                             </p>
-                            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                            <div className="pdf-no-break mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
                                 <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                                     <thead className="bg-slate-100 text-slate-700">
                                         <tr>
@@ -888,12 +792,12 @@ function ProposalPageContent() {
                     </div>
                     </div>
         
-                    <div className="mt-10">
+                    <div className="pdf-no-break mt-10">
                     <h3 className="text-2xl font-bold text-slate-900">O que é a Bandeira Tarifária?</h3>
                     <p className="mt-4 text-sm text-slate-600">
                         As bandeiras tarifárias sinalizam as condições de geração de energia no sistema elétrico brasileiro. Mesmo em cenários críticos, a Planus entrega previsibilidade contratual e suporte consultivo na gestão da conta.
                     </p>
-                    <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                    <div className="pdf-no-break mt-6 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
                         <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                         <thead className="bg-slate-100 text-slate-700">
                             <tr>
@@ -930,7 +834,7 @@ function ProposalPageContent() {
                 </div>
             </div>
   
-            <div className="a4-page !p-0">
+            <div className="pdf-page-break rounded-xl bg-white p-0 shadow-lg">
                 <div className="w-full h-full">
                     <Image
                     src="/proposal/clientes-planus.png"
@@ -982,5 +886,3 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
-
-    
