@@ -42,6 +42,7 @@
     "firebase": "^12.4.0",
     "firebase-admin": "^12.4.0",
     "genkit": "latest",
+    "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.475.0",

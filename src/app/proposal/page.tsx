@@ -5,9 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 import { Button } from "@/components/ui/button";
-import { Download, Droplets } from "lucide-react";
+import { Download, Droplets, Loader2 } from "lucide-react";
 
 type ProposalState = {
   proposalCode: string;
@@ -146,6 +147,7 @@ const plants = [
 function ProposalPageContent() {
   const searchParams = useSearchParams();
   const proposalRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const [proposalData, setProposalData] = useState<ProposalState>({
     proposalCode: "0001/2025",
@@ -278,22 +280,84 @@ function ProposalPageContent() {
     }));
   };
 
-  const handleDownloadPDF = () => {
-    const doc = new jsPDF("p", "pt", "a4");
+  const handleDownloadPDF = async () => {
     const content = proposalRef.current;
+    if (!content || isGeneratingPDF) return;
 
-    if (content) {
-      doc.html(content, {
-        callback(pdf) {
-          pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-        },
-        x: 0,
-        y: 0,
-        html2canvas: {
-          scale: 0.6,
-          useCORS: true,
-        },
+    setIsGeneratingPDF(true);
+
+    try {
+      // Captura o conteúdo com alta qualidade
+      const canvas = await html2canvas(content, {
+        scale: 2, // Alta resolução para qualidade
+        useCORS: true, // Para imagens externas (logos, capa, etc)
+        allowTaint: false,
+        backgroundColor: "#f3f4f6", // Cor de fundo igual ao sistema
+        logging: false,
+        width: content.scrollWidth,
+        height: content.scrollHeight,
+        windowWidth: content.scrollWidth,
+        windowHeight: content.scrollHeight,
       });
+
+      const imgData = canvas.toDataURL("image/png", 1.0); // PNG com qualidade máxima
+
+      // Dimensões do PDF A4 em mm
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+
+      // Calcula a proporção mantendo aspect ratio
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Converte pixels para mm (assumindo 96 DPI)
+      const imgWidthMM = (imgWidth * 25.4) / 96 / 2; // Dividir por 2 por causa do scale
+      const imgHeightMM = (imgHeight * 25.4) / 96 / 2;
+
+      // Calcula a escala para caber na largura do PDF
+      const scale = pdfWidth / imgWidthMM;
+      const scaledHeight = imgHeightMM * scale;
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      // Calcula quantas páginas serão necessárias
+      let heightLeft = scaledHeight;
+      let position = 0;
+      let page = 0;
+
+      // Adiciona a imagem em páginas
+      while (heightLeft > 0) {
+        if (page > 0) {
+          pdf.addPage();
+        }
+        
+        pdf.addImage(
+          imgData,
+          "PNG",
+          0,
+          position,
+          pdfWidth,
+          scaledHeight,
+          undefined,
+          "FAST"
+        );
+        
+        heightLeft -= pdfHeight;
+        position -= pdfHeight;
+        page++;
+      }
+
+      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF. Por favor, tente novamente.");
+    } finally {
+      setIsGeneratingPDF(false);
     }
   };
 
@@ -786,12 +850,29 @@ function ProposalPageContent() {
       </div>
 
       <div className="fixed bottom-6 right-6 z-50">
-        <Button onClick={handleDownloadPDF} size="lg" className="h-16 w-auto rounded-full px-6 shadow-lg">
-          <Download className="mr-3 h-6 w-6" />
-          <div className="flex flex-col items-start">
-            <span className="text-base font-bold">Baixar PDF</span>
-            <span className="text-xs font-medium text-white/80">Exportar proposta</span>
-          </div>
+        <Button
+           onClick={handleDownloadPDF}
+           size="lg"
+           className="h-16 w-auto rounded-full px-6 shadow-lg"
+          disabled={isGeneratingPDF}
+        >
+          {isGeneratingPDF ? (
+            <>
+              <Loader2 className="mr-3 h-6 w-6 animate-spin" />
+              <div className="flex flex-col items-start">
+                <span className="text-base font-bold">Gerando PDF...</span>
+                <span className="text-xs font-medium text-white/80">Aguarde um momento</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <Download className="mr-3 h-6 w-6" />
+              <div className="flex flex-col items-start">
+                <span className="text-base font-bold">Baixar PDF</span>
+                <span className="text-xs font-medium text-white/80">Exportar proposta</span>
+              </div>
+            </>
+          )}
         </Button>
       </div>
     </div>
