@@ -55,7 +55,7 @@ const formatCurrency = (value: number | undefined | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) {
     return "R$ 0,00";
   }
-  return value.toLocaleString("pt-BR", { style: "currency", currency = "BRL" });
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 };
 
 const formatKWh = (value: number | undefined | null) => {
@@ -280,70 +280,91 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-    if (isGeneratingPDF) return;
-    setIsGeneratingPDF(true);
-    try {
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-      // Seleciona todas as páginas A4
-      const pages = proposalRef.current?.querySelectorAll('.a4-page');
-          
-      if (!pages || pages.length === 0) {
-        throw new Error("Nenhuma página encontrada");
+  const content = proposalRef.current;
+  if (!content || isGeneratingPDF) return;
+  setIsGeneratingPDF(true);
+  try {
+    // Scroll para o topo para captura correta
+    window.scrollTo(0, 0);
+    // Aguarda renderização
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Captura com alta qualidade
+    const canvas = await html2canvas(content, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#f3f4f6",
+      logging: false,
+      imageTimeout: 0,
+    });
+    const imgData = canvas.toDataURL("image/png", 1.0);
+    // Cria o PDF
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+    // Dimensões
+    const pageWidth = 210; // A4 em mm
+    const pageHeight = 297; // A4 em mm
+    const margin = 10; // Margem em mm
+    // Calcula dimensões da imagem
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    // Área útil da página (com margens)
+    const contentWidth = pageWidth - (margin * 2);
+    const contentHeight = pageHeight - (margin * 2);
+    // Escala para caber na largura com margem
+    const scale = contentWidth / imgWidth;
+    const scaledWidth = contentWidth;
+    const scaledHeight = imgHeight * scale;
+    let yPosition = 0;
+    let pageNumber = 0;
+    // Adiciona páginas
+    while (yPosition < scaledHeight) {
+      if (pageNumber > 0) {
+        pdf.addPage();
       }
-      let isFirstPage = true;
-      // Processa cada página individualmente
-      for (const page of Array.from(pages)) {
-        // Aguarda um pouco para garantir renderização
-        await new Promise(resolve => setTimeout(resolve, 300));
-        // Captura a página específica
-        const canvas = await html2canvas(page as HTMLElement, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          width: (page as HTMLElement).scrollWidth,
-          height: (page as HTMLElement).scrollHeight,
-        });
-        const imgData = canvas.toDataURL("image/png", 1.0);
-        // Adiciona nova página se não for a primeira
-        if (!isFirstPage) {
-          pdf.addPage();
-        }
-        // Dimensões A4
-        const pageWidth = 210;
-        const pageHeight = 297;
-        // Calcula proporção mantendo a largura fixa
-        const imgWidth = pageWidth;
-        const imgHeight = (canvas.height * pageWidth) / canvas.width;
-        // Se a imagem for maior que uma página, ajusta
-        if (imgHeight > pageHeight) {
-          // Reduz proporcionalmente para caber em uma página
-          const scale = pageHeight / imgHeight;
-          const scaledWidth = imgWidth * scale;
-          const scaledHeight = pageHeight;
-          const xOffset = (pageWidth - scaledWidth) / 2;
-                  
-          pdf.addImage(imgData, "PNG", xOffset, 0, scaledWidth, scaledHeight);
-        } else {
-          // Centraliza verticalmente se menor que uma página
-          const yOffset = (pageHeight - imgHeight) / 2;
-          pdf.addImage(imgData, "PNG", 0, yOffset, imgWidth, imgHeight);
-        }
-        isFirstPage = false;
+      // Calcula a porção da imagem para esta página
+      const sourceY = yPosition / scale;
+      const sourceHeight = Math.min(contentHeight / scale, (imgHeight - sourceY));
+      // Cria um canvas temporário para recortar a porção correta
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCanvas.width = imgWidth;
+      tempCanvas.height = sourceHeight;
+      if (tempCtx) {
+        tempCtx.drawImage(
+          canvas,
+          0, sourceY,           // Fonte: x, y
+          imgWidth, sourceHeight, // Fonte: largura, altura
+          0, 0,                  // Destino: x, y
+          imgWidth, sourceHeight  // Destino: largura, altura
+        );
+        const pageImgData = tempCanvas.toDataURL("image/png", 1.0);
+        const pageImgHeight = sourceHeight * scale;
+        // Adiciona a imagem com margem
+        pdf.addImage(
+          pageImgData,
+          "PNG",
+          margin,
+          margin,
+          scaledWidth,
+          pageImgHeight
+        );
       }
-      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Erro ao gerar PDF. Por favor, tente novamente.");
-    } finally {
-      setIsGeneratingPDF(false);
+      yPosition += contentHeight;
+      pageNumber++;
     }
-  };
+    pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+  } catch (error) {
+    console.error("Erro ao gerar PDF:", error);
+    alert("Erro ao gerar PDF. Por favor, tente novamente.");
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
 
   const selectedCommercializer = useMemo(
@@ -360,44 +381,17 @@ function ProposalPageContent() {
   return (
     <>
       <style jsx global>{`
-        @page {
-          size: A4;
-          margin: 0;
-        }
-          .a4-page {
-          width: 210mm;
-          min-height: 297mm;
-          max-height: 297mm;
-          padding: 15mm 20mm;
-          margin: 0 auto 20px auto;
-          background: white;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          box-sizing: border-box;
-          page-break-after: always;
-          page-break-inside: avoid;
-          overflow: hidden;
-          position: relative;
-        }
-          .a4-page:last-child {
-          margin-bottom: 0;
-        }
-          @media print {
+        @media print {
           body {
             background: white;
           }
-          .a4-page {
+          #proposal-container {
             margin: 0;
+            padding: 0;
             box-shadow: none;
-            page-break-after: always;
-            max-height: none;
           }
           .no-print {
             display: none !important;
-          }
-        }
-          @media screen {
-          body {
-            background: #f3f4f6;
           }
         }
       `}</style>
@@ -537,350 +531,346 @@ function ProposalPageContent() {
             </div>
           </div>
   
-          <div ref={proposalRef}>
-            <div className="a4-page !p-0 !min-h-[297mm] flex" id="page-capa">
-              <div className="relative flex flex-1 flex-col justify-between overflow-hidden bg-slate-900 text-white">
-                <Image
+          <div ref={proposalRef} className="space-y-6">
+            <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
+              <Image
                 src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
                 alt="Capa proposta Planus Energia"
                 fill
                 priority
                 className="object-cover"
-                />
-                <div className="absolute inset-0 bg-slate-900/70" />
-    
-                <div className="relative flex flex-col items-center justify-between px-6 py-10 text-center md:px-16 md:py-16">
+              />
+              <div className="absolute inset-0 bg-slate-900/70" />
+  
+              <div className="relative flex flex-col items-center justify-between px-6 py-10 text-center md:px-16 md:py-16">
                 <div className="flex w-full items-start justify-between text-sm md:text-base">
-                    <span className="font-light uppercase tracking-wide text-sky-200">
+                  <span className="font-light uppercase tracking-wide text-sky-200">
                     Proposta Comercial Planus Energia
-                    </span>
-                    <span className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-sky-100">
+                  </span>
+                  <span className="rounded-full bg-white/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-sky-100">
                     Código: {proposalData.proposalCode}
-                    </span>
+                  </span>
                 </div>
-    
+  
                 <div className="mt-16 flex flex-col items-center gap-4">
-                    <Image
+                  <Image
                     src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png"
                     alt="Logo Planus Energia"
                     width={120}
                     height={120}
                     className="drop-shadow-lg"
-                    />
-                    <h1 className="text-5xl font-black tracking-tight md:text-7xl">
+                  />
+                  <h1 className="text-5xl font-black tracking-tight md:text-7xl">
                     Energia por Assinatura
-                    </h1>
-                    <h2 className="text-2xl font-light text-sky-100 md:text-3xl">
+                  </h1>
+                  <h2 className="text-2xl font-light text-sky-100 md:text-3xl">
                     Soluções completas em geração distribuída
-                    </h2>
+                  </h2>
                 </div>
-    
+  
                 <div className="mt-24 flex flex-col items-center gap-3">
-                    <p className="text-lg font-light text-sky-100 md:text-2xl">
+                  <p className="text-lg font-light text-sky-100 md:text-2xl">
                     Geramos valor com a nossa energia, entregue sob medida para sua operação.
-                    </p>
-                    <p className="text-sm uppercase tracking-[0.3em] text-sky-200">
+                  </p>
+                  <p className="text-sm uppercase tracking-[0.3em] text-sky-200">
                     Planus Energia • Geração Distribuída • Mercado Livre
-                    </p>
-                </div>
+                  </p>
                 </div>
               </div>
             </div>
   
-            <div className="a4-page" id="page-quem-somos">
+            <div className="rounded-xl bg-white p-8 md:p-12">
               <div>
                 <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
-                <div>
+                  <div>
                     <h2 className="text-4xl font-extrabold text-slate-900">Quem Somos</h2>
                     <p className="mt-2 max-w-3xl text-lg text-slate-600">
-                    A Planus Energia integra um ecossistema de empresas especializadas em soluções de energia limpas, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões e preservando recursos naturais.
+                      A Planus Energia integra um ecossistema de empresas especializadas em soluções de energia limpas, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões e preservando recursos naturais.
                     </p>
+                  </div>
+                  <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
                 </div>
-                <Image src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/d889749a0d844cbea5a80379fd30df2e04783bde/LOGO_LOGO_AZUL.png" alt="Logo Planus" width={140} height={140} className="self-start md:self-center" />
-                </div>
-    
-                <div className="pdf-no-break mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
-                <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
+  
+                <div className="mt-10 grid grid-cols-1 gap-4 text-center sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg bg-sky-50 p-4">
                     <p className="text-3xl font-black text-sky-900">+5.500</p>
                     <p className="text-sm text-slate-600">Clientes atendidos nas soluções Planus</p>
-                </div>
-                <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
+                  </div>
+                  <div className="rounded-lg bg-sky-50 p-4">
                     <p className="text-3xl font-black text-sky-900">+R$ 480 mi</p>
                     <p className="text-sm text-slate-600">Economia gerada nos últimos 10 anos</p>
-                </div>
-                <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
+                  </div>
+                  <div className="rounded-lg bg-sky-50 p-4">
                     <p className="text-3xl font-black text-sky-900">+230 GWh</p>
                     <p className="text-sm text-slate-600">Energia limpa gerada pelas nossas usinas</p>
-                </div>
-                <div className="pdf-no-break rounded-lg bg-sky-50 p-4">
+                  </div>
+                  <div className="rounded-lg bg-sky-50 p-4">
                     <p className="text-3xl font-black text-sky-900">ESG</p>
                     <p className="text-sm text-slate-600">+15 mil toneladas de CO₂ evitadas</p>
+                  </div>
                 </div>
-                </div>
-    
+  
                 <h3 className="mt-12 text-2xl font-bold text-slate-900">Algumas de nossas usinas</h3>
                 <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {plants.map((plant) => (
-                    <div key={plant.name} className="pdf-no-break overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-                    <div className="relative h-40 w-full">
+                  {plants.map((plant) => (
+                    <div key={plant.name} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                      <div className="relative h-40 w-full">
                         <Image src={plant.image} alt={plant.name} fill className="object-cover" />
-                    </div>
-                    <div className="space-y-1 p-4">
+                      </div>
+                      <div className="space-y-1 p-4">
                         <p className="text-sm font-semibold text-slate-800">{plant.name}</p>
                         <p className="text-xs text-slate-500">{plant.location}</p>
                         <p className="text-xs font-medium text-sky-600">Capacidade: {plant.capacity}</p>
+                      </div>
                     </div>
-                    </div>
-                ))}
+                  ))}
                 </div>
-    
+  
                 <h3 className="mt-12 text-2xl font-bold text-slate-900">
-                Comercializadoras sob gestão Planus
+                  Comercializadoras sob gestão Planus
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                Atuamos através de estrutura multicomercializadora, garantindo aderência regulatória e competitividade para cada perfil de cliente.
+                  Atuamos através de estrutura multicomercializadora, garantindo aderência regulatória e competitividade para cada perfil de cliente.
                 </p>
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-                {commercializerCatalog.map((item) => (
-                    <div key={item.name} className="pdf-no-break rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="mb-4 flex h-16 items-center justify-center">
+                  {commercializerCatalog.map((item) => (
+                    <div key={item.name} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="mb-4 flex h-16 items-center justify-center">
                         <Image
-                        src={item.logo}
-                        alt={`Logo ${item.name}`}
-                        width={160}
-                        height={64}
-                        className="h-auto w-auto max-h-16 max-w-[160px] object-contain"
+                          src={item.logo}
+                          alt={`Logo ${item.name}`}
+                          width={160}
+                          height={64}
+                          className="h-auto w-auto max-h-16 max-w-[160px] object-contain"
                         />
-                    </div>
-                    <h4 className="text-base font-bold text-slate-900">{item.name}</h4>
-                    {item.cnpj ? (
+                      </div>
+                      <h4 className="text-base font-bold text-slate-900">{item.name}</h4>
+                      {item.cnpj ? (
                         <p className="text-xs uppercase tracking-widest text-sky-600">{item.cnpj}</p>
-                    ) : null}
-                    <p className="mt-2 text-sm text-slate-600">{item.segment}</p>
-                    <p className="mt-2 text-xs font-medium text-slate-500">Cobertura: {item.coverage}</p>
+                      ) : null}
+                      <p className="mt-2 text-sm text-slate-600">{item.segment}</p>
+                      <p className="mt-2 text-xs font-medium text-slate-500">Cobertura: {item.coverage}</p>
                     </div>
-                ))}
+                  ))}
                 </div>
               </div>
             </div>
   
-            <div className="a4-page" id="page-proposta">
+            <div className="rounded-xl bg-white p-8 md:p-12">
               <div>
                 <h2 className="text-4xl font-extrabold text-sky-900">Proposta Comercial</h2>
                 <p className="mt-2 text-lg text-slate-600">
-                Geração Distribuída • Energia por Assinatura • PPA Planus
+                  Geração Distribuída • Energia por Assinatura • PPA Planus
                 </p>
-    
+  
                 <div className="mt-8 rounded-xl border-l-4 border-sky-500 bg-slate-50 p-6">
-                <h3 className="text-xl font-bold text-slate-800">Dados da Proposta</h3>
-                <dl className="mt-4 grid grid-cols-1 gap-2 text-sm text-slate-600 md:grid-cols-2">
+                  <h3 className="text-xl font-bold text-slate-800">Dados da Proposta</h3>
+                  <dl className="mt-4 grid grid-cols-1 gap-2 text-sm text-slate-600 md:grid-cols-2">
                     <div>
-                    <dt className="font-semibold text-slate-900">Cliente</dt>
-                    <dd>{proposalData.clientName}</dd>
+                      <dt className="font-semibold text-slate-900">Cliente</dt>
+                      <dd>{proposalData.clientName}</dd>
                     </div>
                     <div>
-                    <dt className="font-semibold text-slate-900">CNPJ/CPF</dt>
-                    <dd>{proposalData.clientCpfCnpj}</dd>
+                      <dt className="font-semibold text-slate-900">CNPJ/CPF</dt>
+                      <dd>{proposalData.clientCpfCnpj}</dd>
                     </div>
                     <div>
-                    <dt className="font-semibold text-slate-900">Instalação (UC)</dt>
-                    <dd>{proposalData.consumerUnit}</dd>
+                      <dt className="font-semibold text-slate-900">Instalação (UC)</dt>
+                      <dd>{proposalData.consumerUnit}</dd>
                     </div>
                     <div>
-                    <dt className="font-semibold text-slate-900">Distribuidora Local</dt>
-                    <dd>{proposalData.distributor}</dd>
+                      <dt className="font-semibold text-slate-900">Distribuidora Local</dt>
+                      <dd>{proposalData.distributor}</dd>
                     </div>
-                </dl>
+                  </dl>
                 </div>
-    
+  
                 <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="rounded-xl border-l-4 border-rose-500 bg-rose-50 p-6">
+                  <div className="rounded-xl border-l-4 border-rose-500 bg-rose-50 p-6">
                     <h3 className="text-2xl font-bold text-rose-700">Cenário Atual (sem Planus)</h3>
                     <div className="mt-4 space-y-3 text-sm text-rose-700">
-                    <p className="flex justify-between">
+                      <p className="flex justify-between">
                         <span>Consumo Mensal</span>
                         <strong>{formatKWh(proposalData.avgConsumption)}</strong>
-                    </p>
-                    <p className="flex justify-between">
+                      </p>
+                      <p className="flex justify-between">
                         <span>Tarifa Atual (R$/kWh)</span>
                         <strong>{formatCurrency(proposalData.currentPrice)}</strong>
-                    </p>
-                    <p className="flex justify-between border-t border-rose-200 pt-3 text-lg">
+                      </p>
+                      <p className="flex justify-between border-t border-rose-200 pt-3 text-lg">
                         <span>Custo Médio Mensal</span>
                         <strong>{formatCurrency(calculated.avgMonthlyCost)}</strong>
-                    </p>
+                      </p>
                     </div>
-                </div>
-    
-                <div className="rounded-xl border-l-4 border-emerald-500 bg-emerald-50 p-6">
+                  </div>
+  
+                  <div className="rounded-xl border-l-4 border-emerald-500 bg-emerald-50 p-6">
                     <h3 className="text-2xl font-bold text-emerald-700">Cenário com Planus Energia</h3>
                     <div className="mt-4 space-y-3 text-sm text-emerald-700">
-                    <p className="flex justify-between">
+                      <p className="flex justify-between">
                         <span>Desconto Aplicado</span>
                         <strong>{proposalData.discountRate}%</strong>
-                    </p>
-                    <p className="flex justify-between">
+                      </p>
+                      <p className="flex justify-between">
                         <span>Tarifa Planus (R$/kWh)</span>
                         <strong>{formatCurrency(calculated.bcPrice)}</strong>
-                    </p>
-                    <p className="flex justify-between border-t border-emerald-200 pt-3 text-lg">
+                      </p>
+                      <p className="flex justify-between border-t border-emerald-200 pt-3 text-lg">
                         <span>Custo Médio Mensal</span>
                         <strong>{formatCurrency(calculated.bcMonthlyCost)}</strong>
-                    </p>
+                      </p>
                     </div>
+                  </div>
                 </div>
-                </div>
-    
+  
                 {calculated.flagSavings && (
-                    <div className="pdf-no-break mt-8">
-                        <h3 className="text-2xl font-bold text-slate-900 flex items-center">
-                            <Droplets className="mr-3 h-6 w-6 text-sky-600" />
-                            Economia Adicional com Bandeiras
-                        </h3>
-                        <p className="mt-2 text-sm text-slate-600">
-                            Quando a bandeira tarifária não é verde, seu desconto aumenta! Veja a projeção de economia mensal em cada cenário:
-                        </p>
-                        <div className="pdf-no-break mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead className="bg-slate-100 text-slate-700">
-                                    <tr>
-                                        <th className="px-6 py-3 font-semibold">Bandeira</th>
-                                        <th className="px-6 py-3 font-semibold">Seu Desconto</th>
-                                        <th className="px-6 py-3 font-semibold">Economia Mensal</th>
-                                        <th className="px-6 py-3 font-semibold">Economia Anual</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-200 text-slate-600">
-                                    <tr className="bg-green-50">
-                                        <td className="px-6 py-3 font-semibold text-green-700">Verde</td>
-                                        <td className="px-6 py-3">{calculated.flagSavings.green.discount.toFixed(1)}%</td>
-                                        <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.green.monthly)}</td>
-                                        <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.green.annual)}</td>
-                                    </tr>
-                                    <tr className="bg-yellow-50">
-                                        <td className="px-6 py-3 font-semibold text-yellow-700">Amarela</td>
-                                        <td className="px-6 py-3">{calculated.flagSavings.yellow.discount.toFixed(1)}%</td>
-                                        <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.yellow.monthly)}</td>
-                                        <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.yellow.annual)}</td>
-                                    </tr>
-                                    <tr className="bg-red-50">
-                                        <td className="px-6 py-3 font-semibold text-red-700">Vermelha I</td>
-                                        <td className="px-6 py-3">{calculated.flagSavings.red1.discount.toFixed(1)}%</td>
-                                        <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red1.monthly)}</td>
-                                        <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red1.annual)}</td>
-                                    </tr>
-                                    <tr className="bg-red-100">
-                                        <td className="px-6 py-3 font-semibold text-red-800">Vermelha II</td>
-                                        <td className="px-6 py-3">{calculated.flagSavings.red2.discount.toFixed(1)}%</td>
-                                        <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red2.monthly)}</td>
-                                        <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red2.annual)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                  <div className="mt-8">
+                    <h3 className="text-2xl font-bold text-slate-900 flex items-center">
+                      <Droplets className="mr-3 h-6 w-6 text-sky-600" />
+                      Economia Adicional com Bandeiras
+                    </h3>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Quando a bandeira tarifária não é verde, seu desconto aumenta! Veja a projeção de economia mensal em cada cenário:
+                    </p>
+                    <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                        <thead className="bg-slate-100 text-slate-700">
+                          <tr>
+                            <th className="px-6 py-3 font-semibold">Bandeira</th>
+                            <th className="px-6 py-3 font-semibold">Seu Desconto</th>
+                            <th className="px-6 py-3 font-semibold">Economia Mensal</th>
+                            <th className="px-6 py-3 font-semibold">Economia Anual</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 text-slate-600">
+                          <tr className="bg-green-50">
+                            <td className="px-6 py-3 font-semibold text-green-700">Verde</td>
+                            <td className="px-6 py-3">{calculated.flagSavings.green.discount.toFixed(1)}%</td>
+                            <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.green.monthly)}</td>
+                            <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.green.annual)}</td>
+                          </tr>
+                          <tr className="bg-yellow-50">
+                            <td className="px-6 py-3 font-semibold text-yellow-700">Amarela</td>
+                            <td className="px-6 py-3">{calculated.flagSavings.yellow.discount.toFixed(1)}%</td>
+                            <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.yellow.monthly)}</td>
+                            <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.yellow.annual)}</td>
+                          </tr>
+                          <tr className="bg-red-50">
+                            <td className="px-6 py-3 font-semibold text-red-700">Vermelha I</td>
+                            <td className="px-6 py-3">{calculated.flagSavings.red1.discount.toFixed(1)}%</td>
+                            <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red1.monthly)}</td>
+                            <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red1.annual)}</td>
+                          </tr>
+                          <tr className="bg-red-100">
+                            <td className="px-6 py-3 font-semibold text-red-800">Vermelha II</td>
+                            <td className="px-6 py-3">{calculated.flagSavings.red2.discount.toFixed(1)}%</td>
+                            <td className="px-6 py-3 font-medium">{formatCurrency(calculated.flagSavings.red2.monthly)}</td>
+                            <td className="px-6 py-3 font-bold">{formatCurrency(calculated.flagSavings.red2.annual)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
+                  </div>
                 )}
-    
+  
                 <div className="mt-8 grid gap-6 lg:grid-cols-[2fr_3fr]">
-                <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-900">
-                    Comercializadora responsável pela entrega
+                      Comercializadora responsável pela entrega
                     </h3>
                     {selectedCommercializer?.logo ? (
-                    <div className="mt-4 flex h-16 items-center justify-center">
+                      <div className="mt-4 flex h-16 items-center justify-center">
                         <Image
-                        src={selectedCommercializer.logo}
-                        alt={`Logo ${selectedCommercializer.name}`}
-                        width={160}
-                        height={64}
-                        className="h-auto w-auto max-h-16 max-w-[160px] object-contain"
+                          src={selectedCommercializer.logo}
+                          alt={`Logo ${selectedCommercializer.name}`}
+                          width={160}
+                          height={64}
+                          className="h-auto w-auto max-h-16 max-w-[160px] object-contain"
                         />
-                    </div>
+                      </div>
                     ) : null}
                     <p className="mt-4 text-sm text-slate-600">{selectedCommercializer?.name}</p>
                     {selectedCommercializer?.cnpj ? (
-                    <p className="mt-1 text-xs uppercase tracking-widest text-sky-600">
+                      <p className="mt-1 text-xs uppercase tracking-widest text-sky-600">
                         {selectedCommercializer.cnpj}
-                    </p>
+                      </p>
                     ) : null}
                     <p className="mt-4 text-sm text-slate-600">
-                    {selectedCommercializer?.segment} • Cobertura: {selectedCommercializer?.coverage}
+                      {selectedCommercializer?.segment} • Cobertura: {selectedCommercializer?.coverage}
                     </p>
                     <div
-                    className={`mt-6 rounded-lg border px-4 py-3 text-sm font-medium ${
+                      className={`mt-6 rounded-lg border px-4 py-3 text-sm font-medium ${
                         proposalData.coversTariffFlag
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                        : "border-amber-300 bg-amber-50 text-amber-800"
-                    }`}
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                          : "border-amber-300 bg-amber-50 text-amber-800"
+                      }`}
                     >
-                    {bandeiraMessage}
+                      {bandeiraMessage}
                     </div>
-                </div>
-    
-                <div className="rounded-xl bg-sky-600 p-6 text-center text-white shadow-lg">
+                  </div>
+  
+                  <div className="rounded-xl bg-sky-600 p-6 text-center text-white shadow-lg">
                     <p className="text-lg font-semibold">Economia Mensal Projetada (Bandeira Verde)</p>
                     <p className="text-5xl font-black">{formatCurrency(calculated.monthlyEconomy)}</p>
                     <p className="mt-6 text-base font-semibold uppercase tracking-widest text-sky-100">
-                    Economia Anual Sem Investimento
+                      Economia Anual Sem Investimento
                     </p>
                     <p className="text-4xl font-black text-amber-300">
-                    {formatCurrency(calculated.annualEconomy)}
+                      {formatCurrency(calculated.annualEconomy)}
                     </p>
+                  </div>
                 </div>
-                </div>
-    
-                <div className="pdf-no-break mt-10">
-                <h3 className="text-2xl font-bold text-slate-900">O que é a Bandeira Tarifária?</h3>
-                <p className="mt-4 text-sm text-slate-600">
+  
+                <div className="mt-10">
+                  <h3 className="text-2xl font-bold text-slate-900">O que é a Bandeira Tarifária?</h3>
+                  <p className="mt-4 text-sm text-slate-600">
                     As bandeiras tarifárias sinalizam as condições de geração de energia no sistema elétrico brasileiro. Mesmo em cenários críticos, a Planus entrega previsibilidade contratual e suporte consultivo na gestão da conta.
-                </p>
-                <div className="pdf-no-break mt-6 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+                  </p>
+                  <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
                     <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                    <thead className="bg-slate-100 text-slate-700">
+                      <thead className="bg-slate-100 text-slate-700">
                         <tr>
-                        <th className="px-6 py-3 font-semibold">Cor</th>
-                        <th className="px-6 py-3 font-semibold">Significado</th>
-                        <th className="px-6 py-3 font-semibold">Impacto na Conta</th>
+                          <th className="px-6 py-3 font-semibold">Cor</th>
+                          <th className="px-6 py-3 font-semibold">Significado</th>
+                          <th className="px-6 py-3 font-semibold">Impacto na Conta</th>
                         </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 text-slate-600">
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-slate-600">
                         <tr>
-                        <td className="px-6 py-3 font-semibold text-emerald-600">Verde</td>
-                        <td className="px-6 py-3">Condições normais de geração</td>
-                        <td className="px-6 py-3">Sem cobrança adicional</td>
-                        </tr>
-                        <tr>
-                        <td className="px-6 py-3 font-semibold text-amber-500">Amarela</td>
-                        <td className="px-6 py-3">Geração mais cara</td>
-                        <td className="px-6 py-3">Taxa adicional moderada</td>
+                          <td className="px-6 py-3 font-semibold text-emerald-600">Verde</td>
+                          <td className="px-6 py-3">Condições normais de geração</td>
+                          <td className="px-6 py-3">Sem cobrança adicional</td>
                         </tr>
                         <tr>
-                        <td className="px-6 py-3 font-semibold text-red-600">Vermelha I</td>
-                        <td className="px-6 py-3">Geração muito cara</td>
-                        <td className="px-6 py-3">Custo extra elevado</td>
+                          <td className="px-6 py-3 font-semibold text-amber-500">Amarela</td>
+                          <td className="px-6 py-3">Geração mais cara</td>
+                          <td className="px-6 py-3">Taxa adicional moderada</td>
                         </tr>
                         <tr>
-                        <td className="px-6 py-3 font-semibold text-red-800">Vermelha II</td>
-                        <td className="px-6 py-3">Geração crítica</td>
-                        <td className="px-6 py-3">Custo extra máximo</td>
+                          <td className="px-6 py-3 font-semibold text-red-600">Vermelha I</td>
+                          <td className="px-6 py-3">Geração muito cara</td>
+                          <td className="px-6 py-3">Custo extra elevado</td>
                         </tr>
-                    </tbody>
+                        <tr>
+                          <td className="px-6 py-3 font-semibold text-red-800">Vermelha II</td>
+                          <td className="px-6 py-3">Geração crítica</td>
+                          <td className="px-6 py-3">Custo extra máximo</td>
+                        </tr>
+                      </tbody>
                     </table>
-                </div>
+                  </div>
                 </div>
               </div>
             </div>
   
-            <div className="a4-page !p-0" id="page-clientes">
-                <div className="w-full h-full">
-                    <Image
-                    src="/proposal/clientes-planus.png"
-                    alt="Alguns dos clientes atendidos pela Planus Energia"
-                    width={2480}
-                    height={1754}
-                    className="w-full h-full object-cover"
-                    />
-                </div>
+            <div className="rounded-xl bg-white p-0 shadow-lg">
+              <Image
+                src="/proposal/clientes-planus.png"
+                alt="Alguns dos clientes atendidos pela Planus Energia"
+                width={2480}
+                height={1754}
+                className="w-full h-auto"
+              />
             </div>
           </div>
         </div>
@@ -923,5 +913,3 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
-
-    
