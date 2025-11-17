@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,159 +8,153 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, ChevronDown, Phone, User as UserIcon } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone } from 'lucide-react';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { uploadFile } from '@/lib/firebase/storage';
+import { useToast } from '@/hooks/use-toast';
+import type { FaturaCliente, UnidadeConsumidora, Contato } from '@/types/faturas';
 
-// Defines an individual invoice or consumer unit
-interface UnidadeConsumidora {
-  id: string;
-  consumoKwh: string;
-  temGeracao: boolean;
-  arquivoFatura: File | null;
-}
-
-// Defines a contact person
-interface Contato {
-  id: string;
-  nome: string;
-  telefone: string;
-}
-
-// Defines a client, who can have multiple consumer units and contacts
-interface ClienteFatura {
-  id: string;
-  nome: string;
-  tipoPessoa: 'pf' | 'pj' | '';
-  unidades: UnidadeConsumidora[];
-  contatos: Contato[];
-}
 
 export default function FaturasPage() {
-  const [clientes, setClientes] = useState<ClienteFatura[]>([]);
-  const [nextId, setNextId] = useState(1);
+  const { toast } = useToast();
+  const [clientes, setClientes] = useState<FaturaCliente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleAddCliente = () => {
-    const newCliente: ClienteFatura = {
-      id: `cliente-${nextId}`,
-      nome: '',
-      tipoPessoa: '',
-      unidades: [
-        {
-          id: `uc-${nextId}-1`,
-          consumoKwh: '',
-          temGeracao: false,
-          arquivoFatura: null,
-        },
-      ],
-      contatos: [
-        {
-          id: `contato-${nextId}-1`,
-          nome: '',
-          telefone: '',
-        }
-      ]
+  useEffect(() => {
+    const faturasCollectionRef = collection(db, 'faturas_clientes');
+    const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
+      const faturasData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as FaturaCliente[];
+      setClientes(faturasData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching faturas: ", error);
+      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do Firestore.", variant: "destructive" });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
+
+  const handleAddCliente = async () => {
+    const newUnidade: Omit<UnidadeConsumidora, 'id'> = {
+      consumoKwh: '',
+      temGeracao: false,
+      arquivoFaturaUrl: null,
+      nomeArquivo: null,
     };
-    setClientes([...clientes, newCliente]);
-    setNextId(nextId + 1);
+    const newContato: Omit<Contato, 'id'> = {
+      nome: '',
+      telefone: '',
+    };
+    const newClienteData = {
+      nome: 'Novo Cliente',
+      tipoPessoa: '' as 'pf' | 'pj',
+      unidades: [newUnidade],
+      contatos: [newContato],
+      createdAt: Timestamp.now(),
+    };
+    try {
+      await addDoc(collection(db, 'faturas_clientes'), newClienteData);
+      toast({ title: "Cliente Adicionado", description: "Um novo cliente foi criado com sucesso." });
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      toast({ title: "Erro", description: "Não foi possível adicionar o cliente.", variant: "destructive" });
+    }
   };
 
-  const handleRemoveCliente = (clienteId: string) => {
-    setClientes(clientes.filter(c => c.id !== clienteId));
+  const handleRemoveCliente = async (clienteId: string) => {
+    try {
+      await deleteDoc(doc(db, 'faturas_clientes', clienteId));
+      toast({ title: "Cliente Removido", description: "O cliente e todos os seus dados foram removidos." });
+    } catch (error) {
+      console.error("Error removing document: ", error);
+      toast({ title: "Erro", description: "Não foi possível remover o cliente.", variant: "destructive" });
+    }
   };
   
-  const handleClienteInputChange = (clienteId: string, field: keyof ClienteFatura, value: any) => {
-    setClientes(clientes.map(c => (c.id === clienteId ? { ...c, [field]: value } : c)));
+  const handleUpdateField = async (clienteId: string, fieldPath: string, value: any) => {
+    const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
+    try {
+      await updateDoc(clienteDocRef, { [fieldPath]: value });
+    } catch (error) {
+      console.error(`Error updating field ${fieldPath}: `, error);
+      toast({ title: "Erro ao Salvar", description: "Não foi possível salvar a alteração.", variant: "destructive" });
+    }
   };
 
-  const handleAddUnidade = (clienteId: string) => {
-    setClientes(clientes.map(c => {
-      if (c.id === clienteId) {
-        const newUnidade: UnidadeConsumidora = {
-          id: `uc-${c.id}-${c.unidades.length + 1}`,
-          consumoKwh: '',
-          temGeracao: false,
-          arquivoFatura: null,
-        };
-        return { ...c, unidades: [...c.unidades, newUnidade] };
-      }
-      return c;
-    }));
+  const handleAddUnidade = async (clienteId: string) => {
+    const newUnidade: UnidadeConsumidora = {
+      id: `uc-${Date.now()}`,
+      consumoKwh: '',
+      temGeracao: false,
+      arquivoFaturaUrl: null,
+      nomeArquivo: null,
+    };
+    const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
+    await updateDoc(clienteDocRef, { unidades: arrayUnion(newUnidade) });
   };
 
-  const handleRemoveUnidade = (clienteId: string, unidadeId: string) => {
-    setClientes(clientes.map(c => {
-      if (c.id === clienteId) {
-        // Prevent removing the last unit
-        if (c.unidades.length <= 1) return c;
-        return { ...c, unidades: c.unidades.filter(u => u.id !== unidadeId) };
-      }
-      return c;
-    }));
-  };
-
-  const handleUnidadeInputChange = (clienteId: string, unidadeId: string, field: keyof UnidadeConsumidora, value: any) => {
-    setClientes(clientes.map(c => {
-      if (c.id === clienteId) {
-        const novasUnidades = c.unidades.map(u => u.id === unidadeId ? { ...u, [field]: value } : u);
-        return { ...c, unidades: novasUnidades };
-      }
-      return c;
-    }));
-  };
-
-  const handleFileChange = (clienteId: string, unidadeId: string, file: File | null) => {
-    handleUnidadeInputChange(clienteId, unidadeId, 'arquivoFatura', file);
-  };
-
-  // Contact Handlers
-  const handleAddContato = (clienteId: string) => {
-    setClientes(clientes.map(c => {
-      if (c.id === clienteId) {
-        const newContato: Contato = {
-          id: `contato-${c.id}-${c.contatos.length + 1}`,
-          nome: '',
-          telefone: '',
-        };
-        return { ...c, contatos: [...c.contatos, newContato] };
-      }
-      return c;
-    }));
-  };
-
-  const handleRemoveContato = (clienteId: string, contatoId: string) => {
-    setClientes(clientes.map(c => {
-      if (c.id === clienteId) {
-        if (c.contatos.length <= 1) return c; // Prevent removing the last contact
-        return { ...c, contatos: c.contatos.filter(ct => ct.id !== contatoId) };
-      }
-      return c;
-    }));
+  const handleRemoveUnidade = async (clienteId: string, unidade: UnidadeConsumidora) => {
+    const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
+    await updateDoc(clienteDocRef, { unidades: arrayRemove(unidade) });
   };
   
-  const handleContatoInputChange = (clienteId: string, contatoId: string, field: keyof Contato, value: string) => {
-    setClientes(clientes.map(c => {
-        if (c.id === clienteId) {
-            const novosContatos = c.contatos.map(ct => ct.id === contatoId ? { ...ct, [field]: value } : ct);
-            return { ...c, contatos: novosContatos };
-        }
-        return c;
-    }));
+  const handleAddContato = async (clienteId: string) => {
+    const newContato: Contato = { id: `contato-${Date.now()}`, nome: '', telefone: '' };
+    const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
+    await updateDoc(clienteDocRef, { contatos: arrayUnion(newContato) });
   };
 
-  const handleDownload = (file: File) => {
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleRemoveContato = async (clienteId: string, contato: Contato) => {
+    const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
+    await updateDoc(clienteDocRef, { contatos: arrayRemove(contato) });
   };
 
-  const handleView = (file: File) => {
-    const url = URL.createObjectURL(file);
+  const handleFileChange = async (clienteId: string, unidadeId: string, file: File | null) => {
+    if (!file) return;
+
+    toast({ title: "Enviando arquivo...", description: "Aguarde enquanto a fatura é salva." });
+    try {
+      const filePath = `faturas/${clienteId}/${unidadeId}/${file.name}`;
+      const fileUrl = await uploadFile(file, filePath);
+      
+      const cliente = clientes.find(c => c.id === clienteId);
+      if (cliente) {
+        const novasUnidades = cliente.unidades.map(u => 
+          u.id === unidadeId ? { ...u, arquivoFaturaUrl: fileUrl, nomeArquivo: file.name } : u
+        );
+        await handleUpdateField(clienteId, 'unidades', novasUnidades);
+        toast({ title: "Sucesso!", description: "Fatura enviada e salva com sucesso." });
+      }
+    } catch (error) {
+      console.error("File upload error: ", error);
+      toast({ title: "Erro de Upload", description: "Não foi possível enviar o arquivo da fatura.", variant: "destructive" });
+    }
+  };
+
+
+  const handleDownload = (url: string | null) => {
+    if (!url) return;
     window.open(url, '_blank');
   };
+
+  const handleView = (url: string | null) => {
+    if (!url) return;
+    window.open(url, '_blank');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="ml-3 text-lg">Carregando dados das faturas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-8">
@@ -203,11 +197,16 @@ export default function FaturasPage() {
                             <Input
                               placeholder="Nome do cliente"
                               value={cliente.nome}
-                              onChange={(e) => handleClienteInputChange(cliente.id, 'nome', e.target.value)}
+                              onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)}
+                              onChange={(e) => {
+                                const newClientes = [...clientes];
+                                newClientes[index].nome = e.target.value;
+                                setClientes(newClientes);
+                              }}
                             />
                             <Select
                               value={cliente.tipoPessoa}
-                              onValueChange={(value: 'pf' | 'pj' | '') => handleClienteInputChange(cliente.id, 'tipoPessoa', value)}
+                              onValueChange={(value: 'pf' | 'pj' | '') => handleUpdateField(cliente.id, 'tipoPessoa', value)}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecione o tipo" />
@@ -219,21 +218,20 @@ export default function FaturasPage() {
                             </Select>
                           </div>
                           
-                          {/* Contatos Section */}
                           <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                           <div className="space-y-3 mb-6">
                             {cliente.contatos.map((contato) => (
                                <div key={contato.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                  <div className="md:col-span-5 flex items-center">
                                     <UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Nome do Contato" value={contato.nome} onChange={(e) => handleContatoInputChange(cliente.id, contato.id, 'nome', e.target.value)} />
+                                    <Input placeholder="Nome do Contato" value={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
                                  </div>
                                   <div className="md:col-span-6 flex items-center">
                                     <Phone className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Telefone" value={contato.telefone} onChange={(e) => handleContatoInputChange(cliente.id, contato.id, 'telefone', e.target.value)} />
+                                    <Input placeholder="Telefone" value={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
                                   </div>
                                   <div className="md:col-span-1 flex justify-end">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato.id)} disabled={cliente.contatos.length <= 1}>
+                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}>
                                       <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
                                     </Button>
                                   </div>
@@ -254,14 +252,14 @@ export default function FaturasPage() {
                                   <Input
                                       type="number"
                                       placeholder="Consumo (kWh)"
-                                      value={unidade.consumoKwh}
-                                      onChange={(e) => handleUnidadeInputChange(cliente.id, unidade.id, 'consumoKwh', e.target.value)}
+                                      defaultValue={unidade.consumoKwh}
+                                      onBlur={(e) => { const updatedUnidades = cliente.unidades.map(u => u.id === unidade.id ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
                                   />
                                 </div>
                                 <div className="md:col-span-2 flex items-center justify-center gap-2">
                                   <Checkbox
                                       checked={unidade.temGeracao}
-                                      onCheckedChange={(checked) => handleUnidadeInputChange(cliente.id, unidade.id, 'temGeracao', checked)}
+                                      onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map(u => u.id === unidade.id ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
                                       id={`gen-${unidade.id}`}
                                   />
                                   <label htmlFor={`gen-${unidade.id}`} className="text-sm">Tem Geração?</label>
@@ -270,19 +268,19 @@ export default function FaturasPage() {
                                   <Button asChild variant="outline" size="sm" className="w-full">
                                     <label className="cursor-pointer">
                                       <Upload className="mr-2 h-4 w-4" />
-                                      {unidade.arquivoFatura ? 'Trocar Fatura' : 'Anexar Fatura'}
+                                      {unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}
                                       <Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} />
                                     </label>
                                   </Button>
                                 </div>
                                 <div className="md:col-span-3 flex items-center justify-end gap-1">
-                                  {unidade.arquivoFatura && (
+                                  {unidade.arquivoFaturaUrl && (
                                     <>
-                                      <Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFatura!)}><Eye className="h-4 w-4" /></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFatura!)}><Download className="h-4 w-4" /></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button>
+                                      <Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button>
                                     </>
                                   )}
-                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade.id)} disabled={cliente.unidades.length <= 1}>
+                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}>
                                     <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
                                   </Button>
                                 </div>
