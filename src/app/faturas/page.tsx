@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -81,7 +82,7 @@ export default function FaturasPage() {
     try {
       await updateDoc(clienteDocRef, { [fieldPath]: value });
     } catch (error) {
-      console.error(`Error updating field ${fieldPath}: `, error);
+      console.error(`Error updating field ${''}${fieldPath}: `, error);
       toast({ title: "Erro ao Salvar", description: "Não foi possível salvar a alteração.", variant: "destructive" });
     }
   };
@@ -196,13 +197,8 @@ export default function FaturasPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <Input
                               placeholder="Nome do cliente"
-                              value={cliente.nome}
+                              defaultValue={cliente.nome}
                               onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)}
-                              onChange={(e) => {
-                                const newClientes = [...clientes];
-                                newClientes[index].nome = e.target.value;
-                                setClientes(newClientes);
-                              }}
                             />
                             <Select
                               value={cliente.tipoPessoa}
@@ -220,15 +216,15 @@ export default function FaturasPage() {
                           
                           <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                           <div className="space-y-3 mb-6">
-                            {cliente.contatos.map((contato) => (
-                               <div key={contato.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                            {cliente.contatos.map((contato, contatoIndex) => (
+                               <div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                  <div className="md:col-span-5 flex items-center">
                                     <UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Nome do Contato" value={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
+                                    <Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
                                  </div>
                                   <div className="md:col-span-6 flex items-center">
                                     <Phone className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Telefone" value={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
+                                    <Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
                                   </div>
                                   <div className="md:col-span-1 flex justify-end">
                                     <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}>
@@ -246,7 +242,7 @@ export default function FaturasPage() {
                           <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
                           <div className="space-y-3">
                             {cliente.unidades.map((unidade, ucIndex) => (
-                              <div key={unidade.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                              <div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                 <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
                                 <div className="md:col-span-3">
                                   <Input
