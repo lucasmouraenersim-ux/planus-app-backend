@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, ChevronDown } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, ChevronDown, Phone, User as UserIcon } from 'lucide-react';
 
 // Defines an individual invoice or consumer unit
 interface UnidadeConsumidora {
@@ -18,12 +18,20 @@ interface UnidadeConsumidora {
   arquivoFatura: File | null;
 }
 
-// Defines a client, who can have multiple consumer units
+// Defines a contact person
+interface Contato {
+  id: string;
+  nome: string;
+  telefone: string;
+}
+
+// Defines a client, who can have multiple consumer units and contacts
 interface ClienteFatura {
   id: string;
   nome: string;
   tipoPessoa: 'pf' | 'pj' | '';
   unidades: UnidadeConsumidora[];
+  contatos: Contato[];
 }
 
 export default function FaturasPage() {
@@ -43,6 +51,13 @@ export default function FaturasPage() {
           arquivoFatura: null,
         },
       ],
+      contatos: [
+        {
+          id: `contato-${nextId}-1`,
+          nome: '',
+          telefone: '',
+        }
+      ]
     };
     setClientes([...clientes, newCliente]);
     setNextId(nextId + 1);
@@ -94,6 +109,41 @@ export default function FaturasPage() {
 
   const handleFileChange = (clienteId: string, unidadeId: string, file: File | null) => {
     handleUnidadeInputChange(clienteId, unidadeId, 'arquivoFatura', file);
+  };
+
+  // Contact Handlers
+  const handleAddContato = (clienteId: string) => {
+    setClientes(clientes.map(c => {
+      if (c.id === clienteId) {
+        const newContato: Contato = {
+          id: `contato-${c.id}-${c.contatos.length + 1}`,
+          nome: '',
+          telefone: '',
+        };
+        return { ...c, contatos: [...c.contatos, newContato] };
+      }
+      return c;
+    }));
+  };
+
+  const handleRemoveContato = (clienteId: string, contatoId: string) => {
+    setClientes(clientes.map(c => {
+      if (c.id === clienteId) {
+        if (c.contatos.length <= 1) return c; // Prevent removing the last contact
+        return { ...c, contatos: c.contatos.filter(ct => ct.id !== contatoId) };
+      }
+      return c;
+    }));
+  };
+  
+  const handleContatoInputChange = (clienteId: string, contatoId: string, field: keyof Contato, value: string) => {
+    setClientes(clientes.map(c => {
+        if (c.id === clienteId) {
+            const novosContatos = c.contatos.map(ct => ct.id === contatoId ? { ...ct, [field]: value } : ct);
+            return { ...c, contatos: novosContatos };
+        }
+        return c;
+    }));
   };
 
   const handleDownload = (file: File) => {
@@ -167,6 +217,32 @@ export default function FaturasPage() {
                                 <SelectItem value="pj">PJ</SelectItem>
                               </SelectContent>
                             </Select>
+                          </div>
+                          
+                          {/* Contatos Section */}
+                          <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
+                          <div className="space-y-3 mb-6">
+                            {cliente.contatos.map((contato) => (
+                               <div key={contato.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                 <div className="md:col-span-5 flex items-center">
+                                    <UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/>
+                                    <Input placeholder="Nome do Contato" value={contato.nome} onChange={(e) => handleContatoInputChange(cliente.id, contato.id, 'nome', e.target.value)} />
+                                 </div>
+                                  <div className="md:col-span-6 flex items-center">
+                                    <Phone className="h-4 w-4 mr-2 text-muted-foreground"/>
+                                    <Input placeholder="Telefone" value={contato.telefone} onChange={(e) => handleContatoInputChange(cliente.id, contato.id, 'telefone', e.target.value)} />
+                                  </div>
+                                  <div className="md:col-span-1 flex justify-end">
+                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato.id)} disabled={cliente.contatos.length <= 1}>
+                                      <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
+                                    </Button>
+                                  </div>
+                               </div>
+                            ))}
+                             <Button onClick={() => handleAddContato(cliente.id)} className="mt-2" variant="outline" size="sm">
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Adicionar Contato
+                            </Button>
                           </div>
 
                           <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
