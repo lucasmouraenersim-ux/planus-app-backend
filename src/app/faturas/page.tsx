@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import type { FaturaCliente, UnidadeConsumidora, Contato } from '@/types/faturas';
+import { Label } from '@/components/ui/label';
 
 
 export default function FaturasPage() {
@@ -379,3 +380,5 @@ export default function FaturasPage() {
     </div>
   );
 }
+
+    
