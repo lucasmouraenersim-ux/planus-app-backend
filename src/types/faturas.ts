@@ -1,3 +1,4 @@
+
 // src/types/faturas.ts
 import type { Timestamp } from 'firebase/firestore';
 
@@ -19,6 +20,7 @@ export interface FaturaCliente {
   id: string; // Document ID from Firestore
   nome: string;
   tipoPessoa: 'pf' | 'pj' | '';
+  tensao: 'alta' | 'baixa';
   unidades: UnidadeConsumidora[];
   contatos: Contato[];
   createdAt: Timestamp; // To sort by creation time if needed

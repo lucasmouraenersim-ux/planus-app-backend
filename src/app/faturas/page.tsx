@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -21,6 +21,10 @@ export default function FaturasPage() {
   const { toast } = useToast();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // State for filters
+  const [filterTensao, setFilterTensao] = useState<'all' | 'alta' | 'baixa'>('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
     const faturasCollectionRef = collection(db, 'faturas_clientes');
@@ -39,6 +43,31 @@ export default function FaturasPage() {
 
     return () => unsubscribe();
   }, [toast]);
+  
+  const filteredAndSortedClientes = useMemo(() => {
+    let filtered = clientes;
+
+    // Filter by tension
+    if (filterTensao !== 'all') {
+      filtered = filtered.filter(cliente => cliente.tensao === filterTensao);
+    }
+    
+    // Sort by kWh
+    if (sortOrder !== 'none') {
+        filtered.sort((a, b) => {
+            const totalConsumoA = a.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
+            const totalConsumoB = b.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
+            if (sortOrder === 'asc') {
+                return totalConsumoA - totalConsumoB;
+            } else {
+                return totalConsumoB - totalConsumoA;
+            }
+        });
+    }
+
+    return filtered;
+  }, [clientes, filterTensao, sortOrder]);
+
 
   const handleAddCliente = async () => {
     const newUnidade: Omit<UnidadeConsumidora, 'id'> = {
@@ -51,9 +80,10 @@ export default function FaturasPage() {
       nome: '',
       telefone: '',
     };
-    const newClienteData = {
+    const newClienteData: Omit<FaturaCliente, 'id'> = {
       nome: 'Novo Cliente',
       tipoPessoa: '' as 'pf' | 'pj',
+      tensao: 'baixa', // Default to baixa
       unidades: [newUnidade],
       contatos: [newContato],
       createdAt: Timestamp.now(),
@@ -170,9 +200,37 @@ export default function FaturasPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Filters Section */}
+          <div className="flex flex-wrap gap-4 mb-6 p-4 border rounded-lg bg-muted/30">
+              <div className="flex items-center gap-2">
+                <FilterIcon className="h-4 w-4 text-muted-foreground" />
+                <Label>Filtrar por Tensão:</Label>
+                <Select value={filterTensao} onValueChange={(value: 'all' | 'alta' | 'baixa') => setFilterTensao(value)}>
+                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="alta">Alta Tensão</SelectItem>
+                    <SelectItem value="baixa">Baixa Tensão</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+                <Label>Ordenar por Consumo:</Label>
+                <Select value={sortOrder} onValueChange={(value: 'asc' | 'desc' | 'none') => setSortOrder(value)}>
+                  <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Padrão</SelectItem>
+                    <SelectItem value="desc">Maior para Menor</SelectItem>
+                    <SelectItem value="asc">Menor para Maior</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+          </div>
+
           <Accordion type="multiple" className="w-full space-y-2">
-            {clientes.length > 0 ? (
-              clientes.map((cliente, index) => {
+            {filteredAndSortedClientes.length > 0 ? (
+              filteredAndSortedClientes.map((cliente, index) => {
                 const totalConsumo = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
                 return (
                   <AccordionItem key={cliente.id} value={cliente.id} className="border-b-0">
@@ -194,7 +252,7 @@ export default function FaturasPage() {
                       </div>
                       <AccordionContent>
                         <div className="p-4 border-t bg-muted/30">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <Input
                               placeholder="Nome do cliente"
                               defaultValue={cliente.nome}
@@ -212,6 +270,18 @@ export default function FaturasPage() {
                                 <SelectItem value="pj">PJ</SelectItem>
                               </SelectContent>
                             </Select>
+                             <Select
+                              value={cliente.tensao}
+                              onValueChange={(value: 'alta' | 'baixa') => handleUpdateField(cliente.id, 'tensao', value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione a Tensão" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="alta">Alta Tensão</SelectItem>
+                                <SelectItem value="baixa">Baixa Tensão</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                           
                           <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
@@ -220,11 +290,11 @@ export default function FaturasPage() {
                                <div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                  <div className="md:col-span-5 flex items-center">
                                     <UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
+                                    <Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
                                  </div>
                                   <div className="md:col-span-6 flex items-center">
                                     <Phone className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map(c => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
+                                    <Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
                                   </div>
                                   <div className="md:col-span-1 flex justify-end">
                                     <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}>
@@ -249,16 +319,16 @@ export default function FaturasPage() {
                                       type="number"
                                       placeholder="Consumo (kWh)"
                                       defaultValue={unidade.consumoKwh}
-                                      onBlur={(e) => { const updatedUnidades = cliente.unidades.map(u => u.id === unidade.id ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
+                                      onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
                                   />
                                 </div>
                                 <div className="md:col-span-2 flex items-center justify-center gap-2">
                                   <Checkbox
                                       checked={unidade.temGeracao}
-                                      onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map(u => u.id === unidade.id ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
-                                      id={`gen-${unidade.id}`}
+                                      onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
+                                      id={`gen-${cliente.id}-${ucIndex}`}
                                   />
-                                  <label htmlFor={`gen-${unidade.id}`} className="text-sm">Tem Geração?</label>
+                                  <label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label>
                                 </div>
                                 <div className="md:col-span-2">
                                   <Button asChild variant="outline" size="sm" className="w-full">
@@ -295,7 +365,7 @@ export default function FaturasPage() {
               })
             ) : (
                 <div className="h-24 text-center text-muted-foreground flex items-center justify-center">
-                    Nenhum cliente adicionado. Clique em "Adicionar Cliente" para começar.
+                    Nenhum cliente encontrado. Clique em "Adicionar Cliente" para começar.
                 </div>
             )}
           </Accordion>
