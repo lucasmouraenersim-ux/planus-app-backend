@@ -192,7 +192,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                          <SidebarMenuItem>
                            <Link href="/proposal-generator"><SidebarMenuButton isActive={currentPathname === '/proposal-generator'} tooltip="Gerador de Proposta"><FileText />Proposta</SidebarMenuButton></Link>
                          </SidebarMenuItem>
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/faturas"><SidebarMenuButton tooltip="Faturas" isActive={currentPathname === '/faturas'}><FileText />Faturas</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {userAppRole === 'superadmin' && (<SidebarMenuItem><Link href="/faturas"><SidebarMenuButton tooltip="Faturas" isActive={currentPathname === '/faturas'}><FileText />Faturas</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {userAppRole === 'vendedor' && (<SidebarMenuItem><Link href="/dashboard/seller"><SidebarMenuButton isActive={currentPathname === '/dashboard/seller'} tooltip="Meu Painel"><LayoutDashboard />Meu Painel</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin' || appUser?.canViewCrm) && (<SidebarMenuItem><Link href="/crm"><SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}><UsersRound />CRM</SidebarMenuButton></Link></SidebarMenuItem>)}
                          {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/leads"><SidebarMenuButton tooltip="Importar Leads" isActive={currentPathname === '/leads'}><ListChecks />Leads</SidebarMenuButton></Link></SidebarMenuItem>)}
