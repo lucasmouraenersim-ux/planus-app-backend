@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -68,6 +68,22 @@ export default function FaturasPage() {
 
     return filtered;
   }, [clientes, filterTensao, sortOrder]);
+
+  const { totalKwhAlta, totalKwhBaixa } = useMemo(() => {
+    let totalKwhAlta = 0;
+    let totalKwhBaixa = 0;
+
+    clientes.forEach(cliente => {
+      const clienteKwh = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
+      if (cliente.tensao === 'alta') {
+        totalKwhAlta += clienteKwh;
+      } else if (cliente.tensao === 'baixa') {
+        totalKwhBaixa += clienteKwh;
+      }
+    });
+
+    return { totalKwhAlta, totalKwhBaixa };
+  }, [clientes]);
 
 
   const handleAddCliente = async () => {
@@ -201,6 +217,32 @@ export default function FaturasPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Dashboard Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <Card className="bg-blue-500/10 border-blue-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Consumo - Alta Tensão</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-800 dark:text-blue-300 flex items-center">
+                  <Zap className="h-6 w-6 mr-2" />
+                  {totalKwhAlta.toLocaleString('pt-BR')} kWh
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-500/10 border-green-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-green-600 dark:text-green-400">Total Consumo - Baixa Tensão</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-800 dark:text-green-300 flex items-center">
+                  <Zap className="h-6 w-6 mr-2" />
+                  {totalKwhBaixa.toLocaleString('pt-BR')} kWh
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Filters Section */}
           <div className="flex flex-wrap gap-4 mb-6 p-4 border rounded-lg bg-muted/30">
               <div className="flex items-center gap-2">
@@ -223,7 +265,7 @@ export default function FaturasPage() {
                   <SelectContent>
                     <SelectItem value="none">Padrão</SelectItem>
                     <SelectItem value="desc">Maior para Menor</SelectItem>
-                    <SelectItem value="asc">Menor para Maior</SelectItem>
+                    <SelectItem value="asc">Menor para Menor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -380,5 +422,3 @@ export default function FaturasPage() {
     </div>
   );
 }
-
-    
