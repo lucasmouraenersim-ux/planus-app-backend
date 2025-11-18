@@ -9,17 +9,32 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
-import type { FaturaCliente, UnidadeConsumidora, Contato } from '@/types/faturas';
+import type { FaturaCliente, UnidadeConsumidora, Contato, FaturaStatus } from '@/types/faturas';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
+import { Textarea } from '@/components/ui/textarea';
 
+
+const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
+
+const getStatusBadgeStyle = (status?: FaturaStatus) => {
+    switch (status) {
+        case 'Contato?': return 'bg-sky-500/80';
+        case 'Proposta': return 'bg-indigo-500/80';
+        case 'Fechamento': return 'bg-purple-500/80';
+        case 'Fechado': return 'bg-green-500/80';
+        default: return 'bg-muted';
+    }
+};
 
 export default function FaturasPage() {
   const { toast } = useToast();
+  const { appUser } = useAuth();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -104,6 +119,8 @@ export default function FaturasPage() {
       unidades: [newUnidade],
       contatos: [newContato],
       createdAt: Timestamp.now(),
+      status: 'Nenhum',
+      feedbackNotes: '',
     };
     try {
       await addDoc(collection(db, 'faturas_clientes'), newClienteData);
@@ -127,9 +144,17 @@ export default function FaturasPage() {
   const handleUpdateField = async (clienteId: string, fieldPath: string, value: any) => {
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     try {
-      await updateDoc(clienteDocRef, { [fieldPath]: value });
+      const updates = { [fieldPath]: value };
+      // Also update tracking fields when status or notes change
+      if (fieldPath === 'status' || fieldPath === 'feedbackNotes') {
+        updates.lastUpdatedAt = Timestamp.now();
+        if (appUser) {
+          updates.lastUpdatedBy = { uid: appUser.uid, name: appUser.displayName || appUser.email || 'N/A' };
+        }
+      }
+      await updateDoc(clienteDocRef, updates);
     } catch (error) {
-      console.error(`Error updating field ${''}${fieldPath}: `, error);
+      console.error(`Error updating field ${fieldPath}: `, error);
       toast({ title: "Erro ao Salvar", description: "Não foi possível salvar a alteração.", variant: "destructive" });
     }
   };
@@ -265,7 +290,7 @@ export default function FaturasPage() {
                   <SelectContent>
                     <SelectItem value="none">Padrão</SelectItem>
                     <SelectItem value="desc">Maior para Menor</SelectItem>
-                    <SelectItem value="asc">Menor para Menor</SelectItem>
+                    <SelectItem value="asc">Menor para Maior</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -281,8 +306,9 @@ export default function FaturasPage() {
                       <div className="flex items-center pr-4">
                         <AccordionTrigger className="flex-1 p-4 text-left font-medium text-lg hover:no-underline">
                            <div className="flex flex-col md:flex-row md:items-center md:gap-4 w-full">
-                                <span className="flex-1 min-w-0 truncate" title={cliente.nome || "Novo Cliente"}>
-                                  {index + 1}. {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
+                                <span className="flex-1 min-w-0 truncate flex items-center gap-2" title={cliente.nome || "Novo Cliente"}>
+                                  <span className={`px-2 py-1 text-xs rounded-full text-white ${getStatusBadgeStyle(cliente.status)}`}>{cliente.status || 'Nenhum'}</span>
+                                  {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
                                 </span>
                                 <span className="text-sm font-normal text-muted-foreground md:border-l md:pl-4">
                                   Total: <span className="font-semibold text-primary">{totalConsumo.toLocaleString('pt-BR')} kWh</span>
@@ -400,6 +426,39 @@ export default function FaturasPage() {
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Adicionar UC
                           </Button>
+                          
+                          <div className="mt-6 pt-4 border-t">
+                            <h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center">
+                                <MessageSquare className="mr-2 h-4 w-4" />
+                                Feedback e Status
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <Select
+                                value={cliente.status || 'Nenhum'}
+                                onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}
+                                >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                                </SelectContent>
+                                </Select>
+                                <div className="md:col-span-2">
+                                <Textarea
+                                    placeholder="Adicione notas de feedback aqui..."
+                                    defaultValue={cliente.feedbackNotes}
+                                    onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}
+                                />
+                                </div>
+                            </div>
+                            {cliente.lastUpdatedBy && (
+                                <div className="text-xs text-muted-foreground mt-2 flex items-center">
+                                <UserCheck className="mr-2 h-3 w-3"/>
+                                Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date((cliente.lastUpdatedAt as any).seconds * 1000).toLocaleString('pt-BR') : '...'}
+                                </div>
+                            )}
+                          </div>
                         </div>
                       </AccordionContent>
                     </Card>

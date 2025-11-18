@@ -16,6 +16,8 @@ export interface Contato {
   telefone: string;
 }
 
+export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | 'Fechado';
+
 export interface FaturaCliente {
   id: string; // Document ID from Firestore
   nome: string;
@@ -24,4 +26,12 @@ export interface FaturaCliente {
   unidades: UnidadeConsumidora[];
   contatos: Contato[];
   createdAt: Timestamp; // To sort by creation time if needed
+  // New feedback fields
+  status: FaturaStatus;
+  feedbackNotes?: string;
+  lastUpdatedBy?: {
+    uid: string;
+    name: string;
+  };
+  lastUpdatedAt?: Timestamp;
 }
