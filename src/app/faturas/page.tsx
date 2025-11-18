@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -32,9 +32,78 @@ const getStatusStyle = (status?: FaturaStatus) => {
     }
 };
 
+const SubscriptionPlan = ({ title, price, features, recommended }: { title: string; price: string; features: string[]; recommended?: boolean }) => (
+    <Card className={`flex flex-col ${recommended ? 'border-primary shadow-lg' : ''}`}>
+        <CardHeader className="text-center">
+            {recommended && <Badge variant="secondary" className="mx-auto mb-2 w-fit">Recomendado</Badge>}
+            <CardTitle className={`text-2xl font-bold ${recommended ? 'text-primary' : ''}`}>{title}</CardTitle>
+            <CardDescription>{price}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-grow space-y-4">
+            <ul className="space-y-2 text-sm text-muted-foreground">
+                {features.map((feature, index) => (
+                    <li key={index} className="flex items-center">
+                        <Check className="mr-2 h-4 w-4 text-green-500" />
+                        {feature}
+                    </li>
+                ))}
+            </ul>
+        </CardContent>
+        <CardFooter>
+            <Button className={`w-full ${recommended ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}>
+                Assinar Agora
+            </Button>
+        </CardFooter>
+    </Card>
+);
+
+const SubscriptionPage = () => (
+    <div className="container mx-auto p-4 md:p-8">
+        <div className="text-center mb-12">
+            <Crown className="w-16 h-16 text-primary mx-auto mb-4" />
+            <h1 className="text-4xl font-bold text-primary">Desbloqueie Recursos Avançados</h1>
+            <p className="text-lg text-muted-foreground mt-2">Escolha o plano ideal para você e eleve seu nível de gestão.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            <SubscriptionPlan
+                title="Básico"
+                price="R$ 49/mês"
+                features={[
+                    "Acesso ao CRM",
+                    "Calculadora de Economia",
+                    "Gerador de Propostas",
+                    "Até 50 leads"
+                ]}
+            />
+            <SubscriptionPlan
+                title="Pro"
+                price="R$ 99/mês"
+                features={[
+                    "Todos os recursos do Básico",
+                    "Acesso à Gestão de Faturas",
+                    "Até 200 leads",
+                    "Relatórios Avançados"
+                ]}
+                recommended
+            />
+            <SubscriptionPlan
+                title="Enterprise"
+                price="R$ 199/mês"
+                features={[
+                    "Todos os recursos do Pro",
+                    "Disparos em Massa",
+                    "Leads Ilimitados",
+                    "Suporte Prioritário"
+                ]}
+            />
+        </div>
+    </div>
+);
+
+
 export default function FaturasPage() {
   const { toast } = useToast();
-  const { appUser } = useAuth();
+  const { appUser, userAppRole } = useAuth();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
@@ -44,6 +113,12 @@ export default function FaturasPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
+    // Only fetch data if the user is a superadmin
+    if (userAppRole !== 'superadmin') {
+      setIsLoading(false);
+      return;
+    }
+
     const faturasCollectionRef = collection(db, 'faturas_clientes');
     const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
       const faturasData = snapshot.docs.map(doc => {
@@ -64,7 +139,7 @@ export default function FaturasPage() {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast, userAppRole]);
   
   const filteredAndSortedClientes = useMemo(() => {
     let filtered = clientes;
@@ -230,6 +305,11 @@ export default function FaturasPage() {
     setExpandedClientId(currentId => currentId === clienteId ? null : clienteId);
   }
 
+  // Check user role to display content
+  if (userAppRole !== 'superadmin') {
+      return <SubscriptionPage />;
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -383,7 +463,7 @@ export default function FaturasPage() {
                                                           <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
                                                           <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
                                                           <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
-                                                          <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
+                                                          <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id || `uc-${ucIndex}`, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
                                                           <div className="md:col-span-3 flex items-center justify-end gap-1">{unidade.arquivoFaturaUrl && (<><Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button></>)}<Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
                                                         </div>))}
                                                   </div>
