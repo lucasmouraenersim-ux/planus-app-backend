@@ -22,13 +22,13 @@ import { Textarea } from '@/components/ui/textarea';
 
 const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
 
-const getStatusBadgeStyle = (status?: FaturaStatus) => {
+const getStatusStyle = (status?: FaturaStatus) => {
     switch (status) {
-        case 'Contato?': return 'bg-sky-500/80';
-        case 'Proposta': return 'bg-indigo-500/80';
-        case 'Fechamento': return 'bg-purple-500/80';
-        case 'Fechado': return 'bg-green-500/80';
-        default: return 'bg-muted';
+        case 'Contato?': return { badge: 'bg-sky-500/80', border: 'border-l-sky-500' };
+        case 'Proposta': return { badge: 'bg-indigo-500/80', border: 'border-l-indigo-500' };
+        case 'Fechamento': return { badge: 'bg-purple-500/80', border: 'border-l-purple-500' };
+        case 'Fechado': return { badge: 'bg-green-500/80', border: 'border-l-green-500' };
+        default: return { badge: 'bg-muted', border: 'border-l-transparent' };
     }
 };
 
@@ -46,10 +46,14 @@ export default function FaturasPage() {
   useEffect(() => {
     const faturasCollectionRef = collection(db, 'faturas_clientes');
     const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
-      const faturasData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FaturaCliente[];
+      const faturasData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
+          }
+        }) as FaturaCliente[];
       setClientes(faturasData);
       setIsLoading(false);
     }, (error) => {
@@ -145,7 +149,7 @@ export default function FaturasPage() {
   const handleUpdateField = async (clienteId: string, fieldPath: string, value: any) => {
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     try {
-      const updates = { [fieldPath]: value };
+      const updates: { [key: string]: any } = { [fieldPath]: value };
       // Also update tracking fields when status or notes change
       if (fieldPath === 'status' || fieldPath === 'feedbackNotes') {
         updates.lastUpdatedAt = Timestamp.now();
@@ -312,6 +316,7 @@ export default function FaturasPage() {
                         <TableHead>Tem GD</TableHead>
                         <TableHead>Tensão</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Última Interação</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -321,10 +326,11 @@ export default function FaturasPage() {
                             const totalConsumo = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
                             const hasGd = cliente.unidades.some(u => u.temGeracao);
                             const isExpanded = expandedClientId === cliente.id;
+                            const statusStyles = getStatusStyle(cliente.status);
 
                             return (
                                 <React.Fragment key={cliente.id}>
-                                    <TableRow onClick={() => toggleExpand(cliente.id)} className="cursor-pointer hover:bg-muted/50">
+                                    <TableRow onClick={() => toggleExpand(cliente.id)} className={`cursor-pointer hover:bg-muted/50 border-l-4 ${statusStyles.border}`}>
                                         <TableCell>
                                             <Button variant="ghost" size="icon">
                                                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -335,7 +341,15 @@ export default function FaturasPage() {
                                         <TableCell>{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
                                         <TableCell>{hasGd ? 'Sim' : 'Não'}</TableCell>
                                         <TableCell>{cliente.tensao === 'alta' ? 'Alta' : 'Baixa'}</TableCell>
-                                        <TableCell><span className={`px-2 py-1 text-xs rounded-full text-white ${getStatusBadgeStyle(cliente.status)}`}>{cliente.status || 'Nenhum'}</span></TableCell>
+                                        <TableCell><span className={`px-2 py-1 text-xs rounded-full text-white ${statusStyles.badge}`}>{cliente.status || 'Nenhum'}</span></TableCell>
+                                        <TableCell>
+                                            {cliente.lastUpdatedBy ? (
+                                                <div className="flex flex-col text-xs">
+                                                    <span className="font-medium">{cliente.lastUpdatedBy.name}</span>
+                                                    <span className="text-muted-foreground">{cliente.lastUpdatedAt ? new Date(cliente.lastUpdatedAt).toLocaleString('pt-BR') : ''}</span>
+                                                </div>
+                                            ) : 'N/A'}
+                                        </TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleRemoveCliente(cliente.id); }}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
@@ -344,7 +358,7 @@ export default function FaturasPage() {
                                     </TableRow>
                                     {isExpanded && (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="p-0">
+                                            <TableCell colSpan={9} className="p-0">
                                                 <div className="p-4 bg-muted/30">
                                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                                                     <Input placeholder="Nome do cliente" defaultValue={cliente.nome} onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)} />
@@ -376,7 +390,7 @@ export default function FaturasPage() {
                                                           <Select value={cliente.status || 'Nenhum'} onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger><SelectContent>{FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select>
                                                           <div className="md:col-span-2"><Textarea placeholder="Adicione notas de feedback aqui..." defaultValue={cliente.feedbackNotes} onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}/></div>
                                                       </div>
-                                                      {cliente.lastUpdatedBy && (<div className="text-xs text-muted-foreground mt-2 flex items-center"><UserCheck className="mr-2 h-3 w-3"/>Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date((cliente.lastUpdatedAt as any).seconds * 1000).toLocaleString('pt-BR') : '...'}</div>)}
+                                                      {cliente.lastUpdatedBy && (<div className="text-xs text-muted-foreground mt-2 flex items-center"><UserCheck className="mr-2 h-3 w-3"/>Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date(cliente.lastUpdatedAt).toLocaleString('pt-BR') : '...'}</div>)}
                                                   </div>
                                                 </div>
                                             </TableCell>
@@ -387,7 +401,7 @@ export default function FaturasPage() {
                         })
                     ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="h-24 text-center">Nenhum cliente encontrado. Clique em "Adicionar Cliente" para começar.</TableCell>
+                            <TableCell colSpan={9} className="h-24 text-center">Nenhum cliente encontrado. Clique em "Adicionar Cliente" para começar.</TableCell>
                         </TableRow>
                     )}
                 </TableBody>
