@@ -8,8 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -37,6 +36,7 @@ export default function FaturasPage() {
   const { appUser } = useAuth();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
 
   // State for filters
   const [filterTensao, setFilterTensao] = useState<'all' | 'alta' | 'baixa'>('all');
@@ -219,6 +219,10 @@ export default function FaturasPage() {
     if (!url) return;
     window.open(url, '_blank');
   };
+  
+  const toggleExpand = (clienteId: string) => {
+    setExpandedClientId(currentId => currentId === clienteId ? null : clienteId);
+  }
 
   if (isLoading) {
     return (
@@ -290,189 +294,106 @@ export default function FaturasPage() {
                   <SelectContent>
                     <SelectItem value="none">Padrão</SelectItem>
                     <SelectItem value="desc">Maior para Menor</SelectItem>
-                    <SelectItem value="asc">Menor para Maior</SelectItem>
+                    <SelectItem value="asc">Menor para Menor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
           </div>
-
-          <Accordion type="multiple" className="w-full space-y-2">
-            {filteredAndSortedClientes.length > 0 ? (
-              filteredAndSortedClientes.map((cliente, index) => {
-                const totalConsumo = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
-                return (
-                  <AccordionItem key={cliente.id} value={cliente.id} className="border-b-0">
-                    <Card className="overflow-hidden">
-                      <div className="flex items-center pr-4">
-                        <AccordionTrigger className="flex-1 p-4 text-left font-medium text-lg hover:no-underline">
-                           <div className="flex flex-col md:flex-row md:items-center md:gap-4 w-full">
-                                <span className="flex-1 min-w-0 truncate flex items-center gap-2" title={cliente.nome || "Novo Cliente"}>
-                                  <span className={`px-2 py-1 text-xs rounded-full text-white ${getStatusBadgeStyle(cliente.status)}`}>{cliente.status || 'Nenhum'}</span>
-                                  {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
-                                </span>
-                                <span className="text-sm font-normal text-muted-foreground md:border-l md:pl-4">
-                                  Total: <span className="font-semibold text-primary">{totalConsumo.toLocaleString('pt-BR')} kWh</span>
-                                </span>
-                           </div>
-                        </AccordionTrigger>
-                         <Button variant="ghost" size="icon" onClick={() => handleRemoveCliente(cliente.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                      <AccordionContent>
-                        <div className="p-4 border-t bg-muted/30">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            <Input
-                              placeholder="Nome do cliente"
-                              defaultValue={cliente.nome}
-                              onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)}
-                            />
-                            <Select
-                              value={cliente.tipoPessoa}
-                              onValueChange={(value: 'pf' | 'pj' | '') => handleUpdateField(cliente.id, 'tipoPessoa', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione o tipo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pf">PF</SelectItem>
-                                <SelectItem value="pj">PJ</SelectItem>
-                              </SelectContent>
-                            </Select>
-                             <Select
-                              value={cliente.tensao}
-                              onValueChange={(value: 'alta' | 'baixa') => handleUpdateField(cliente.id, 'tensao', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione a Tensão" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="alta">Alta Tensão</SelectItem>
-                                <SelectItem value="baixa">Baixa Tensão</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
-                          <div className="space-y-3 mb-6">
-                            {cliente.contatos.map((contato, contatoIndex) => (
-                               <div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
-                                 <div className="md:col-span-5 flex items-center">
-                                    <UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} />
-                                 </div>
-                                  <div className="md:col-span-6 flex items-center">
-                                    <Phone className="h-4 w-4 mr-2 text-muted-foreground"/>
-                                    <Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/>
-                                  </div>
-                                  <div className="md:col-span-1 flex justify-end">
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}>
-                                      <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
-                                    </Button>
-                                  </div>
-                               </div>
-                            ))}
-                             <Button onClick={() => handleAddContato(cliente.id)} className="mt-2" variant="outline" size="sm">
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Adicionar Contato
-                            </Button>
-                          </div>
-
-                          <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
-                          <div className="space-y-3">
-                            {cliente.unidades.map((unidade, ucIndex) => (
-                              <div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
-                                <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
-                                <div className="md:col-span-3">
-                                  <Input
-                                      type="number"
-                                      placeholder="Consumo (kWh)"
-                                      defaultValue={unidade.consumoKwh}
-                                      onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
-                                  />
-                                </div>
-                                <div className="md:col-span-2 flex items-center justify-center gap-2">
-                                  <Checkbox
-                                      checked={unidade.temGeracao}
-                                      onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}
-                                      id={`gen-${cliente.id}-${ucIndex}`}
-                                  />
-                                  <label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label>
-                                </div>
-                                <div className="md:col-span-2">
-                                  <Button asChild variant="outline" size="sm" className="w-full">
-                                    <label className="cursor-pointer">
-                                      <Upload className="mr-2 h-4 w-4" />
-                                      {unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}
-                                      <Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} />
-                                    </label>
-                                  </Button>
-                                </div>
-                                <div className="md:col-span-3 flex items-center justify-end gap-1">
-                                  {unidade.arquivoFaturaUrl && (
-                                    <>
-                                      <Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button>
-                                      <Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button>
-                                    </>
-                                  )}
-                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}>
-                                    <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <Button onClick={() => handleAddUnidade(cliente.id)} className="mt-4" variant="outline" size="sm">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Adicionar UC
-                          </Button>
-                          
-                          <div className="mt-6 pt-4 border-t">
-                            <h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center">
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                Feedback e Status
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Select
-                                value={cliente.status || 'Nenhum'}
-                                onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}
-                                >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                <div className="md:col-span-2">
-                                <Textarea
-                                    placeholder="Adicione notas de feedback aqui..."
-                                    defaultValue={cliente.feedbackNotes}
-                                    onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}
-                                />
-                                </div>
-                            </div>
-                            {cliente.lastUpdatedBy && (
-                                <div className="text-xs text-muted-foreground mt-2 flex items-center">
-                                <UserCheck className="mr-2 h-3 w-3"/>
-                                Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date((cliente.lastUpdatedAt as any).seconds * 1000).toLocaleString('pt-BR') : '...'}
-                                </div>
-                            )}
-                          </div>
-                        </div>
-                      </AccordionContent>
-                    </Card>
-                  </AccordionItem>
-                );
-              })
-            ) : (
-                <div className="h-24 text-center text-muted-foreground flex items-center justify-center">
-                    Nenhum cliente encontrado. Clique em "Adicionar Cliente" para começar.
-                </div>
-            )}
-          </Accordion>
           
-          <Button onClick={handleAddCliente} className="mt-4">
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-[50px]"></TableHead>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Consumo Total</TableHead>
+                        <TableHead>Telefone Principal</TableHead>
+                        <TableHead>Tem GD</TableHead>
+                        <TableHead>Tensão</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {filteredAndSortedClientes.length > 0 ? (
+                        filteredAndSortedClientes.map(cliente => {
+                            const totalConsumo = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
+                            const hasGd = cliente.unidades.some(u => u.temGeracao);
+                            const isExpanded = expandedClientId === cliente.id;
+
+                            return (
+                                <React.Fragment key={cliente.id}>
+                                    <TableRow onClick={() => toggleExpand(cliente.id)} className="cursor-pointer hover:bg-muted/50">
+                                        <TableCell>
+                                            <Button variant="ghost" size="icon">
+                                                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell className="font-medium">{cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}</TableCell>
+                                        <TableCell>{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
+                                        <TableCell>{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
+                                        <TableCell>{hasGd ? 'Sim' : 'Não'}</TableCell>
+                                        <TableCell>{cliente.tensao === 'alta' ? 'Alta' : 'Baixa'}</TableCell>
+                                        <TableCell><span className={`px-2 py-1 text-xs rounded-full text-white ${getStatusBadgeStyle(cliente.status)}`}>{cliente.status || 'Nenhum'}</span></TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleRemoveCliente(cliente.id); }}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                    {isExpanded && (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="p-0">
+                                                <div className="p-4 bg-muted/30">
+                                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                                    <Input placeholder="Nome do cliente" defaultValue={cliente.nome} onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)} />
+                                                    <Select value={cliente.tipoPessoa} onValueChange={(value: 'pf' | 'pj' | '') => handleUpdateField(cliente.id, 'tipoPessoa', value)}><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger><SelectContent><SelectItem value="pf">PF</SelectItem><SelectItem value="pj">PJ</SelectItem></SelectContent></Select>
+                                                    <Select value={cliente.tensao} onValueChange={(value: 'alta' | 'baixa') => handleUpdateField(cliente.id, 'tensao', value)}><SelectTrigger><SelectValue placeholder="Selecione a Tensão" /></SelectTrigger><SelectContent><SelectItem value="alta">Alta Tensão</SelectItem><SelectItem value="baixa">Baixa Tensão</SelectItem></SelectContent></Select>
+                                                  </div>
+                                                  <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
+                                                  <div className="space-y-3 mb-6">
+                                                      {cliente.contatos.map((contato, contatoIndex) => (<div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                          <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
+                                                          <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
+                                                          <div className="md:col-span-1 flex justify-end"><Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
+                                                      </div>))}
+                                                      <Button onClick={() => handleAddContato(cliente.id)} className="mt-2" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar Contato</Button>
+                                                  </div>
+                                                  <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
+                                                  <div className="space-y-3">
+                                                      {cliente.unidades.map((unidade, ucIndex) => (<div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                          <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
+                                                          <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
+                                                          <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
+                                                          <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
+                                                          <div className="md:col-span-3 flex items-center justify-end gap-1">{unidade.arquivoFaturaUrl && (<><Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button></>)}<Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
+                                                      </div>))}
+                                                  </div>
+                                                  <Button onClick={() => handleAddUnidade(cliente.id)} className="mt-4" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar UC</Button>
+                                                  <div className="mt-6 pt-4 border-t"><h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Feedback e Status</h4>
+                                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                          <Select value={cliente.status || 'Nenhum'} onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger><SelectContent>{FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select>
+                                                          <div className="md:col-span-2"><Textarea placeholder="Adicione notas de feedback aqui..." defaultValue={cliente.feedbackNotes} onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}/></div>
+                                                      </div>
+                                                      {cliente.lastUpdatedBy && (<div className="text-xs text-muted-foreground mt-2 flex items-center"><UserCheck className="mr-2 h-3 w-3"/>Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date((cliente.lastUpdatedAt as any).seconds * 1000).toLocaleString('pt-BR') : '...'}</div>)}
+                                                  </div>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </React.Fragment>
+                            )
+                        })
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={8} className="h-24 text-center">Nenhum cliente encontrado. Clique em "Adicionar Cliente" para começar.</TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+          </div>
+          
+          <Button onClick={handleAddCliente} className="mt-6">
             <PlusCircle className="mr-2 h-4 w-4" />
             Adicionar Cliente
           </Button>
