@@ -51,6 +51,7 @@ export default function FaturasPage() {
           return {
             id: doc.id,
             ...data,
+            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
             lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
           }
         }) as FaturaCliente[];
@@ -299,7 +300,7 @@ export default function FaturasPage() {
                   <SelectContent>
                     <SelectItem value="none">Padrão</SelectItem>
                     <SelectItem value="desc">Maior para Menor</SelectItem>
-                    <SelectItem value="asc">Menor para Menor</SelectItem>
+                    <SelectItem value="asc">Menor para Maior</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -309,15 +310,15 @@ export default function FaturasPage() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead className="w-[50px]"></TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Consumo Total</TableHead>
-                        <TableHead>Telefone Principal</TableHead>
-                        <TableHead>Tem GD</TableHead>
-                        <TableHead>Tensão</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Última Interação</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
+                        <TableHead className="w-[50px] p-2"></TableHead>
+                        <TableHead className="p-2">Cliente</TableHead>
+                        <TableHead className="p-2">Consumo Total</TableHead>
+                        <TableHead className="p-2">Telefone Principal</TableHead>
+                        <TableHead className="p-2">Tem GD</TableHead>
+                        <TableHead className="p-2">Tensão</TableHead>
+                        <TableHead className="p-2">Status</TableHead>
+                        <TableHead className="p-2">Última Interação</TableHead>
+                        <TableHead className="text-right p-2">Ações</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -331,18 +332,18 @@ export default function FaturasPage() {
                             return (
                                 <React.Fragment key={cliente.id}>
                                     <TableRow onClick={() => toggleExpand(cliente.id)} className={`cursor-pointer hover:bg-muted/50 border-l-4 ${statusStyles.border}`}>
-                                        <TableCell>
+                                        <TableCell className="p-2 text-sm">
                                             <Button variant="ghost" size="icon">
                                                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                                             </Button>
                                         </TableCell>
-                                        <TableCell className="font-medium">{cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}</TableCell>
-                                        <TableCell>{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
-                                        <TableCell>{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
-                                        <TableCell>{hasGd ? 'Sim' : 'Não'}</TableCell>
-                                        <TableCell>{cliente.tensao === 'alta' ? 'Alta' : 'Baixa'}</TableCell>
-                                        <TableCell><span className={`px-2 py-1 text-xs rounded-full text-white ${statusStyles.badge}`}>{cliente.status || 'Nenhum'}</span></TableCell>
-                                        <TableCell>
+                                        <TableCell className="p-2 font-medium text-sm">{cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}</TableCell>
+                                        <TableCell className="p-2 text-sm">{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
+                                        <TableCell className="p-2 text-sm">{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
+                                        <TableCell className="p-2 text-sm">{hasGd ? 'Sim' : 'Não'}</TableCell>
+                                        <TableCell className="p-2 text-sm">{cliente.tensao === 'alta' ? 'Alta' : 'Baixa'}</TableCell>
+                                        <TableCell className="p-2 text-sm"><span className={`px-2 py-1 text-xs rounded-full text-white ${statusStyles.badge}`}>{cliente.status || 'Nenhum'}</span></TableCell>
+                                        <TableCell className="p-2 text-sm">
                                             {cliente.lastUpdatedBy ? (
                                                 <div className="flex flex-col text-xs">
                                                     <span className="font-medium">{cliente.lastUpdatedBy.name}</span>
@@ -350,7 +351,7 @@ export default function FaturasPage() {
                                                 </div>
                                             ) : 'N/A'}
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="p-2 text-right">
                                             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleRemoveCliente(cliente.id); }}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
@@ -367,22 +368,24 @@ export default function FaturasPage() {
                                                   </div>
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                                                   <div className="space-y-3 mb-6">
-                                                      {cliente.contatos.map((contato, contatoIndex) => (<div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                      {cliente.contatos.map((contato, contatoIndex) => (
+                                                        <div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
                                                           <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
                                                           <div className="md:col-span-1 flex justify-end"><Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
-                                                      </div>))}
+                                                        </div>))}
                                                       <Button onClick={() => handleAddContato(cliente.id)} className="mt-2" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar Contato</Button>
                                                   </div>
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
                                                   <div className="space-y-3">
-                                                      {cliente.unidades.map((unidade, ucIndex) => (<div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                      {cliente.unidades.map((unidade, ucIndex) => (
+                                                        <div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
                                                           <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
                                                           <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
                                                           <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
                                                           <div className="md:col-span-3 flex items-center justify-end gap-1">{unidade.arquivoFaturaUrl && (<><Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button></>)}<Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
-                                                      </div>))}
+                                                        </div>))}
                                                   </div>
                                                   <Button onClick={() => handleAddUnidade(cliente.id)} className="mt-4" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar UC</Button>
                                                   <div className="mt-6 pt-4 border-t"><h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Feedback e Status</h4>
