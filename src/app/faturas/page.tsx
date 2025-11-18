@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown, Check } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown, Check, Badge, BatteryCharging } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -18,7 +18,6 @@ import type { FaturaCliente, UnidadeConsumidora, Contato, FaturaStatus } from '@
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 
 
 const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
@@ -33,7 +32,7 @@ const getStatusStyle = (status?: FaturaStatus) => {
     }
 };
 
-const SubscriptionPlan = ({ title, price, features, recommended }: { title: string; price: string; features: string[]; recommended?: boolean }) => (
+const SubscriptionPlan = ({ title, price, features, recommended, isEnterprise = false }: { title: string; price: string; features: (string | { sublist: string[] })[]; recommended?: boolean, isEnterprise?: boolean }) => (
     <Card className={`flex flex-col ${recommended ? 'border-primary shadow-lg' : ''}`}>
         <CardHeader className="text-center">
             {recommended && <Badge variant="secondary" className="mx-auto mb-2 w-fit">Recomendado</Badge>}
@@ -42,12 +41,26 @@ const SubscriptionPlan = ({ title, price, features, recommended }: { title: stri
         </CardHeader>
         <CardContent className="flex-grow space-y-4">
             <ul className="space-y-2 text-sm text-muted-foreground">
-                {features.map((feature, index) => (
-                    <li key={index} className="flex items-center">
-                        <Check className="mr-2 h-4 w-4 text-green-500" />
-                        {feature}
-                    </li>
-                ))}
+                {features.map((feature, index) => {
+                    if (typeof feature === 'string') {
+                        return (
+                            <li key={index} className="flex items-start">
+                                <Check className="mr-2 h-4 w-4 mt-0.5 text-green-500 flex-shrink-0" />
+                                <span>{feature}</span>
+                            </li>
+                        );
+                    }
+                    if (typeof feature === 'object' && feature.sublist) {
+                        return (
+                           <ul key={index} className="pl-6 list-disc space-y-1">
+                                {feature.sublist.map((subitem, subIndex) => (
+                                    <li key={subIndex}>{subitem}</li>
+                                ))}
+                            </ul>
+                        );
+                    }
+                    return null;
+                })}
             </ul>
         </CardContent>
         <CardFooter>
@@ -63,41 +76,87 @@ const SubscriptionPage = () => (
         <div className="text-center mb-12">
             <Crown className="w-16 h-16 text-primary mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-primary">Desbloqueie Recursos Avançados</h1>
-            <p className="text-lg text-muted-foreground mt-2">Escolha o plano ideal para você e eleve seu nível de gestão.</p>
+            <p className="text-lg text-muted-foreground mt-2">Escolha o plano ideal para você e eleve seu nível de gestão com nosso sistema de créditos generativos.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             <SubscriptionPlan
                 title="Básico"
-                price="R$ 49/mês"
+                price="R$ 449,90/mês"
                 features={[
                     "Acesso ao CRM",
                     "Calculadora de Economia",
                     "Gerador de Propostas",
-                    "Até 50 leads"
+                    "Até 50 leads",
+                    "Download de faturas: 1 crédito por kWh (Ex: 1000 kWh = 1000 créditos)",
                 ]}
             />
             <SubscriptionPlan
                 title="Pro"
-                price="R$ 99/mês"
+                price="R$ 990,00/mês"
                 features={[
                     "Todos os recursos do Básico",
                     "Acesso à Gestão de Faturas",
                     "Até 200 leads",
-                    "Relatórios Avançados"
+                    "Relatórios Avançados",
+                    "Download de faturas: 0,20 créditos por kWh",
                 ]}
                 recommended
             />
             <SubscriptionPlan
                 title="Enterprise"
-                price="R$ 199/mês"
+                price="R$ 1.490,00/mês"
                 features={[
                     "Todos os recursos do Pro",
                     "Disparos em Massa",
                     "Leads Ilimitados",
-                    "Suporte Prioritário"
+                    "Suporte Prioritário",
+                    "Vantagens no download de faturas:",
+                    { sublist: [
+                        "Contas BT até 1000 kWh: 500 créditos",
+                        "Contas BT 1000-5000 kWh: 1000 créditos",
+                        "Contas 10k-20k kWh: 1000 créditos",
+                        "Contas acima de 20k kWh: 2000 créditos",
+                    ]}
                 ]}
+                isEnterprise
             />
         </div>
+        <Card className="max-w-4xl mx-auto mt-12">
+            <CardHeader>
+                <CardTitle className="flex items-center text-primary">
+                    <BatteryCharging className="mr-3 h-6 w-6"/>
+                    Planos de Recarga de Créditos Generativos
+                </CardTitle>
+                <CardDescription>Adquira mais créditos para continuar utilizando os recursos de download e análise de faturas.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                 <Card className="text-center p-4">
+                    <p className="text-lg font-semibold">10.000</p>
+                    <p className="text-sm text-muted-foreground">Créditos</p>
+                    <p className="text-xl font-bold text-primary mt-2">R$ 50</p>
+                    <Button size="sm" className="w-full mt-3">Comprar</Button>
+                </Card>
+                <Card className="text-center p-4">
+                    <p className="text-lg font-semibold">50.000</p>
+                    <p className="text-sm text-muted-foreground">Créditos</p>
+                    <p className="text-xl font-bold text-primary mt-2">R$ 200</p>
+                    <Button size="sm" className="w-full mt-3">Comprar</Button>
+                </Card>
+                <Card className="text-center p-4 border-primary">
+                    <Badge variant="secondary" className="mb-2">Popular</Badge>
+                    <p className="text-lg font-semibold">200.000</p>
+                    <p className="text-sm text-muted-foreground">Créditos</p>
+                    <p className="text-xl font-bold text-primary mt-2">R$ 750</p>
+                    <Button size="sm" className="w-full mt-3">Comprar</Button>
+                </Card>
+                <Card className="text-center p-4">
+                    <p className="text-lg font-semibold">500.000</p>
+                    <p className="text-sm text-muted-foreground">Créditos</p>
+                    <p className="text-xl font-bold text-primary mt-2">R$ 1.500</p>
+                    <Button size="sm" className="w-full mt-3">Comprar</Button>
+                </Card>
+            </CardContent>
+        </Card>
     </div>
 );
 
