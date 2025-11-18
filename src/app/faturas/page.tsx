@@ -4,12 +4,12 @@
 import * as React from "react";
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown, Check } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -113,11 +113,18 @@ export default function FaturasPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
-    // Only fetch data if the user is a superadmin
-    if (userAppRole !== 'superadmin') {
+    // Only fetch data if the user is a superadmin or the specific test user
+    if (userAppRole !== 'superadmin' && appUser?.displayName?.toLowerCase() !== 'jhonathas') {
       setIsLoading(false);
       return;
     }
+    
+    // Test user 'Jhonathas' sees the subscription page, so we don't need to fetch data for him.
+    if (appUser?.displayName?.toLowerCase() === 'jhonathas') {
+        setIsLoading(false);
+        return;
+    }
+
 
     const faturasCollectionRef = collection(db, 'faturas_clientes');
     const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
@@ -139,7 +146,7 @@ export default function FaturasPage() {
     });
 
     return () => unsubscribe();
-  }, [toast, userAppRole]);
+  }, [toast, userAppRole, appUser]);
   
   const filteredAndSortedClientes = useMemo(() => {
     let filtered = clientes;
@@ -306,8 +313,12 @@ export default function FaturasPage() {
   }
 
   // Check user role to display content
-  if (userAppRole !== 'superadmin') {
+  if (appUser?.displayName?.toLowerCase() === 'jhonathas') {
       return <SubscriptionPage />;
+  }
+  
+  if (userAppRole !== 'superadmin') {
+      return <div className="container mx-auto p-4 md:p-8 text-center text-muted-foreground">Acesso negado. Esta página está disponível apenas para Super Administradores.</div>;
   }
 
   if (isLoading) {
@@ -380,7 +391,7 @@ export default function FaturasPage() {
                   <SelectContent>
                     <SelectItem value="none">Padrão</SelectItem>
                     <SelectItem value="desc">Maior para Menor</SelectItem>
-                    <SelectItem value="asc">Menor para Maior</SelectItem>
+                    <SelectItem value="asc">Menor para Menor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
