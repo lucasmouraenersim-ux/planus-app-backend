@@ -229,39 +229,30 @@ export default function FaturasPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
-    // Only fetch data if the user is a superadmin or the specific test user
-    if (userAppRole !== 'superadmin' && appUser?.displayName?.toLowerCase() !== 'jhonathas') {
-      setIsLoading(false);
-      return;
-    }
-    
-    // Test user 'Jhonathas' sees the subscription page, so we don't need to fetch data for him.
-    if (appUser?.displayName?.toLowerCase() === 'jhonathas') {
+    // Show management page for superadmin and the specific test user Jhonathas
+    if (userAppRole === 'superadmin' || appUser?.displayName?.toLowerCase() === 'jhonathas') {
+      const faturasCollectionRef = collection(db, 'faturas_clientes');
+      const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
+        const faturasData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+              lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
+            }
+          }) as FaturaCliente[];
+        setClientes(faturasData);
         setIsLoading(false);
-        return;
+      }, (error) => {
+        console.error("Error fetching faturas: ", error);
+        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do Firestore.", variant: "destructive" });
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } else {
+        setIsLoading(false);
     }
-
-
-    const faturasCollectionRef = collection(db, 'faturas_clientes');
-    const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
-      const faturasData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-            lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
-          }
-        }) as FaturaCliente[];
-      setClientes(faturasData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching faturas: ", error);
-      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do Firestore.", variant: "destructive" });
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
   }, [toast, userAppRole, appUser]);
   
   const filteredAndSortedClientes = useMemo(() => {
@@ -428,15 +419,11 @@ export default function FaturasPage() {
     setExpandedClientId(currentId => currentId === clienteId ? null : clienteId);
   }
 
-  // Check user role to display content
-  if (appUser?.displayName?.toLowerCase() === 'jhonathas') {
-      return <SubscriptionPage />;
+  // Show subscription page for non-superadmin users (except Jhonathas who sees the management page now)
+  if (userAppRole !== 'superadmin' && appUser?.displayName?.toLowerCase() !== 'jhonathas') {
+      return <div className="container mx-auto p-4 md:p-8 text-center text-muted-foreground">Acesso negado. Esta página requer uma assinatura de plano.</div>;
   }
   
-  if (userAppRole !== 'superadmin') {
-      return <div className="container mx-auto p-4 md:p-8 text-center text-muted-foreground">Acesso negado. Esta página está disponível apenas para Super Administradores.</div>;
-  }
-
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
