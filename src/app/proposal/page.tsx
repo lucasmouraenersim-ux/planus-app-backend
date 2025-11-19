@@ -505,7 +505,7 @@ function ProposalPageContent() {
           <div ref={proposalRef} className="space-y-6">
             <div data-pdf-section="cover" className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
               <Image
-                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b3642acb35fac8e3075f8/capa-planus.png"
+                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/main/capa-planus.png"
                 alt="Capa proposta Planus Energia"
                 fill
                 priority
