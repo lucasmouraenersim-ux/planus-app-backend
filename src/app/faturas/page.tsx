@@ -4,12 +4,12 @@
 import * as React from "react";
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Star, Crown, Check, Badge, BatteryCharging, QrCode, Copy } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -18,17 +18,6 @@ import type { FaturaCliente, UnidadeConsumidora, Contato, FaturaStatus } from '@
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Textarea } from '@/components/ui/textarea';
-import Image from 'next/image';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-
 
 const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
 
@@ -42,184 +31,9 @@ const getStatusStyle = (status?: FaturaStatus) => {
     }
 };
 
-const SubscriptionPlan = ({ title, price, features, recommended, isEnterprise = false }: { title: string; price: string; features: (string | { sublist: string[] })[]; recommended?: boolean, isEnterprise?: boolean }) => (
-    <Card className={`flex flex-col ${recommended ? 'border-primary shadow-lg' : ''}`}>
-        <CardHeader className="text-center">
-            {recommended && <Badge variant="secondary" className="mx-auto mb-2 w-fit">Recomendado</Badge>}
-            <CardTitle className={`text-2xl font-bold ${recommended ? 'text-primary' : ''}`}>{title}</CardTitle>
-            <CardDescription>{price}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex-grow space-y-4">
-            <ul className="space-y-2 text-sm text-muted-foreground">
-                {features.map((feature, index) => {
-                    if (typeof feature === 'string') {
-                        return (
-                            <li key={index} className="flex items-start">
-                                <Check className="mr-2 h-4 w-4 mt-0.5 text-green-500 flex-shrink-0" />
-                                <span>{feature}</span>
-                            </li>
-                        );
-                    }
-                    if (typeof feature === 'object' && feature.sublist) {
-                        return (
-                           <ul key={index} className="pl-6 list-disc space-y-1">
-                                {feature.sublist.map((subitem, subIndex) => (
-                                    <li key={subIndex}>{subitem}</li>
-                                ))}
-                            </ul>
-                        );
-                    }
-                    return null;
-                })}
-            </ul>
-        </CardContent>
-        <CardFooter>
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button className={`w-full ${recommended ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}>
-                        Assinar Agora
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Pagamento PIX - {title}</DialogTitle>
-                        <DialogDescription>
-                            Para concluir a assinatura do plano {title} no valor de {price}, faça o pagamento via PIX.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 space-y-4 text-center">
-                        <p className="text-sm text-muted-foreground">Escaneie o QR Code abaixo com o aplicativo do seu banco:</p>
-                        <div className="flex justify-center">
-                            <Image
-                                src="https://placehold.co/250x250.png?text=PIX+QR+CODE"
-                                alt="Exemplo de QR Code PIX"
-                                width={250}
-                                height={250}
-                                data-ai-hint="pix qrcode"
-                            />
-                        </div>
-                        <p className="text-sm text-muted-foreground">Ou copie o código PIX:</p>
-                        <div className="relative">
-                            <Input
-                                readOnly
-                                value="00020126360014br.gov.bcb.pix0114+5565999999999520400005303986540550.005802BR5913NOME DO CLIENTE6009SAO PAULO62070503***6304E2A4"
-                                className="pr-10 text-xs bg-muted"
-                            />
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-                                onClick={() => {
-                                    navigator.clipboard.writeText("00020126360014br.gov.bcb.pix0114+5565999999999520400005303986540550.005802BR5913NOME DO CLIENTE6009SAO PAULO62070503***6304E2A4");
-                                    // You would likely use a toast notification here to confirm copy
-                                }}
-                            >
-                                <Copy className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <p className="text-xs text-muted-foreground text-center w-full">Após o pagamento, sua assinatura será ativada automaticamente em alguns instantes.</p>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </CardFooter>
-    </Card>
-);
-
-const SubscriptionPage = () => (
-    <div className="container mx-auto p-4 md:p-8">
-        <div className="text-center mb-12">
-            <Crown className="w-16 h-16 text-primary mx-auto mb-4" />
-            <h1 className="text-4xl font-bold text-primary">Desbloqueie Recursos Avançados</h1>
-            <p className="text-lg text-muted-foreground mt-2">Escolha o plano ideal para você e eleve seu nível de gestão com nosso sistema de créditos generativos.</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <SubscriptionPlan
-                title="Básico"
-                price="R$ 449,90/mês"
-                features={[
-                    "Acesso ao CRM",
-                    "Calculadora de Economia",
-                    "Gerador de Propostas",
-                    "Até 50 leads",
-                    "Download de faturas: 1 crédito por kWh (Ex: 1000 kWh = 1000 créditos)",
-                ]}
-            />
-            <SubscriptionPlan
-                title="Pro"
-                price="R$ 990,00/mês"
-                features={[
-                    "Todos os recursos do Básico",
-                    "Acesso à Gestão de Faturas",
-                    "Até 200 leads",
-                    "Relatórios Avançados",
-                    "Download de faturas: 0,20 créditos por kWh",
-                ]}
-                recommended
-            />
-            <SubscriptionPlan
-                title="Enterprise"
-                price="R$ 1.490,00/mês"
-                features={[
-                    "Todos os recursos do Pro",
-                    "Disparos em Massa",
-                    "Leads Ilimitados",
-                    "Suporte Prioritário",
-                    "Vantagens no download de faturas:",
-                    { sublist: [
-                        "Contas BT até 1000 kWh: 500 créditos",
-                        "Contas BT 1000-5000 kWh: 1000 créditos",
-                        "Contas 10k-20k kWh: 1000 créditos",
-                        "Contas acima de 20k kWh: 2000 créditos",
-                    ]}
-                ]}
-                isEnterprise
-            />
-        </div>
-        <Card className="max-w-4xl mx-auto mt-12">
-            <CardHeader>
-                <CardTitle className="flex items-center text-primary">
-                    <BatteryCharging className="mr-3 h-6 w-6"/>
-                    Planos de Recarga de Créditos Generativos
-                </CardTitle>
-                <CardDescription>Adquira mais créditos para continuar utilizando os recursos de download e análise de faturas.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                 <Card className="text-center p-4">
-                    <p className="text-lg font-semibold">10.000</p>
-                    <p className="text-sm text-muted-foreground">Créditos</p>
-                    <p className="text-xl font-bold text-primary mt-2">R$ 50</p>
-                    <Button size="sm" className="w-full mt-3">Comprar</Button>
-                </Card>
-                <Card className="text-center p-4">
-                    <p className="text-lg font-semibold">50.000</p>
-                    <p className="text-sm text-muted-foreground">Créditos</p>
-                    <p className="text-xl font-bold text-primary mt-2">R$ 200</p>
-                    <Button size="sm" className="w-full mt-3">Comprar</Button>
-                </Card>
-                <Card className="text-center p-4 border-primary">
-                    <Badge variant="secondary" className="mb-2">Popular</Badge>
-                    <p className="text-lg font-semibold">200.000</p>
-                    <p className="text-sm text-muted-foreground">Créditos</p>
-                    <p className="text-xl font-bold text-primary mt-2">R$ 750</p>
-                    <Button size="sm" className="w-full mt-3">Comprar</Button>
-                </Card>
-                <Card className="text-center p-4">
-                    <p className="text-lg font-semibold">500.000</p>
-                    <p className="text-sm text-muted-foreground">Créditos</p>
-                    <p className="text-xl font-bold text-primary mt-2">R$ 1.500</p>
-                    <Button size="sm" className="w-full mt-3">Comprar</Button>
-                </Card>
-            </CardContent>
-        </Card>
-    </div>
-);
-
-
 export default function FaturasPage() {
   const { toast } = useToast();
-  const { appUser, userAppRole } = useAuth();
+  const { appUser } = useAuth();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
@@ -229,31 +43,27 @@ export default function FaturasPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
-    // Show management page for superadmin and the specific test user Jhonathas
-    if (userAppRole === 'superadmin' || appUser?.displayName?.toLowerCase() === 'jhonathas') {
-      const faturasCollectionRef = collection(db, 'faturas_clientes');
-      const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
-        const faturasData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
-              lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
-            }
-          }) as FaturaCliente[];
-        setClientes(faturasData);
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Error fetching faturas: ", error);
-        toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do Firestore.", variant: "destructive" });
-        setIsLoading(false);
-      });
-      return () => unsubscribe();
-    } else {
-        setIsLoading(false);
-    }
-  }, [toast, userAppRole, appUser]);
+    const faturasCollectionRef = collection(db, 'faturas_clientes');
+    const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
+      const faturasData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+            lastUpdatedAt: data.lastUpdatedAt ? (data.lastUpdatedAt as Timestamp).toDate().toISOString() : undefined,
+          }
+        }) as FaturaCliente[];
+      setClientes(faturasData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching faturas: ", error);
+      toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do Firestore.", variant: "destructive" });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
   
   const filteredAndSortedClientes = useMemo(() => {
     let filtered = clientes;
@@ -419,11 +229,6 @@ export default function FaturasPage() {
     setExpandedClientId(currentId => currentId === clienteId ? null : clienteId);
   }
 
-  // Show subscription page for non-superadmin users (except Jhonathas who sees the management page now)
-  if (userAppRole !== 'superadmin' && appUser?.displayName?.toLowerCase() !== 'jhonathas') {
-      return <div className="container mx-auto p-4 md:p-8 text-center text-muted-foreground">Acesso negado. Esta página requer uma assinatura de plano.</div>;
-  }
-  
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
