@@ -117,7 +117,7 @@ export default function FaturasPage() {
       nome: '',
       telefone: '',
     };
-    const newClienteData: Omit<FaturaCliente, 'id'> = {
+    const newClienteData: Omit<FaturaCliente, 'id' | 'createdAt'> & { createdAt: Timestamp } = {
       nome: 'Novo Cliente',
       tipoPessoa: '' as 'pf' | 'pj',
       tensao: 'baixa', // Default to baixa
