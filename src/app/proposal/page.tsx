@@ -280,91 +280,62 @@ function ProposalPageContent() {
   };
 
   const handleDownloadPDF = async () => {
-  const content = proposalRef.current;
-  if (!content || isGeneratingPDF) return;
-  setIsGeneratingPDF(true);
-  try {
-    // Scroll para o topo para captura correta
-    window.scrollTo(0, 0);
-    // Aguarda renderização
-    await new Promise(resolve => setTimeout(resolve, 500));
-    // Captura com alta qualidade
-    const canvas = await html2canvas(content, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: "#f3f4f6",
-      logging: false,
-      imageTimeout: 0,
-    });
-    const imgData = canvas.toDataURL("image/png", 1.0);
-    // Cria o PDF
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-      compress: true,
-    });
-    // Dimensões
-    const pageWidth = 210; // A4 em mm
-    const pageHeight = 297; // A4 em mm
-    const margin = 10; // Margem em mm
-    // Calcula dimensões da imagem
-    const imgWidth = canvas.width;
-    const imgHeight = canvas.height;
-    // Área útil da página (com margens)
-    const contentWidth = pageWidth - (margin * 2);
-    const contentHeight = pageHeight - (margin * 2);
-    // Escala para caber na largura com margem
-    const scale = contentWidth / imgWidth;
-    const scaledWidth = contentWidth;
-    const scaledHeight = imgHeight * scale;
-    let yPosition = 0;
-    let pageNumber = 0;
-    // Adiciona páginas
-    while (yPosition < scaledHeight) {
-      if (pageNumber > 0) {
-        pdf.addPage();
+      const content = proposalRef.current;
+      if (!content || isGeneratingPDF) return;
+  
+      setIsGeneratingPDF(true);
+      window.scrollTo(0, 0);
+  
+      const pdf = new jsPDF({
+          orientation: 'p',
+          unit: 'mm',
+          format: 'a4',
+          compress: true,
+      });
+  
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pageWidth - margin * 2;
+  
+      const sections = content.querySelectorAll('[data-pdf-section]') as NodeListOf<HTMLElement>;
+  
+      for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
+          const sectionId = section.dataset.pdfSection;
+  
+          if (i > 0) {
+              pdf.addPage();
+          }
+          
+          try {
+              const canvas = await html2canvas(section, {
+                  scale: 2, // Higher scale for better quality
+                  useCORS: true,
+                  allowTaint: true,
+                  backgroundColor: '#ffffff', // Set a solid background
+              });
+  
+              const imgData = canvas.toDataURL('image/png', 1.0);
+              const imgWidth = canvas.width;
+              const imgHeight = canvas.height;
+              
+              const ratio = imgWidth / contentWidth;
+              const scaledHeight = imgHeight / ratio;
+  
+              if (scaledHeight > pageHeight - margin * 2) {
+                  console.warn(`Section ${sectionId} is taller than a single page. It might be cropped.`);
+              }
+  
+              pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, scaledHeight, undefined, 'FAST');
+          } catch (error) {
+              console.error(`Error rendering section ${sectionId} to canvas:`, error);
+          }
       }
-      // Calcula a porção da imagem para esta página
-      const sourceY = yPosition / scale;
-      const sourceHeight = Math.min(contentHeight / scale, (imgHeight - sourceY));
-      // Cria um canvas temporário para recortar a porção correta
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCanvas.width = imgWidth;
-      tempCanvas.height = sourceHeight;
-      if (tempCtx) {
-        tempCtx.drawImage(
-          canvas,
-          0, sourceY,           // Fonte: x, y
-          imgWidth, sourceHeight, // Fonte: largura, altura
-          0, 0,                  // Destino: x, y
-          imgWidth, sourceHeight  // Destino: largura, altura
-        );
-        const pageImgData = tempCanvas.toDataURL("image/png", 1.0);
-        const pageImgHeight = sourceHeight * scale;
-        // Adiciona a imagem com margem
-        pdf.addImage(
-          pageImgData,
-          "PNG",
-          margin,
-          margin,
-          scaledWidth,
-          pageImgHeight
-        );
-      }
-      yPosition += contentHeight;
-      pageNumber++;
-    }
-    pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
-  } catch (error) {
-    console.error("Erro ao gerar PDF:", error);
-    alert("Erro ao gerar PDF. Por favor, tente novamente.");
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
+  
+      pdf.save(`Proposta_${proposalData.clientName.replace(/\s+/g, "_")}.pdf`);
+      setIsGeneratingPDF(false);
+  };
 
 
   const selectedCommercializer = useMemo(
@@ -532,9 +503,9 @@ function ProposalPageContent() {
           </div>
   
           <div ref={proposalRef} className="space-y-6">
-            <div className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
+            <div data-pdf-section="cover" className="relative flex min-h-[1024px] flex-col justify-between overflow-hidden rounded-xl bg-slate-900 text-white">
               <Image
-                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b33b507908aa99ff3a78a/capa-planus.png"
+                src="https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/96dbd2e9523b247dd65b3642acb35fac8e3075f8/capa-planus.png"
                 alt="Capa proposta Planus Energia"
                 fill
                 priority
@@ -579,7 +550,7 @@ function ProposalPageContent() {
               </div>
             </div>
   
-            <div className="rounded-xl bg-white p-8 md:p-12">
+            <div data-pdf-section="about" className="rounded-xl bg-white p-8 md:p-12">
               <div>
                 <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -656,7 +627,7 @@ function ProposalPageContent() {
               </div>
             </div>
   
-            <div className="rounded-xl bg-white p-8 md:p-12">
+            <div data-pdf-section="proposal" className="rounded-xl bg-white p-8 md:p-12">
               <div>
                 <h2 className="text-4xl font-extrabold text-sky-900">Proposta Comercial</h2>
                 <p className="mt-2 text-lg text-slate-600">
@@ -863,7 +834,7 @@ function ProposalPageContent() {
               </div>
             </div>
   
-            <div className="rounded-xl bg-white p-0 shadow-lg">
+            <div data-pdf-section="clients" className="rounded-xl bg-white p-0 shadow-lg">
               <Image
                 src="/proposal/clientes-planus.png"
                 alt="Alguns dos clientes atendidos pela Planus Energia"
