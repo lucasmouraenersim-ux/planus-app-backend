@@ -108,14 +108,14 @@ export default function FaturasPage() {
 
   const handleAddCliente = async () => {
     const newUnidade: UnidadeConsumidora = {
-      id: `uc-${Date.now()}`,
+      id: `uc-${Date.now()}-${Math.random()}`, // Ensure unique ID on creation
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
       nomeArquivo: null,
     };
     const newContato: Contato = {
-      id: `contato-${Date.now()}`,
+      id: `contato-${Date.now()}-${Math.random()}`, // Ensure unique ID
       nome: '',
       telefone: '',
     };
@@ -168,7 +168,7 @@ export default function FaturasPage() {
 
   const handleAddUnidade = async (clienteId: string) => {
     const newUnidade: UnidadeConsumidora = {
-      id: `uc-${Date.now()}`,
+      id: `uc-${Date.now()}-${Math.random()}`,
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
@@ -184,7 +184,7 @@ export default function FaturasPage() {
   };
   
   const handleAddContato = async (clienteId: string) => {
-    const newContato: Contato = { id: `contato-${Date.now()}`, nome: '', telefone: '' };
+    const newContato: Contato = { id: `contato-${Date.now()}-${Math.random()}`, nome: '', telefone: '' };
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     await updateDoc(clienteDocRef, { contatos: arrayUnion(newContato) });
   };
@@ -384,7 +384,7 @@ export default function FaturasPage() {
                                                           <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
                                                           <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
                                                           <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
-                                                          <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id || `uc-${ucIndex}`, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
+                                                          <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
                                                           <div className="md:col-span-3 flex items-center justify-end gap-1">{unidade.arquivoFaturaUrl && (<><Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button></>)}<Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
                                                         </div>))}
                                                   </div>
