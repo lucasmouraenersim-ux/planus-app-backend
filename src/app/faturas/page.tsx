@@ -107,13 +107,15 @@ export default function FaturasPage() {
 
 
   const handleAddCliente = async () => {
-    const newUnidade: Omit<UnidadeConsumidora, 'id'> = {
+    const newUnidade: UnidadeConsumidora = {
+      id: `uc-${Date.now()}`,
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
       nomeArquivo: null,
     };
-    const newContato: Omit<Contato, 'id'> = {
+    const newContato: Contato = {
+      id: `contato-${Date.now()}`,
       nome: '',
       telefone: '',
     };
@@ -368,9 +370,9 @@ export default function FaturasPage() {
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                                                   <div className="space-y-3 mb-6">
                                                       {cliente.contatos.map((contato, contatoIndex) => (
-                                                        <div key={`${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
-                                                          <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
-                                                          <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c, i) => i === contatoIndex ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
+                                                        <div key={contato.id || `${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                          <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
+                                                          <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
                                                           <div className="md:col-span-1 flex justify-end"><Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
                                                         </div>))}
                                                       <Button onClick={() => handleAddContato(cliente.id)} className="mt-2" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar Contato</Button>
@@ -378,10 +380,10 @@ export default function FaturasPage() {
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
                                                   <div className="space-y-3">
                                                       {cliente.unidades.map((unidade, ucIndex) => (
-                                                        <div key={`${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                        <div key={unidade.id || `${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
-                                                          <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
-                                                          <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u, i) => i === ucIndex ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
+                                                          <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
+                                                          <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>
                                                           <div className="md:col-span-2"><Button asChild variant="outline" size="sm" className="w-full"><label className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />{unidade.arquivoFaturaUrl ? 'Trocar' : 'Anexar'}<Input type="file" className="hidden" onChange={(e) => handleFileChange(cliente.id, unidade.id || `uc-${ucIndex}`, e.target.files ? e.target.files[0] : null)} /></label></Button></div>
                                                           <div className="md:col-span-3 flex items-center justify-end gap-1">{unidade.arquivoFaturaUrl && (<><Button variant="ghost" size="icon" onClick={() => handleView(unidade.arquivoFaturaUrl)}><Eye className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={() => handleDownload(unidade.arquivoFaturaUrl)}><Download className="h-4 w-4" /></Button></>)}<Button variant="ghost" size="icon" onClick={() => handleRemoveUnidade(cliente.id, unidade)} disabled={cliente.unidades.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
                                                         </div>))}
