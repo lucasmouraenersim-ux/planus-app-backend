@@ -1,4 +1,3 @@
-
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -70,7 +69,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
     CalendarIcon, Filter, Users, UserPlus, DollarSign, Settings, RefreshCw, 
     ExternalLink, ShieldAlert, WalletCards, Activity, BarChartHorizontalBig, PieChartIcon, 
-    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload, Map as MapIcon
+    Loader2, Search, Download, Edit2, Trash2, Eye, Rocket, UsersRound as CrmIcon, Percent, Network, Banknote, TrendingUp, ArrowRight, ClipboardList, Building, PiggyBank, Target as TargetIcon, Briefcase, PlusCircle, Pencil, LineChart, TrendingUp as TrendingUpIcon, Landmark, FileSignature, AlertTriangle, ArrowDown, ArrowUp, Upload, Map as MapIcon, File as FileIcon
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -92,6 +91,14 @@ const addUserFormSchema = z.object({
 });
 
 type AddUserFormData = z.infer<typeof addUserFormSchema>;
+
+const faturasUserFormSchema = z.object({
+  email: z.string().email("Email inválido."),
+  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
+});
+
+type FaturasUserFormData = z.infer<typeof faturasUserFormSchema>;
+
 
 const editUserFormSchema = z.object({
   displayName: z.string().min(2, "Nome deve ter no mínimo 2 caracteres."),
@@ -859,6 +866,8 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isImportRecurrenceModalOpen, setIsImportRecurrenceModalOpen] = useState(false);
   const [isUploadingRecurrence, setIsUploadingRecurrence] = useState(false);
+  const [isUserTypeSelectionOpen, setIsUserTypeSelectionOpen] = useState(false);
+  const [isFaturasUserModalOpen, setIsFaturasUserModalOpen] = useState(false);
 
   
   const [selectedUser, setSelectedUser] = useState<FirestoreUser | null>(null);
@@ -874,6 +883,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     resolver: zodResolver(addUserFormSchema), 
     defaultValues: { type: 'vendedor', documento: '', displayName: '', email: '', password: '', phone: '' } 
   });
+  const faturasUserForm = useForm<FaturasUserFormData>({ resolver: zodResolver(faturasUserFormSchema) });
   const editUserForm = useForm<EditUserFormData>({ resolver: zodResolver(editUserFormSchema) });
   const updateWithdrawalForm = useForm<UpdateWithdrawalFormData>({ resolver: zodResolver(updateWithdrawalFormSchema) });
 
@@ -1100,6 +1110,42 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       toast({
         title: "Erro de Rede",
         description: "Não foi possível conectar ao servidor para criar o usuário.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingUser(false);
+    }
+  };
+
+  const handleAddFaturasUser = async (data: FaturasUserFormData) => {
+    setIsSubmittingUser(true);
+    try {
+      // For 'Usuário Faturas', we create a user with type 'advogado'
+      // and a random document number since it's required but not provided in this form.
+      const randomDoc = Math.floor(10000000000 + Math.random() * 90000000000).toString();
+      const result = await createUser({
+        ...data,
+        type: 'advogado',
+        documento: randomDoc,
+      });
+
+      if (result.success) {
+        await onUsersChange();
+        toast({ title: "Usuário Faturas Criado", description: result.message });
+        setIsFaturasUserModalOpen(false);
+        faturasUserForm.reset();
+      } else {
+        toast({
+          title: "Erro ao Criar Usuário",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("CRITICAL ERROR adding faturas user:", error);
+      toast({
+        title: "Erro de Rede",
+        description: "Não foi possível conectar ao servidor.",
         variant: "destructive",
       });
     } finally {
@@ -1469,7 +1515,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                 <div><CardTitle className="text-primary flex items-center"><Users className="mr-2 h-5 w-5" />Gerenciamento de Usuários</CardTitle><CardDescription>Adicione e gerencie usuários e suas comissões.</CardDescription></div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Button onClick={handleExportUsersCSV} size="sm" variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar</Button>
-                    {canEdit && <Button onClick={() => setIsAddUserModalOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
+                    {canEdit && <Button onClick={() => setIsUserTypeSelectionOpen(true)} size="sm"><UserPlus className="mr-2 h-4 w-4" /> Adicionar Usuário</Button>}
                 </div>
                 </CardHeader>
                 <CardContent>
@@ -1624,11 +1670,75 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         </TabsContent>
       </Tabs>
 
-
       {/* Modals */}
+      <Dialog open={isUserTypeSelectionOpen} onOpenChange={setIsUserTypeSelectionOpen}>
+          <DialogContent className="sm:max-w-md bg-card/80 backdrop-blur-xl border text-foreground">
+            <DialogHeader>
+              <DialogTitle className="text-primary">Tipo de Usuário</DialogTitle>
+              <DialogDescription>
+                Selecione o tipo de usuário que você deseja criar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+               <Button
+                variant="outline"
+                className="w-full justify-start p-4 h-auto"
+                onClick={() => {
+                  setIsUserTypeSelectionOpen(false);
+                  setIsFaturasUserModalOpen(true);
+                }}
+              >
+                <FileIcon className="mr-3 h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-semibold text-left">Usuário Faturas</p>
+                  <p className="text-xs text-muted-foreground text-left">Acesso restrito à página de faturas.</p>
+                </div>
+              </Button>
+               <Button
+                variant="outline"
+                className="w-full justify-start p-4 h-auto"
+                onClick={() => {
+                  setIsUserTypeSelectionOpen(false);
+                  setIsAddUserModalOpen(true);
+                }}
+              >
+                <UserPlus className="mr-3 h-5 w-5 text-primary" />
+                 <div>
+                  <p className="font-semibold text-left">Usuário Padrão</p>
+                  <p className="text-xs text-muted-foreground text-left">Crie um administrador, vendedor, etc.</p>
+                </div>
+              </Button>
+            </div>
+          </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isFaturasUserModalOpen} onOpenChange={setIsFaturasUserModalOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-primary">Adicionar Usuário de Faturas</DialogTitle>
+            <DialogDescription>
+              Este usuário terá acesso apenas à página de faturas.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...faturasUserForm}>
+            <form onSubmit={faturasUserForm.handleSubmit(handleAddFaturasUser)} className="space-y-4 py-3">
+              <FormField control={faturasUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="email@advogado.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={faturasUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setIsFaturasUserModalOpen(false); faturasUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmittingUser}>
+                  {isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                  Criar Usuário
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}>
         <DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground">
-          <DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle className="text-primary">Adicionar Novo Usuário Padrão</DialogTitle><DialogDescription>Crie uma nova conta de usuário para o sistema.</DialogDescription></DialogHeader>
           <Form {...addUserForm}>
             <form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-3">
               <FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome Completo (Opcional)</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} />
