@@ -57,6 +57,8 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         // User is logged in
         if (userAppRole === 'prospector' && !isTrainingPage) {
           router.replace('/training');
+        } else if (userAppRole === 'advogado' && pathname !== '/faturas' && pathname !== '/profile' && pathname !== '/sobre') {
+            router.replace('/faturas');
         } else if (isAuthPage) {
           router.replace('/dashboard');
         }
@@ -187,34 +189,46 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                 )}
                 <SidebarContent className={cn((!isMobile || openMobile) && "pt-4")}>
                     <SidebarMenu>
-                         <SidebarMenuItem>
-                            <Link href="/dashboard"><SidebarMenuButton isActive={currentPathname === '/dashboard'} tooltip="Calculadora"><Calculator />Calculadora</SidebarMenuButton></Link>
-                         </SidebarMenuItem>
-                         <SidebarMenuItem>
-                           <Link href="/proposal-generator"><SidebarMenuButton isActive={currentPathname === '/proposal-generator'} tooltip="Gerador de Proposta"><FileText />Proposta</SidebarMenuButton></Link>
-                         </SidebarMenuItem>
-                         {(userAppRole === 'superadmin' || appUser.displayName?.toLowerCase() === 'jhonathas') && (<SidebarMenuItem><Link href="/faturas"><SidebarMenuButton tooltip="Faturas" isActive={currentPathname === '/faturas'}><FileText />Faturas</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {userAppRole === 'vendedor' && (<SidebarMenuItem><Link href="/dashboard/seller"><SidebarMenuButton isActive={currentPathname === '/dashboard/seller'} tooltip="Meu Painel"><LayoutDashboard />Meu Painel</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin' || appUser?.canViewCrm) && (<SidebarMenuItem><Link href="/crm"><SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}><UsersRound />CRM</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/leads"><SidebarMenuButton tooltip="Importar Leads" isActive={currentPathname === '/leads'}><ListChecks />Leads</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
-                         <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
+                        {userAppRole !== 'advogado' && (
+                            <>
+                                <SidebarMenuItem>
+                                    <Link href="/dashboard"><SidebarMenuButton isActive={currentPathname === '/dashboard'} tooltip="Calculadora"><Calculator />Calculadora</SidebarMenuButton></Link>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                <Link href="/proposal-generator"><SidebarMenuButton isActive={currentPathname === '/proposal-generator'} tooltip="Gerador de Proposta"><FileText />Proposta</SidebarMenuButton></Link>
+                                </SidebarMenuItem>
+                            </>
+                        )}
                          
-                         {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
-                            <SidebarMenuItem>
-                                <Link href="/team">
-                                    <SidebarMenuButton isActive={currentPathname === '/team'} tooltip="Minha Equipe">
-                                        <Network />Minha Equipe
-                                    </SidebarMenuButton>
-                                </Link>
-                            </SidebarMenuItem>
+                         {(userAppRole === 'superadmin' || appUser.displayName?.toLowerCase() === 'jhonathas' || userAppRole === 'advogado') && (
+                            <SidebarMenuItem><Link href="/faturas"><SidebarMenuButton tooltip="Faturas" isActive={currentPathname === '/faturas'}><FileText />Faturas</SidebarMenuButton></Link></SidebarMenuItem>
                          )}
 
-                         {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
+                         {userAppRole !== 'advogado' && (
+                             <>
+                                {userAppRole === 'vendedor' && (<SidebarMenuItem><Link href="/dashboard/seller"><SidebarMenuButton isActive={currentPathname === '/dashboard/seller'} tooltip="Meu Painel"><LayoutDashboard />Meu Painel</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin' || appUser?.canViewCrm) && (<SidebarMenuItem><Link href="/crm"><SidebarMenuButton tooltip="Gestão de Clientes" isActive={currentPathname === '/crm'}><UsersRound />CRM</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/leads"><SidebarMenuButton tooltip="Importar Leads" isActive={currentPathname === '/leads'}><ListChecks />Leads</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/disparos"><SidebarMenuButton tooltip="Disparos em Massa" isActive={currentPathname === '/disparos'}><Send />Disparos</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                <SidebarMenuItem><Link href="/carteira"><SidebarMenuButton tooltip="Minha Carteira" isActive={currentPathname === '/carteira'}><Wallet />Carteira</SidebarMenuButton></Link></SidebarMenuItem>
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/dashboard"><SidebarMenuButton isActive={currentPathname === '/admin/dashboard'} tooltip="Painel Admin"><ShieldAlert />Painel Admin</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/goals"><SidebarMenuButton isActive={currentPathname === '/admin/goals'} tooltip="Metas"><Target />Metas</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                {(userAppRole === 'admin' || userAppRole === 'superadmin') && (<SidebarMenuItem><Link href="/admin/training"><SidebarMenuButton isActive={currentPathname === '/admin/training'} tooltip="Gerenciar Treinamento"><TrainingIcon />Gerenciar Treinamento</SidebarMenuButton></Link></SidebarMenuItem>)}
+                                <SidebarMenuItem><Link href="/ranking"><SidebarMenuButton tooltip="Ranking de Performance" isActive={currentPathname === '/ranking'}><BarChart3 />Ranking</SidebarMenuButton></Link></SidebarMenuItem>
+                                
+                                {(userAppRole === 'vendedor' || userAppRole === 'admin' || userAppRole === 'superadmin') && (
+                                    <SidebarMenuItem>
+                                        <Link href="/team">
+                                            <SidebarMenuButton isActive={currentPathname === '/team'} tooltip="Minha Equipe">
+                                                <Network />Minha Equipe
+                                            </SidebarMenuButton>
+                                        </Link>
+                                    </SidebarMenuItem>
+                                )}
+
+                                {appUser?.canViewCareerPlan && (<SidebarMenuItem><Link href="/career-plan"><SidebarMenuButton tooltip="Planejamento de Carreira" isActive={currentPathname === '/career-plan' || currentPathname.startsWith('/career-plan/')}><Rocket />Plano de Carreira</SidebarMenuButton></Link></SidebarMenuItem>)}
+                            </>
+                         )}
                          <SidebarMenuItem><Link href="/profile"><SidebarMenuButton tooltip="Meu Perfil" isActive={currentPathname === '/profile'}><CircleUserRound />Perfil</SidebarMenuButton></Link></SidebarMenuItem>
                          <SidebarMenuItem><Link href="/sobre"><SidebarMenuButton tooltip="Sobre o App" isActive={currentPathname.startsWith('/sobre')}><Info />Sobre</SidebarMenuButton></Link></SidebarMenuItem>
                     </SidebarMenu>

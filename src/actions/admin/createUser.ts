@@ -90,7 +90,7 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
       mlmBalance: 0,
       commissionRate: 40,
       canViewLeadPhoneNumber: finalUserType === 'advogado',
-      canViewCrm: finalUserType === 'advogado' || isSuperAdminEmail,
+      canViewCrm: true, // Garante que o advogado tenha a flag canViewCrm
       canViewCareerPlan: !isSuperAdminEmail,
       assignmentLimit: 2, // Default limit for new users
     };
