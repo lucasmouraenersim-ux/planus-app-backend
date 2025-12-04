@@ -12,8 +12,6 @@ import { calculateSavings } from '@/lib/discount-calculator';
 import Image from 'next/image';
 import { getLandingPageStats } from '@/actions/public/getLandingPageStats';
 import { cn } from '@/lib/utils';
-import { FakeLogin } from '@/components/auth/FakeLogin';
-import { PhotoEnhancer } from '@/components/photo/PhotoEnhancer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -325,61 +323,14 @@ const EnergySection = () => {
     );
 }
 
-const PhotoSection = () => {
-  const { appUser, isLoadingAuth, firebaseUser } = useAuth();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const router = useRouter();
-
-  // This handles the case where the user is already logged in via the main app's AuthProvider
-  useEffect(() => {
-    if (!isLoadingAuth && firebaseUser) {
-      setIsLoggedIn(true);
-    }
-  }, [isLoadingAuth, firebaseUser]);
-  
-  const handleLoginSuccess = () => {
-      setIsLoggedIn(true);
-  };
-
-  if (isLoadingAuth) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
-        <Loader2 className="w-12 h-12 text-[#a855f7] animate-spin mb-4" />
-        <p className="text-lg text-slate-400">Carregando...</p>
-      </div>
-    );
-  }
-  
-  if (!isLoggedIn) {
-      return <FakeLogin onLogin={handleLoginSuccess} />;
-  }
-
-  // If user is logged in, show the photo enhancer.
-  return <PhotoEnhancer />;
-};
-
-const ForexSection = () => (
-  <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center px-4">
-    <LineChart className="w-24 h-24 text-primary mb-6 opacity-30" />
-    <h2 className="text-4xl font-bold text-primary">Invista em Forex com Inteligência</h2>
-    <p className="text-lg text-muted-foreground mt-2 max-w-2xl">
-      Uma nova plataforma para análise e investimento no mercado Forex está em desenvolvimento. Volte em breve para mais novidades.
-    </p>
-  </div>
-);
-
-
 const LandingPage = () => {
-  const [selectedApp, setSelectedApp] = useState<'energia' | 'foto' | 'forex'>('energia');
-
   return (
-    <div className={cn("text-foreground", selectedApp === 'foto' ? 'bg-[#171821]' : 'bg-background' )}>
+    <div className="bg-background text-foreground">
       {/* Top Menu */}
-      <header className={cn("sticky top-0 z-50  border-b", selectedApp === 'foto' ? 'bg-[#171821]/80 border-slate-800' : 'bg-background/80 border-border')}>
+      <header className="sticky top-0 z-50  border-b bg-background/80 border-border">
         <nav className="container mx-auto px-4 py-2 flex justify-center items-center gap-4">
             <Button 
-                variant={selectedApp === 'energia' ? 'default' : 'ghost'} 
-                onClick={() => setSelectedApp('energia')}
+                variant={'default'}
                 className="transition-all"
             >
                 <Zap className="mr-2 h-4 w-4"/>
@@ -390,13 +341,11 @@ const LandingPage = () => {
 
       {/* Conditional Content */}
       <main>
-        {selectedApp === 'energia' && <EnergySection />}
-        {selectedApp === 'foto' && <PhotoSection />}
-        {selectedApp === 'forex' && <ForexSection />}
+        <EnergySection />
       </main>
 
       {/* Footer */}
-      <footer className={cn("text-center py-6 border-t", selectedApp === 'foto' ? 'bg-[#171821] border-slate-800' : 'bg-background border-border')}>
+      <footer className="text-center py-6 border-t bg-background border-border">
         <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Sent Energia. Todos os direitos reservados.</p>
         <Link href="/politica-de-privacidade" className="text-sm text-primary hover:underline mt-1 inline-block">Política de Privacidade</Link>
       </footer>
