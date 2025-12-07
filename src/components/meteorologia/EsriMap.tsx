@@ -899,8 +899,7 @@ const EsriMapInternal = ({ onLogout }: { onLogout: () => void }) => {
     }
   }, [isReportMode]);
 
-  const MUNICIPIOS_URL =
-    'https://raw.githubusercontent.com/LucasMouraChaser/simplaoosmunicipio/bb3e7071319f8e42ffd24513873ffb73cce566e6/brazil-mun.simplificado.geojson';
+  const MUNICIPIOS_URL = 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json';
 
   const initMap = useCallback(async () => {
     if (!mapDivRef.current || !brazilBoundary || mapInitializedRef.current) return;
