@@ -31,6 +31,7 @@ export interface FaturaCliente {
   // New feedback fields
   status: FaturaStatus;
   feedbackNotes?: string;
+  feedbackAttachmentUrl?: string | null;
   lastUpdatedBy?: {
     uid: string;
     name: string;

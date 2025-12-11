@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
@@ -161,7 +161,7 @@ export default function FaturasPage() {
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     try {
       const updates: { [key: string]: any } = { [fieldPath]: value };
-      if (fieldPath === 'status' || fieldPath === 'feedbackNotes') {
+      if (fieldPath === 'status' || fieldPath === 'feedbackNotes' || fieldPath === 'feedbackAttachmentUrl') {
         updates.lastUpdatedAt = Timestamp.now();
         if (appUser) {
           updates.lastUpdatedBy = { uid: appUser.uid, name: appUser.displayName || appUser.email || 'N/A' };
@@ -221,6 +221,20 @@ export default function FaturasPage() {
     } catch (error) {
       console.error("File upload error: ", error);
       toast({ title: "Erro de Upload", description: "Não foi possível enviar o arquivo da fatura.", variant: "destructive" });
+    }
+  };
+
+  const handleFeedbackFileChange = async (clienteId: string, file: File | null) => {
+    if (!file) return;
+    toast({ title: "Enviando comprovante...", description: "Aguarde enquanto o arquivo é salvo." });
+    try {
+      const filePath = `faturas_feedback/${clienteId}/${Date.now()}_${file.name}`;
+      const fileUrl = await uploadFile(file, filePath);
+      await handleUpdateField(clienteId, 'feedbackAttachmentUrl', fileUrl);
+      toast({ title: "Sucesso!", description: "Comprovante de feedback enviado." });
+    } catch (error) {
+      console.error("Feedback file upload error: ", error);
+      toast({ title: "Erro de Upload", description: "Não foi possível enviar o comprovante.", variant: "destructive" });
     }
   };
 
@@ -419,12 +433,34 @@ export default function FaturasPage() {
                                                         </div>))}
                                                   </div>
                                                   <Button onClick={() => handleAddUnidade(cliente.id)} className="mt-4" variant="outline" size="sm"><PlusCircle className="mr-2 h-4 w-4" />Adicionar UC</Button>
-                                                  <div className="mt-6 pt-4 border-t"><h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Feedback e Status</h4>
-                                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                          <Select value={cliente.status || 'Nenhum'} onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}><SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger><SelectContent>{FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select>
-                                                          <div className="md:col-span-2"><Textarea placeholder="Adicione notas de feedback aqui..." defaultValue={cliente.feedbackNotes} onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}/></div>
-                                                      </div>
-                                                      {cliente.lastUpdatedBy && (<div className="text-xs text-muted-foreground mt-2 flex items-center"><UserCheck className="mr-2 h-3 w-3"/>Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date(cliente.lastUpdatedAt).toLocaleString('pt-BR') : '...'}</div>)}
+                                                  
+                                                  <div className="mt-6 pt-4 border-t">
+                                                    <h4 className="font-semibold text-sm mb-2 text-muted-foreground flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Feedback e Status</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                        <Select value={cliente.status || 'Nenhum'} onValueChange={(value: FaturaStatus) => handleUpdateField(cliente.id, 'status', value)}>
+                                                          <SelectTrigger><SelectValue placeholder="Selecione o status" /></SelectTrigger>
+                                                          <SelectContent>{FATURA_STATUS_OPTIONS.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
+                                                        </Select>
+                                                        <div className="md:col-span-2">
+                                                          <Textarea placeholder="Adicione notas de feedback aqui..." defaultValue={cliente.feedbackNotes} onBlur={(e) => handleUpdateField(cliente.id, 'feedbackNotes', e.target.value)}/>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-4 flex items-center gap-4">
+                                                        <Button asChild variant="outline" size="sm">
+                                                            <label className="cursor-pointer">
+                                                                <Paperclip className="mr-2 h-4 w-4" />
+                                                                Anexar Comprovante
+                                                                <Input type="file" className="hidden" onChange={(e) => handleFeedbackFileChange(cliente.id, e.target.files ? e.target.files[0] : null)} />
+                                                            </label>
+                                                        </Button>
+                                                        {cliente.feedbackAttachmentUrl && (
+                                                            <Button variant="secondary" size="sm" onClick={() => handleView(cliente.feedbackAttachmentUrl)}>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                Ver Anexo
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    {cliente.lastUpdatedBy && (<div className="text-xs text-muted-foreground mt-2 flex items-center"><UserCheck className="mr-2 h-3 w-3"/>Última atualização por <strong className="mx-1">{cliente.lastUpdatedBy.name}</strong> em {cliente.lastUpdatedAt ? new Date(cliente.lastUpdatedAt).toLocaleString('pt-BR') : '...'}</div>)}
                                                   </div>
                                                 </div>
                                             </TableCell>
