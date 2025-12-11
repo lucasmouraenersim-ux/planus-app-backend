@@ -117,14 +117,14 @@ export default function FaturasPage() {
 
   const handleAddCliente = async () => {
     const newUnidade: UnidadeConsumidora = {
-      id: `uc-${Date.now()}-${Math.random()}`,
+      id: crypto.randomUUID(),
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
       nomeArquivo: null,
     };
     const newContato: Contato = {
-      id: `contato-${Date.now()}-${Math.random()}`,
+      id: crypto.randomUUID(),
       nome: '',
       telefone: '',
     };
@@ -176,7 +176,7 @@ export default function FaturasPage() {
 
   const handleAddUnidade = async (clienteId: string) => {
     const newUnidade: UnidadeConsumidora = {
-      id: `uc-${Date.now()}-${Math.random()}`,
+      id: crypto.randomUUID(),
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
@@ -192,7 +192,7 @@ export default function FaturasPage() {
   };
   
   const handleAddContato = async (clienteId: string) => {
-    const newContato: Contato = { id: `contato-${Date.now()}-${Math.random()}`, nome: '', telefone: '' };
+    const newContato: Contato = { id: crypto.randomUUID(), nome: '', telefone: '' };
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     await updateDoc(clienteDocRef, { contatos: arrayUnion(newContato) });
   };
