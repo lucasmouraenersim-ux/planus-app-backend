@@ -10,16 +10,22 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2, User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap, MessageSquare, UserCheck, ChevronDown, ChevronUp } from 'lucide-react';
-import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
-import type { FaturaCliente, UnidadeConsumidora, Contato, FaturaStatus } from '@/types/faturas';
+import type { FaturaCliente, UnidadeConsumidora, Contato, FaturaStatus, TensaoType } from '@/types/faturas';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Textarea } from '@/components/ui/textarea';
 
 const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
+const TENSAO_OPTIONS: { value: TensaoType; label: string }[] = [
+    { value: 'baixa', label: 'Baixa Tensão' },
+    { value: 'alta', label: 'Alta Tensão' },
+    { value: 'b_optante', label: 'B Optante' },
+    { value: 'baixa_renda', label: 'Baixa Renda' },
+];
 
 const getStatusStyle = (status?: FaturaStatus) => {
     switch (status) {
@@ -39,12 +45,13 @@ export default function FaturasPage() {
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
 
   // State for filters
-  const [filterTensao, setFilterTensao] = useState<'all' | 'alta' | 'baixa'>('all');
+  const [filterTensao, setFilterTensao] = useState<TensaoType | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   useEffect(() => {
     const faturasCollectionRef = collection(db, 'faturas_clientes');
-    const unsubscribe = onSnapshot(faturasCollectionRef, (snapshot) => {
+    const q = query(faturasCollectionRef, orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const faturasData = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
@@ -89,33 +96,35 @@ export default function FaturasPage() {
     return filtered;
   }, [clientes, filterTensao, sortOrder]);
 
-  const { totalKwhAlta, totalKwhBaixa } = useMemo(() => {
-    let totalKwhAlta = 0;
-    let totalKwhBaixa = 0;
+  const { totalKwhAlta, totalKwhBaixa, totalKwhBOptante, totalKwhBaixaRenda } = useMemo(() => {
+    let totals: Record<TensaoType, number> = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
 
     clientes.forEach(cliente => {
       const clienteKwh = cliente.unidades.reduce((sum, u) => sum + (parseInt(u.consumoKwh) || 0), 0);
-      if (cliente.tensao === 'alta') {
-        totalKwhAlta += clienteKwh;
-      } else if (cliente.tensao === 'baixa') {
-        totalKwhBaixa += clienteKwh;
+      if (totals[cliente.tensao] !== undefined) {
+        totals[cliente.tensao] += clienteKwh;
       }
     });
 
-    return { totalKwhAlta, totalKwhBaixa };
+    return { 
+      totalKwhAlta: totals.alta, 
+      totalKwhBaixa: totals.baixa, 
+      totalKwhBOptante: totals.b_optante, 
+      totalKwhBaixaRenda: totals.baixa_renda 
+    };
   }, [clientes]);
 
 
   const handleAddCliente = async () => {
     const newUnidade: UnidadeConsumidora = {
-      id: `uc-${Date.now()}-${Math.random()}`, // Ensure unique ID on creation
+      id: `uc-${Date.now()}-${Math.random()}`,
       consumoKwh: '',
       temGeracao: false,
       arquivoFaturaUrl: null,
       nomeArquivo: null,
     };
     const newContato: Contato = {
-      id: `contato-${Date.now()}-${Math.random()}`, // Ensure unique ID
+      id: `contato-${Date.now()}-${Math.random()}`,
       nome: '',
       telefone: '',
     };
@@ -152,7 +161,6 @@ export default function FaturasPage() {
     const clienteDocRef = doc(db, 'faturas_clientes', clienteId);
     try {
       const updates: { [key: string]: any } = { [fieldPath]: value };
-      // Also update tracking fields when status or notes change
       if (fieldPath === 'status' || fieldPath === 'feedbackNotes') {
         updates.lastUpdatedAt = Timestamp.now();
         if (appUser) {
@@ -254,10 +262,10 @@ export default function FaturasPage() {
         </CardHeader>
         <CardContent>
           {/* Dashboard Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <Card className="bg-blue-500/10 border-blue-500/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Consumo - Alta Tensão</CardTitle>
+                <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Alta Tensão</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-800 dark:text-blue-300 flex items-center">
@@ -268,12 +276,34 @@ export default function FaturasPage() {
             </Card>
             <Card className="bg-green-500/10 border-green-500/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-green-600 dark:text-green-400">Total Consumo - Baixa Tensão</CardTitle>
+                <CardTitle className="text-sm font-medium text-green-600 dark:text-green-400">Baixa Tensão</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-800 dark:text-green-300 flex items-center">
                   <Zap className="h-6 w-6 mr-2" />
                   {totalKwhBaixa.toLocaleString('pt-BR')} kWh
+                </div>
+              </CardContent>
+            </Card>
+             <Card className="bg-orange-500/10 border-orange-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-orange-600 dark:text-orange-400">B Optante</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-800 dark:text-orange-300 flex items-center">
+                  <Zap className="h-6 w-6 mr-2" />
+                  {totalKwhBOptante.toLocaleString('pt-BR')} kWh
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-yellow-500/10 border-yellow-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Baixa Renda</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-800 dark:text-yellow-300 flex items-center">
+                  <Zap className="h-6 w-6 mr-2" />
+                  {totalKwhBaixaRenda.toLocaleString('pt-BR')} kWh
                 </div>
               </CardContent>
             </Card>
@@ -284,12 +314,11 @@ export default function FaturasPage() {
               <div className="flex items-center gap-2">
                 <FilterIcon className="h-4 w-4 text-muted-foreground" />
                 <Label>Filtrar por Tensão:</Label>
-                <Select value={filterTensao} onValueChange={(value: 'all' | 'alta' | 'baixa') => setFilterTensao(value)}>
+                <Select value={filterTensao} onValueChange={(value: TensaoType | 'all') => setFilterTensao(value)}>
                   <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="alta">Alta Tensão</SelectItem>
-                    <SelectItem value="baixa">Baixa Tensão</SelectItem>
+                    {TENSAO_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -329,6 +358,7 @@ export default function FaturasPage() {
                             const hasGd = cliente.unidades.some(u => u.temGeracao);
                             const isExpanded = expandedClientId === cliente.id;
                             const statusStyles = getStatusStyle(cliente.status);
+                            const tensaoLabel = TENSAO_OPTIONS.find(opt => opt.value === cliente.tensao)?.label || cliente.tensao;
 
                             return (
                                 <React.Fragment key={cliente.id}>
@@ -342,7 +372,7 @@ export default function FaturasPage() {
                                         <TableCell className="p-2 text-sm">{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
                                         <TableCell className="p-2 text-sm">{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
                                         <TableCell className="p-2 text-sm">{hasGd ? 'Sim' : 'Não'}</TableCell>
-                                        <TableCell className="p-2 text-sm">{cliente.tensao === 'alta' ? 'Alta' : 'Baixa'}</TableCell>
+                                        <TableCell className="p-2 text-sm">{tensaoLabel}</TableCell>
                                         <TableCell className="p-2 text-sm"><span className={`px-2 py-1 text-xs rounded-full text-white ${statusStyles.badge}`}>{cliente.status || 'Nenhum'}</span></TableCell>
                                         <TableCell className="p-2 text-sm">
                                             {cliente.lastUpdatedBy ? (
@@ -365,12 +395,12 @@ export default function FaturasPage() {
                                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                                                     <Input placeholder="Nome do cliente" defaultValue={cliente.nome} onBlur={(e) => handleUpdateField(cliente.id, 'nome', e.target.value)} />
                                                     <Select value={cliente.tipoPessoa} onValueChange={(value: 'pf' | 'pj' | '') => handleUpdateField(cliente.id, 'tipoPessoa', value)}><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger><SelectContent><SelectItem value="pf">PF</SelectItem><SelectItem value="pj">PJ</SelectItem></SelectContent></Select>
-                                                    <Select value={cliente.tensao} onValueChange={(value: 'alta' | 'baixa') => handleUpdateField(cliente.id, 'tensao', value)}><SelectTrigger><SelectValue placeholder="Selecione a Tensão" /></SelectTrigger><SelectContent><SelectItem value="alta">Alta Tensão</SelectItem><SelectItem value="baixa">Baixa Tensão</SelectItem></SelectContent></Select>
+                                                    <Select value={cliente.tensao} onValueChange={(value: TensaoType) => handleUpdateField(cliente.id, 'tensao', value)}><SelectTrigger><SelectValue placeholder="Selecione a Tensão" /></SelectTrigger><SelectContent>{TENSAO_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select>
                                                   </div>
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                                                   <div className="space-y-3 mb-6">
                                                       {cliente.contatos.map((contato, contatoIndex) => (
-                                                        <div key={contato.id || `${cliente.id}-contato-${contatoIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                        <div key={contato.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
                                                           <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
                                                           <div className="md:col-span-1 flex justify-end"><Button variant="ghost" size="icon" onClick={() => handleRemoveContato(cliente.id, contato)} disabled={cliente.contatos.length <= 1}><Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" /></Button></div>
@@ -380,7 +410,7 @@ export default function FaturasPage() {
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Unidades Consumidoras</h4>
                                                   <div className="space-y-3">
                                                       {cliente.unidades.map((unidade, ucIndex) => (
-                                                        <div key={unidade.id || `${cliente.id}-uc-${ucIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
+                                                        <div key={unidade.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <span className="md:col-span-1 text-center font-semibold text-muted-foreground">UC {ucIndex + 1}</span>
                                                           <div className="md:col-span-3"><Input type="number" placeholder="Consumo (kWh)" defaultValue={unidade.consumoKwh} onBlur={(e) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, consumoKwh: e.target.value } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }}/></div>
                                                           <div className="md:col-span-2 flex items-center justify-center gap-2"><Checkbox checked={unidade.temGeracao} onCheckedChange={(checked) => { const updatedUnidades = cliente.unidades.map((u) => u.id === unidade.id ? { ...u, temGeracao: !!checked } : u); handleUpdateField(cliente.id, 'unidades', updatedUnidades); }} id={`gen-${cliente.id}-${ucIndex}`}/><label htmlFor={`gen-${cliente.id}-${ucIndex}`} className="text-sm">Tem Geração?</label></div>

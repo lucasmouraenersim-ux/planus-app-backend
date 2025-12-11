@@ -18,14 +18,16 @@ export interface Contato {
 
 export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | 'Fechado';
 
+export type TensaoType = 'alta' | 'baixa' | 'b_optante' | 'baixa_renda';
+
 export interface FaturaCliente {
   id: string; // Document ID from Firestore
   nome: string;
   tipoPessoa: 'pf' | 'pj' | '';
-  tensao: 'alta' | 'baixa';
+  tensao: TensaoType;
   unidades: UnidadeConsumidora[];
   contatos: Contato[];
-  createdAt: Timestamp; // To sort by creation time if needed
+  createdAt: Timestamp | string; // Use string on client for serializability
   // New feedback fields
   status: FaturaStatus;
   feedbackNotes?: string;
@@ -33,5 +35,5 @@ export interface FaturaCliente {
     uid: string;
     name: string;
   };
-  lastUpdatedAt?: Timestamp;
+  lastUpdatedAt?: Timestamp | string;
 }
