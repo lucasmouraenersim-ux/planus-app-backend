@@ -382,7 +382,10 @@ export default function FaturasPage() {
                                                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                                             </Button>
                                         </TableCell>
-                                        <TableCell className="p-2 font-medium text-sm">{cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}</TableCell>
+                                        <TableCell className="p-2 font-medium text-sm">
+                                            {cliente.tensao === 'alta' ? 'A - ' : 'B - '}
+                                            {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
+                                        </TableCell>
                                         <TableCell className="p-2 text-sm">{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
                                         <TableCell className="p-2 text-sm">{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
                                         <TableCell className="p-2 text-sm">{hasGd ? 'Sim' : 'Não'}</TableCell>
