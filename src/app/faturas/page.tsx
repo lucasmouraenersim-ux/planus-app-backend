@@ -374,6 +374,10 @@ export default function FaturasPage() {
                             const statusStyles = getStatusStyle(cliente.status);
                             const tensaoLabel = TENSAO_OPTIONS.find(opt => opt.value === cliente.tensao)?.label || cliente.tensao;
 
+                            const isAltaTensao = cliente.tensao === 'alta';
+                            const prefixText = isAltaTensao ? 'A' : 'B';
+                            const prefixBg = isAltaTensao ? 'bg-blue-500' : 'bg-green-500';
+
                             return (
                                 <React.Fragment key={cliente.id}>
                                     <TableRow onClick={() => toggleExpand(cliente.id)} className={`cursor-pointer hover:bg-muted/50 border-l-4 ${statusStyles.border}`}>
@@ -383,8 +387,12 @@ export default function FaturasPage() {
                                             </Button>
                                         </TableCell>
                                         <TableCell className="p-2 font-medium text-sm">
-                                            {cliente.tensao === 'alta' ? 'A - ' : 'B - '}
-                                            {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs ${prefixBg}`}>
+                                                    {prefixText}
+                                                </div>
+                                                {cliente.nome || <span className="italic text-muted-foreground">Novo Cliente</span>}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="p-2 text-sm">{totalConsumo.toLocaleString('pt-BR')} kWh</TableCell>
                                         <TableCell className="p-2 text-sm">{cliente.contatos[0]?.telefone || 'N/A'}</TableCell>
