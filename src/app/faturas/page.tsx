@@ -413,7 +413,7 @@ export default function FaturasPage() {
                                                   </div>
                                                   <h4 className="font-semibold text-sm mb-2 text-muted-foreground">Contatos</h4>
                                                   <div className="space-y-3 mb-6">
-                                                      {cliente.contatos.map((contato, contatoIndex) => (
+                                                      {cliente.contatos.map((contato) => (
                                                         <div key={contato.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2 border rounded bg-background">
                                                           <div className="md:col-span-5 flex items-center"><UserIcon className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Nome do Contato" defaultValue={contato.nome} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, nome: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }} /></div>
                                                           <div className="md:col-span-6 flex items-center"><Phone className="h-4 w-4 mr-2 text-muted-foreground"/><Input placeholder="Telefone" defaultValue={contato.telefone} onBlur={(e) => { const updatedContatos = cliente.contatos.map((c) => c.id === contato.id ? { ...c, telefone: e.target.value } : c); handleUpdateField(cliente.id, 'contatos', updatedContatos); }}/></div>
