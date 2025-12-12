@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -85,7 +84,7 @@ function ProposalPageContent() {
     distributor: searchParams.get("distribuidora") || "Distribuidora Local",
     comercializadora: searchParams.get("comercializadora") || "BC Energia",
     avgConsumption: parseFloat(searchParams.get("item1Quantidade") || "0"),
-    currentPrice: parseFloat(searchParams.get("currentTariff") || "0"),
+    currentPrice: parseFloat(searchParams.get("tariff") || "0"), // CORREÇÃO APLICADA AQUI
     discountRate: parseFloat(searchParams.get("desconto") || "0"),
     coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
     address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
