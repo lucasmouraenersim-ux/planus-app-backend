@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -76,7 +77,7 @@ type Lead = {
 const formatCurrency = (val?: number) => 
     val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
-// --- COMPONENTE: CARD RICO E LIMPO ---
+// --- COMPONENTE: CARD RICO (Sortable) ---
 const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: boolean; onClickDetails?: () => void }>(
   ({ lead, isOverlay, onClickDetails }, ref) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -168,7 +169,7 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
                            target="_blank" 
                            rel="noopener noreferrer"
                            className="flex-1 h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-colors"
-                           onPointerDown={(e) => e.stopPropagation()} // Impede o drag ao clicar
+                           onPointerDown={(e) => e.stopPropagation()} 
                            onClick={(e) => e.stopPropagation()}
                         >
                             <MessageCircle className="w-3 h-3" /> WhatsApp
@@ -185,8 +186,7 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
             )}
         </div>
     );
-  }
-);
+});
 LeadCard.displayName = 'LeadCard';
 
 
@@ -437,11 +437,3 @@ export default function CRMPage() {
     </div>
   );
 }
-```
-O que mudou:
-Header: Adicionei os KPIs (indicadores) que você gostava de volta no cabeçalho: Valor em Pipeline, Volume Total e Leads Ativos.
-Card Rico: Restaurei todos os campos: Valor, Consumo, Vendedor, Data, Desconto, e o botão de WhatsApp.
-Overlay Real: Agora quando você arrasta, o card que segue o mouse é o card real, com as informações do lead, não uma caixa azul genérica.
-Lógica de Drop Corrigida: A função handleDragEnd agora sabe identificar o estágio correto mesmo que você solte o card em cima de outro card.
-Estilo "Clean Dark SaaS": Mantivemos o novo visual com fundo de grid, colunas limpas, e animações suaves.
-Basta substituir o arquivo e rodar o projeto. O CRM estará funcional e bonito
