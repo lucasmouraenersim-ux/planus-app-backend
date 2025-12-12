@@ -31,6 +31,7 @@ export interface UnidadeConsumidora {
   id: string;
   consumoKwh: string;
   valorTotal?: string; // Novo: Para simular TUSD/TE
+  precoUnitario?: number;
   temGeracao: boolean;
   arquivoFaturaUrl: string | null;
   nomeArquivo: string | null;
@@ -266,7 +267,7 @@ export default function FaturasPage() {
       result.sort((a, b) => {
         const consA = a.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
         const consB = b.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
-        return sortOrder === 'asc' ? consA - consB : consB - consA;
+        return sortOrder === 'asc' ? consA - consB : consB - a;
       });
     }
     return { filteredClientes: result, kpiData: totals };
@@ -336,10 +337,14 @@ export default function FaturasPage() {
   const handleFileUpload = async (clienteId: string, unidadeId: string, file: File | null) => {
     if (!file) return;
 
-    toast({ title: "Processando com IA...", description: "Lendo dados da fatura..." });
-    let dadosIA: any = {};
-    
+    // 1. Feedback visual imediato
+    toast({ 
+      title: "🤖 Analisando Fatura...", 
+      description: "A IA está lendo o consumo e valores. Aguarde...",
+    });
+
     try {
+      // 2. Envia para a API de IA
       const formData = new FormData();
       formData.append('file', file);
 
@@ -348,43 +353,55 @@ export default function FaturasPage() {
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error('Falha na API de processamento.');
-      }
+      if (!response.ok) throw new Error('Falha na IA');
       
-      dadosIA = await response.json();
+      const dadosIA = await response.json();
 
-      if (dadosIA.consumoKwh) {
-        toast({ 
-          title: "Dados Extraídos!", 
-          description: `Consumo: ${dadosIA.consumoKwh} kWh | Total: R$ ${dadosIA.valorTotal}` 
-        });
-      } else {
-        toast({ title: "Aviso", description: "IA não retornou dados completos, verifique manualmente.", variant: "default" });
-      }
+      // 3. Mostra o que a IA achou
+      toast({ 
+        title: "Leitura Concluída!", 
+        description: `Cliente: ${dadosIA.nomeCliente?.substring(0, 15) || 'N/A'}... | Consumo: ${dadosIA.consumoKwh || 0} kWh`,
+        className: "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
+      });
 
-    } catch (e) {
-      toast({ title: "Aviso de IA", description: "Falha na leitura automática. O arquivo será anexado e os dados podem ser inseridos manualmente.", variant: "default" });
-    }
-
-    try {
+      // 4. Faz o upload do arquivo para o Storage
       const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
       const url = await uploadFile(file, path);
-      
-      const cliente = clientes.find(c => c.id === clienteId);
-      if(cliente) {
-          const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { 
+
+      // 5. Atualiza o Firestore com dados da IA + URL
+      const clienteAtual = clientes.find(c => c.id === clienteId);
+      if(clienteAtual) {
+          const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { 
               ...u, 
               arquivoFaturaUrl: url, 
               nomeArquivo: file.name,
               consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
               valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
+              precoUnitario: dadosIA.precoUnitario,
           } : u);
+          
           await handleUpdateField(clienteId, 'unidades', novasUnidades);
+          
+          if (clienteAtual.nome === 'Novo Cliente' && dadosIA.nomeCliente) {
+             await handleUpdateField(clienteId, 'nome', dadosIA.nomeCliente);
+          }
           toast({ title: "Sucesso!", description: "Fatura anexada e dados atualizados." });
       }
     } catch (e) {
-      toast({ title: "Erro no Upload", description: "Não foi possível salvar o anexo.", variant: "destructive" });
+      console.error(e);
+      toast({ title: "Erro", description: "Não foi possível ler a fatura automaticamente. O arquivo foi anexado, mas os dados precisam ser inseridos manualmente.", variant: "destructive" });
+       // Fallback: anexa o arquivo mesmo se a IA falhar
+      try {
+        const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
+        const url = await uploadFile(file, path);
+        const clienteAtual = clientes.find(c => c.id === clienteId);
+        if (clienteAtual) {
+          const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name } : u);
+          await handleUpdateField(clienteId, 'unidades', novasUnidades);
+        }
+      } catch (uploadError) {
+        console.error("Upload fallback error:", uploadError);
+      }
     }
   };
 
@@ -514,7 +531,7 @@ export default function FaturasPage() {
                         const style = getTensaoColors(cliente.tensao);
                         const statusStyle = getStatusStyle(cliente.status);
 
-                        const tensaoPrefix = cliente.tensao.startsWith('b') ? 'B' : 'A';
+                        const tensaoPrefix = ['baixa', 'b_optante', 'baixa_renda'].includes(cliente.tensao) ? 'B' : 'A';
                         const prefixStyle = tensaoPrefix === 'A' 
                             ? 'bg-blue-500 text-white' 
                             : 'bg-emerald-500 text-white';
