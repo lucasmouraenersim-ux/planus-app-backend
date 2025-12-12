@@ -1,16 +1,14 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { statesData } from '@/data/state-data';
 import type { StateInfo } from "@/types";
-
 
 interface BrazilMapGraphicProps {
   selectedStateCode: string | null;
   hoveredStateCode: string | null;
   onStateClick: (stateCode: string) => void;
   onStateHover: (stateCode: string | null) => void;
-  // NOVAS PROPS
   activeStates?: string[]; // Lista de siglas ativas (ex: ['MT', 'GO'])
   activeColor?: string;    // Cor do parceiro selecionado
 }
