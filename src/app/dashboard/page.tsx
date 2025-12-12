@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
@@ -10,7 +11,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { calculateSavings } from '@/lib/discount-calculator';
 import { statesData } from '@/data/state-data';
-import { HandHelping, TrendingUp, Zap, MapPin, DollarSign, Percent, BarChart3, ChevronRight, Sparkles, X } from 'lucide-react';
+import { HandHelping, TrendingUp, Zap, MapPin, DollarSign, Percent, BarChart3, ChevronRight, Sparkles, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
