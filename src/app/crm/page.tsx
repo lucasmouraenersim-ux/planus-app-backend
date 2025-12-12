@@ -1,40 +1,53 @@
+
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent 
+  DndContext, 
+  DragOverlay, 
+  closestCorners, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors, 
+  DragStartEvent, 
+  DragEndEvent,
+  DragOverEvent,
+  defaultDropAnimationSideEffects,
+  DropAnimation
 } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { 
+  SortableContext, 
+  sortableKeyboardCoordinates, 
+  verticalListSortingStrategy, 
+  useSortable 
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, onSnapshot, orderBy, Timestamp, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { updateCrmLeadStage } from '@/lib/firebase/firestore'; // Importe sua função de update
+import { updateCrmLeadStage } from '@/lib/firebase/firestore'; 
 
 import { 
-  Users, Filter, Plus, Zap, Loader2, Search, MoreHorizontal, Calendar, 
-  DollarSign, Phone, LayoutGrid, List as ListIcon, GripVertical 
+  Users, Filter, Plus, Loader2, Search, Calendar, 
+  LayoutGrid, List as ListIcon, GripVertical 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
-// --- TIPOS (Simplificados para o exemplo, use os seus oficiais) ---
+// --- TIPOS ---
 type Lead = {
   id: string;
   name: string;
-  stageId: string; // 'contato', 'proposta', 'negociacao', 'fechado'
+  stageId: string;
   valueAfterDiscount?: number;
   kwh?: number;
   sellerName?: string;
-  phone?: string;
   createdAt: string;
 };
 
@@ -46,30 +59,26 @@ const STAGES = [
   { id: 'perdido', title: 'Perdido', color: 'bg-red-500' }
 ];
 
-// --- COMPONENTES DO DRAG & DROP ---
-
-// 1. O Cartão Arrastável (Sortable Item)
-function SortableLeadCard({ lead, onClick }: { lead: Lead, onClick: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lead.id, data: { ...lead } });
-  
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-    zIndex: isDragging ? 999 : 'auto',
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="group relative mb-3">
-      {/* Card Visual */}
-      <div 
+// --- COMPONENTE: CARD DO LEAD (USADO NA LISTA E NO OVERLAY) ---
+const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: boolean; onClick?: () => void }>(
+  ({ lead, isOverlay, onClick }, ref) => {
+    return (
+      <div
+        ref={ref}
         onClick={onClick}
-        className="bg-slate-800/60 hover:bg-slate-800 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 shadow-lg transition-all cursor-pointer backdrop-blur-sm group-hover:shadow-cyan-900/20"
+        className={`
+            relative p-4 rounded-xl border transition-all cursor-grab active:cursor-grabbing
+            ${isOverlay 
+                ? 'bg-slate-800 border-cyan-500 shadow-2xl scale-105 rotate-2 z-50' 
+                : 'bg-slate-800/60 border-white/5 hover:border-cyan-500/50 hover:bg-slate-800 shadow-lg'
+            }
+        `}
       >
-        {/* Drag Handle (Grip) */}
-        <div {...attributes} {...listeners} className="absolute top-3 right-3 p-1 text-slate-600 hover:text-white cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity">
-           <GripVertical className="w-4 h-4" />
-        </div>
+        {!isOverlay && (
+             <div className="absolute top-3 right-3 p-1 text-slate-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <GripVertical className="w-4 h-4" />
+             </div>
+        )}
 
         <div className="flex justify-between items-start mb-2 pr-6">
            <h4 className="font-bold text-white text-sm truncate">{lead.name}</h4>
@@ -77,7 +86,11 @@ function SortableLeadCard({ lead, onClick }: { lead: Lead, onClick: () => void }
 
         <div className="space-y-2">
             <div className="flex items-center text-xs text-slate-400 gap-2">
-                <Calendar className="w-3 h-3" /> {format(parseISO(lead.createdAt), 'dd/MM HH:mm')}
+                <Calendar className="w-3 h-3" /> 
+                {/* Proteção para data inválida */}
+                {lead.createdAt && !isNaN(new Date(lead.createdAt).getTime()) 
+                    ? format(new Date(lead.createdAt), 'dd/MM HH:mm') 
+                    : 'Data N/A'}
             </div>
             
             <div className="flex justify-between items-center pt-2 border-t border-white/5 mt-2">
@@ -99,17 +112,38 @@ function SortableLeadCard({ lead, onClick }: { lead: Lead, onClick: () => void }
             )}
         </div>
       </div>
+    );
+  }
+);
+LeadCard.displayName = "LeadCard";
+
+
+// --- COMPONENTE: ITEM ARRASTÁVEL ---
+function SortableItem({ lead, onClick }: { lead: Lead, onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+      id: lead.id,
+      data: { type: 'Lead', lead } // Passamos o lead completo nos dados
+  });
+  
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-3 group">
+        <LeadCard lead={lead} onClick={onClick} />
     </div>
   );
 }
 
-// 2. A Coluna (Droppable)
+// --- COMPONENTE: COLUNA ---
 function KanbanColumn({ id, title, color, leads, onEditLead }: { id: string, title: string, color: string, leads: Lead[], onEditLead: (l: Lead) => void }) {
   const totalValue = leads.reduce((acc, l) => acc + (l.valueAfterDiscount || 0), 0);
   
   return (
     <div className="flex flex-col h-full min-w-[300px] w-[300px] bg-slate-900/30 rounded-2xl border border-white/5 backdrop-blur-sm">
-      {/* Header da Coluna */}
       <div className={`p-4 rounded-t-2xl border-b border-white/5 ${color} bg-opacity-10`}>
         <div className="flex justify-between items-center mb-1">
             <h3 className={`font-bold text-sm uppercase tracking-wider ${color.replace('bg-', 'text-')}`}>{title}</h3>
@@ -120,14 +154,14 @@ function KanbanColumn({ id, title, color, leads, onEditLead }: { id: string, tit
         </div>
       </div>
 
-      {/* Área de Drop */}
       <div className="flex-1 p-3 overflow-y-auto custom-scrollbar">
         <SortableContext id={id} items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
             {leads.map(lead => (
-                <SortableLeadCard key={lead.id} lead={lead} onClick={() => onEditLead(lead)} />
+                <SortableItem key={lead.id} lead={lead} onClick={() => onEditLead(lead)} />
             ))}
+            {/* Área vazia que garante que a coluna aceite drops mesmo sem itens */}
             {leads.length === 0 && (
-                <div className="h-24 border-2 border-dashed border-slate-800 rounded-xl flex items-center justify-center text-slate-600 text-xs">
+                <div className="h-full min-h-[100px] border-2 border-dashed border-slate-800/50 rounded-xl flex items-center justify-center text-slate-600 text-xs">
                     Arraste para cá
                 </div>
             )}
@@ -142,70 +176,94 @@ function KanbanColumn({ id, title, color, leads, onEditLead }: { id: string, tit
 
 export default function CRMPage() {
   const { toast } = useToast();
-  const { appUser } = useAuth();
-  
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null); // ID do card sendo arrastado
+  const [activeLead, setActiveLead] = useState<Lead | null>(null); // Lead sendo arrastado
   const [filterText, setFilterText] = useState('');
 
-  // Sensores para Drag & Drop (Mouse e Touch)
+  // Sensores (Mouse e Touch) - Ajustado activationConstraint para 5px para não confundir com clique
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Move 5px para iniciar drag
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), 
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Carregar Dados
   useEffect(() => {
     const q = query(collection(db, "crm_leads"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
-        const data = snap.docs.map(d => {
-            const docData = d.data();
-            return { 
-                id: d.id, 
-                ...docData,
-                // Garantir que timestamps sejam strings ISO
-                createdAt: (docData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-            } as Lead
-        });
+        const data = snap.docs.map(d => ({ 
+            id: d.id, 
+            ...d.data(),
+            // Garantir que datas venham como string ISO para evitar erros
+            createdAt: d.data().createdAt instanceof Timestamp ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
+        } as Lead));
         setLeads(data);
         setIsLoading(false);
     });
     return () => unsub();
   }, []);
 
-  // Lógica de Movimentação (Drag End)
+  const handleDragStart = (event: DragStartEvent) => {
+      if (event.active.data.current?.type === 'Lead') {
+          setActiveLead(event.active.data.current.lead);
+      }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveDragId(null);
+    setActiveLead(null);
 
     if (!over) return;
 
-    const leadId = active.id as string;
-    const newStageId = over.id as string; // O ID da coluna é o StageID
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
-    // Encontra o lead atual
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead || lead.stageId === newStageId) return; // Se não mudou de coluna, ignora
+    if (activeId === overId) return;
 
-    // 1. Atualização Otimista (UI Imediata)
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stageId: newStageId } : l));
+    // Encontrar o lead que está sendo movido
+    const activeLead = leads.find(l => l.id === activeId);
+    if (!activeLead) return;
 
-    // 2. Atualiza no Firebase
-    try {
-        await updateCrmLeadStage(leadId, newStageId as any); // Sua função de update existente
-        toast({ title: "Lead Movido", description: `Mudou para ${STAGES.find(s => s.id === newStageId)?.title}` });
-    } catch (error) {
-        toast({ title: "Erro", description: "Falha ao mover lead.", variant: "destructive" });
-        // Reverte se der erro (opcional)
+    // Descobrir para qual ESTÁGIO ele foi
+    let newStageId = '';
+
+    // Cenário 1: Soltou em cima de uma Coluna vazia ou na área da coluna
+    if (STAGES.some(s => s.id === overId)) {
+        newStageId = overId;
+    } 
+    // Cenário 2: Soltou em cima de outro Card (Lead)
+    else {
+        const overLead = leads.find(l => l.id === overId);
+        if (overLead) {
+            newStageId = overLead.stageId;
+        }
+    }
+
+    if (newStageId && newStageId !== activeLead.stageId) {
+        // 1. Atualização Otimista (UI muda na hora)
+        setLeads(prev => prev.map(l => l.id === activeId ? { ...l, stageId: newStageId } : l));
+
+        // 2. Atualização no Backend
+        try {
+            await updateCrmLeadStage(activeId, newStageId as any);
+            const stageName = STAGES.find(s => s.id === newStageId)?.title;
+            toast({ title: "Lead Movido", description: `Mudou para: ${stageName}`, className: "bg-slate-800 border-emerald-500 text-emerald-400" });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Erro", description: "Falha ao mover lead.", variant: "destructive" });
+            // Reverter em caso de erro (poderia refetch do firebase, mas o listener já faz isso)
+        }
     }
   };
+  
+  // Efeito de drop suave
+  const dropAnimation: DropAnimation = {
+    sideEffects: defaultDropAnimationSideEffects({
+      styles: {
+        active: { opacity: '0.5' },
+      },
+    }),
+  };
 
-  const handleDragStart = (event: DragStartEvent) => {
-      setActiveDragId(event.active.id as string);
-  }
-
-  // Filtragem
   const filteredLeads = useMemo(() => {
       if(!filterText) return leads;
       return leads.filter(l => l.name.toLowerCase().includes(filterText.toLowerCase()));
@@ -216,11 +274,10 @@ export default function CRMPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans flex flex-col overflow-hidden">
-      
-      {/* Styles Globais */}
       <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
       {/* Header */}
@@ -229,20 +286,12 @@ export default function CRMPage() {
              <div className="p-2 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-lg shadow-lg"><Users className="w-5 h-5 text-white" /></div>
              <h1 className="text-xl font-bold text-white">Pipeline de Vendas</h1>
          </div>
-         
          <div className="flex items-center gap-4">
              <div className="relative">
                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                 <Input 
-                    placeholder="Buscar lead..." 
-                    className="pl-9 bg-slate-800 border-white/10 w-64 focus:ring-cyan-500 transition-all" 
-                    value={filterText}
-                    onChange={e => setFilterText(e.target.value)}
-                 />
+                 <Input placeholder="Buscar lead..." className="pl-9 bg-slate-800 border-white/10 w-64 focus:ring-cyan-500 transition-all" value={filterText} onChange={e => setFilterText(e.target.value)} />
              </div>
-             <Button className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-900/20">
-                 <Plus className="w-4 h-4 mr-2" /> Novo Lead
-             </Button>
+             <Button className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-900/20"><Plus className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
       </header>
 
@@ -258,29 +307,23 @@ export default function CRMPage() {
                 {STAGES.map(stage => (
                     <KanbanColumn 
                         key={stage.id}
-                        id={stage.id} // O ID da coluna deve ser o StageID para o drop funcionar
+                        id={stage.id} 
                         title={stage.title}
                         color={stage.color}
                         leads={filteredLeads.filter(l => l.stageId === stage.id)}
-                        onEditLead={(lead) => console.log("Editar", lead)} // Conecte sua função handleOpenForm aqui
+                        onEditLead={(lead) => console.log("Editar", lead)}
                     />
                 ))}
             </div>
 
-            {/* Overlay (O card "fantasma" que segue o mouse) */}
-            <DragOverlay>
-                {activeDragId ? (
-                    <div className="opacity-90 rotate-3 cursor-grabbing scale-105">
-                         {/* Reutilizando estrutura visual para o overlay */}
-                         <div className="bg-slate-800 p-4 rounded-xl border border-cyan-500 shadow-2xl">
-                             <h4 className="font-bold text-white">Movendo Lead...</h4>
-                         </div>
-                    </div>
+            {/* Overlay: O card visual que segue o mouse */}
+            <DragOverlay dropAnimation={dropAnimation}>
+                {activeLead ? (
+                    <LeadCard lead={activeLead} isOverlay />
                 ) : null}
             </DragOverlay>
          </DndContext>
       </div>
-
     </div>
   );
 }
