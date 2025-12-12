@@ -12,7 +12,7 @@ import {
   Filter as FilterIcon, Zap, Home, AlertCircle, 
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   MoreHorizontal, Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail, Search
+  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -21,6 +21,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from 'recharts';
 import { GoogleMap, useJsApiLoader, OverlayView, HeatmapLayer } from '@react-google-maps/api';
+import { unlockContactAction } from '@/actions/unlockContact';
+import { TermsModal } from '@/components/TermsModal';
 
 // --- CONFIGURAÇÃO GOOGLE MAPS ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -53,7 +55,6 @@ export interface FaturaCliente {
   contatos: { id: string, nome: string, telefone: string, email?: string }[];
   status?: FaturaStatus;
   feedbackNotes?: string;
-  // NOVO: Controle de "Compra" do lead
   isUnlocked?: boolean; 
   createdAt: string | Timestamp; 
   lastUpdatedBy?: { uid: string; name: string };
@@ -129,10 +130,10 @@ const MiniLineChart = ({ color }: { color: string }) => {
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
-    <div className={`glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
+    <div className={'glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all'}>
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className={`text-xs font-bold uppercase tracking-wider text-slate-400`}>{title}</p>
+          <p className={'text-xs font-bold uppercase tracking-wider text-slate-400'}>{title}</p>
           <h3 className="text-2xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')} <span className="text-xs">{unit}</span></h3>
         </div>
         <div className={`p-2 rounded-lg ${styles.text} bg-white/5`}><Icon className="w-5 h-5" /></div>
@@ -152,8 +153,7 @@ export default function FaturasPage() {
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // States de Negócio (Wallet)
-  const [userCredits, setUserCredits] = useState(50); // Simulação de créditos do usuário
+  const { appUser, updateAppUser, userAppRole } = useAuth();
   
   // UI States
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
@@ -180,25 +180,53 @@ export default function FaturasPage() {
     return () => unsub();
   }, []);
 
-  // Lógica de Compra de Lead
   const handleUnlockLead = async (clienteId: string) => {
-      if (userCredits < COST_PER_UNLOCK) {
-          toast({ title: "Saldo Insuficiente", description: "Você precisa de mais créditos para desbloquear este contato.", variant: "destructive" });
+      if (!appUser) return;
+
+      const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
+      const currentCredits = appUser.credits || 0;
+
+      if (!isAdmin && currentCredits < COST_PER_UNLOCK) {
+          toast({ title: "Saldo Insuficiente", description: "Recarregue seus créditos para continuar.", variant: "destructive" });
           return;
       }
 
-      // Simulação de Desconto e Liberação no Banco
-      setUserCredits(prev => prev - COST_PER_UNLOCK);
-      
-      // Atualiza no Firebase (Na vida real, isso seria uma chamada segura de backend)
-      await updateDoc(doc(db, 'faturas_clientes', clienteId), { isUnlocked: true });
-      
-      toast({ title: "Contato Liberado!", description: `-${COST_PER_UNLOCK} créditos descontados. Dados revelados.` });
+      toast({ title: "Processando...", description: isAdmin ? "Acesso Admin..." : "Validando saldo..." });
+
+      try {
+          const result = await unlockContactAction(appUser.uid, clienteId);
+
+          if (result.success) {
+              const newUnlockedList = [...(appUser.unlockedLeads || []), clienteId];
+              
+              if(appUser) {
+                updateAppUser({
+                    ...appUser,
+                    credits: isAdmin ? appUser.credits : (appUser.credits || 0) - COST_PER_UNLOCK,
+                    unlockedLeads: newUnlockedList
+                });
+              }
+
+              setClientes(prev => prev.map(c => 
+                  c.id === clienteId ? { ...c, isUnlocked: true } : c
+              ));
+
+              toast({ title: "Sucesso", description: result.message, className: "bg-emerald-500 text-white" });
+          } else {
+              toast({ title: "Erro", description: result.message, variant: "destructive" });
+          }
+      } catch (error) {
+          toast({ title: "Erro", description: "Falha na comunicação com o servidor.", variant: "destructive" });
+      }
   };
 
+
   const handleBuyCredits = () => {
-      setUserCredits(prev => prev + 50);
-      toast({ title: "Compra Realizada", description: "50 Créditos adicionados à sua carteira." });
+    if(!appUser) return;
+    const newCredits = (appUser.credits || 0) + 50;
+    updateDoc(doc(db, 'users', appUser.uid), { credits: newCredits });
+    updateAppUser({ ...appUser, credits: newCredits });
+    toast({ title: "Compra Realizada", description: "50 Créditos adicionados à sua carteira." });
   }
 
   // Filter Logic
@@ -208,6 +236,13 @@ export default function FaturasPage() {
     const cidades = new Set<string>();
 
     clientes.forEach(c => {
+        const isUnlockedForUser = appUser?.unlockedLeads?.includes(c.id);
+        const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
+
+        if (isAdmin || isUnlockedForUser) {
+          c.isUnlocked = true;
+        }
+
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
              const consumo = Number(u.consumoKwh) || 0;
@@ -220,7 +255,7 @@ export default function FaturasPage() {
     if (filterCidade !== 'all') result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
 
     return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
-  }, [clientes, searchTerm, filterTensao, filterCidade]);
+  }, [clientes, searchTerm, filterTensao, filterCidade, appUser, userAppRole]);
 
   // Heatmap Data
   const heatmapData = useMemo(() => {
@@ -308,6 +343,7 @@ export default function FaturasPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
+      <TermsModal />
       <style jsx global>{`
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         .blur-text { filter: blur(4px); user-select: none; pointer-events: none; opacity: 0.6; }
@@ -322,15 +358,14 @@ export default function FaturasPage() {
           </div>
           
           <div className="flex items-center gap-6">
-             {/* Carteira de Créditos */}
              <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-lg shadow-yellow-900/10 cursor-pointer hover:bg-slate-800 transition-colors" onClick={handleBuyCredits} title="Clique para recarregar (Simulado)">
                 <Coins className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-bold text-yellow-100">{userCredits} Créditos</span>
+                <span className="text-sm font-bold text-yellow-100">{appUser?.credits || 0} Créditos</span>
                 <PlusCircle className="w-3 h-3 text-yellow-500 ml-1" />
              </div>
 
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}>
-                <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button>
+                <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><SearchIcon className="w-5 h-5" /></button>
                 <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
              </div>
           </div>
@@ -530,7 +565,6 @@ export default function FaturasPage() {
 
                   {/* RESTANTE DO DRAWER (IGUAL ANTES: MAPA, UCS, ETC) */}
                   <div className="space-y-4">
-                      {/* ... Código das UCs (Mantido igual) ... */}
                       {selectedCliente.unidades.map((uc, i) => (
                           <div key={uc.id} className="bg-slate-800/40 p-4 rounded-lg border border-white/5">
                               <div className="flex justify-between mb-2">
@@ -540,17 +574,12 @@ export default function FaturasPage() {
                               <div className="flex gap-2 mb-3">
                                   <Input placeholder="Consumo" defaultValue={uc.consumoKwh} className="h-8 text-xs bg-slate-900 border-white/10" onBlur={e => {const n=[...selectedCliente.unidades];n[i].consumoKwh=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} />
                               </div>
-                              {/* ... (código para geocode e upload mantido) ... */}
-                              <label className={`flex items-center justify-center w-full py-3 border border-dashed rounded-lg cursor-pointer transition-all ${uc.arquivoFaturaUrl ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400' : 'border-slate-600 hover:border-cyan-500 hover:bg-slate-800 text-slate-400'}`}>
-                                  {uc.arquivoFaturaUrl ? <Check className="w-4 h-4 mr-2" /> : <Upload className="w-4 h-4 mr-2" />} {uc.arquivoFaturaUrl ? 'Fatura OK' : 'Upload PDF (IA)'}
-                                  <input type="file" className="hidden" onChange={(e) => handleFileUpload(selectedCliente.id, uc.id, e.target.files?.[0] || null)} />
-                              </label>
                           </div>
                       ))}
                   </div>
                </div>
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{userCredits}cr</strong></div>
+                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.credits || 0}cr</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
