@@ -29,7 +29,6 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const { appUser, isLoadingAuth } = useAuth();
     
     const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/register';
-    // Adicionamos '/hub' aqui para ele ser tratado como uma "página cheia" sem sidebar
     const isImmersivePage = pathname === '/hub'; 
 
     useEffect(() => {
@@ -46,15 +45,12 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         );
     }
     
-    // Se não estiver logado ou for página pública
     if (!appUser && isPublicPage) return <>{children}</>;
 
-    // SE FOR O HUB (Imersivo): Renderiza sem SidebarProvider
     if (appUser && isImmersivePage) {
         return <>{children}</>;
     }
 
-    // Se for o resto do sistema: Renderiza com Sidebar
     if (appUser) {
         return (
             <SidebarProvider defaultOpen={true}>
@@ -87,7 +83,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
         return map[role || ''] || "Usuário";
     };
 
-    // Estilo do Botão do Menu (Ativo/Inativo)
     const getMenuClass = (isActive: boolean) => cn(
         "transition-all duration-200 font-medium tracking-wide",
         isActive 
@@ -100,7 +95,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
         isActive ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" : "text-slate-500 group-hover:text-slate-300"
     );
 
-    // Verificações de permissão
     const isAdminOrSuper = userAppRole === 'admin' || userAppRole === 'superadmin';
     const isSeller = userAppRole === 'vendedor';
 
@@ -110,26 +104,25 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
             
             <Sidebar collapsible="icon" className="border-r border-white/5 bg-[#020617]">
                 
-                {/* Header Sidebar */}
                 <div className="h-16 flex items-center justify-center border-b border-white/5 bg-[#020617]">
                     <Link href="/hub" className="w-full flex justify-center">
                         {sidebarState === 'expanded' ? (
-                            <div className="flex items-center gap-2 cursor-pointer animate-in fade-in zoom-in duration-300">
-                                <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-                                    <Zap className="h-5 w-5 text-white fill-white" />
-                                </div>
-                                <span className="font-heading font-bold text-xl tracking-tight text-white">Sent<span className="text-cyan-500">Energia</span></span>
-                            </div>
+                             <div className="flex items-center gap-2 cursor-pointer animate-in fade-in">
+                                 <img 
+                                    src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/b0c93c3d8a644f4a5c54974a14b804bab886dcac/LOGO_LOGO_BRANCA.png" 
+                                    alt="Planus Energia" 
+                                    className="h-8 w-auto object-contain"
+                                 />
+                             </div>
                         ) : (
                             <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg cursor-pointer">
-                                <Zap className="h-5 w-5 text-white fill-white" />
+                                 <Zap className="h-5 w-5 text-white fill-white" />
                             </div>
                         )}
                     </Link>
                 </div>
 
 
-                {/* Profile Card */}
                 {sidebarState === 'expanded' && (
                     <div className="mx-4 mt-6 p-3 rounded-xl bg-slate-900/50 border border-white/5 flex items-center gap-3 mb-2 animate-in slide-in-from-left-4 fade-in">
                         <Avatar className="h-10 w-10 border-2 border-cyan-500/30">
@@ -146,7 +139,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                 <SidebarContent className="px-2 mt-2 space-y-1 custom-scrollbar">
                     <SidebarMenu>
                         
-                        {/* GRUPO 1: FERRAMENTAS ESSENCIAIS */}
                         <MenuSectionLabel label="Ferramentas" collapsed={sidebarState === 'collapsed'} />
                         
                         {userAppRole !== 'advogado' && (
@@ -162,7 +154,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
 
                         {userAppRole !== 'advogado' && (
                             <>
-                                {/* GRUPO 2: COMERCIAL & VENDAS */}
                                 <MenuSectionLabel label="Comercial" collapsed={sidebarState === 'collapsed'} />
 
                                 {isSeller && (
@@ -182,7 +173,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                                     </>
                                 )}
 
-                                {/* GRUPO 3: GESTÃO & EQUIPE */}
                                 <MenuSectionLabel label="Gestão" collapsed={sidebarState === 'collapsed'} />
                                 
                                 {isAdminOrSuper && (
@@ -204,12 +194,11 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                                 )}
 
                                 {appUser?.canViewCareerPlan && (
-                                    <MenuItem href="/career-plan" icon={Rocket} label="Plano de Carreira" active={currentPathname.startsWith('/career-plan')} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
+                                    <MenuItem href="/plano-carreira" icon={Rocket} label="Plano de Carreira" active={currentPathname.startsWith('/plano-carreira')} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                 )}
                             </>
                         )}
                         
-                        {/* GRUPO 4: CONTA */}
                         <MenuSectionLabel label="Conta" collapsed={sidebarState === 'collapsed'} />
                         <MenuItem href="/profile" icon={CircleUserRound} label="Meu Perfil" active={currentPathname === '/profile'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                         <MenuItem href="/sobre" icon={Info} label="Sobre" active={currentPathname === '/sobre'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
@@ -224,16 +213,13 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                 </SidebarFooter>
             </Sidebar>
 
-            {/* CONTEÚDO PRINCIPAL */}
             <SidebarInset className="bg-[#020617] relative overflow-hidden">
                 
-                {/* Background Blobs Globais */}
                 <div className="fixed inset-0 z-0 pointer-events-none">
                     <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[120px] animate-float"></div>
                     <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] animate-float" style={{animationDelay: '2s'}}></div>
                 </div>
 
-                {/* Mobile Header Trigger */}
                 <header className="sticky top-0 z-30 flex h-14 items-center gap-x-4 border-b border-white/5 bg-slate-950/50 backdrop-blur-md px-4 sm:px-6 md:hidden">
                     <Button variant="ghost" size="icon" onClick={toggleSidebar} className="text-white">
                         <Menu className="h-6 w-6" />
@@ -249,7 +235,6 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
     );
 };
 
-// Componente Auxiliar de Item de Menu (Limpo e Reutilizável)
 const MenuItem = ({ href, icon: Icon, label, active, getMenuClass, menuIconClass }: any) => (
     <SidebarMenuItem>
         <Link href={href} className="w-full block">
@@ -261,9 +246,8 @@ const MenuItem = ({ href, icon: Icon, label, active, getMenuClass, menuIconClass
     </SidebarMenuItem>
 );
 
-// Componente Auxiliar para Títulos de Seção
 const MenuSectionLabel = ({ label, collapsed }: { label: string, collapsed: boolean }) => {
-    if (collapsed) return <div className="h-4"></div>; // Espaço em branco se colapsado
+    if (collapsed) return <div className="h-4"></div>;
     return (
         <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold px-4 py-2 mt-4 mb-1 animate-in fade-in">
             {label}
@@ -275,8 +259,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className="dark">
       <head>
-        <title>Sent Energia Hub</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <title>Planus Energia Hub</title>
         <meta name="theme-color" content="#020617" />
       </head>
       <body className="font-sans antialiased bg-background text-foreground selection:bg-cyan-500/30 selection:text-cyan-100">
