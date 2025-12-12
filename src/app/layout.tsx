@@ -110,19 +110,22 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                 
                 {/* Header Sidebar */}
                 <div className="h-16 flex items-center justify-center border-b border-white/5 bg-[#020617]">
-                    {sidebarState === 'expanded' ? (
-                         <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-300">
-                             <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-                                 <Zap className="h-5 w-5 text-white fill-white" />
-                             </div>
-                             <span className="font-heading font-bold text-xl tracking-tight text-white">Sent<span className="text-cyan-500">Energia</span></span>
-                         </div>
-                    ) : (
-                        <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg">
-                             <Zap className="h-5 w-5 text-white fill-white" />
-                        </div>
-                    )}
+                    <Link href="/hub" className="w-full flex justify-center">
+                        {sidebarState === 'expanded' ? (
+                            <div className="flex items-center gap-2 cursor-pointer animate-in fade-in zoom-in duration-300">
+                                <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                                    <Zap className="h-5 w-5 text-white fill-white" />
+                                </div>
+                                <span className="font-heading font-bold text-xl tracking-tight text-white">Sent<span className="text-cyan-500">Energia</span></span>
+                            </div>
+                        ) : (
+                            <div className="p-1.5 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg cursor-pointer">
+                                <Zap className="h-5 w-5 text-white fill-white" />
+                            </div>
+                        )}
+                    </Link>
                 </div>
+
 
                 {/* Profile Card */}
                 {sidebarState === 'expanded' && (
