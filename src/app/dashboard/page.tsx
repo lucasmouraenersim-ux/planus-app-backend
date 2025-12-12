@@ -2,7 +2,7 @@
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BrazilMap3D } from '@/components/BrazilMap3D';
+import { BrazilMapGraphic } from '@/components/BrazilMapGraphic';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -272,9 +272,11 @@ function DashboardPageContent() {
                 </div>
 
                 <div className="relative w-full h-full flex items-center justify-center p-0">
-                    <BrazilMap3D 
+                    <BrazilMapGraphic 
                         selectedStateCode={selectedStateCode}
+                        hoveredStateCode={hoveredStateCode}
                         onStateClick={setSelectedStateCode}
+                        onStateHover={setHoveredStateCode}
                         activeStates={currentPartner.states}
                         activeColor={currentPartner.color}
                     />

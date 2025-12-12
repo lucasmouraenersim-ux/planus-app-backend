@@ -2,15 +2,15 @@
 
 import React from 'react';
 import { statesData } from '@/data/state-data';
-import type { StateInfo } from "@/types";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BrazilMapGraphicProps {
   selectedStateCode: string | null;
   hoveredStateCode: string | null;
   onStateClick: (stateCode: string) => void;
   onStateHover: (stateCode: string | null) => void;
-  activeStates?: string[]; // Lista de siglas ativas (ex: ['MT', 'GO'])
-  activeColor?: string;    // Cor do parceiro selecionado
+  activeStates?: string[];
+  activeColor?: string;
 }
 
 export function BrazilMapGraphic({ 
@@ -19,102 +19,87 @@ export function BrazilMapGraphic({
   onStateClick, 
   onStateHover,
   activeStates = [], 
-  activeColor = '#06b6d4' // Ciano padrão
+  activeColor = '#06b6d4'
 }: BrazilMapGraphicProps) {
 
-  // Função para decidir a cor de cada estado
-  const getStateColor = (state: StateInfo) => {
-    const isSelected = selectedStateCode === state.abbreviation;
-    const isHovered = hoveredStateCode === state.code;
+  const getStyle = (uf: string) => {
+    const isSelected = selectedStateCode === uf;
+    const isHovered = hoveredStateCode === uf;
     
-    // Se tiver filtro de parceiro ativo e o estado NÃO estiver na lista -> Cinza Escuro
-    const isInactiveByPartner = activeStates.length > 0 && !activeStates.includes(state.abbreviation);
+    const isInactive = activeStates.length > 0 && !activeStates.includes(uf);
 
-    if (isInactiveByPartner) {
-        return '#1e293b'; // Slate-800 (Apagado)
+    // Se o parceiro não atende, fica escuro
+    if (isInactive) {
+        return { 
+          fill: '#1e293b', 
+          opacity: 0.3, 
+          stroke: '#334155', 
+          strokeWidth: 0.5 
+        };
     }
 
-    if (isSelected) return activeColor; // Cor do parceiro (ou ciano)
-    if (isHovered) return activeColor; // Cor do parceiro com opacidade (controlada no CSS se quiser)
+    // Se selecionado, brilha
+    if (isSelected) {
+        return { 
+          fill: activeColor, 
+          opacity: 1, 
+          stroke: '#ffffff', 
+          strokeWidth: 2, 
+          filter: `drop-shadow(0 0 15px ${activeColor})`,
+          zIndex: 10 
+        };
+    }
     
-    // Estado disponível padrão
-    return '#3b82f6'; // Azul do botão "Gerar Proposta"
-  };
+    // Hover
+    if (isHovered) {
+        return { 
+          fill: activeColor, 
+          opacity: 0.7, 
+          stroke: '#ffffff', 
+          strokeWidth: 1, 
+          cursor: 'pointer' 
+        };
+    }
 
-  const getStateOpacity = (state: StateInfo) => {
-     const isInactiveByPartner = activeStates.length > 0 && !activeStates.includes(state.abbreviation);
-     if (isInactiveByPartner) return 0.3; // Bem transparente
-
-     if (selectedStateCode === state.abbreviation) return 1;
-     if (hoveredStateCode === state.code) return 0.8;
-     
-     // Se o parceiro atende esse estado, destaca ele um pouco
-     if (activeStates.length > 0 && activeStates.includes(state.abbreviation)) return 0.6;
-     
-     return 0.4;
+    // Normal (azul padrão)
+    return { 
+      fill: '#3b82f6', 
+      opacity: 1, 
+      stroke: '#0f172a', 
+      strokeWidth: 1, 
+      cursor: 'pointer' 
+    };
   };
 
   return (
     <div className="relative w-full h-full flex items-center justify-center p-4">
       <svg
-        viewBox="0 0 450 460"
-        className="w-full h-full max-h-[600px] drop-shadow-2xl"
-        style={{ filter: 'drop-shadow(0 0 20px rgba(0,0,0,0.5))' }}
+        viewBox="0 0 600 600"
+        className="w-full h-full max-h-[600px]"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ overflow: 'visible' }}
       >
-        <g transform="scale(1) translate(0, 0)">
-           {statesData.map((state) => (
-             <g key={state.code}>
-                <path
-                d={state.pathD}
-                fill={getStateColor(state)}
-                fillOpacity={getStateOpacity(state)}
-                stroke={selectedStateCode === state.abbreviation ? '#ffffff' : '#0f172a'}
-                strokeWidth={selectedStateCode === state.abbreviation ? 2 : 1}
-                className="transition-all duration-300 ease-in-out cursor-pointer hover:brightness-110"
-                onClick={() => onStateClick(state.abbreviation)}
-                onMouseEnter={() => onStateHover(state.code)}
-                onMouseLeave={() => onStateHover(null)}
-                />
-                {state.circlePathD && (
-                    <path
-                        d={state.circlePathD}
-                        fill={getStateColor(state)}
-                        fillOpacity={getStateOpacity(state)}
-                        stroke={selectedStateCode === state.abbreviation ? '#ffffff' : '#0f172a'}
-                        strokeWidth={selectedStateCode === state.abbreviation ? 1 : 0.5}
-                        className="transition-all duration-300 ease-in-out cursor-pointer"
-                        onClick={() => onStateClick(state.abbreviation)}
-                        onMouseEnter={() => onStateHover(state.code)}
-                        onMouseLeave={() => onStateHover(null)}
-                    />
-                )}
-             </g>
-           ))}
-           
-           {/* Labels (Siglas) */}
-           {statesData.map((state) => {
-              const isActive = activeStates.length === 0 || activeStates.includes(state.abbreviation);
-              if (!isActive) return null;
-              
-              const isSelected = selectedStateCode === state.abbreviation;
-
-              return (
-                 <text
-                    key={`label-${state.code}`}
-                    transform={state.textTransform}
-                    className="font-headline text-[10px] sm:text-xs pointer-events-none select-none transition-all duration-300"
-                    style={{
-                      fill: isSelected ? '#FFFFFF' : '#94a3b8',
-                      opacity: isSelected ? 1 : 0.7,
-                      textShadow: isSelected ? '0 0 5px rgba(255,255,255,0.7)' : 'none',
-                    }}
-                    dominantBaseline="middle"
-                    textAnchor="middle"
-                  >
-                    {state.abbreviation}
-                  </text>
-              );
-           })}
+        <g transform="scale(1.2) translate(-20, -40)">
+          {statesData.map((state) => (
+             <TooltipProvider key={state.abbreviation}>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <path
+                     id={state.abbreviation}
+                     d={state.pathD}
+                     style={getStyle(state.abbreviation)}
+                     className="transition-all duration-300 ease-out"
+                     onClick={() => onStateClick(state.abbreviation)}
+                     onMouseEnter={() => onStateHover(state.abbreviation)}
+                     onMouseLeave={() => onStateHover(null)}
+                   />
+                 </TooltipTrigger>
+                 <TooltipContent className="bg-slate-900 border-white/10 text-white font-bold">
+                   <p>{state.name}</p>
+                 </TooltipContent>
+               </Tooltip>
+             </TooltipProvider>
+          ))}
         </g>
       </svg>
     </div>
