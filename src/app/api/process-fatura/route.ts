@@ -60,9 +60,12 @@ export async function POST(req: Request) {
           - valorTotal (number)
           - vencimento (string dd/mm/aaaa)
           - precoUnitario (number)
-          
-          NOVO CAMPO IMPORTANTE:
           - mediaConsumo (number): Procure no bloco "CONSUMO FATURADO" ou "Histórico" a linha escrito "Média". Retorne apenas o número (ex: 1751).
+
+          NOVOS CAMPOS DE LOCALIZAÇÃO:
+          - enderecoCompleto (string): O endereço da unidade consumidora (Rua, Número, Bairro).
+          - cidade (string): A cidade da unidade (Ex: Várzea Grande, Cuiabá).
+          - estado (string): Sigla do estado (Ex: MT).
 
           Texto:
           """

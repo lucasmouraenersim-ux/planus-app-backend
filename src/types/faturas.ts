@@ -2,18 +2,23 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export interface UnidadeConsumidora {
-  id: string; // Unique ID for the unit within the client
+  id: string;
   consumoKwh: string;
-  valorTotal?: string; // Novo: Para simular TUSD/TE e salvar o valor extraído pela IA
-  mediaConsumo?: string; // <--- ADICIONE ISTO
-  precoUnitario?: number; // Novo: Para salvar o preço unitário extraído pela IA
+  valorTotal?: string;
+  mediaConsumo?: string;
+  precoUnitario?: number;
   temGeracao: boolean;
-  arquivoFaturaUrl: string | null; // URL from Firebase Storage
-  nomeArquivo: string | null; // Original name of the uploaded file
+  arquivoFaturaUrl: string | null;
+  nomeArquivo: string | null;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Contato {
-  id: string; // Unique ID for the contact within the client
+  id: string;
   nome: string;
   telefone: string;
 }

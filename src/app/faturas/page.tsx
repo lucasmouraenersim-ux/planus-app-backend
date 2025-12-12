@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
+import { 
   FileText, PlusCircle, Trash2, Upload, Download, Eye, Loader2,
   User as UserIcon, Phone, Filter as FilterIcon, ArrowUpDown, Zap,
   MessageSquare, UserCheck, Paperclip, Search, Bell, TrendingUp, 
   TrendingDown, Minus, Home, AlertCircle, Plus, LayoutGrid, List,
-  MoreHorizontal, AlertTriangle, CheckCircle2, X, Share2
+  MoreHorizontal, AlertTriangle, CheckCircle2, X, Share2,
+  Map as MapIcon, MapPin 
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, arrayUnion, arrayRemove, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -30,13 +31,19 @@ export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | '
 export interface UnidadeConsumidora {
   id: string;
   consumoKwh: string;
-  valorTotal?: string; // Novo: Para simular TUSD/TE
-  mediaConsumo?: string; // <--- ADICIONADO
-  precoUnitario?: number;
+  valorTotal?: string;
+  mediaConsumo?: string;
   temGeracao: boolean;
   arquivoFaturaUrl: string | null;
   nomeArquivo: string | null;
+  // NOVOS CAMPOS
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  latitude?: number;  // Para o Pin no mapa
+  longitude?: number; // Para o Pin no mapa
 }
+
 
 export interface Contato {
   id: string;
@@ -103,20 +110,16 @@ const analyzeEnergyData = (consumoTotal: number) => {
 };
 
 const generateMiniChartData = () => {
-  const data = [];
-  let lastValue = Math.random() * 50 + 25; // start between 25 and 75
-  const trend = Math.random() > 0.5 ? 'up' : 'down';
-  for (let i = 0; i < 10; i++) {
-    data.push({ value: lastValue });
-    if (trend === 'up') {
-      lastValue += Math.random() * 10;
-    } else {
-      lastValue -= Math.random() * 10;
-      if (lastValue < 0) lastValue = 0;
+    const data = [];
+    let lastValue = Math.random() * 50 + 25;
+    for (let i = 0; i < 10; i++) {
+        data.push({ value: lastValue });
+        lastValue += (Math.random() - 0.5) * 10;
+        if (lastValue < 0) lastValue = 0;
     }
-  }
-  return data;
+    return data;
 };
+
 
 // --- COMPONENTES VISUAIS ---
 
@@ -221,10 +224,11 @@ export default function FaturasPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // UI States
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTensao, setFilterTensao] = useState<TensaoType | 'all'>('all');
+  const [filterCidade, setFilterCidade] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'none'>('none');
 
   // Fetch Data
@@ -264,6 +268,9 @@ export default function FaturasPage() {
 
     if (searchTerm) result = result.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
     if (filterTensao !== 'all') result = result.filter(c => c.tensao === filterTensao);
+    if (filterCidade !== 'all') {
+      result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
+    }
     
     if (sortOrder !== 'none') {
       result.sort((a, b) => {
@@ -273,7 +280,7 @@ export default function FaturasPage() {
       });
     }
     return { filteredClientes: result, kpiData: totals };
-  }, [clientes, searchTerm, filterTensao, sortOrder]);
+  }, [clientes, searchTerm, filterTensao, sortOrder, filterCidade]);
 
   // Handlers
   const handleAddCliente = async () => {
@@ -336,7 +343,7 @@ export default function FaturasPage() {
     } catch (e) { toast({ title: "Erro ao Salvar", variant: "destructive" }); }
   };
   
-  const handleFileUpload = async (clienteId: string, unidadeId: string, file: File | null) => {
+  const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file) return;
 
     // 1. Feedback visual imediato
@@ -356,14 +363,13 @@ export default function FaturasPage() {
       });
 
       if (!response.ok) {
-        let errorData = { error: 'Falha na IA.' };
+        let errorData;
         try {
-            errorData = await response.json();
-        } catch(e) {
-            // response was not JSON
-            errorData.error = response.statusText;
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: response.statusText };
         }
-        throw new Error(errorData.error);
+        throw new Error(errorData.error || 'Falha na IA');
       }
       
       const dadosIA = await response.json();
@@ -377,14 +383,13 @@ export default function FaturasPage() {
         });
       }
 
-
       // 4. Faz o upload do arquivo para o Storage (Firebase)
       const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
       const url = await uploadFile(file, path);
 
       // 5. Atualiza o banco de dados com os dados da IA + URL do arquivo
       const clienteAtual = clientes.find(c => c.id === clienteId);
-      if(clienteAtual) {
+      if(clienteAtual && unidadeId) {
           const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { 
               ...u, 
               arquivoFaturaUrl: url, 
@@ -392,7 +397,9 @@ export default function FaturasPage() {
               consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
               valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
               mediaConsumo: dadosIA.mediaConsumo?.toString() || '',
-              precoUnitario: dadosIA.precoUnitario,
+              endereco: dadosIA.enderecoCompleto || u.endereco,
+              cidade: dadosIA.cidade || u.cidade,
+              estado: dadosIA.estado || u.estado,
           } : u);
           
           await handleUpdateField(clienteId, 'unidades', novasUnidades);
@@ -429,6 +436,10 @@ export default function FaturasPage() {
     if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
     setSelectedIds(newSet);
   };
+  
+  const cidadesDisponiveis = Array.from(new Set(
+    clientes.flatMap(c => c.unidades.map(u => u.cidade)).filter(Boolean)
+  )) as string[];
 
   // Cliente selecionado para o Drawer
   const selectedCliente = useMemo(() => clientes.find(c => c.id === selectedClienteId), [clientes, selectedClienteId]);
@@ -488,15 +499,30 @@ export default function FaturasPage() {
           {/* Actions & Filters */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
              <div className="flex items-center gap-2">
-                {/* View Toggle */}
+                {/* View Toggle (Agora com Mapa) */}
                 <div className="bg-slate-900 p-1 rounded-lg border border-white/10 flex">
-                   <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}><List className="w-4 h-4" /></button>
-                   <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded-md transition-all ${viewMode === 'kanban' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}><LayoutGrid className="w-4 h-4" /></button>
+                   <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`} title="Lista"><List className="w-4 h-4" /></button>
+                   <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded-md transition-all ${viewMode === 'kanban' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`} title="Kanban"><LayoutGrid className="w-4 h-4" /></button>
+                   <button onClick={() => setViewMode('map')} className={`p-1.5 rounded-md transition-all ${viewMode === 'map' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`} title="Mapa"><MapIcon className="w-4 h-4" /></button>
                 </div>
+                
                 <div className="h-6 w-px bg-white/10 mx-2"></div>
+                
+                {/* Filtro de Tensão */}
                 <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}>
-                   <SelectTrigger className="w-[140px] h-9 bg-slate-900 border-white/10 text-xs"><SelectValue /></SelectTrigger>
-                   <SelectContent className="bg-slate-900 border-slate-800"><SelectItem value="all">Todas</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                   <SelectTrigger className="w-[140px] h-9 bg-slate-900 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger>
+                   <SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas Tensões</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+
+                {/* NOVO: Filtro de Cidade */}
+                <Select value={filterCidade} onValueChange={setFilterCidade}>
+                   <SelectTrigger className="w-[140px] h-9 bg-slate-900 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Todas Cidades" /></SelectTrigger>
+                   <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                     <SelectItem value="all">Todas Cidades</SelectItem>
+                     {cidadesDisponiveis.map(cidade => (
+                       <SelectItem key={cidade} value={cidade}>{cidade}</SelectItem>
+                     ))}
+                   </SelectContent>
                 </Select>
              </div>
              <Button onClick={handleAddCliente} size="sm" className="bg-cyan-600 hover:bg-cyan-500 h-9 text-xs"><PlusCircle className="w-3 h-3 mr-2" /> Novo Cliente</Button>
@@ -610,6 +636,60 @@ export default function FaturasPage() {
                       </div>
                    </div>
                 ))}
+             </div>
+          )}
+          
+          {/* MAP VIEW (Simulação Visual) */}
+          {viewMode === 'map' && (
+             <div className="relative w-full h-[500px] bg-slate-900 rounded-xl border border-white/10 overflow-hidden group">
+                {/* Imagem de fundo simulando um mapa escuro (Dark Mode Map) */}
+                <div 
+                  className="absolute inset-0 opacity-40" 
+                  style={{ 
+                    backgroundColor: '#1e293b', 
+                    backgroundImage: 'radial-gradient(circle at 1px 1px, #334155 1px, transparent 0)', 
+                    backgroundSize: '40px 40px' 
+                  }} 
+                >
+                </div>
+
+                {/* Pins dos Clientes (Plotados randomicamente para demonstração) */}
+                {filteredClientes.map((cliente, idx) => {
+                   // Simulação de coordenadas para demo (No futuro virá do banco)
+                   const topPos = Math.random() * 80 + 10; // 10% a 90%
+                   const leftPos = Math.random() * 80 + 10;
+                   
+                   const total = cliente.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
+                   const isHigh = total > 30000;
+
+                   return (
+                      <div 
+                        key={cliente.id} 
+                        onClick={() => setSelectedClienteId(cliente.id)}
+                        className="absolute cursor-pointer flex flex-col items-center transform hover:scale-110 transition-transform group/pin"
+                        style={{ top: `${topPos}%`, left: `${leftPos}%` }}
+                      >
+                         {/* O Pin */}
+                         <div className={`relative flex items-center justify-center w-8 h-8 rounded-full border-2 border-slate-900 shadow-xl ${isHigh ? 'bg-blue-500' : 'bg-emerald-500'} text-white`}>
+                            <Zap className="w-4 h-4" />
+                            {/* Pulso animado para clientes de alta tensão */}
+                            {isHigh && <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping"></span>}
+                         </div>
+                         
+                         {/* Tooltip do Pin */}
+                         <div className="absolute bottom-full mb-2 bg-slate-800 text-xs px-2 py-1 rounded border border-white/10 whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity z-10 pointer-events-none">
+                            <p className="font-bold text-white">{cliente.nome}</p>
+                            <p className="text-slate-400">{total.toLocaleString()} kWh</p>
+                         </div>
+                      </div>
+                   )
+                })}
+                
+                {/* Aviso de Demonstração */}
+                <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur px-3 py-2 rounded-lg border border-white/10 text-xs text-slate-400 max-w-xs">
+                   <p className="font-bold text-white mb-1 flex items-center gap-2"><MapPin className="w-3 h-3 text-cyan-500"/> Modo Demonstração</p>
+                   <p>Os pinos são ilustrativos. Para geolocalização real, é necessário integrar Google Maps API ou Mapbox.</p>
+                </div>
              </div>
           )}
 
