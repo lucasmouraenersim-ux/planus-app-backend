@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import type { UserType } from '@/types/user';
+import { CommandMenu } from '@/components/ui/command-menu';
 
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const pathname = usePathname();
@@ -277,9 +278,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
             <AppLayoutContent>{children}</AppLayoutContent>
             <Toaster />
+            <CommandMenu />
         </AuthProvider>
       </body>
     </html>
   );
 }
-    
