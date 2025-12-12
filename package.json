@@ -51,7 +51,7 @@
     "jspdf": "^2.5.1",
     "leaflet": "^1.9.4",
     "lucide-react": "latest",
-    "next": "15.5.8",
+    "next": "15.5.9",
     "node-fetch": "^3.3.2",
     "openai": "^4.52.7",
     "papaparse": "^5.4.1",
