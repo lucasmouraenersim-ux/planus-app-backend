@@ -76,13 +76,18 @@ function ProposalPageContent() {
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // --- CORREÇÃO: Função para tratar números brasileiros (vírgula e ponto) ---
+  // --- FUNÇÃO CORRIGIDA PARA TRATAR NÚMEROS (BRL/US) ---
   const parseNumber = (val: string | null) => {
     if (!val) return 0;
-    // Remove pontos de milhar (ex: 17.850 -> 17850) e troca vírgula por ponto (ex: 0,98 -> 0.98)
-    const clean = val.replace(/\./g, '').replace(',', '.');
-    const parsed = parseFloat(clean);
-    return isNaN(parsed) ? 0 : parsed;
+    
+    // Se tiver vírgula (ex: 1.500,00 ou 0,98), assume formato BR
+    if (val.includes(',')) {
+        // Remove pontos de milhar e troca vírgula por ponto
+        return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    }
+    
+    // Se não tiver vírgula, assume formato US/Standard (ex: 1500 or 1.12)
+    return parseFloat(val);
   };
 
   // Parse dos dados da URL
@@ -92,23 +97,28 @@ function ProposalPageContent() {
     consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
     distributor: searchParams.get("distribuidora") || "Distribuidora Local",
     comercializadora: searchParams.get("comercializadora") || "BC Energia",
-    // Usando a função corrigida para números
+    // Usando a função corrigida
     avgConsumption: parseNumber(searchParams.get("item1Quantidade")), 
     currentPrice: parseNumber(searchParams.get("tariff")),
     discountRate: parseNumber(searchParams.get("desconto")),
     coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
     address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [searchParams]);
 
   // Cálculos
   const calculated = useMemo(() => {
-    const avgMonthlyCost = proposalData.avgConsumption * proposalData.currentPrice;
+    const consumption = proposalData.avgConsumption || 0;
+    const price = proposalData.currentPrice || 0;
+    const discount = proposalData.discountRate || 0;
+
+    const avgMonthlyCost = consumption * price;
     
     // Calcula o preço do kWh com desconto
-    const discountDecimal = proposalData.discountRate / 100;
-    const bcPrice = proposalData.currentPrice * (1 - discountDecimal);
+    const discountDecimal = discount / 100;
+    const bcPrice = price * (1 - discountDecimal);
     
-    const bcMonthlyCost = proposalData.avgConsumption * bcPrice;
+    const bcMonthlyCost = consumption * bcPrice;
     const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
     const annualEconomy = monthlyEconomy * 12;
     
