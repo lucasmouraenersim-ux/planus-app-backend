@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -21,6 +20,11 @@ const commercializerCatalog = [
   {
     name: "Bolt Energy",
     logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/bc761e2a925f19d5436b3642acb35fac8e3075f8/Bolt%20Energy.jpg",
+  },
+  {
+    name: "Capibolt",
+    // ⚠️ SUBSTITUA O LINK ABAIXO PELA URL REAL DA IMAGEM DA CAPIBOLT
+    logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/main/Capibolt.png", 
   },
   {
     name: "Cenergy",
@@ -265,7 +269,7 @@ function ProposalPageContent() {
             </div>
         </div>
 
-        {/* === PÁGINA 3: PROPOSTA COMERCIAL (CORRIGIDA) === */}
+        {/* === PÁGINA 3: PROPOSTA COMERCIAL (Financeiro) === */}
         <div data-pdf-section="proposal" className="relative w-full aspect-[210/297] bg-slate-50 text-slate-900 p-12 flex flex-col">
             <header className="mb-10">
                 <div className="flex items-center gap-4">
@@ -304,7 +308,7 @@ function ProposalPageContent() {
                             <span className="font-bold text-emerald-700 uppercase text-sm">Cenário Sent Energia</span>
                         </div>
                         <div className="space-y-3 text-sm">
-                            <div className="flex justify-between"><span className="text-slate-500">Desconto Garantido</span><span className="font-bold text-emerald-600 bg-emerald-50 px-2 rounded">{proposalData.discountRate}% OFF</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500">Desconto Base</span><span className="font-bold text-emerald-600 bg-emerald-50 px-2 rounded">{proposalData.discountRate}% OFF</span></div>
                             <div className="flex justify-between"><span className="text-slate-500">Nova Tarifa</span><span className="font-bold text-emerald-700">{formatCurrency(calculated.bcPrice)}</span></div>
                             <div className="bg-emerald-50 p-3 rounded-lg flex justify-between items-center mt-2 border border-emerald-100">
                                 <span className="font-bold text-emerald-800">Novo Custo</span>
@@ -387,5 +391,3 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
-
-    

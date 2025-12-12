@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -249,6 +248,7 @@ export default function ProposalGeneratorPage() {
                     <SelectContent className="bg-slate-900 border-slate-700 text-white">
                         <SelectItem value="BC Energia">BC Energia</SelectItem>
                         <SelectItem value="Bolt Energy">Bolt Energy</SelectItem>
+                        <SelectItem value="Capibolt">Capibolt</SelectItem>
                         <SelectItem value="Cenergy">Cenergy</SelectItem>
                         <SelectItem value="Serena Energia">Serena Energia</SelectItem>
                     </SelectContent>
@@ -359,17 +359,4 @@ export default function ProposalGeneratorPage() {
                         <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" /> Sem custo de adesão</li>
                         <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" /> Energia 100% Renovável</li>
                         <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" /> Gestão via App e Web</li>
-                        {formData.cobreBandeira && <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" /> Cobertura de Bandeira Tarifária</li>}
-                    </ul>
-                </div>
-
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-  
+                        {formData.cobreBandeira && <li className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5" /> Cobertura de Bandeira
