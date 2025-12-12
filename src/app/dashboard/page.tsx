@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BrazilMapGraphic } from '@/components/BrazilMapGraphic';
-import { StateInfoCard } from '@/components/StateInfoCard';
-import { SavingsDisplay } from '@/components/SavingsDisplay';
-import CompetitorComparisonDisplay from '@/components/CompetitorComparisonDisplay';
-import { DiscountConfigurator, type DiscountConfig } from '@/components/DiscountConfigurator';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,45 +10,73 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { calculateSavings } from '@/lib/discount-calculator';
 import { statesData } from '@/data/state-data';
-import type { StateInfo } from '@/types';
-import { HandHelping, TrendingUp } from 'lucide-react';
+import { HandHelping, TrendingUp, Zap, MapPin, DollarSign, Percent, BarChart3, ChevronRight, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// --- COMPONENTES AUXILIARES ---
+
+// Card de Resultado com Animação
+const BigNumberCard = ({ label, value, subtext, color = "emerald" }: { label: string, value: string, subtext?: string, color?: "emerald" | "blue" | "orange" }) => (
+    <div className={`relative overflow-hidden rounded-2xl bg-slate-900/60 border border-white/10 p-6 backdrop-blur-md group hover:border-${color}-500/50 transition-all duration-500`}>
+        <div className={`absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity bg-${color}-500 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`}></div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
+            {color === 'emerald' ? <TrendingUp className="w-3 h-3" /> : <DollarSign className="w-3 h-3" />} {label}
+        </p>
+        <div className="text-3xl md:text-4xl font-black text-white tracking-tight mt-2">
+            {value}
+        </div>
+        {subtext && <p className={`text-xs mt-2 font-medium text-${color}-400`}>{subtext}</p>}
+    </div>
+);
+
+// Toggle Customizado para Tipo de Desconto
+const DiscountTypeToggle = ({ value, onChange }: { value: 'promotional' | 'fixed', onChange: (v: 'promotional' | 'fixed') => void }) => (
+    <div className="bg-slate-950 p-1 rounded-lg border border-white/10 flex relative">
+        <div 
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-cyan-600 rounded-md transition-all duration-300 shadow-lg ${value === 'promotional' ? 'left-1' : 'left-[calc(50%+4px)]'}`} 
+        />
+        <button 
+            onClick={() => onChange('promotional')}
+            className={`flex-1 relative z-10 text-xs font-bold py-2 text-center transition-colors ${value === 'promotional' ? 'text-white' : 'text-slate-400 hover:text-white'}`}
+        >
+            Promocional (Escalonado)
+        </button>
+        <button 
+            onClick={() => onChange('fixed')}
+            className={`flex-1 relative z-10 text-xs font-bold py-2 text-center transition-colors ${value === 'fixed' ? 'text-white' : 'text-slate-400 hover:text-white'}`}
+        >
+            Fixo (Flat)
+        </button>
+    </div>
+);
 
 function DashboardPageContent() {
   const searchParams = useSearchParams();
   const initialKwh = parseInt(searchParams.get('item1Quantidade') || '1500', 10);
   const initialUF = searchParams.get('clienteUF');
 
+  // States
   const [selectedStateCode, setSelectedStateCode] = useState<string | null>(initialUF || null);
   const [hoveredStateCode, setHoveredStateCode] = useState<string | null>(null);
   const [currentKwh, setCurrentKwh] = useState<number>(initialKwh);
-  const [isFidelityEnabled, setIsFidelityEnabled] = useState(false);
   const [showCompetitorAnalysis, setShowCompetitorAnalysis] = useState(false);
 
-  // Ler configurações de desconto da URL ou usar padrão
-  const [discountConfig, setDiscountConfig] = useState<DiscountConfig>(() => {
+  // Configuração de Desconto
+  const [discountConfig, setDiscountConfig] = useState<any>(() => {
     const discountType = searchParams.get('discountType') as 'promotional' | 'fixed' || 'promotional';
-    
-    if (discountType === 'promotional') {
-      return {
-        type: 'promotional',
+    return {
+        type: discountType,
         promotional: {
           rate: parseInt(searchParams.get('promotionalRate') || '25', 10),
           durationMonths: parseInt(searchParams.get('promotionalDuration') || '3', 10),
           subsequentRate: parseInt(searchParams.get('subsequentRate') || '15', 10),
         },
-        fixed: { rate: 20 }
-      };
-    } else {
-      return {
-        type: 'fixed',
         fixed: {
           rate: parseInt(searchParams.get('fixedRate') || '20', 10),
-        },
-        promotional: { rate: 25, durationMonths: 3, subsequentRate: 15 }
-      };
-    }
+        }
+    };
   });
 
   const selectedState = useMemo(() => {
@@ -60,140 +84,301 @@ function DashboardPageContent() {
     return statesData.find(s => s.abbreviation === selectedStateCode) || null;
   }, [selectedStateCode]);
 
-  const handleStateClick = (stateCode: string) => {
-    setSelectedStateCode(stateCode);
-  };
-  
-  const handleKwhChange = (value: number[]) => {
-      setCurrentKwh(value[0]);
-  };
-  
-  const handleKwhInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = parseInt(event.target.value.replace(/\D/g, ''), 10);
-      setCurrentKwh(isNaN(value) ? 0 : value);
-  };
-
+  // Cálculos
   const savingsResult = useMemo(() => {
-    const kwhToReaisFactor = 1.0907; // Fator de conversão kWh para Reais
+    const kwhToReaisFactor = 1.0907; // Tarifa média base
     const billAmount = currentKwh * kwhToReaisFactor;
 
-    if (!selectedState?.available) {
-      return {
-        effectiveAnnualDiscountPercentage: 0,
-        monthlySaving: 0,
-        annualSaving: 0,
-        discountDescription: `O estado de ${selectedState?.name || '...'} ainda não está disponível.`,
-        originalMonthlyBill: 0,
-        newMonthlyBillWithPlanus: 0,
-      };
+    if (!selectedState?.available && selectedStateCode) {
+      return null; // Estado indisponível
     }
     
-    return calculateSavings(billAmount, discountConfig, selectedStateCode);
-
+    return calculateSavings(billAmount, discountConfig, selectedStateCode || 'MT');
   }, [currentKwh, selectedState, discountConfig, selectedStateCode]);
-  
+
   const proposalLink = useMemo(() => {
     const params = new URLSearchParams();
     params.set('item1Quantidade', String(currentKwh));
-    if (selectedStateCode) {
-      params.set('clienteUF', selectedStateCode);
-    }
-    
-    // Adicionar configurações de desconto à URL
+    if (selectedStateCode) params.set('clienteUF', selectedStateCode);
     params.set('discountType', discountConfig.type);
-    if (discountConfig.type === 'promotional' && discountConfig.promotional) {
+    
+    if (discountConfig.type === 'promotional') {
       params.set('promotionalRate', String(discountConfig.promotional.rate));
       params.set('promotionalDuration', String(discountConfig.promotional.durationMonths));
       params.set('subsequentRate', String(discountConfig.promotional.subsequentRate));
-    } else if (discountConfig.type === 'fixed' && discountConfig.fixed) {
+    } else {
       params.set('fixedRate', String(discountConfig.fixed.rate));
     }
     
     return `/proposal-generator?${params.toString()}`;
   }, [currentKwh, selectedStateCode, discountConfig]);
 
+  const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
   return (
-    <div className="relative flex flex-col min-h-[calc(100vh-56px)] items-center justify-start p-4 md:p-8 space-y-8">
-      <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* Left Column */}
-        <div className="flex flex-col gap-8">
-          <Card className="shadow-xl bg-card/70 backdrop-blur-lg border">
-            <CardHeader>
-              <CardTitle className="text-2xl font-bold text-primary">Calculadora de Economia</CardTitle>
-              <CardDescription>Selecione um estado e ajuste o consumo para simular.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <StateInfoCard state={selectedState || (hoveredStateCode ? statesData.find(s => s.code === hoveredStateCode) : null)} />
-              <div className="space-y-4">
-                <Label htmlFor="kwh-slider">Consumo Mensal (kWh)</Label>
-                <Slider id="kwh-slider" min={100} max={50000} step={100} value={[currentKwh]} onValueChange={handleKwhChange} />
-                <Input type="text" value={currentKwh.toLocaleString('pt-BR')} onChange={handleKwhInputChange} className="text-center font-bold text-lg" />
-              </div>
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
+      
+      {/* Estilos Globais */}
+      <style jsx global>{`
+        .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
+        .glass-highlight { background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(6, 182, 212, 0.3); box-shadow: 0 0 20px rgba(6, 182, 212, 0.15); }
+        
+        @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
+        .animate-blob { animation: blob 15s infinite; }
+        
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #06b6d4; cursor: pointer; border-radius: 50%; box-shadow: 0 0 10px rgba(6, 182, 212, 0.8); transition: transform 0.1s; }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+      `}</style>
 
-           <DiscountConfigurator config={discountConfig} onConfigChange={setDiscountConfig} />
-          
-          <Card className="shadow-lg bg-card/70 backdrop-blur-lg border">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold text-primary flex items-center">
-                <TrendingUp className="mr-2 h-5 w-5" />
-                Análise de Mercado
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="competitor-switch" className="flex flex-col space-y-1">
-                  <span>Comparar com Concorrentes</span>
-                  <span className="font-normal leading-snug text-muted-foreground text-xs">
-                    Ative para ver uma análise comparativa da economia.
-                  </span>
-                </Label>
-                <Switch id="competitor-switch" checked={showCompetitorAnalysis} onCheckedChange={setShowCompetitorAnalysis} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column */}
-        <div className="flex flex-col gap-8">
-          <div className="lg:sticky lg:top-24">
-             <BrazilMapGraphic 
-                selectedStateCode={selectedStateCode}
-                hoveredStateCode={hoveredStateCode}
-                onStateClick={handleStateClick}
-                onStateHover={setHoveredStateCode}
-              />
-          </div>
-          <SavingsDisplay savings={savingsResult} currentKwh={currentKwh} selectedStateCode={selectedStateCode} proposalLink={proposalLink} />
-        </div>
+      {/* Background Dinâmico */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[100px] animate-blob"></div>
+        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[100px] animate-blob" style={{ animationDelay: '2s' }}></div>
       </div>
 
-       {showCompetitorAnalysis && (
-        <div className="w-full mt-8">
-          <CompetitorComparisonDisplay 
-            currentBillAmount={currentKwh * 1.0907}
-            sentEnergyAnnualSaving={savingsResult.annualSaving}
-          />
+      {/* Conteúdo Principal */}
+      <div className="relative z-10 flex-1 p-4 md:p-8 max-w-[1600px] mx-auto w-full">
+        
+        {/* Header */}
+        <div className="mb-8">
+            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-xl shadow-lg shadow-cyan-900/20">
+                    <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+                Simulador de Economia
+            </h1>
+            <p className="text-slate-400 mt-2">Selecione um estado no mapa e ajuste o consumo para ver a mágica acontecer.</p>
         </div>
-      )}
 
-       <Link href="/proposal-generator" passHref className="fixed bottom-6 right-6 z-50">
-        <Button size="lg" className="rounded-full shadow-lg h-16 w-auto px-6 bg-accent hover:bg-accent/90 text-accent-foreground">
-          <HandHelping className="mr-3 h-6 w-6" />
-          <div className="flex flex-col items-start">
-            <span className="text-base font-bold">Nova Proposta</span>
-            <span className="text-xs font-normal -mt-1">Começar do zero</span>
-          </div>
-        </Button>
-      </Link>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* === COLUNA ESQUERDA: CONTROLES (4 Cols) === */}
+            <div className="lg:col-span-4 space-y-6">
+                
+                {/* Card de Configuração de Consumo */}
+                <div className="glass-panel p-6 rounded-2xl">
+                    <div className="flex items-center gap-2 mb-6">
+                        <Zap className="w-5 h-5 text-yellow-400" />
+                        <h2 className="text-lg font-bold text-white">Perfil de Consumo</h2>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div>
+                            <div className="flex justify-between text-sm mb-2">
+                                <Label className="text-slate-300">Consumo Mensal</Label>
+                                <span className="font-bold text-cyan-400 text-lg">{currentKwh.toLocaleString()} kWh</span>
+                            </div>
+                            <Slider 
+                                value={[currentKwh]} 
+                                onValueChange={(v) => setCurrentKwh(v[0])} 
+                                max={10000} 
+                                step={50} 
+                                className="cursor-pointer"
+                            />
+                            <div className="flex justify-between text-[10px] text-slate-500 mt-1 uppercase tracking-wider">
+                                <span>Residencial</span>
+                                <span>Comercial</span>
+                                <span>Industrial</span>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/5">
+                            <div className="flex justify-between items-center mb-3">
+                                <Label className="text-slate-300 flex items-center gap-2"><Percent className="w-4 h-4 text-emerald-400"/> Modelo de Desconto</Label>
+                            </div>
+                            <DiscountTypeToggle 
+                                value={discountConfig.type} 
+                                onChange={(t) => setDiscountConfig({ ...discountConfig, type: t })} 
+                            />
+                        </div>
+
+                        {discountConfig.type === 'promotional' ? (
+                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                <div>
+                                    <Label className="text-xs text-slate-400">Taxa Promo (%)</Label>
+                                    <Input 
+                                        type="number" 
+                                        className="mt-1 bg-slate-900/50 border-white/10 text-white font-bold h-10"
+                                        value={discountConfig.promotional.rate}
+                                        onChange={(e) => setDiscountConfig({...discountConfig, promotional: {...discountConfig.promotional, rate: Number(e.target.value)}})}
+                                    />
+                                </div>
+                                <div>
+                                    <Label className="text-xs text-slate-400">Duração (Meses)</Label>
+                                    <Input 
+                                        type="number" 
+                                        className="mt-1 bg-slate-900/50 border-white/10 text-white font-bold h-10"
+                                        value={discountConfig.promotional.durationMonths}
+                                        onChange={(e) => setDiscountConfig({...discountConfig, promotional: {...discountConfig.promotional, durationMonths: Number(e.target.value)}})}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                                <Label className="text-xs text-slate-400">Taxa Fixa (%)</Label>
+                                <Input 
+                                    type="number" 
+                                    className="mt-1 bg-slate-900/50 border-white/10 text-white font-bold h-10"
+                                    value={discountConfig.fixed.rate}
+                                    onChange={(e) => setDiscountConfig({...discountConfig, fixed: {...discountConfig.fixed, rate: Number(e.target.value)}})}
+                                />
+                            </div>
+                        )}
+                        
+                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                            <Label htmlFor="competitor" className="text-sm cursor-pointer text-slate-400">Comparar com Concorrentes</Label>
+                            <Switch id="competitor" checked={showCompetitorAnalysis} onCheckedChange={setShowCompetitorAnalysis} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card de Estado Selecionado (Info Rápida) */}
+                {selectedStateCode && (
+                    <div className="glass-panel p-4 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-left-4">
+                        <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-white/10 font-black text-xl text-white">
+                            {selectedStateCode}
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-400 uppercase tracking-wider">Região Selecionada</p>
+                            <p className="text-white font-bold">{selectedState?.name || selectedStateCode}</p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedStateCode(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4"/></Button>
+                    </div>
+                )}
+            </div>
+
+            {/* === COLUNA CENTRAL: MAPA (5 Cols) === */}
+            <div className="lg:col-span-5 h-[500px] lg:h-auto relative group">
+                <div className="absolute inset-0 bg-cyan-500/5 rounded-3xl blur-3xl group-hover:bg-cyan-500/10 transition-colors duration-1000"></div>
+                
+                {/* Container do Mapa */}
+                <div className="relative w-full h-full flex items-center justify-center p-4">
+                    <BrazilMapGraphic 
+                        selectedStateCode={selectedStateCode}
+                        hoveredStateCode={hoveredStateCode}
+                        onStateClick={setSelectedStateCode}
+                        onStateHover={setHoveredStateCode}
+                    />
+                    
+                    {/* Tooltip Flutuante do Mapa */}
+                    {!selectedStateCode && (
+                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-white/10 text-sm text-slate-300 pointer-events-none animate-bounce">
+                            <MapPin className="w-4 h-4 inline mr-2 text-cyan-400"/> Clique em um estado
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* === COLUNA DIREITA: RESULTADOS (3 Cols) === */}
+            <div className="lg:col-span-3 space-y-6">
+                
+                {/* Título de Resultados */}
+                <div>
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-cyan-400" /> Projeção de Ganhos
+                    </h3>
+                    
+                    {savingsResult ? (
+                        <div className="space-y-4">
+                            <BigNumberCard 
+                                label="Economia Anual" 
+                                value={formatCurrency(savingsResult.annualSaving)} 
+                                subtext="Dinheiro livre no caixa"
+                                color="emerald"
+                            />
+                            
+                            <BigNumberCard 
+                                label="Desconto Médio" 
+                                value={`${savingsResult.effectiveAnnualDiscountPercentage.toFixed(1)}%`} 
+                                subtext={discountConfig.type === 'promotional' ? "Com bônus inicial" : "Taxa fixa garantida"}
+                                color="blue"
+                            />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-900/40 p-4 rounded-xl border border-white/5">
+                                    <p className="text-[10px] text-slate-500 uppercase">Fatura Atual</p>
+                                    <p className="text-lg font-bold text-slate-300 line-through decoration-red-500/50">{formatCurrency(savingsResult.originalMonthlyBill)}</p>
+                                </div>
+                                <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                                    <p className="text-[10px] text-emerald-400 uppercase">Nova Fatura</p>
+                                    <p className="text-lg font-bold text-white">{formatCurrency(savingsResult.newMonthlyBillWithPlanus)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+                            <MapPin className="w-12 h-12 text-slate-600 mb-4" />
+                            <p className="text-slate-400 font-medium">Selecione um estado no mapa para calcular a economia disponível na região.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Botão de Ação (Sticky Bottom on Mobile) */}
+                <div className="fixed bottom-6 right-6 lg:static lg:w-full z-50">
+                    <Link href={proposalLink} className="w-full">
+                        <Button 
+                            disabled={!savingsResult}
+                            className={`
+                                h-16 w-full rounded-xl shadow-2xl transition-all duration-300
+                                ${savingsResult 
+                                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105 text-white' 
+                                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'}
+                            `}
+                        >
+                            <div className="flex items-center justify-between w-full px-6">
+                                <div className="text-left">
+                                    <p className="text-xs font-medium uppercase tracking-wider opacity-80">Gostou?</p>
+                                    <p className="text-lg font-bold">Gerar Proposta</p>
+                                </div>
+                                <div className="bg-white/20 p-2 rounded-full">
+                                    <ChevronRight className="w-6 h-6 text-white" />
+                                </div>
+                            </div>
+                        </Button>
+                    </Link>
+                </div>
+
+            </div>
+        </div>
+
+        {/* Análise de Concorrentes (Condicional) */}
+        {showCompetitorAnalysis && savingsResult && (
+            <div className="mt-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
+                <div className="glass-panel p-8 rounded-2xl border-t-4 border-t-purple-500">
+                    <h3 className="text-2xl font-bold text-white mb-6">Comparativo de Mercado</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Sent Energia */}
+                        <div className="bg-slate-800 p-6 rounded-xl border-2 border-emerald-500 relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase">Melhor Escolha</div>
+                            <p className="text-center font-bold text-white text-lg mb-4">Sent Energia</p>
+                            <p className="text-center text-3xl font-black text-emerald-400">{formatCurrency(savingsResult.annualSaving)}</p>
+                            <p className="text-center text-xs text-slate-400 mt-2">Economia Anual</p>
+                        </div>
+                        {/* Concorrente A */}
+                        <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 opacity-70">
+                            <p className="text-center font-bold text-slate-400 text-lg mb-4">Média de Mercado</p>
+                            <p className="text-center text-3xl font-bold text-slate-300">{formatCurrency(savingsResult.annualSaving * 0.8)}</p>
+                            <p className="text-center text-xs text-slate-500 mt-2">Economia estimada (-20%)</p>
+                        </div>
+                        {/* Banco Tradicional */}
+                        <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 opacity-50">
+                            <p className="text-center font-bold text-slate-500 text-lg mb-4">Sem Gestão</p>
+                            <p className="text-center text-3xl font-bold text-slate-600">R$ 0,00</p>
+                            <p className="text-center text-xs text-slate-600 mt-2">Sem economia</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+      </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
     return (
-        <Suspense fallback={<div>Carregando...</div>}>
+        <Suspense fallback={<div className="h-screen flex items-center justify-center bg-slate-950"><Loader2 className="w-10 h-10 text-cyan-500 animate-spin"/></div>}>
             <DashboardPageContent />
         </Suspense>
     )
