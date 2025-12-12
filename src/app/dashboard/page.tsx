@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BrazilMapGraphic } from '@/components/BrazilMapGraphic';
+import { BrazilMap3D } from '@/components/BrazilMap3D';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -125,7 +124,7 @@ function DashboardPageContent() {
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
         .animate-blob { animation: blob 15s infinite; }
         @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
-        /* Slider Customizado */
+        /* Slider Customizado */}
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #06b6d4; cursor: pointer; border-radius: 50%; box-shadow: 0 0 10px rgba(6, 182, 212, 0.8); transition: transform 0.1s; }
         input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
       `}</style>
@@ -272,21 +271,13 @@ function DashboardPageContent() {
                     </Select>
                 </div>
 
-                <div className="relative w-full h-full flex items-center justify-center p-4">
-                    <BrazilMapGraphic 
+                <div className="relative w-full h-full flex items-center justify-center p-0">
+                    <BrazilMap3D 
                         selectedStateCode={selectedStateCode}
-                        hoveredStateCode={hoveredStateCode}
                         onStateClick={setSelectedStateCode}
-                        onStateHover={setHoveredStateCode}
-                        // NOVAS PROPS
                         activeStates={currentPartner.states}
                         activeColor={currentPartner.color}
                     />
-                    
-                    {/* Legenda Dinâmica no Rodapé do Mapa */}
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-400 bg-slate-900/50 px-3 py-1 rounded-full border border-white/5 backdrop-blur pointer-events-none">
-                        Exibindo cobertura: <span style={{ color: currentPartner.color, fontWeight: 'bold' }}>{currentPartner.name}</span>
-                    </div>
                 </div>
             </div>
 
