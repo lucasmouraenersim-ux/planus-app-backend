@@ -101,9 +101,10 @@ const analyzeEnergyData = (consumoTotal: number) => {
   return { anomalies, yoyPercentage };
 };
 
-const generateMiniChartData = (trend: 'up' | 'down') => {
+const generateMiniChartData = () => {
   const data = [];
   let lastValue = Math.random() * 50 + 25; // start between 25 and 75
+  const trend = Math.random() > 0.5 ? 'up' : 'down';
   for (let i = 0; i < 10; i++) {
     data.push({ value: lastValue });
     if (trend === 'up') {
@@ -337,14 +338,12 @@ export default function FaturasPage() {
   const handleFileUpload = async (clienteId: string, unidadeId: string, file: File | null) => {
     if (!file) return;
 
-    // 1. Feedback visual imediato
     toast({ 
       title: "🤖 Analisando Fatura...", 
       description: "A IA está lendo o consumo e valores. Aguarde...",
     });
 
     try {
-      // 2. Envia para a API de IA
       const formData = new FormData();
       formData.append('file', file);
 
@@ -353,22 +352,29 @@ export default function FaturasPage() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Falha na IA');
+      // Instead of throwing a generic error, we'll parse the JSON to get the specific error message.
+      if (!response.ok) {
+        let errorData = { error: 'Falha na IA. Resposta não foi OK.' };
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          // The response was not JSON, use the status text.
+          errorData.error = response.statusText;
+        }
+        throw new Error(errorData.error);
+      }
       
       const dadosIA = await response.json();
 
-      // 3. Mostra o que a IA achou
       toast({ 
         title: "Leitura Concluída!", 
         description: `Cliente: ${dadosIA.nomeCliente?.substring(0, 15) || 'N/A'}... | Consumo: ${dadosIA.consumoKwh || 0} kWh`,
         className: "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
       });
 
-      // 4. Faz o upload do arquivo para o Storage
       const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
       const url = await uploadFile(file, path);
 
-      // 5. Atualiza o Firestore com dados da IA + URL
       const clienteAtual = clientes.find(c => c.id === clienteId);
       if(clienteAtual) {
           const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { 
@@ -387,17 +393,20 @@ export default function FaturasPage() {
           }
           toast({ title: "Sucesso!", description: "Fatura anexada e dados atualizados." });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast({ title: "Erro", description: "Não foi possível ler a fatura automaticamente. O arquivo foi anexado, mas os dados precisam ser inseridos manualmente.", variant: "destructive" });
-       // Fallback: anexa o arquivo mesmo se a IA falhar
+      // Display the specific error message from the API or a fallback.
+      toast({ title: "Erro na Análise", description: e.message || "Não foi possível ler a fatura automaticamente. O anexo foi salvo, mas os dados devem ser inseridos manualmente.", variant: "destructive" });
+      // Fallback: anexa o arquivo mesmo se a IA falhar
       try {
-        const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
-        const url = await uploadFile(file, path);
-        const clienteAtual = clientes.find(c => c.id === clienteId);
-        if (clienteAtual) {
-          const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name } : u);
-          await handleUpdateField(clienteId, 'unidades', novasUnidades);
+        if (file && clienteId && unidadeId) {
+            const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
+            const url = await uploadFile(file, path);
+            const clienteAtual = clientes.find(c => c.id === clienteId);
+            if (clienteAtual) {
+                const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name } : u);
+                await handleUpdateField(clienteId, 'unidades', novasUnidades);
+            }
         }
       } catch (uploadError) {
         console.error("Upload fallback error:", uploadError);
@@ -437,6 +446,7 @@ export default function FaturasPage() {
       
       {/* Styles & Animation */}
       <style jsx global>{`
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
         .shimmer { position: relative; overflow: hidden; }
         .shimmer::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; transform: translateX(-100%); background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,0.1) 20%, rgba(255,255,255,0.05) 60%, rgba(255,255,255,0)); animation: shimmer 3s infinite; }
@@ -550,7 +560,7 @@ export default function FaturasPage() {
                                     </div>
                                  </div>
                               </td>
-                              <td className="p-4"><MiniLineChart data={generateMiniChartData(totalConsumo > 20000 ? 'up' : 'down')} color={style.chartColor} /></td>
+                              <td className="p-4"><MiniLineChart data={generateMiniChartData()} color={style.chartColor} /></td>
                               <td className="p-4">
                                  <div className="flex flex-col">
                                     <span className="text-slate-300 text-xs">{totalConsumo.toLocaleString('pt-BR')} kWh</span>
@@ -722,3 +732,5 @@ export default function FaturasPage() {
     </div>
   );
 }
+
+    
