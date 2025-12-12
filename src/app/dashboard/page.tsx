@@ -42,13 +42,13 @@ const DiscountTypeToggle = ({ value, onChange }: { value: 'promotional' | 'fixed
             onClick={() => onChange('promotional')}
             className={`flex-1 relative z-10 text-xs font-bold py-2 text-center transition-colors ${value === 'promotional' ? 'text-white' : 'text-slate-400 hover:text-white'}`}
         >
-            Promocional (Escalonado)
+            Promocional
         </button>
         <button 
             onClick={() => onChange('fixed')}
             className={`flex-1 relative z-10 text-xs font-bold py-2 text-center transition-colors ${value === 'fixed' ? 'text-white' : 'text-slate-400 hover:text-white'}`}
         >
-            Fixo (Flat)
+            Fixo
         </button>
     </div>
 );
@@ -80,27 +80,37 @@ function DashboardPageContent() {
     };
   });
 
+  // Lógica para encontrar o estado (seja por sigla "MT" ou código "51")
   const selectedState = useMemo(() => {
     if (!selectedStateCode) return null;
-    return statesData.find(s => s.abbreviation === selectedStateCode) || null;
+    
+    // Tenta achar pela sigla ou pelo código IBGE (caso o mapa retorne número)
+    return statesData.find(s => 
+        s.abbreviation === selectedStateCode || 
+        s.code === selectedStateCode
+    ) || null;
   }, [selectedStateCode]);
 
   // Cálculos
   const savingsResult = useMemo(() => {
-    const kwhToReaisFactor = 1.0907; // Tarifa média base
+    const kwhToReaisFactor = 1.0907; 
     const billAmount = currentKwh * kwhToReaisFactor;
 
-    if (!selectedState?.available && selectedStateCode) {
-      return null; // Estado indisponível
-    }
+    // REMOVIDO: A trava que retornava null se o estado não estivesse disponível.
+    // Agora sempre calcula, permitindo a simulação visual.
     
-    return calculateSavings(billAmount, discountConfig, selectedStateCode || 'MT');
-  }, [currentKwh, selectedState, discountConfig, selectedStateCode]);
+    // Se não tiver estado selecionado, usa 'MT' como base de cálculo padrão
+    const stateForCalc = selectedStateCode || 'MT';
+    
+    return calculateSavings(billAmount, discountConfig, stateForCalc);
+  }, [currentKwh, discountConfig, selectedStateCode]);
 
   const proposalLink = useMemo(() => {
     const params = new URLSearchParams();
     params.set('item1Quantidade', String(currentKwh));
-    if (selectedStateCode) params.set('clienteUF', selectedStateCode);
+    // Passa a sigla correta se encontrada, senão o código bruto
+    if (selectedState) params.set('clienteUF', selectedState.abbreviation);
+    
     params.set('discountType', discountConfig.type);
     
     if (discountConfig.type === 'promotional') {
@@ -112,7 +122,7 @@ function DashboardPageContent() {
     }
     
     return `/proposal-generator?${params.toString()}`;
-  }, [currentKwh, selectedStateCode, discountConfig]);
+  }, [currentKwh, selectedState, discountConfig]);
 
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -122,11 +132,9 @@ function DashboardPageContent() {
       {/* Estilos Globais */}
       <style jsx global>{`
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
-        .glass-highlight { background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(6, 182, 212, 0.3); box-shadow: 0 0 20px rgba(6, 182, 212, 0.15); }
-        
-        @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
         .animate-blob { animation: blob 15s infinite; }
-        
+        @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
+        /* Slider Customizado */
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #06b6d4; cursor: pointer; border-radius: 50%; box-shadow: 0 0 10px rgba(6, 182, 212, 0.8); transition: transform 0.1s; }
         input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
       `}</style>
@@ -172,8 +180,8 @@ function DashboardPageContent() {
                             <Slider 
                                 value={[currentKwh]} 
                                 onValueChange={(v) => setCurrentKwh(v[0])} 
-                                max={10000} 
-                                step={50} 
+                                max={50000} /* AUMENTADO PARA 50.000 conforme solicitado */
+                                step={100} 
                                 className="cursor-pointer"
                             />
                             <div className="flex justify-between text-[10px] text-slate-500 mt-1 uppercase tracking-wider">
@@ -233,15 +241,15 @@ function DashboardPageContent() {
                     </div>
                 </div>
 
-                {/* Card de Estado Selecionado (Info Rápida) */}
+                {/* Card de Estado Selecionado (Corrigido para mostrar Nome) */}
                 {selectedStateCode && (
                     <div className="glass-panel p-4 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-left-4">
                         <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-white/10 font-black text-xl text-white">
-                            {selectedStateCode}
+                            {selectedState?.abbreviation || selectedStateCode}
                         </div>
                         <div>
                             <p className="text-xs text-slate-400 uppercase tracking-wider">Região Selecionada</p>
-                            <p className="text-white font-bold">{selectedState?.name || selectedStateCode}</p>
+                            <p className="text-white font-bold text-lg">{selectedState?.name || selectedStateCode}</p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setSelectedStateCode(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4"/></Button>
                     </div>
@@ -252,7 +260,6 @@ function DashboardPageContent() {
             <div className="lg:col-span-5 h-[500px] lg:h-auto relative group">
                 <div className="absolute inset-0 bg-cyan-500/5 rounded-3xl blur-3xl group-hover:bg-cyan-500/10 transition-colors duration-1000"></div>
                 
-                {/* Container do Mapa */}
                 <div className="relative w-full h-full flex items-center justify-center p-4">
                     <BrazilMapGraphic 
                         selectedStateCode={selectedStateCode}
@@ -261,7 +268,6 @@ function DashboardPageContent() {
                         onStateHover={setHoveredStateCode}
                     />
                     
-                    {/* Tooltip Flutuante do Mapa */}
                     {!selectedStateCode && (
                         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-white/10 text-sm text-slate-300 pointer-events-none animate-bounce">
                             <MapPin className="w-4 h-4 inline mr-2 text-cyan-400"/> Clique em um estado
@@ -273,7 +279,6 @@ function DashboardPageContent() {
             {/* === COLUNA DIREITA: RESULTADOS (3 Cols) === */}
             <div className="lg:col-span-3 space-y-6">
                 
-                {/* Título de Resultados */}
                 <div>
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-cyan-400" /> Projeção de Ganhos
@@ -314,10 +319,11 @@ function DashboardPageContent() {
                     )}
                 </div>
 
-                {/* Botão de Ação (Sticky Bottom on Mobile) */}
+                {/* Botão de Ação - AGORA SEMPRE ATIVO SE HOUVER RESULTADO */}
                 <div className="fixed bottom-6 right-6 lg:static lg:w-full z-50">
                     <Link href={proposalLink} className="w-full">
                         <Button 
+                            // Correção: Agora verifica apenas se temos um resultado de cálculo, ignorando a "disponibilidade" técnica do estado para fins de demonstração
                             disabled={!savingsResult}
                             className={`
                                 h-16 w-full rounded-xl shadow-2xl transition-all duration-300
@@ -342,26 +348,23 @@ function DashboardPageContent() {
             </div>
         </div>
 
-        {/* Análise de Concorrentes (Condicional) */}
+        {/* Análise de Concorrentes */}
         {showCompetitorAnalysis && savingsResult && (
             <div className="mt-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
                 <div className="glass-panel p-8 rounded-2xl border-t-4 border-t-purple-500">
                     <h3 className="text-2xl font-bold text-white mb-6">Comparativo de Mercado</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Sent Energia */}
                         <div className="bg-slate-800 p-6 rounded-xl border-2 border-emerald-500 relative">
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase">Melhor Escolha</div>
                             <p className="text-center font-bold text-white text-lg mb-4">Sent Energia</p>
                             <p className="text-center text-3xl font-black text-emerald-400">{formatCurrency(savingsResult.annualSaving)}</p>
                             <p className="text-center text-xs text-slate-400 mt-2">Economia Anual</p>
                         </div>
-                        {/* Concorrente A */}
                         <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 opacity-70">
                             <p className="text-center font-bold text-slate-400 text-lg mb-4">Média de Mercado</p>
                             <p className="text-center text-3xl font-bold text-slate-300">{formatCurrency(savingsResult.annualSaving * 0.8)}</p>
                             <p className="text-center text-xs text-slate-500 mt-2">Economia estimada (-20%)</p>
                         </div>
-                        {/* Banco Tradicional */}
                         <div className="bg-slate-900/50 p-6 rounded-xl border border-white/5 opacity-50">
                             <p className="text-center font-bold text-slate-500 text-lg mb-4">Sem Gestão</p>
                             <p className="text-center text-3xl font-bold text-slate-600">R$ 0,00</p>
