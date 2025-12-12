@@ -118,7 +118,7 @@ function ProposalPageContent() {
           const canvas = await html2canvas(sections[i] as HTMLElement, { 
               scale: 2, 
               useCORS: true, 
-              backgroundColor: '#ffffff',
+              backgroundColor: '#ffffff', // Fundo branco sólido
               logging: false
           });
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -147,52 +147,66 @@ function ProposalPageContent() {
       {/* --- CONTAINER DA PROPOSTA (Para Impressão A4) --- */}
       <div ref={proposalRef} className="w-full max-w-[210mm] space-y-0">
         
-        {/* === PÁGINA 1: CAPA === */}
-        <div data-pdf-section="cover" className="relative w-full aspect-[210/297] bg-slate-900 text-white overflow-hidden shadow-2xl flex flex-col">
-            {/* Imagem de Fundo Sofisticada */}
+        {/* === PÁGINA 1: CAPA (LAYOUT CORRIGIDO) === */}
+        <div data-pdf-section="cover" className="relative w-full aspect-[210/297] bg-slate-900 text-white overflow-hidden flex flex-col">
+            {/* Fundo Fixo - Usando img normal para garantir renderização no PDF */}
             <div className="absolute inset-0 z-0">
-                <img src="https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop" className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt="Energia" />
-                <div className="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/60 to-cyan-900/90" />
+                <img 
+                    src="https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop" 
+                    className="w-full h-full object-cover opacity-30" 
+                    alt="Solar Background"
+                    crossOrigin="anonymous" // Importante para CORS no html2canvas
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900/50 to-slate-900"></div>
             </div>
             
+            {/* Conteúdo da Capa */}
             <div className="relative z-10 flex-1 flex flex-col justify-between p-16">
-                <div className="flex justify-between items-center border-b border-white/10 pb-6">
+                
+                {/* Header Capa */}
+                <div className="w-full border-b border-white/20 pb-6 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-cyan-500 rounded-lg"><Zap className="w-6 h-6 text-white" /></div>
-                        <span className="text-2xl font-bold tracking-tight">SENT ENERGIA</span>
+                        <div className="w-10 h-10 bg-cyan-500 rounded flex items-center justify-center">
+                            <Zap className="w-6 h-6 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold tracking-tight">SENT ENERGIA</h1>
                     </div>
                     <div className="text-right">
-                        <p className="text-xs text-cyan-300 font-mono tracking-widest uppercase">Código da Proposta</p>
-                        <p className="text-lg font-bold">#{new Date().getFullYear()}-{(Math.random()*1000).toFixed(0)}</p>
+                        <p className="text-xs text-cyan-400 font-bold uppercase tracking-wider">Código da Proposta</p>
+                        <p className="text-xl font-bold">#{new Date().getFullYear()}-{(Math.random()*1000).toFixed(0)}</p>
                     </div>
                 </div>
 
-                <div className="space-y-6">
-                    <h1 className="text-7xl font-black leading-tight tracking-tighter">
+                {/* Título Central */}
+                <div className="py-10">
+                    <h2 className="text-7xl font-black leading-tight mb-6">
                         Energia Limpa <br/>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">Inteligente.</span>
-                    </h1>
-                    <p className="text-2xl text-slate-300 font-light max-w-xl">
+                        <span className="text-cyan-400">Inteligente.</span>
+                    </h2>
+                    <p className="text-2xl text-slate-300 font-light max-w-2xl leading-relaxed">
                         Soluções de geração distribuída que reduzem custos e ampliam a sustentabilidade do seu negócio.
                     </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8">
-                    <div>
-                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Preparado Exclusivamente para</p>
-                        <p className="text-2xl font-bold text-white">{proposalData.clientName}</p>
-                        <p className="text-sm text-slate-300">{proposalData.address}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Validade da Proposta</p>
-                        <p className="text-xl font-bold text-white">5 Dias Úteis</p>
+                {/* Footer Capa (Dados do Cliente) */}
+                <div className="border-t border-white/20 pt-8 mt-auto">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <p className="text-xs text-slate-400 uppercase tracking-widest mb-2">Preparado Exclusivamente Para</p>
+                            <h3 className="text-3xl font-bold text-white mb-2">{proposalData.clientName}</h3>
+                            <p className="text-lg text-slate-300">{proposalData.address}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">Validade</p>
+                            <p className="text-xl font-bold text-white">5 Dias Úteis</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* === PÁGINA 2: INSTITUCIONAL (Quem Somos / Usinas / Parceiros) === */}
-        <div data-pdf-section="about" className="relative w-full aspect-[210/297] bg-white text-slate-900 p-12 shadow-2xl flex flex-col justify-between">
+        {/* === PÁGINA 2: INSTITUCIONAL === */}
+        <div data-pdf-section="about" className="relative w-full aspect-[210/297] bg-white text-slate-900 p-12 flex flex-col justify-between">
             <div>
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-10">
@@ -224,9 +238,9 @@ function ProposalPageContent() {
                 <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Leaf className="w-5 h-5 text-emerald-500"/> Nossas Usinas</h3>
                 <div className="grid grid-cols-3 gap-6 mb-12">
                     {plants.map((plant, i) => (
-                        <div key={i} className="group relative overflow-hidden rounded-xl bg-slate-900 shadow-md">
-                            <img src={plant.image} alt={plant.name} className="h-32 w-full object-cover transition-transform group-hover:scale-110 opacity-80" />
-                            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent p-3 pt-8">
+                        <div key={i} className="group relative overflow-hidden rounded-xl bg-slate-900 shadow-md h-32">
+                            <img src={plant.image} alt={plant.name} className="w-full h-full object-cover opacity-80" crossOrigin="anonymous" />
+                            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/90 to-transparent p-3">
                                 <p className="text-xs font-bold text-white">{plant.name}</p>
                                 <p className="text-[10px] text-slate-300">{plant.location}</p>
                             </div>
@@ -234,13 +248,12 @@ function ProposalPageContent() {
                     ))}
                 </div>
 
-                {/* Parceiros / Comercializadoras */}
+                {/* Parceiros */}
                 <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Globe className="w-5 h-5 text-blue-500"/> Comercializadoras Parceiras</h3>
-                <p className="text-sm text-slate-500 mb-4">Atuamos através de estrutura multicomercializadora para garantir a melhor taxa.</p>
                 <div className="grid grid-cols-6 gap-3 items-center">
                     {commercializerCatalog.map((c, i) => (
                         <div key={i} className="border border-slate-200 rounded-lg p-2 h-16 flex items-center justify-center grayscale opacity-70">
-                            <img src={c.logo} alt={c.name} className="max-h-full max-w-full object-contain" />
+                            <img src={c.logo} alt={c.name} className="max-h-full max-w-full object-contain" crossOrigin="anonymous" />
                         </div>
                     ))}
                 </div>
@@ -252,8 +265,8 @@ function ProposalPageContent() {
             </div>
         </div>
 
-        {/* === PÁGINA 3: PROPOSTA COMERCIAL (Financeiro) === */}
-        <div data-pdf-section="proposal" className="relative w-full aspect-[210/297] bg-slate-50 text-slate-900 p-12 shadow-2xl flex flex-col">
+        {/* === PÁGINA 3: PROPOSTA COMERCIAL (CORRIGIDA) === */}
+        <div data-pdf-section="proposal" className="relative w-full aspect-[210/297] bg-slate-50 text-slate-900 p-12 flex flex-col">
             <header className="mb-10">
                 <div className="flex items-center gap-4">
                     <div className="w-2 h-10 bg-emerald-500"></div>
@@ -265,7 +278,7 @@ function ProposalPageContent() {
             </header>
 
             <main className="flex-1">
-                {/* Cards Comparativos (Lado a Lado) */}
+                {/* Cards Comparativos */}
                 <div className="grid grid-cols-2 gap-8 mb-8">
                     {/* Cenário Atual */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -274,14 +287,8 @@ function ProposalPageContent() {
                             <span className="font-bold text-slate-600 uppercase text-sm">Cenário Atual (Sem Sent)</span>
                         </div>
                         <div className="space-y-3 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Consumo Médio</span>
-                                <span className="font-medium">{proposalData.avgConsumption.toLocaleString()} kWh</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Tarifa Vigente</span>
-                                <span className="font-medium">{formatCurrency(proposalData.currentPrice)}</span>
-                            </div>
+                            <div className="flex justify-between"><span className="text-slate-500">Consumo Médio</span><span className="font-medium">{proposalData.avgConsumption.toLocaleString()} kWh</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500">Tarifa Vigente</span><span className="font-medium">{formatCurrency(proposalData.currentPrice)}</span></div>
                             <div className="bg-slate-100 p-3 rounded-lg flex justify-between items-center mt-2">
                                 <span className="font-bold text-slate-700">Custo Mensal</span>
                                 <span className="font-black text-slate-800 text-lg">{formatCurrency(calculated.avgMonthlyCost)}</span>
@@ -297,14 +304,8 @@ function ProposalPageContent() {
                             <span className="font-bold text-emerald-700 uppercase text-sm">Cenário Sent Energia</span>
                         </div>
                         <div className="space-y-3 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Desconto Garantido</span>
-                                <span className="font-bold text-emerald-600 bg-emerald-50 px-2 rounded">{proposalData.discountRate}% OFF</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-500">Nova Tarifa</span>
-                                <span className="font-bold text-emerald-700">{formatCurrency(calculated.bcPrice)}</span>
-                            </div>
+                            <div className="flex justify-between"><span className="text-slate-500">Desconto Garantido</span><span className="font-bold text-emerald-600 bg-emerald-50 px-2 rounded">{proposalData.discountRate}% OFF</span></div>
+                            <div className="flex justify-between"><span className="text-slate-500">Nova Tarifa</span><span className="font-bold text-emerald-700">{formatCurrency(calculated.bcPrice)}</span></div>
                             <div className="bg-emerald-50 p-3 rounded-lg flex justify-between items-center mt-2 border border-emerald-100">
                                 <span className="font-bold text-emerald-800">Novo Custo</span>
                                 <span className="font-black text-emerald-700 text-lg">{formatCurrency(calculated.bcMonthlyCost)}</span>
@@ -320,12 +321,9 @@ function ProposalPageContent() {
                         <div className="text-5xl font-black text-emerald-400 drop-shadow-lg">{formatCurrency(calculated.annualEconomy)}</div>
                         <p className="text-slate-400 text-sm mt-3">Valor livre para reinvestir no seu negócio.</p>
                     </div>
-                    {/* Efeito Glow */}
-                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/30 rounded-full blur-3xl"></div>
-                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-cyan-500/30 rounded-full blur-3xl"></div>
                 </div>
 
-                {/* Tabela de Bandeiras */}
+                {/* Tabela de Bandeiras Turbinada */}
                 {proposalData.coversTariffFlag && (
                     <div className="bg-white rounded-xl border border-slate-200 p-6">
                         <div className="flex items-center gap-2 mb-4">
@@ -336,25 +334,38 @@ function ProposalPageContent() {
                             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                                 <tr>
                                     <th className="p-3 text-left font-semibold">Bandeira</th>
-                                    <th className="p-3 text-right font-semibold">Custo Extra (Mercado)</th>
-                                    <th className="p-3 text-right font-semibold text-emerald-600">Custo com Sent</th>
+                                    <th className="p-3 text-center font-semibold text-emerald-600 bg-emerald-50">Seu Desconto Total</th>
+                                    <th className="p-3 text-right font-semibold">Custo Final kWh</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                <tr><td className="p-3 font-medium text-green-600">Verde</td><td className="p-3 text-right text-slate-500">R$ 0,00</td><td className="p-3 text-right font-bold text-emerald-700">R$ 0,00</td></tr>
-                                <tr><td className="p-3 font-medium text-yellow-600">Amarela</td><td className="p-3 text-right text-slate-500">~ R$ 0,02 / kWh</td><td className="p-3 text-right font-bold text-emerald-700">R$ 0,00 (Isento)</td></tr>
-                                <tr><td className="p-3 font-medium text-red-600">Vermelha</td><td className="p-3 text-right text-slate-500">~ R$ 0,07 / kWh</td><td className="p-3 text-right font-bold text-emerald-700">R$ 0,00 (Isento)</td></tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-green-600">Verde</td>
+                                    <td className="p-3 text-center font-bold text-emerald-700 bg-emerald-50/50">{proposalData.discountRate}%</td>
+                                    <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(calculated.bcPrice)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-yellow-600">Amarela</td>
+                                    <td className="p-3 text-center font-bold text-emerald-700 bg-emerald-50/50">{proposalData.discountRate + 3}% (Bônus +3%)</td>
+                                    <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(calculated.bcPrice * 0.97)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-red-600">Vermelha</td>
+                                    <td className="p-3 text-center font-bold text-emerald-700 bg-emerald-50/50">{proposalData.discountRate + 5}% (Bônus +5%)</td>
+                                    <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(calculated.bcPrice * 0.95)}</td>
+                                </tr>
                             </tbody>
                         </table>
+                        <p className="text-xs text-slate-400 mt-2 italic">* O desconto aumenta automaticamente nas bandeiras mais caras para proteger sua economia.</p>
                     </div>
                 )}
 
-                {/* Comercializadora Responsável */}
+                {/* Footer Entrega */}
                 <div className="mt-8 flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200">
                     <div className="text-sm text-slate-500">
                         Entrega garantida por: <strong className="text-slate-800">{selectedCommercializer.name}</strong>
                     </div>
-                    {selectedCommercializer.logo && <img src={selectedCommercializer.logo} alt="Partner" className="h-8 object-contain" />}
+                    {selectedCommercializer.logo && <img src={selectedCommercializer.logo} alt="Partner" className="h-8 object-contain" crossOrigin="anonymous" />}
                 </div>
             </main>
 
@@ -377,4 +388,4 @@ export default function ProposalPage() {
   );
 }
 
-  
+    
