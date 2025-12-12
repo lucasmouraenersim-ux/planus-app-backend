@@ -1,25 +1,13 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  DndContext, 
-  DragOverlay, 
-  closestCorners, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors, 
-  DragStartEvent, 
-  DragEndEvent,
-  defaultDropAnimationSideEffects,
-  DropAnimation 
+  DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, 
+  useSensor, useSensors, DragStartEvent, DragEndEvent, 
+  defaultDropAnimationSideEffects, DropAnimation 
 } from '@dnd-kit/core';
 import { 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
-  verticalListSortingStrategy, 
-  useSortable 
+  SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable 
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -33,14 +21,18 @@ import { LeadForm } from '@/components/crm/LeadForm';
 
 import { 
   Users, Filter, Plus, Loader2, Search, Calendar, 
-  GripVertical, DollarSign, MessageCircle, ExternalLink, Zap, User, ArrowRight
+  GripVertical, DollarSign, MessageCircle, ExternalLink, Zap, User, 
+  Flame, Clock, Send, CalendarPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { format, parseISO } from 'date-fns';
+import { 
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // --- CONFIGURAÇÃO DAS COLUNAS (Visual Refinado) ---
@@ -77,9 +69,22 @@ type Lead = {
 const formatCurrency = (val?: number) => 
     val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
-// --- COMPONENTE: CARD RICO (Sortable) ---
-const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: boolean; onClickDetails?: () => void }>(
-  ({ lead, isOverlay, onClickDetails }, ref) => {
+// --- HELPER: Templates de WhatsApp ---
+const getWhatsappLink = (phone: string, template: 'ola' | 'cobranca' | 'proposta', leadName: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    let text = '';
+    const name = leadName.split(' ')[0]; // Primeiro nome
+
+    switch(template) {
+        case 'ola': text = `Olá ${name}, tudo bem? Aqui é da Sent Energia. Gostaria de falar sobre sua economia de energia.`; break;
+        case 'proposta': text = `Olá ${name}, já conseguimos analisar sua fatura! Tenho uma proposta de economia pronta pra você.`; break;
+        case 'cobranca': text = `Oi ${name}, passando para saber se você conseguiu avaliar a proposta que enviei?`; break;
+    }
+    return `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(text)}`;
+};
+
+// --- COMPONENTE: CARD RICO E INTELIGENTE ---
+function LeadCard({ lead, isOverlay, onClickDetails }: { lead: Lead; isOverlay?: boolean; onClickDetails?: () => void }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: lead.id,
         data: { type: 'Lead', lead },
@@ -92,9 +97,37 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
         opacity: isDragging ? 0.3 : 1,
     };
 
+    // --- LÓGICA DE INTELIGÊNCIA ---
     const original = lead.value || 0;
     const final = lead.valueAfterDiscount || 0;
     const discount = original > 0 ? ((original - final) / original) * 100 : 0;
+
+    // 1. Lead Scoring (Consumo kWh)
+    const kwh = lead.kwh || 0;
+    const isHot = kwh > 5000;  // > 5.000 kWh
+    const isWarm = kwh > 1000 && kwh <= 5000; // 1.000 a 5.000 kWh
+    
+    // 2. Alerta de Estagnação (Dias sem contato)
+    const daysSinceContact = lead.lastContact 
+        ? differenceInDays(new Date(), new Date(lead.lastContact)) 
+        : differenceInDays(new Date(), new Date(lead.createdAt));
+    
+    const isStagnant = daysSinceContact > 7; // Alerta Amarelo
+    const isCritical = daysSinceContact > 15; // Alerta Vermelho
+
+    // Estilos dinâmicos baseados no Score
+    let borderClass = 'border-white/5';
+    let bgClass = 'bg-slate-900';
+    let shadowClass = '';
+
+    if (isHot) {
+        borderClass = 'border-orange-500/50';
+        bgClass = 'bg-gradient-to-br from-slate-900 to-orange-950/20';
+        shadowClass = 'shadow-[0_0_15px_-3px_rgba(249,115,22,0.15)]';
+    } else if (isWarm) {
+        borderClass = 'border-cyan-500/40';
+        shadowClass = 'shadow-[0_0_10px_-3px_rgba(6,182,212,0.1)]';
+    }
 
     return (
         <div 
@@ -102,22 +135,30 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
             style={style} 
             className={`
                 group relative flex flex-col gap-3 p-4 rounded-xl border transition-all duration-200
+                ${bgClass} ${borderClass} ${shadowClass}
                 ${isOverlay 
-                    ? 'bg-slate-800 border-cyan-500 shadow-2xl scale-105 rotate-2 cursor-grabbing z-50 ring-2 ring-cyan-500/50' 
-                    : 'bg-slate-900 border-white/5 hover:border-white/10 hover:bg-slate-800 hover:shadow-lg hover:-translate-y-1 cursor-grab active:cursor-grabbing'
+                    ? 'shadow-2xl scale-105 rotate-2 cursor-grabbing z-50 ring-2 ring-cyan-500/50' 
+                    : 'hover:border-white/10 hover:bg-slate-800 hover:shadow-lg hover:-translate-y-1 cursor-grab active:cursor-grabbing'
                 }
             `}
             {...attributes} 
             {...listeners}
         >
-            {/* Header: Nome e Drag Handle */}
-            <div className="flex justify-between items-start">
-                <h4 className="font-bold text-slate-100 text-sm line-clamp-2 leading-snug tracking-tight pr-4">
+            {/* Header: Nome e Badges */}
+            <div className="flex justify-between items-start gap-2">
+                <h4 className="font-bold text-slate-100 text-sm line-clamp-2 leading-snug tracking-tight">
                     {lead.name}
                 </h4>
                 {!isOverlay && (
-                    <div className="text-slate-600 group-hover:text-slate-400 transition-colors">
-                        <GripVertical className="w-4 h-4" />
+                    <div className="flex items-center gap-1 text-slate-600">
+                        {/* Ícone de Scoring */}
+                        {isHot && <Flame className="w-4 h-4 text-orange-500 animate-pulse" fill="currentColor" />}
+                        {isWarm && <Zap className="w-4 h-4 text-cyan-400" fill="currentColor" />}
+                        
+                        {/* Ícone de Drag */}
+                        <div className="group-hover:text-slate-400 transition-colors ml-1">
+                            <GripVertical className="w-4 h-4" />
+                        </div>
                     </div>
                 )}
             </div>
@@ -126,7 +167,7 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
             <div className="grid grid-cols-2 gap-3 py-2 border-y border-white/5">
                 <div className="flex flex-col">
                     <span className="text-[10px] uppercase text-slate-500 font-medium mb-0.5">Valor Final</span>
-                    <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
+                    <div className={`flex items-center gap-1 font-bold text-sm ${isHot ? 'text-orange-400' : 'text-emerald-400'}`}>
                         <span className="text-xs">R$</span>
                         {lead.valueAfterDiscount?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
                     </div>
@@ -134,12 +175,23 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
                 </div>
                 <div className="flex flex-col items-end">
                     <span className="text-[10px] uppercase text-slate-500 font-medium mb-0.5">Consumo</span>
-                    <div className="flex items-center gap-1 text-sky-400 font-bold text-sm">
-                        <Zap className="w-3 h-3" />
+                    <div className={`flex items-center gap-1 font-bold text-sm ${isHot ? 'text-white' : 'text-sky-400'}`}>
+                        {isHot ? <Zap className="w-3 h-3 text-orange-500" /> : <Zap className="w-3 h-3" />}
                         {lead.kwh?.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">kWh</span>
                     </div>
                 </div>
             </div>
+
+            {/* Alertas de Estagnação (Se houver) */}
+            {(isStagnant || isCritical) && (
+                <div className={`
+                    flex items-center gap-2 text-[10px] px-2 py-1 rounded-md font-medium
+                    ${isCritical ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}
+                `}>
+                    <Clock className="w-3 h-3" />
+                    <span>Sem contato há {daysSinceContact} dias</span>
+                </div>
+            )}
 
             {/* Footer: Vendedor e Data */}
             <div className="flex items-center justify-between mt-1">
@@ -148,55 +200,69 @@ const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: bool
                         <AvatarImage src={lead.photoURL} />
                         <AvatarFallback className="text-[9px] bg-slate-800 text-slate-300">{lead.sellerName?.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 max-w-[80px] truncate">{lead.sellerName || 'Sistema'}</span>
-                    </div>
+                    <span className="text-[10px] text-slate-400 max-w-[80px] truncate">{lead.sellerName || 'Sistema'}</span>
                 </div>
-                <div className="flex items-center gap-1 text-[10px] text-slate-500 bg-slate-950 px-2 py-0.5 rounded-full border border-white/5">
+                <div className="flex items-center gap-1 text-[10px] text-slate-500">
                     <Calendar className="w-3 h-3" />
-                    {lead.createdAt && !isNaN(new Date(lead.createdAt).getTime()) 
-                        ? format(new Date(lead.createdAt), 'dd/MM', { locale: ptBR })
-                        : '--/--'}
+                    {lead.createdAt && !isNaN(new Date(lead.createdAt).getTime()) ? format(new Date(lead.createdAt), 'dd/MM') : '--/--'}
                 </div>
             </div>
 
-            {/* Ações (Hover) */}
+            {/* Ações Avançadas (Hover) */}
             {!isOverlay && (
-                <div className="flex gap-2 pt-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                     {lead.phone && (
-                        <a 
-                           href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}`} 
-                           target="_blank" 
-                           rel="noopener noreferrer"
-                           className="flex-1 h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-colors"
-                           onPointerDown={(e) => e.stopPropagation()} 
-                           onClick={(e) => e.stopPropagation()}
-                        >
-                            <MessageCircle className="w-3 h-3" /> WhatsApp
-                        </a>
-                    )}
+                <div className="grid grid-cols-4 gap-1 pt-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                     {/* 1. Botão WhatsApp Inteligente */}
+                     {lead.phone ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className="col-span-2 h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-colors" onPointerDown={(e) => e.stopPropagation()}>
+                                    <MessageCircle className="w-3 h-3" /> WhatsApp
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="bg-slate-900 border-slate-700 text-slate-300">
+                                <DropdownMenuLabel className="text-xs">Escolha o Modelo</DropdownMenuLabel>
+                                <DropdownMenuSeparator className="bg-slate-700" />
+                                <DropdownMenuItem className="hover:bg-slate-800 cursor-pointer text-xs" onClick={() => window.open(getWhatsappLink(lead.phone!, 'ola', lead.name), '_blank')}>👋 Apresentação</DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-slate-800 cursor-pointer text-xs" onClick={() => window.open(getWhatsappLink(lead.phone!, 'proposta', lead.name), '_blank')}>💰 Enviar Proposta</DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-slate-800 cursor-pointer text-xs" onClick={() => window.open(getWhatsappLink(lead.phone!, 'cobranca', lead.name), '_blank')}>⏳ Follow-up (Cobrança)</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                     ) : (
+                         <div className="col-span-2 h-7 flex items-center justify-center text-[10px] text-slate-600 bg-slate-900/50 rounded border border-white/5">Sem Whats</div>
+                     )}
+
+                    {/* 2. Botão Detalhes */}
                     <button 
-                        className="flex-1 h-7 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-[10px] font-bold rounded-md flex items-center justify-center gap-1 transition-colors"
+                        className="col-span-1 h-7 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-[10px] font-bold rounded-md flex items-center justify-center transition-colors"
                         onPointerDown={(e) => e.stopPropagation()} 
                         onClick={(e) => { e.stopPropagation(); onClickDetails?.(); }}
+                        title="Ver Detalhes Completos"
                     >
-                        <ExternalLink className="w-3 h-3" /> Detalhes
+                        <ExternalLink className="w-3 h-3" />
+                    </button>
+
+                     {/* 3. Botão Tarefa (Mock) */}
+                     <button 
+                        className="col-span-1 h-7 bg-slate-800 hover:bg-amber-500/10 hover:text-amber-500 text-slate-400 border border-white/10 text-[10px] font-bold rounded-md flex items-center justify-center transition-colors"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        title="Agendar Tarefa"
+                    >
+                        <CalendarPlus className="w-3 h-3" />
                     </button>
                 </div>
             )}
         </div>
     );
-});
-LeadCard.displayName = 'LeadCard';
-
+}
 
 // --- COMPONENTE: COLUNA ---
 function KanbanColumn({ stage, leads, onEditLead }: { stage: typeof STAGES[0], leads: Lead[], onEditLead: (l: Lead) => void }) {
   const totalValue = leads.reduce((acc, l) => acc + (l.valueAfterDiscount || 0), 0);
+  const totalKwh = leads.reduce((acc, l) => acc + (l.kwh || 0), 0);
   
   return (
     <div className="flex flex-col h-full min-w-[300px] w-[300px] max-w-[300px] rounded-xl bg-slate-950/30 border border-white/5 backdrop-blur-sm">
-      {/* Header da Coluna - Minimalista */}
+      {/* Header da Coluna */}
       <div className="p-3 pb-2">
         <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
@@ -239,11 +305,9 @@ export default function CRMPage() {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [filterText, setFilterText] = useState('');
   
-  // Detalhes / Edição
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  // Sensores
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -276,26 +340,20 @@ export default function CRMPage() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveLead(null);
-
     if (!over) return;
-
     const activeId = active.id as string;
     const overId = over.id as string;
-
     if (activeId === overId) return;
 
     const currentLead = leads.find(l => l.id === activeId);
     if (!currentLead) return;
 
     let newStageId = '';
-
     if (STAGES.some(s => s.id === overId)) {
         newStageId = overId;
     } else {
         const overLead = leads.find(l => l.id === overId);
-        if (overLead) {
-            newStageId = overLead.stageId;
-        }
+        if (overLead) newStageId = overLead.stageId;
     }
 
     if (newStageId && newStageId !== currentLead.stageId) {
@@ -331,80 +389,34 @@ export default function CRMPage() {
 
   return (
     <div className="h-[calc(100vh-56px)] bg-slate-950 text-slate-300 font-sans flex flex-col overflow-hidden relative">
-      
       <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-      `}</style>
+      <style jsx global>{` .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } `}</style>
 
       <header className="shrink-0 border-b border-white/5 bg-slate-950/80 backdrop-blur-md px-6 py-3 flex items-center justify-between z-10 gap-4">
          <div className="flex items-center gap-4">
-             <div className="bg-gradient-to-br from-cyan-600 to-blue-700 p-2 rounded-lg shadow-lg shadow-cyan-900/20">
-                 <Users className="w-5 h-5 text-white" />
-             </div>
-             <div>
-                 <h1 className="text-lg font-bold text-white leading-tight">Pipeline de Vendas</h1>
-                 <p className="text-xs text-slate-500">Gerencie suas oportunidades em tempo real</p>
-             </div>
-             
+             <div className="bg-gradient-to-br from-cyan-600 to-blue-700 p-2 rounded-lg shadow-lg shadow-cyan-900/20"><Users className="w-5 h-5 text-white" /></div>
+             <div><h1 className="text-lg font-bold text-white leading-tight">Pipeline de Vendas</h1><p className="text-xs text-slate-500">Gerencie suas oportunidades em tempo real</p></div>
              <div className="h-8 w-px bg-white/10 mx-2"></div>
-             
              <div className="flex gap-4">
-                <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Valor em Pipeline</p>
-                    <p className="text-sm font-bold text-emerald-400">{formatCurrency(metrics.valuePipeline)}</p>
-                </div>
-                <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Volume Total</p>
-                    <p className="text-sm font-bold text-sky-400">{metrics.kwhPipeline.toLocaleString()} kWh</p>
-                </div>
-                <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Leads Ativos</p>
-                    <p className="text-sm font-bold text-white">{metrics.total}</p>
-                </div>
+                <div><p className="text-[10px] text-slate-500 uppercase font-bold">Valor em Pipeline</p><p className="text-sm font-bold text-emerald-400">{formatCurrency(metrics.valuePipeline)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase font-bold">Volume Total</p><p className="text-sm font-bold text-sky-400">{metrics.kwhPipeline.toLocaleString()} kWh</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase font-bold">Leads Ativos</p><p className="text-sm font-bold text-white">{metrics.total}</p></div>
              </div>
          </div>
-
          <div className="flex items-center gap-3">
-             <div className="relative">
-                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                 <Input 
-                    placeholder="Filtrar leads..." 
-                    className="pl-9 bg-slate-900 border-white/10 w-64 focus:ring-cyan-500 h-9 text-sm transition-all focus:w-80" 
-                    value={filterText} 
-                    onChange={e => setFilterText(e.target.value)} 
-                 />
-             </div>
-             <Button onClick={() => setIsFormOpen(true)} size="sm" className="bg-cyan-600 hover:bg-cyan-500 h-9 shadow-lg shadow-cyan-900/20">
-                 <Plus className="w-4 h-4 mr-2" /> Novo Lead
-             </Button>
+             <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" /><Input placeholder="Filtrar leads..." className="pl-9 bg-slate-900 border-white/10 w-64 focus:ring-cyan-500 h-9 text-sm transition-all focus:w-80" value={filterText} onChange={e => setFilterText(e.target.value)} /></div>
+             <Button onClick={() => setIsFormOpen(true)} size="sm" className="bg-cyan-600 hover:bg-cyan-500 h-9 shadow-lg shadow-cyan-900/20"><Plus className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
       </header>
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 z-0">
-         <DndContext 
-            sensors={sensors} 
-            collisionDetection={closestCorners} 
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-         >
+         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex h-full gap-4 min-w-max pb-2">
                 {STAGES.map(stage => (
-                    <KanbanColumn 
-                        key={stage.id}
-                        stage={stage}
-                        leads={filteredLeads.filter(l => l.stageId === stage.id)}
-                        onEditLead={setSelectedLead}
-                    />
+                    <KanbanColumn key={stage.id} stage={stage} leads={filteredLeads.filter(l => l.stageId === stage.id)} onEditLead={setSelectedLead} />
                 ))}
             </div>
-
-            <DragOverlay dropAnimation={dropAnimation}>
-                {activeLead ? (<LeadCard lead={activeLead} isOverlay />) : null}
-            </DragOverlay>
+            <DragOverlay dropAnimation={dropAnimation}>{activeLead ? (<LeadCard lead={activeLead} isOverlay />) : null}</DragOverlay>
          </DndContext>
       </div>
 
@@ -412,10 +424,12 @@ export default function CRMPage() {
         <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
             <DialogContent className="max-w-4xl h-[90vh] p-0 border-none bg-transparent shadow-2xl">
                 <LeadDetailView 
-                    lead={selectedLead as any} 
+                    lead={selectedLead} 
                     onClose={() => setSelectedLead(null)}
-                    onEdit={() => { setSelectedLead(null); setIsFormOpen(true); }}
+                    onEdit={() => { setSelectedLead(null); setIsFormOpen(true); }} 
                     isAdmin={true} 
+                    onApprove={async () => {}}
+                    onRequestCorrection={async () => {}}
                 />
             </DialogContent>
         </Dialog>
@@ -437,3 +451,20 @@ export default function CRMPage() {
     </div>
   );
 }
+O que há de novo:
+Lead Scoring (kWh):
+Se o lead tem mais de 5.000 kWh, ele ganha uma borda gradiente laranja/vermelha e um ícone de fogo pulsante 🔥.
+Se tem entre 1.000 e 5.000 kWh, ganha um brilho ciano na borda e um ícone de raio ⚡.
+Alerta de Estagnação:
+Calcula os dias desde o último contato (lastContact).
+Se for > 7 dias, mostra um ícone de relógio ⏰ com um fundo amarelo de alerta.
+Se for > 15 dias, o ícone fica vermelho crítico.
+Menu WhatsApp Inteligente:
+O botão de WhatsApp agora é um DropdownMenu.
+Oferece 3 opções de mensagens prontas.
+Ao clicar, abre o link do WhatsApp já com a mensagem preenchida e o nome do lead.
+Agendamento Rápido:
+Adicionei um botão com um ícone de sino/calendário (CalendarPlus). Por enquanto, ele é visual, mas é o lugar perfeito para você adicionar a lógica de criar uma tarefa futura.
+Design Melhorado:
+Os ícones e alertas dão vida aos cards, permitindo que o vendedor identifique visualmente as prioridades sem precisar ler tudo.
+O uso de gradientes e sombras sutis eleva o visual.
