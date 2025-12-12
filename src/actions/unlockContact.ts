@@ -1,3 +1,4 @@
+
 'use server';
 
 import { db } from '@/lib/firebase';
@@ -67,4 +68,6 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
 
   } catch (error) {
     console.error("Erro ao desbloquear:", error);
-    return { success: false, message: '
+    return { success: false, message: 'Erro interno ao processar.' };
+  }
+}
