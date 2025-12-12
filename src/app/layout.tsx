@@ -28,8 +28,9 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const router = useRouter();
     const { appUser, isLoadingAuth } = useAuth();
     
-    // Tratamento para páginas públicas
-    const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/register' || pathname.startsWith('/meteorologia');
+    const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/register';
+    // Adicionamos '/hub' aqui para ele ser tratado como uma "página cheia" sem sidebar
+    const isImmersivePage = pathname === '/hub'; 
 
     useEffect(() => {
         if (!isLoadingAuth && !appUser && !isPublicPage) {
@@ -40,19 +41,20 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     if (isLoadingAuth) {
         return (
             <div className="flex flex-col justify-center items-center h-screen bg-[#020617] text-primary">
-                <div className="relative">
-                    <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full"></div>
-                    <Loader2 className="relative animate-spin h-12 w-12 text-cyan-500" />
-                </div>
-                <p className="mt-4 text-slate-400 text-sm font-medium tracking-widest uppercase animate-pulse">Carregando Hub...</p>
+                <Loader2 className="animate-spin h-12 w-12 text-cyan-500" />
             </div>
         );
     }
     
-    if (!appUser && isPublicPage) {
-         return <>{children}</>;
+    // Se não estiver logado ou for página pública
+    if (!appUser && isPublicPage) return <>{children}</>;
+
+    // SE FOR O HUB (Imersivo): Renderiza sem SidebarProvider
+    if (appUser && isImmersivePage) {
+        return <>{children}</>;
     }
 
+    // Se for o resto do sistema: Renderiza com Sidebar
     if (appUser) {
         return (
             <SidebarProvider defaultOpen={true}>
