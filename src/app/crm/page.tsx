@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -12,7 +11,6 @@ import {
   useSensors, 
   DragStartEvent, 
   DragEndEvent,
-  DragOverEvent,
   defaultDropAnimationSideEffects,
   DropAnimation
 } from '@dnd-kit/core';
@@ -29,173 +27,214 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, query, onSnapshot, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { updateCrmLeadStage } from '@/lib/firebase/firestore'; 
+import { LeadDetailView } from '@/components/crm/LeadDetailView'; 
+import { LeadForm } from '@/components/crm/LeadForm'; 
 
 import { 
   Users, Filter, Plus, Loader2, Search, Calendar, 
-  LayoutGrid, List as ListIcon, GripVertical 
+  GripVertical, DollarSign, Phone, MessageCircle, ExternalLink, Zap, User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+// --- CONFIGURAÇÃO DAS COLUNAS (STAGES) ---
+const STAGES = [
+  { id: 'para-validacao', title: 'Para Validação', color: 'bg-slate-700', border: 'border-slate-500' },
+  { id: 'para-atribuir', title: 'Para Atribuir', color: 'bg-slate-600', border: 'border-slate-400' },
+  { id: 'contato', title: 'Contato Inicial', color: 'bg-blue-600', border: 'border-blue-500' },
+  { id: 'fatura', title: 'Fatura em Análise', color: 'bg-indigo-600', border: 'border-indigo-500' },
+  { id: 'proposta', title: 'Proposta Apresentada', color: 'bg-yellow-600', border: 'border-yellow-500' },
+  { id: 'negociacao', title: 'Em Negociação', color: 'bg-orange-600', border: 'border-orange-500' },
+  { id: 'contrato', title: 'Contrato', color: 'bg-purple-600', border: 'border-purple-500' },
+  { id: 'assinado', title: 'Assinado', color: 'bg-emerald-600', border: 'border-emerald-500' },
+  { id: 'finalizado', title: 'Finalizado', color: 'bg-green-600', border: 'border-green-500' },
+  { id: 'perdido', title: 'Perdido', color: 'bg-red-600', border: 'border-red-500' },
+  { id: 'cancelado', title: 'Cancelado', color: 'bg-gray-600', border: 'border-gray-500' }
+];
 
 // --- TIPOS ---
 type Lead = {
   id: string;
   name: string;
   stageId: string;
-  valueAfterDiscount?: number;
+  value?: number; // Valor Original
+  valueAfterDiscount?: number; // Valor com Desconto
   kwh?: number;
   sellerName?: string;
+  phone?: string;
   createdAt: string;
+  lastContact?: string;
+  description?: string; // Observações
+  [key: string]: any; // Allow other fields from LeadWithId
 };
 
-const STAGES = [
-  { id: 'contato', title: 'Contato Inicial', color: 'bg-blue-500' },
-  { id: 'proposta', title: 'Proposta Enviada', color: 'bg-yellow-500' },
-  { id: 'negociacao', title: 'Em Negociação', color: 'bg-orange-500' },
-  { id: 'fechado', title: 'Fechado / Ganho', color: 'bg-emerald-500' },
-  { id: 'perdido', title: 'Perdido', color: 'bg-red-500' }
-];
+// --- HELPER: Formatar Moeda ---
+const formatCurrency = (val?: number) => 
+    val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
-// --- COMPONENTE: CARD DO LEAD (USADO NA LISTA E NO OVERLAY) ---
-const LeadCard = React.forwardRef<HTMLDivElement, { lead: Lead; isOverlay?: boolean; onClick?: () => void }>(
-  ({ lead, isOverlay, onClick }, ref) => {
+// --- COMPONENTE: CARD RICO (Sortable) ---
+function LeadCard({ lead, isOverlay, onClickDetails }: { lead: Lead; isOverlay?: boolean; onClickDetails?: () => void }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id: lead.id,
+        data: { type: 'Lead', lead },
+        disabled: isOverlay
+    });
+
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
+    };
+
+    const original = lead.value || 0;
+    const final = lead.valueAfterDiscount || 0;
+    const discount = original > 0 ? ((original - final) / original) * 100 : 0;
+
     return (
-      <div
-        ref={ref}
-        onClick={onClick}
-        className={`
-            relative p-4 rounded-xl border transition-all cursor-grab active:cursor-grabbing
-            ${isOverlay 
-                ? 'bg-slate-800 border-cyan-500 shadow-2xl scale-105 rotate-2 z-50' 
-                : 'bg-slate-800/60 border-white/5 hover:border-cyan-500/50 hover:bg-slate-800 shadow-lg'
-            }
-        `}
-      >
-        {!isOverlay && (
-             <div className="absolute top-3 right-3 p-1 text-slate-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                <GripVertical className="w-4 h-4" />
-             </div>
-        )}
-
-        <div className="flex justify-between items-start mb-2 pr-6">
-           <h4 className="font-bold text-white text-sm truncate">{lead.name}</h4>
-        </div>
-
-        <div className="space-y-2">
-            <div className="flex items-center text-xs text-slate-400 gap-2">
-                <Calendar className="w-3 h-3" /> 
-                {/* Proteção para data inválida */}
-                {lead.createdAt && !isNaN(new Date(lead.createdAt).getTime()) 
-                    ? format(new Date(lead.createdAt), 'dd/MM HH:mm') 
-                    : 'Data N/A'}
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            className={`
+                group relative flex flex-col gap-3 p-4 rounded-xl border transition-all bg-slate-900/80 backdrop-blur-sm
+                ${isOverlay ? 'border-cyan-500 shadow-2xl scale-105 rotate-2 cursor-grabbing z-50' : 'border-white/5 hover:border-cyan-500/50 hover:shadow-lg cursor-grab'}
+            `}
+            {...attributes} 
+            {...listeners}
+        >
+            <div className="flex justify-between items-start">
+                <h4 className="font-bold text-white text-sm line-clamp-2 leading-tight">{lead.name}</h4>
+                {!isOverlay && <div className="p-1 rounded hover:bg-white/10 text-slate-500"><GripVertical className="w-4 h-4" /></div>}
             </div>
-            
-            <div className="flex justify-between items-center pt-2 border-t border-white/5 mt-2">
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-slate-500 uppercase">Valor</span>
-                    <span className="text-sm font-bold text-emerald-400">R$ {(lead.valueAfterDiscount || 0).toLocaleString('pt-BR')}</span>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-1 text-slate-400">
+                    <Zap className="w-3 h-3 text-yellow-500" />
+                    <span>{lead.kwh?.toLocaleString()} kWh</span>
                 </div>
-                <div className="flex flex-col items-end">
-                    <span className="text-[10px] text-slate-500 uppercase">Consumo</span>
-                    <span className="text-sm font-bold text-cyan-400">{(lead.kwh || 0).toLocaleString()} kWh</span>
+                <div className="flex items-center gap-1 text-slate-400 justify-end">
+                    <span className="text-[10px] text-slate-500 line-through">{formatCurrency(lead.value)}</span>
                 </div>
             </div>
 
-            {lead.sellerName && (
-                <div className="flex items-center gap-2 mt-2 pt-2">
-                    <Avatar className="w-5 h-5"><AvatarImage src="" /><AvatarFallback className="text-[9px] bg-slate-700">{lead.sellerName.charAt(0)}</AvatarFallback></Avatar>
-                    <span className="text-xs text-slate-400 truncate max-w-[120px]">{lead.sellerName}</span>
+            <div className="bg-slate-950/50 p-2 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] text-emerald-500 font-bold uppercase">Valor Final</span>
+                    {discount > 0 && <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 rounded">-{discount.toFixed(0)}%</span>}
+                </div>
+                <div className="text-sm font-bold text-white flex items-center gap-1">
+                    <DollarSign className="w-3 h-3 text-emerald-500" />
+                    {formatCurrency(lead.valueAfterDiscount)}
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-1 text-[10px] text-slate-500">
+                <div className="flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    <span className="truncate">{lead.sellerName || 'Sistema'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    <span>{lead.lastContact ? format(new Date(lead.lastContact), "dd/MM/yy HH:mm", { locale: ptBR }) : 'Sem contato'}</span>
+                </div>
+            </div>
+
+            {!isOverlay && (
+                <div className="flex gap-2 mt-1 pt-2 border-t border-white/5">
+                    {lead.phone && (
+                        <a 
+                           href={`https://wa.me/55${lead.phone.replace(/\D/g, '')}`} 
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="flex-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[10px] font-bold py-1.5 rounded flex items-center justify-center gap-1 transition-colors"
+                           onPointerDown={(e) => e.stopPropagation()}
+                           onClick={(e) => e.stopPropagation()}
+                        >
+                            <MessageCircle className="w-3 h-3" /> WhatsApp
+                        </a>
+                    )}
+                    <button 
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold py-1.5 rounded flex items-center justify-center gap-1 transition-colors"
+                        onPointerDown={(e) => e.stopPropagation()} 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onClickDetails?.();
+                        }}
+                    >
+                        <ExternalLink className="w-3 h-3" /> Ver Detalhes
+                    </button>
                 </div>
             )}
         </div>
-      </div>
     );
-  }
-);
-LeadCard.displayName = "LeadCard";
-
-
-// --- COMPONENTE: ITEM ARRASTÁVEL ---
-function SortableItem({ lead, onClick }: { lead: Lead, onClick: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
-      id: lead.id,
-      data: { type: 'Lead', lead } // Passamos o lead completo nos dados
-  });
-  
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-3 group">
-        <LeadCard lead={lead} onClick={onClick} />
-    </div>
-  );
 }
 
 // --- COMPONENTE: COLUNA ---
-function KanbanColumn({ id, title, color, leads, onEditLead }: { id: string, title: string, color: string, leads: Lead[], onEditLead: (l: Lead) => void }) {
+function KanbanColumn({ stage, leads, onEditLead }: { stage: typeof STAGES[0], leads: Lead[], onEditLead: (l: Lead) => void }) {
   const totalValue = leads.reduce((acc, l) => acc + (l.valueAfterDiscount || 0), 0);
+  const totalKwh = leads.reduce((acc, l) => acc + (l.kwh || 0), 0);
   
   return (
-    <div className="flex flex-col h-full min-w-[300px] w-[300px] bg-slate-900/30 rounded-2xl border border-white/5 backdrop-blur-sm">
-      <div className={`p-4 rounded-t-2xl border-b border-white/5 ${color} bg-opacity-10`}>
+    <div className="flex flex-col h-full min-w-[320px] w-[320px] bg-slate-900/40 rounded-xl border border-white/5">
+      <div className={`p-3 rounded-t-xl border-b-4 ${stage.color.replace('bg-', 'border-')} bg-slate-900`}>
         <div className="flex justify-between items-center mb-1">
-            <h3 className={`font-bold text-sm uppercase tracking-wider ${color.replace('bg-', 'text-')}`}>{title}</h3>
-            <Badge variant="secondary" className="bg-slate-800 text-white border-0">{leads.length}</Badge>
+            <h3 className="font-bold text-sm text-white uppercase tracking-wider">{stage.title}</h3>
+            <Badge className="bg-slate-800 text-white hover:bg-slate-700">{leads.length}</Badge>
         </div>
-        <div className="text-xs text-slate-400 font-mono">
-            Total: R$ {totalValue.toLocaleString('pt-BR', { notation: "compact" })}
+        <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono mt-1">
+             <span>{formatCurrency(totalValue)}</span>
+             <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {totalKwh.toLocaleString()} kWh</span>
         </div>
       </div>
 
-      <div className="flex-1 p-3 overflow-y-auto custom-scrollbar">
-        <SortableContext id={id} items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
-            {leads.map(lead => (
-                <SortableItem key={lead.id} lead={lead} onClick={() => onEditLead(lead)} />
-            ))}
-            {/* Área vazia que garante que a coluna aceite drops mesmo sem itens */}
-            {leads.length === 0 && (
-                <div className="h-full min-h-[100px] border-2 border-dashed border-slate-800/50 rounded-xl flex items-center justify-center text-slate-600 text-xs">
-                    Arraste para cá
-                </div>
-            )}
+      <div className="flex-1 p-2 overflow-y-auto custom-scrollbar">
+        <SortableContext id={stage.id} items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2 min-h-[150px]">
+                {leads.map(lead => (
+                    <LeadCard key={lead.id} lead={lead} onClickDetails={() => onEditLead(lead)} />
+                ))}
+            </div>
         </SortableContext>
       </div>
     </div>
   );
 }
 
-
-// --- PÁGINA PRINCIPAL CRM ---
+// --- PÁGINA PRINCIPAL ---
 
 export default function CRMPage() {
   const { toast } = useToast();
+  const { appUser } = useAuth();
+  
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeLead, setActiveLead] = useState<Lead | null>(null); // Lead sendo arrastado
+  const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const [filterText, setFilterText] = useState('');
+  
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
-  // Sensores (Mouse e Touch) - Ajustado activationConstraint para 5px para não confundir com clique
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), 
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
     const q = query(collection(db, "crm_leads"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
-        const data = snap.docs.map(d => ({ 
-            id: d.id, 
-            ...d.data(),
-            // Garantir que datas venham como string ISO para evitar erros
-            createdAt: d.data().createdAt instanceof Timestamp ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
-        } as Lead));
+        const data = snap.docs.map(d => {
+            const data = d.data();
+            return { 
+                id: d.id, 
+                ...data,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+                lastContact: data.lastContact instanceof Timestamp ? data.lastContact.toDate().toISOString() : data.lastContact
+            } as Lead
+        });
         setLeads(data);
         setIsLoading(false);
     });
@@ -203,7 +242,7 @@ export default function CRMPage() {
   }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
-      if (event.active.data.current?.type === 'Lead') {
+      if (event.active.data.current?.lead) {
           setActiveLead(event.active.data.current.lead);
       }
   };
@@ -219,18 +258,14 @@ export default function CRMPage() {
 
     if (activeId === overId) return;
 
-    // Encontrar o lead que está sendo movido
-    const activeLead = leads.find(l => l.id === activeId);
-    if (!activeLead) return;
+    const currentLead = leads.find(l => l.id === activeId);
+    if (!currentLead) return;
 
-    // Descobrir para qual ESTÁGIO ele foi
     let newStageId = '';
 
-    // Cenário 1: Soltou em cima de uma Coluna vazia ou na área da coluna
     if (STAGES.some(s => s.id === overId)) {
         newStageId = overId;
     } 
-    // Cenário 2: Soltou em cima de outro Card (Lead)
     else {
         const overLead = leads.find(l => l.id === overId);
         if (overLead) {
@@ -238,31 +273,26 @@ export default function CRMPage() {
         }
     }
 
-    if (newStageId && newStageId !== activeLead.stageId) {
-        // 1. Atualização Otimista (UI muda na hora)
+    if (newStageId && newStageId !== currentLead.stageId) {
         setLeads(prev => prev.map(l => l.id === activeId ? { ...l, stageId: newStageId } : l));
 
-        // 2. Atualização no Backend
         try {
             await updateCrmLeadStage(activeId, newStageId as any);
             const stageName = STAGES.find(s => s.id === newStageId)?.title;
-            toast({ title: "Lead Movido", description: `Mudou para: ${stageName}`, className: "bg-slate-800 border-emerald-500 text-emerald-400" });
+            toast({ title: "Lead Atualizado", description: `Movido para: ${stageName}` });
         } catch (error) {
             console.error(error);
             toast({ title: "Erro", description: "Falha ao mover lead.", variant: "destructive" });
-            // Reverter em caso de erro (poderia refetch do firebase, mas o listener já faz isso)
         }
     }
   };
-  
-  // Efeito de drop suave
-  const dropAnimation: DropAnimation = {
-    sideEffects: defaultDropAnimationSideEffects({
-      styles: {
-        active: { opacity: '0.5' },
-      },
-    }),
-  };
+
+  const metrics = useMemo(() => {
+    const totalLeads = leads.length;
+    const finalizadoKwh = leads.filter(l => l.stageId === 'finalizado').reduce((acc, l) => acc + (l.kwh || 0), 0);
+    const paraAtribuirKwh = leads.filter(l => l.stageId === 'para-atribuir').reduce((acc, l) => acc + (l.kwh || 0), 0);
+    return { totalLeads, finalizadoKwh, paraAtribuirKwh };
+  }, [leads]);
 
   const filteredLeads = useMemo(() => {
       if(!filterText) return leads;
@@ -273,57 +303,104 @@ export default function CRMPage() {
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-10 h-10 text-cyan-500 animate-spin"/></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans flex flex-col overflow-hidden">
+    <div className="h-[calc(100vh-56px)] bg-slate-950 text-slate-300 font-sans flex flex-col overflow-hidden">
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       `}</style>
 
-      {/* Header */}
-      <header className="h-20 shrink-0 border-b border-white/5 bg-slate-900/80 backdrop-blur px-8 flex items-center justify-between z-10">
-         <div className="flex items-center gap-3">
-             <div className="p-2 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-lg shadow-lg"><Users className="w-5 h-5 text-white" /></div>
-             <h1 className="text-xl font-bold text-white">Pipeline de Vendas</h1>
+      <header className="shrink-0 border-b border-white/5 bg-slate-900/80 backdrop-blur px-6 py-4 flex flex-col gap-4 z-10">
+         <div className="flex justify-between items-center">
+             <div className="flex items-center gap-3">
+                 <div className="p-2 bg-cyan-600 rounded-lg shadow-lg"><Users className="w-6 h-6 text-white" /></div>
+                 <div>
+                    <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                        CRM - Gestão de Leads 
+                        <Badge variant="secondary" className="bg-slate-800 text-slate-300">{metrics.totalLeads}</Badge>
+                    </h1>
+                 </div>
+             </div>
+             
+             <div className="flex gap-3">
+                 <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 py-1 px-3">
+                    <Zap className="w-3 h-3 mr-2" /> Finalizado: {metrics.finalizadoKwh.toLocaleString()} kWh
+                 </Badge>
+                 <Badge variant="outline" className="border-slate-500/30 bg-slate-500/10 text-slate-400 py-1 px-3">
+                    <Zap className="w-3 h-3 mr-2" /> Para Atribuir: {metrics.paraAtribuirKwh.toLocaleString()} kWh
+                 </Badge>
+             </div>
          </div>
-         <div className="flex items-center gap-4">
+
+         <div className="flex justify-between items-center">
              <div className="relative">
                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                 <Input placeholder="Buscar lead..." className="pl-9 bg-slate-800 border-white/10 w-64 focus:ring-cyan-500 transition-all" value={filterText} onChange={e => setFilterText(e.target.value)} />
+                 <Input 
+                    placeholder="Buscar lead, documento ou telefone..." 
+                    className="pl-9 bg-slate-800 border-white/10 w-96 focus:ring-cyan-500 h-9 text-sm" 
+                    value={filterText}
+                    onChange={e => setFilterText(e.target.value)}
+                 />
              </div>
-             <Button className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-900/20"><Plus className="w-4 h-4 mr-2" /> Novo Lead</Button>
+             <Button onClick={() => setIsFormOpen(true)} size="sm" className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">
+                 <Plus className="w-4 h-4 mr-2" /> Novo Lead
+             </Button>
          </div>
       </header>
 
-      {/* Board Kanban */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-[url('/bg-grid.svg')] bg-fixed bg-repeat opacity-90">
          <DndContext 
             sensors={sensors} 
             collisionDetection={closestCorners} 
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
          >
-            <div className="flex h-full gap-6 min-w-max pb-4">
+            <div className="flex h-full gap-4 min-w-max pb-4">
                 {STAGES.map(stage => (
                     <KanbanColumn 
                         key={stage.id}
-                        id={stage.id} 
-                        title={stage.title}
-                        color={stage.color}
+                        stage={stage}
                         leads={filteredLeads.filter(l => l.stageId === stage.id)}
-                        onEditLead={(lead) => console.log("Editar", lead)}
+                        onEditLead={setSelectedLead}
                     />
                 ))}
             </div>
 
-            {/* Overlay: O card visual que segue o mouse */}
-            <DragOverlay dropAnimation={dropAnimation}>
-                {activeLead ? (
-                    <LeadCard lead={activeLead} isOverlay />
-                ) : null}
+            <DragOverlay dropAnimation={{
+                sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } })
+            }}>
+                {activeLead ? (<LeadCard lead={activeLead} isOverlay />) : null}
             </DragOverlay>
          </DndContext>
       </div>
+
+      {selectedLead && (
+        <Dialog open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
+            <DialogContent className="max-w-4xl h-[90vh] p-0 border-none bg-transparent">
+                <LeadDetailView 
+                    lead={selectedLead as any} 
+                    onClose={() => setSelectedLead(null)}
+                    onEdit={() => { setSelectedLead(null); setIsFormOpen(true); }}
+                    isAdmin={true}
+                />
+            </DialogContent>
+        </Dialog>
+      )}
+
+      {isFormOpen && (
+        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+            <DialogContent className="max-w-xl bg-slate-900 border-white/10">
+                 <LeadForm 
+                    onCancel={() => setIsFormOpen(false)}
+                    onSubmit={async (data) => {
+                        setIsFormOpen(false);
+                    }}
+                    allUsers={[]}
+                 />
+            </DialogContent>
+        </Dialog>
+      )}
+
     </div>
   );
 }

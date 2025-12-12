@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { LeadWithId, Stage, StageId } from '@/types/crm';
