@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -77,18 +78,21 @@ function ProposalPageContent() {
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const proposalData = useMemo(() => ({
-    clientName: searchParams.get("clienteNome") || "Cliente",
-    clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
-    consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
-    distributor: searchParams.get("distribuidora") || "Distribuidora Local",
-    comercializadora: searchParams.get("comercializadora") || "BC Energia",
-    avgConsumption: parseFloat(searchParams.get("item1Quantidade") || "0"),
-    currentPrice: parseFloat(searchParams.get("tariff") || "0"), // CORREÇÃO APLICADA AQUI
-    discountRate: parseFloat(searchParams.get("desconto") || "0"),
-    coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
-    address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
-  }), [searchParams]);
+  const proposalData = useMemo(() => {
+    const tariffString = searchParams.get("tariff") || "0";
+    return {
+      clientName: searchParams.get("clienteNome") || "Cliente",
+      clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
+      consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
+      distributor: searchParams.get("distribuidora") || "Distribuidora Local",
+      comercializadora: searchParams.get("comercializadora") || "BC Energia",
+      avgConsumption: parseFloat(searchParams.get("item1Quantidade") || "0"),
+      currentPrice: parseFloat(tariffString.replace(',', '.')) || 0, // CORRECTED HERE
+      discountRate: parseFloat(searchParams.get("desconto") || "0"),
+      coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
+      address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
+    }
+  }, [searchParams]);
 
   const calculated = useMemo(() => {
     const avgMonthlyCost = proposalData.avgConsumption * proposalData.currentPrice;
