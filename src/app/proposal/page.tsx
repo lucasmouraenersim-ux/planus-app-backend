@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 // --- DADOS E MOCKS ---
-
 const commercializerCatalog = [
   { name: "BC Energia", logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/bc761e2a925f19d5436b3642acb35fac8e3075f8/BC-ENERGIA.png" },
   { name: "Bolt Energy", logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/bc761e2a925f19d5436b3642acb35fac8e3075f8/Bolt%20Energy.jpg" },
@@ -69,6 +68,7 @@ const clients = [
     { category: "Agro", icon: Wheat, names: ["São Salvador", "Milhão", "Grupo Cereal"] },
 ];
 
+// Helper de Formatação
 const formatCurrency = (val: number) => val.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
 
 function ProposalPageContent() {
@@ -76,49 +76,75 @@ function ProposalPageContent() {
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // --- FUNÇÃO CORRIGIDA PARA TRATAR NÚMEROS (BRL/US) ---
+  // --- FUNÇÃO DE PARSE ROBUSTA (CORRIGIDA) ---
   const parseNumber = (val: string | null) => {
     if (!val) return 0;
     
-    // Se tiver vírgula (ex: 1.500,00 ou 0,98), assume formato BR
-    if (val.includes(',')) {
-        // Remove pontos de milhar e troca vírgula por ponto
-        return parseFloat(val.replace(/\./g, '').replace(',', '.'));
+    // 1. Remove caracteres não numéricos (exceto ponto, virgula e traço)
+    // Remove "R$", espaços, letras, etc.
+    let clean = val.replace(/[^0-9.,-]/g, '');
+
+    // 2. Resolve ambiguidade Ponto vs Vírgula
+    if (clean.includes(',')) {
+        // Se tem vírgula, assume padrão BR (1.500,00)
+        // Remove pontos de milhar
+        clean = clean.replace(/\./g, '');
+        // Troca vírgula por ponto decimal
+        clean = clean.replace(',', '.');
+    } else {
+        // Se SÓ tem ponto (ex: 1.500 ou 1.12)
+        // Se tiver mais de um ponto (1.000.000), é milhar -> remove todos
+        if ((clean.match(/\./g) || []).length > 1) {
+            clean = clean.replace(/\./g, '');
+        } 
+        // Se tiver 1 ponto e for um valor alto (consumo), pode ser milhar (1.500)
+        // Mas se for valor baixo (tarifa), pode ser decimal (1.12)
+        // Como o JS nativo trata "1.500" como 1.5, precisamos cuidar.
+        // HACK: Se for consumo (> 100) e tiver ponto, remove o ponto.
+        // Mas vamos confiar que o input veio limpo ou no padrão US se não tiver vírgula.
     }
-    
-    // Se não tiver vírgula, assume formato US/Standard (ex: 1500 or 1.12)
-    return parseFloat(val);
+
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
   };
 
   // Parse dos dados da URL
-  const proposalData = useMemo(() => ({
-    clientName: searchParams.get("clienteNome") || "Cliente",
-    clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
-    consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
-    distributor: searchParams.get("distribuidora") || "Distribuidora Local",
-    comercializadora: searchParams.get("comercializadora") || "BC Energia",
-    // Usando a função corrigida
-    avgConsumption: parseNumber(searchParams.get("item1Quantidade")), 
-    currentPrice: parseNumber(searchParams.get("tariff")),
-    discountRate: parseNumber(searchParams.get("desconto")),
-    coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
-    address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [searchParams]);
+  const proposalData = useMemo(() => {
+      // Captura raw strings para debug se necessário
+      const rawKwh = searchParams.get("item1Quantidade");
+      const rawTariff = searchParams.get("currentTariff");
+      const rawDiscount = searchParams.get("desconto");
+
+      // Tratamento especial para Consumo que pode vir como "1.500" (milhar)
+      // Se não tiver vírgula e tiver ponto, remove o ponto para garantir que 1.500 vire 1500 e não 1.5
+      let kwh = parseNumber(rawKwh);
+      if (rawKwh && !rawKwh.includes(',') && rawKwh.includes('.') && kwh < 100) {
+           kwh = kwh * 1000; // Correção para bug comum de milhar
+      }
+
+      return {
+        clientName: searchParams.get("clienteNome") || "Cliente",
+        clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
+        consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
+        distributor: searchParams.get("distribuidora") || "Distribuidora Local",
+        comercializadora: searchParams.get("comercializadora") || "BC Energia",
+        
+        avgConsumption: kwh,
+        currentPrice: parseNumber(rawTariff),
+        discountRate: parseNumber(rawDiscount),
+        
+        coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
+        address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
+      }
+  }, [searchParams]);
 
   // Cálculos
   const calculated = useMemo(() => {
-    const consumption = proposalData.avgConsumption || 0;
-    const price = proposalData.currentPrice || 0;
-    const discount = proposalData.discountRate || 0;
-
-    const avgMonthlyCost = consumption * price;
+    const avgMonthlyCost = proposalData.avgConsumption * proposalData.currentPrice;
     
-    // Calcula o preço do kWh com desconto
-    const discountDecimal = discount / 100;
-    const bcPrice = price * (1 - discountDecimal);
+    const bcPrice = proposalData.currentPrice * (1 - (proposalData.discountRate / 100));
+    const bcMonthlyCost = proposalData.avgConsumption * bcPrice;
     
-    const bcMonthlyCost = consumption * bcPrice;
     const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
     const annualEconomy = monthlyEconomy * 12;
     
