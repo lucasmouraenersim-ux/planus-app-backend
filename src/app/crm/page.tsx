@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -258,11 +259,9 @@ function LeadCard({ lead, isOverlay, onClickDetails }: { lead: Lead; isOverlay?:
 // --- COMPONENTE: COLUNA ---
 function KanbanColumn({ stage, leads, onEditLead }: { stage: typeof STAGES[0], leads: Lead[], onEditLead: (l: Lead) => void }) {
   const totalValue = leads.reduce((acc, l) => acc + (l.valueAfterDiscount || 0), 0);
-  const totalKwh = leads.reduce((acc, l) => acc + (l.kwh || 0), 0);
   
   return (
     <div className="flex flex-col h-full min-w-[300px] w-[300px] max-w-[300px] rounded-xl bg-slate-950/30 border border-white/5 backdrop-blur-sm">
-      {/* Header da Coluna */}
       <div className="p-3 pb-2">
         <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
@@ -271,7 +270,6 @@ function KanbanColumn({ stage, leads, onEditLead }: { stage: typeof STAGES[0], l
             </div>
             <Badge className="bg-slate-800 text-slate-300 border border-white/5 hover:bg-slate-700">{leads.length}</Badge>
         </div>
-        {/* Barra de progresso visual do volume */}
         <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mb-1">
             <div className={`h-full ${stage.color}`} style={{ width: '40%' }}></div>
         </div>
@@ -280,7 +278,6 @@ function KanbanColumn({ stage, leads, onEditLead }: { stage: typeof STAGES[0], l
         </div>
       </div>
 
-      {/* Área de Drop */}
       <div className="flex-1 p-2 overflow-y-auto overflow-x-hidden custom-scrollbar bg-gradient-to-b from-slate-950/50 to-transparent rounded-b-xl">
         <SortableContext id={stage.id} items={leads.map(l => l.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-2 min-h-[100px]">
@@ -451,20 +448,3 @@ export default function CRMPage() {
     </div>
   );
 }
-O que há de novo:
-Lead Scoring (kWh):
-Se o lead tem mais de 5.000 kWh, ele ganha uma borda gradiente laranja/vermelha e um ícone de fogo pulsante 🔥.
-Se tem entre 1.000 e 5.000 kWh, ganha um brilho ciano na borda e um ícone de raio ⚡.
-Alerta de Estagnação:
-Calcula os dias desde o último contato (lastContact).
-Se for > 7 dias, mostra um ícone de relógio ⏰ com um fundo amarelo de alerta.
-Se for > 15 dias, o ícone fica vermelho crítico.
-Menu WhatsApp Inteligente:
-O botão de WhatsApp agora é um DropdownMenu.
-Oferece 3 opções de mensagens prontas.
-Ao clicar, abre o link do WhatsApp já com a mensagem preenchida e o nome do lead.
-Agendamento Rápido:
-Adicionei um botão com um ícone de sino/calendário (CalendarPlus). Por enquanto, ele é visual, mas é o lugar perfeito para você adicionar a lógica de criar uma tarefa futura.
-Design Melhorado:
-Os ícones e alertas dão vida aos cards, permitindo que o vendedor identifique visualmente as prioridades sem precisar ler tudo.
-O uso de gradientes e sombras sutis eleva o visual.
