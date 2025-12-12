@@ -23,7 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // --- TIPOS (Simplificados para o exemplo, use os seus oficiais) ---
@@ -77,7 +77,7 @@ function SortableLeadCard({ lead, onClick }: { lead: Lead, onClick: () => void }
 
         <div className="space-y-2">
             <div className="flex items-center text-xs text-slate-400 gap-2">
-                <Calendar className="w-3 h-3" /> {format(new Date(lead.createdAt), 'dd/MM HH:mm')}
+                <Calendar className="w-3 h-3" /> {format(parseISO(lead.createdAt), 'dd/MM HH:mm')}
             </div>
             
             <div className="flex justify-between items-center pt-2 border-t border-white/5 mt-2">
@@ -159,7 +159,15 @@ export default function CRMPage() {
   useEffect(() => {
     const q = query(collection(db, "crm_leads"), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
+        const data = snap.docs.map(d => {
+            const docData = d.data();
+            return { 
+                id: d.id, 
+                ...docData,
+                // Garantir que timestamps sejam strings ISO
+                createdAt: (docData.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+            } as Lead
+        });
         setLeads(data);
         setIsLoading(false);
     });
