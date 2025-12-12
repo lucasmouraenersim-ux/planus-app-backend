@@ -65,6 +65,7 @@ export default function ProposalGeneratorPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
+  // Controle de Passos (1 = Dados, 2 = Comercializadora)
   const [currentStep, setCurrentStep] = useState(1);
   const [activeIndex, setActiveIndex] = useState(0); // Controle do Carrossel
 
@@ -173,7 +174,7 @@ export default function ProposalGeneratorPage() {
 
       <div className="relative z-10 p-4 md:p-8 w-full max-w-7xl mx-auto flex-1 flex flex-col">
         
-        {/* Header */}
+        {/* Header com Progresso */}
         <div className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -181,8 +182,8 @@ export default function ProposalGeneratorPage() {
               Gerador de Propostas
             </h1>
             <div className="flex items-center gap-2 mt-2">
-                <div className={'h-1 w-8 rounded-full transition-all ${currentStep >= 1 ? 'bg-cyan-500' : 'bg-slate-700'}'}></div>
-                <div className={'h-1 w-8 rounded-full transition-all ${currentStep >= 2 ? 'bg-cyan-500' : 'bg-slate-700'}'}></div>
+                <div className={`h-1 w-8 rounded-full transition-all ${currentStep >= 1 ? 'bg-cyan-500' : 'bg-slate-700'}`}></div>
+                <div className={`h-1 w-8 rounded-full transition-all ${currentStep >= 2 ? 'bg-cyan-500' : 'bg-slate-700'}`}></div>
                 <span className="text-xs text-slate-400 ml-2">Passo {currentStep} de 2</span>
             </div>
           </div>
@@ -270,7 +271,7 @@ export default function ProposalGeneratorPage() {
                 
                 {/* 1. Título */}
                 <div className="text-center">
-                    <h2 className="text-3xl font-bold text-white mb-2">Escolha a Parceira Ideal</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">Escolha a Parceira Ideal</h2>
                     <p className="text-slate-400">Deslize para selecionar a melhor opção para este perfil.</p>
                 </div>
 
@@ -283,7 +284,7 @@ export default function ProposalGeneratorPage() {
                     </button>
 
                     {/* Itens do Carrossel */}
-                    <div className="flex items-center justify-center gap-4 md:gap-8 perspective-1000">
+                    <div className="flex items-center justify-center gap-4 md:gap-8" style={{ perspective: '1000px' }}>
                         {[-1, 0, 1].map((offset) => {
                             const index = (activeIndex + offset + providers.length) % providers.length;
                             const provider = providers[index];
@@ -300,7 +301,7 @@ export default function ProposalGeneratorPage() {
                                     `}
                                 >
                                     <div className="relative w-full h-full p-2">
-                                        <img src={provider.logo} alt={provider.name} className="w-full h-full object-contain" />
+                                        <img src={provider.logo} alt={provider.name} className="object-contain w-full h-full" />
                                     </div>
                                     {isActive && (
                                         <div className="absolute bottom-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow-lg">
