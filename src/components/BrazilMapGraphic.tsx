@@ -38,7 +38,7 @@ export function BrazilMapGraphic({
     if (isHovered) return activeColor; // Cor do parceiro com opacidade (controlada no CSS se quiser)
     
     // Estado disponível padrão
-    return '#334155'; // Slate-700
+    return '#3b82f6'; // Azul do botão "Gerar Proposta"
   };
 
   const getStateOpacity = (state: StateInfo) => {
@@ -65,7 +65,6 @@ export function BrazilMapGraphic({
            {statesData.map((state) => (
              <g key={state.code}>
                 <path
-                key={state.code}
                 d={state.pathD}
                 fill={getStateColor(state)}
                 fillOpacity={getStateOpacity(state)}
