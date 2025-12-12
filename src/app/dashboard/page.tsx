@@ -10,11 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { calculateSavings } from '@/lib/discount-calculator';
-import { statesData } from '@/data/state-data';
 import { HandHelping, TrendingUp, Zap, MapPin, DollarSign, Percent, BarChart3, ChevronRight, Sparkles, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PARTNERS_COVERAGE } from '@/data/partners'; // Crie esse arquivo no passo 1
 
 // --- COMPONENTES AUXILIARES ---
 
@@ -63,6 +63,8 @@ function DashboardPageContent() {
   const [hoveredStateCode, setHoveredStateCode] = useState<string | null>(null);
   const [currentKwh, setCurrentKwh] = useState<number>(initialKwh);
   const [showCompetitorAnalysis, setShowCompetitorAnalysis] = useState(false);
+  const [selectedPartnerId, setSelectedPartnerId] = useState('all');
+
 
   // Configuração de Desconto
   const [discountConfig, setDiscountConfig] = useState<any>(() => {
@@ -80,26 +82,16 @@ function DashboardPageContent() {
     };
   });
 
-  // Lógica para encontrar o estado (seja por sigla "MT" ou código "51")
-  const selectedState = useMemo(() => {
-    if (!selectedStateCode) return null;
-    
-    // Tenta achar pela sigla ou pelo código IBGE (caso o mapa retorne número)
-    return statesData.find(s => 
-        s.abbreviation === selectedStateCode || 
-        s.code === selectedStateCode
-    ) || null;
-  }, [selectedStateCode]);
+  const currentPartner = useMemo(() => 
+    PARTNERS_COVERAGE.find(p => p.id === selectedPartnerId) || PARTNERS_COVERAGE[0], 
+  [selectedPartnerId]);
+
 
   // Cálculos
   const savingsResult = useMemo(() => {
     const kwhToReaisFactor = 1.0907; 
     const billAmount = currentKwh * kwhToReaisFactor;
 
-    // REMOVIDO: A trava que retornava null se o estado não estivesse disponível.
-    // Agora sempre calcula, permitindo a simulação visual.
-    
-    // Se não tiver estado selecionado, usa 'MT' como base de cálculo padrão
     const stateForCalc = selectedStateCode || 'MT';
     
     return calculateSavings(billAmount, discountConfig, stateForCalc);
@@ -108,8 +100,7 @@ function DashboardPageContent() {
   const proposalLink = useMemo(() => {
     const params = new URLSearchParams();
     params.set('item1Quantidade', String(currentKwh));
-    // Passa a sigla correta se encontrada, senão o código bruto
-    if (selectedState) params.set('clienteUF', selectedState.abbreviation);
+    if (selectedStateCode) params.set('clienteUF', selectedStateCode);
     
     params.set('discountType', discountConfig.type);
     
@@ -122,7 +113,7 @@ function DashboardPageContent() {
     }
     
     return `/proposal-generator?${params.toString()}`;
-  }, [currentKwh, selectedState, discountConfig]);
+  }, [currentKwh, selectedStateCode, discountConfig]);
 
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -241,15 +232,14 @@ function DashboardPageContent() {
                     </div>
                 </div>
 
-                {/* Card de Estado Selecionado (Corrigido para mostrar Nome) */}
                 {selectedStateCode && (
                     <div className="glass-panel p-4 rounded-xl flex items-center gap-4 animate-in fade-in slide-in-from-left-4">
                         <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border border-white/10 font-black text-xl text-white">
-                            {selectedState?.abbreviation || selectedStateCode}
+                            {selectedStateCode}
                         </div>
                         <div>
                             <p className="text-xs text-slate-400 uppercase tracking-wider">Região Selecionada</p>
-                            <p className="text-white font-bold text-lg">{selectedState?.name || selectedStateCode}</p>
+                            <p className="text-white font-bold text-lg">{selectedStateCode}</p>
                         </div>
                         <Button variant="ghost" size="sm" onClick={() => setSelectedStateCode(null)} className="ml-auto text-slate-500 hover:text-white"><X className="w-4 h-4"/></Button>
                     </div>
@@ -258,21 +248,45 @@ function DashboardPageContent() {
 
             {/* === COLUNA CENTRAL: MAPA (5 Cols) === */}
             <div className="lg:col-span-5 h-[500px] lg:h-auto relative group">
-                <div className="absolute inset-0 bg-cyan-500/5 rounded-3xl blur-3xl group-hover:bg-cyan-500/10 transition-colors duration-1000"></div>
+                 <div 
+                    className="absolute inset-0 rounded-3xl blur-3xl transition-colors duration-1000"
+                    style={{ backgroundColor: `${currentPartner.color}20` }} // 20% de opacidade da cor do parceiro
+                ></div>
                 
+                {/* Seletor Flutuante de Parceiro */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-64">
+                    <Select value={selectedPartnerId} onValueChange={setSelectedPartnerId}>
+                        <SelectTrigger className="bg-slate-900/80 border-white/10 text-white backdrop-blur-md">
+                            <SelectValue placeholder="Filtrar Cobertura" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-slate-700 text-white">
+                            {PARTNERS_COVERAGE.map(p => (
+                                <SelectItem key={p.id} value={p.id}>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></div>
+                                        {p.name}
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div className="relative w-full h-full flex items-center justify-center p-4">
                     <BrazilMapGraphic 
                         selectedStateCode={selectedStateCode}
                         hoveredStateCode={hoveredStateCode}
                         onStateClick={setSelectedStateCode}
                         onStateHover={setHoveredStateCode}
+                        // NOVAS PROPS
+                        activeStates={currentPartner.states}
+                        activeColor={currentPartner.color}
                     />
                     
-                    {!selectedStateCode && (
-                        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-white/10 text-sm text-slate-300 pointer-events-none animate-bounce">
-                            <MapPin className="w-4 h-4 inline mr-2 text-cyan-400"/> Clique em um estado
-                        </div>
-                    )}
+                    {/* Legenda Dinâmica no Rodapé do Mapa */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-400 bg-slate-900/50 px-3 py-1 rounded-full border border-white/5 backdrop-blur pointer-events-none">
+                        Exibindo cobertura: <span style={{ color: currentPartner.color, fontWeight: 'bold' }}>{currentPartner.name}</span>
+                    </div>
                 </div>
             </div>
 
@@ -319,11 +333,9 @@ function DashboardPageContent() {
                     )}
                 </div>
 
-                {/* Botão de Ação - AGORA SEMPRE ATIVO SE HOUVER RESULTADO */}
                 <div className="fixed bottom-6 right-6 lg:static lg:w-full z-50">
                     <Link href={proposalLink} className="w-full">
                         <Button 
-                            // Correção: Agora verifica apenas se temos um resultado de cálculo, ignorando a "disponibilidade" técnica do estado para fins de demonstração
                             disabled={!savingsResult}
                             className={`
                                 h-16 w-full rounded-xl shadow-2xl transition-all duration-300
@@ -348,7 +360,6 @@ function DashboardPageContent() {
             </div>
         </div>
 
-        {/* Análise de Concorrentes */}
         {showCompetitorAnalysis && savingsResult && (
             <div className="mt-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
                 <div className="glass-panel p-8 rounded-2xl border-t-4 border-t-purple-500">

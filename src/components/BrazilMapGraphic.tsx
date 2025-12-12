@@ -1,125 +1,125 @@
-// /src/components/BrazilMapGraphic.tsx
 "use client";
 
-import { cn } from "@/lib/utils";
-import { statesData } from "@/data/state-data";
+import React, { useMemo } from 'react';
+import { statesData } from '@/data/state-data';
 import type { StateInfo } from "@/types";
+
 
 interface BrazilMapGraphicProps {
   selectedStateCode: string | null;
   hoveredStateCode: string | null;
   onStateClick: (stateCode: string) => void;
   onStateHover: (stateCode: string | null) => void;
-  className?: string;
+  // NOVAS PROPS
+  activeStates?: string[]; // Lista de siglas ativas (ex: ['MT', 'GO'])
+  activeColor?: string;    // Cor do parceiro selecionado
 }
 
-export function BrazilMapGraphic({
-  selectedStateCode,
-  hoveredStateCode,
-  onStateClick,
+export function BrazilMapGraphic({ 
+  selectedStateCode, 
+  hoveredStateCode, 
+  onStateClick, 
   onStateHover,
-  className,
+  activeStates = [], 
+  activeColor = '#06b6d4' // Ciano padrão
 }: BrazilMapGraphicProps) {
 
-  const getFillColor = (state: StateInfo, isCircle: boolean = false) => {
-    if (!state.available) {
-      return "fill-muted opacity-70";
+  // Função para decidir a cor de cada estado
+  const getStateColor = (state: StateInfo) => {
+    const isSelected = selectedStateCode === state.abbreviation;
+    const isHovered = hoveredStateCode === state.code;
+    
+    // Se tiver filtro de parceiro ativo e o estado NÃO estiver na lista -> Cinza Escuro
+    const isInactiveByPartner = activeStates.length > 0 && !activeStates.includes(state.abbreviation);
+
+    if (isInactiveByPartner) {
+        return '#1e293b'; // Slate-800 (Apagado)
     }
-    if (selectedStateCode === state.code || hoveredStateCode === state.code) {
-      return "fill-accent";
-    }
-    if (isCircle) {
-      return "fill-primary opacity-70";
-    }
-    return "fill-primary";
+
+    if (isSelected) return activeColor; // Cor do parceiro (ou ciano)
+    if (isHovered) return activeColor; // Cor do parceiro com opacidade (controlada no CSS se quiser)
+    
+    // Estado disponível padrão
+    return '#334155'; // Slate-700
+  };
+
+  const getStateOpacity = (state: StateInfo) => {
+     const isInactiveByPartner = activeStates.length > 0 && !activeStates.includes(state.abbreviation);
+     if (isInactiveByPartner) return 0.3; // Bem transparente
+
+     if (selectedStateCode === state.abbreviation) return 1;
+     if (hoveredStateCode === state.code) return 0.8;
+     
+     // Se o parceiro atende esse estado, destaca ele um pouco
+     if (activeStates.length > 0 && activeStates.includes(state.abbreviation)) return 0.6;
+     
+     return 0.4;
   };
 
   return (
-    <svg
-      version="1.1"
-      id="svg-map"
-      xmlns="http://www.w3.org/2000/svg"
-      xmlnsXlink="http://www.w3.org/1999/xlink"
-      x="0px"
-      y="0px"
-      width="100%"
-      viewBox="0 0 450 460"
-      enableBackground="new 0 0 450 460"
-      xmlSpace="preserve"
-      className={cn("max-w-xl w-full", className)}
-      aria-label="Interactive map of Brazil"
-    >
-      <g>
-        {statesData.map((state) => {
-          const isAvailable = state.available;
-          return (
-            <g
-              key={state.code}
-              onClick={() => {
-                if (isAvailable) {
-                  onStateClick(state.code);
-                }
-              }}
-              onMouseEnter={() => {
-                if (isAvailable) {
-                  onStateHover(state.code);
-                }
-              }}
-              onMouseLeave={() => {
-                if (isAvailable) {
-                  onStateHover(null);
-                }
-              }}
-              className={cn(
-                "focus:outline-none focus:ring-2 focus:ring-ring rounded-sm",
-                isAvailable ? "cursor-pointer group" : "cursor-not-allowed"
-              )}
-              aria-label={`${state.name}${isAvailable ? "" : " - Indisponível"}`}
-              tabIndex={isAvailable ? 0 : -1}
-              onKeyDown={(e) => {
-                if (isAvailable && (e.key === "Enter" || e.key === " ")) {
-                  e.preventDefault();
-                  onStateClick(state.code);
-                }
-              }}
-            >
-              <title>{`${state.name}${isAvailable ? "" : " (Indisponível)"}`}</title>
-              <path
-                d={state.pathD}
-                stroke="hsl(var(--card))"
-                strokeWidth="1.0404"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={cn(
-                  "transition-colors duration-200 ease-in-out",
-                  getFillColor(state)
-                )}
-              />
-              {state.circlePathD && (
+    <div className="relative w-full h-full flex items-center justify-center p-4">
+      <svg
+        viewBox="0 0 450 460"
+        className="w-full h-full max-h-[600px] drop-shadow-2xl"
+        style={{ filter: 'drop-shadow(0 0 20px rgba(0,0,0,0.5))' }}
+      >
+        <g transform="scale(1) translate(0, 0)">
+           {statesData.map((state) => (
+             <g key={state.code}>
                 <path
-                  d={state.circlePathD}
-                  className={cn(
-                    "transition-colors duration-200 ease-in-out",
-                    getFillColor(state, true)
-                  )}
+                key={state.code}
+                d={state.pathD}
+                fill={getStateColor(state)}
+                fillOpacity={getStateOpacity(state)}
+                stroke={selectedStateCode === state.abbreviation ? '#ffffff' : '#0f172a'}
+                strokeWidth={selectedStateCode === state.abbreviation ? 2 : 1}
+                className="transition-all duration-300 ease-in-out cursor-pointer hover:brightness-110"
+                onClick={() => onStateClick(state.abbreviation)}
+                onMouseEnter={() => onStateHover(state.code)}
+                onMouseLeave={() => onStateHover(null)}
                 />
-              )}
-              <text
-                transform={state.textTransform}
-                className={cn(
-                  "font-headline text-[10px] sm:text-xs pointer-events-none select-none",
-                  isAvailable ? "fill-white" : "fill-muted-foreground opacity-80"
+                {state.circlePathD && (
+                    <path
+                        d={state.circlePathD}
+                        fill={getStateColor(state)}
+                        fillOpacity={getStateOpacity(state)}
+                        stroke={selectedStateCode === state.abbreviation ? '#ffffff' : '#0f172a'}
+                        strokeWidth={selectedStateCode === state.abbreviation ? 1 : 0.5}
+                        className="transition-all duration-300 ease-in-out cursor-pointer"
+                        onClick={() => onStateClick(state.abbreviation)}
+                        onMouseEnter={() => onStateHover(state.code)}
+                        onMouseLeave={() => onStateHover(null)}
+                    />
                 )}
-                style={{ userSelect: 'none' }}
-                dominantBaseline="middle"
-                textAnchor="middle"
-              >
-                {state.abbreviation}
-              </text>
-            </g>
-          );
-        })}
-      </g>
-    </svg>
+             </g>
+           ))}
+           
+           {/* Labels (Siglas) */}
+           {statesData.map((state) => {
+              const isActive = activeStates.length === 0 || activeStates.includes(state.abbreviation);
+              if (!isActive) return null;
+              
+              const isSelected = selectedStateCode === state.abbreviation;
+
+              return (
+                 <text
+                    key={`label-${state.code}`}
+                    transform={state.textTransform}
+                    className="font-headline text-[10px] sm:text-xs pointer-events-none select-none transition-all duration-300"
+                    style={{
+                      fill: isSelected ? '#FFFFFF' : '#94a3b8',
+                      opacity: isSelected ? 1 : 0.7,
+                      textShadow: isSelected ? '0 0 5px rgba(255,255,255,0.7)' : 'none',
+                    }}
+                    dominantBaseline="middle"
+                    textAnchor="middle"
+                  >
+                    {state.abbreviation}
+                  </text>
+              );
+           })}
+        </g>
+      </svg>
+    </div>
   );
 }
