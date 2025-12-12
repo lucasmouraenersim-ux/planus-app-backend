@@ -3,69 +3,84 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import pdf from 'pdf-parse';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export async function POST(req: Request) {
+  // 1. Verificar Chave de API
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("❌ ERRO: OPENAI_API_KEY não encontrada no .env.local");
+    return NextResponse.json({ error: 'Chave de API da OpenAI não configurada no servidor.' }, { status: 500 });
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
-    if (!file) return NextResponse.json({ error: 'Arquivo inválido' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: 'Nenhum arquivo recebido pelo servidor.' }, { status: 400 });
+    }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const data = await pdf(buffer);
-    const textoFatura = data.text;
+    console.log(`📄 Recebendo arquivo: ${file.name} (${file.size} bytes)`);
 
-    // A MÁGICA ACONTECE AQUI
+    // 2. Tentar converter PDF para Texto
+    let textoFatura = '';
+    try {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const data = await pdf(buffer);
+      textoFatura = data.text;
+      
+      console.log(`📝 Texto extraído (primeiros 100 chars): ${textoFatura.substring(0, 100)}...`);
+
+      if (!textoFatura || textoFatura.trim().length < 10) {
+        throw new Error("PDF parece estar vazio ou é uma imagem escaneada sem texto selecionável.");
+      }
+    } catch (pdfError: any) {
+      console.error("❌ Erro ao ler PDF:", pdfError);
+      return NextResponse.json({ error: `Erro ao ler o PDF: ${pdfError.message}` }, { status: 400 });
+    }
+
+    // 3. Enviar para OpenAI
+    console.log("🤖 Enviando para OpenAI...");
+    
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `Você é um especialista em extração de dados de faturas de energia (OCR). 
-          Sua missão é estruturar dados bagunçados em JSON confiável.`
+          content: "Você é um assistente que extrai dados JSON de faturas de energia."
         },
         {
           role: "user",
-          content: `Analise o texto desta fatura de energia (ex: Energisa, CPFL, Enel).
-          
-          Extraia ESTRITAMENTE os seguintes campos:
+          content: `Extraia os dados deste texto de fatura e retorne APENAS um JSON:
+          - nomeCliente (string)
+          - consumoKwh (number)
+          - valorTotal (number)
+          - vencimento (string dd/mm/aaaa)
 
-          1. **nomeCliente**: O nome da empresa ou pessoa.
-             - DICA: Geralmente está no topo esquerdo, acima do endereço, ou próximo a "Classificação". No exemplo da Energisa, aparece antes de "RUA...".
-             - Exemplo no texto: "RECICLATE COM MATERIAIS RECICLAVEIS LTDA"
-
-          2. **consumoKwh**: A quantidade de energia consumida.
-             - DICA: Procure a linha que começa com "Consumo em kWh" ou "Consumo Ativo". Pegue o valor numérico na coluna "Quant" ou "Leitura Atual - Anterior".
-             - No texto aparece algo como: "Consumo em kWh KWH 1793 ..." -> O valor é 1793.
-
-          3. **precoUnitario**: O preço do kWh COM tributos.
-             - DICA: Na mesma linha do consumo, procure a coluna "Preço unit" ou "Tarifa com Tributos".
-             - No texto aparece algo como: "... 1793 1,127570 ..." -> O valor é 1.127570.
-
-          4. **valorTotal**: O valor total a pagar da fatura (R$).
-
-          5. **vencimento**: Data de vencimento da fatura.
-
-          IMPORTANTE: 
-          - Converta números para formato float (ponto ao invés de vírgula).
-          - Retorne APENAS o JSON.
-
-          Texto da Fatura:
+          Texto:
           """
           ${textoFatura.substring(0, 4000)}
           """`
         }
       ],
-      temperature: 0, // Zero criatividade, máxima precisão
-      response_format: { type: "json_object" } // Garante que volta JSON válido
+      response_format: { type: "json_object" },
+      temperature: 0,
     });
 
-    const result = JSON.parse(completion.choices[0].message.content || '{}');
+    const conteudo = completion.choices[0].message.content;
+    console.log("✅ Resposta da IA:", conteudo);
+
+    if (!conteudo) throw new Error("A IA retornou uma resposta vazia.");
+
+    const result = JSON.parse(conteudo);
     return NextResponse.json(result);
 
-  } catch (error) {
-    console.error("Erro AI:", error);
-    return NextResponse.json({ error: 'Falha no processamento' }, { status: 500 });
+  } catch (error: any) {
+    // Log detalhado no terminal do servidor
+    console.error("❌ ERRO GERAL NA API:", error);
+    
+    // Retorna o erro detalhado para o frontend ver
+    const errorMessage = error.response?.data?.error?.message || error.message || "Erro desconhecido";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
