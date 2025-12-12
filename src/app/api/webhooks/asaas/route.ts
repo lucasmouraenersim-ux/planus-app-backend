@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase/admin'; // Use Admin SDK on server
-import { doc, updateDoc, increment, addDoc, collection, Timestamp, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/admin';
+import { doc, updateDoc, increment, addDoc, collection, Timestamp, getDocs, query, where } from 'firebase/firestore';
 
 export async function POST(req: Request) {
   try {
-    // 1. Validar Token de Segurança do Asaas (para ninguém forjar pagamento)
+    // 1. Segurança: Verifica se a senha bate com a que você criou no painel do Asaas
     const token = req.headers.get('asaas-access-token');
     if (token !== process.env.ASAAS_WEBHOOK_SECRET) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -12,51 +12,57 @@ export async function POST(req: Request) {
 
     const event = await req.json();
 
-    // 2. Filtrar evento: Apenas pagamentos CONFIRMADOS
+    // 2. Filtra apenas pagamentos confirmados
     if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
-      return NextResponse.json({ received: true }); // Ignora outros eventos
+      return NextResponse.json({ received: true });
     }
 
     const payment = event.payment;
-    // O ID do usuário deve ter sido enviado no campo 'externalReference' na hora de criar o pagamento
+    // O ID do usuário (uid do firebase) deve vir no campo externalReference
     const userId = payment.externalReference; 
     const value = payment.value;
-    
-    // 3. Lógica de Créditos (Exemplo simples)
-    // Você pode mapear o valor pago para a quantidade de créditos
+
+    if (!userId) {
+      console.warn("Pagamento sem ID de usuário (externalReference):", payment.id);
+      return NextResponse.json({ error: 'No user ID' }, { status: 400 });
+    }
+
+    // 3. Define quantos créditos dar baseado no valor pago
     let creditsToAdd = 0;
     
-    if (value === 97) creditsToAdd = 20;   // Plano Starter
-    else if (value === 197) creditsToAdd = 50; // Plano Pro
-    else if (value === 30) creditsToAdd = 10;  // Pack 10
-    else if (value === 125) creditsToAdd = 50; // Pack 50
-    // ... etc
+    // Regras de negócio (Ajuste conforme seus preços reais)
+    if (value >= 200) creditsToAdd = 100;      // Ex: Pacote Grande
+    else if (value >= 125) creditsToAdd = 50;  // Ex: Pacote Médio
+    else if (value >= 97) creditsToAdd = 20;   // Ex: Assinatura Starter
+    else if (value >= 30) creditsToAdd = 10;   // Ex: Pacote Pequeno
+    else creditsToAdd = Math.floor(value / 3); // Regra genérica (1 crédito = R$ 3)
 
-    if (userId && creditsToAdd > 0) {
+    if (creditsToAdd > 0) {
         const userRef = doc(db, 'users', userId);
         
-        // Adiciona Créditos
+        // Atualiza o saldo do usuário
         await updateDoc(userRef, {
             credits: increment(creditsToAdd),
-            subscriptionStatus: 'active' // Se for assinatura, ativa
+            subscriptionStatus: 'active'
         });
 
-        // Grava no Extrato
+        // Salva no histórico de transações
         await addDoc(collection(db, 'transactions'), {
             userId,
-            type: 'purchase', // Compra
+            type: 'purchase',
             amount: creditsToAdd,
             moneyValue: value,
-            description: `Pagamento Confirmado via Asaas (ID: ${payment.id})`,
+            description: `Recarga via Asaas (Ref: ${payment.id})`,
+            paymentMethod: payment.billingType,
             createdAt: Timestamp.now()
         });
 
-        console.log(`💰 Pagamento processado: ${creditsToAdd} créditos para ${userId}`);
+        console.log(`✅ Sucesso: ${creditsToAdd} créditos adicionados para ${userId}`);
     }
 
     return NextResponse.json({ success: true });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Webhook Error:", error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
