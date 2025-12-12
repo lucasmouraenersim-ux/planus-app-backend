@@ -11,6 +11,9 @@
     "genkit": "genkit"
   },
   "dependencies": {
+    "@dnd-kit/core": "latest",
+    "@dnd-kit/sortable": "latest",
+    "@dnd-kit/utilities": "latest",
     "@genkit-ai/googleai": "latest",
     "@hookform/resolvers": "^4.1.3",
     "@opentelemetry/exporter-jaeger": "^1.25.1",
