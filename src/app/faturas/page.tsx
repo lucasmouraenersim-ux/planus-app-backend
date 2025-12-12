@@ -9,9 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
-  Filter as FilterIcon, Zap, Home, AlertCircle, 
-  TrendingUp, TrendingDown, Minus, LayoutGrid, List,
-  MoreHorizontal, Map as MapIcon, X, MapPin, LocateFixed, Check, Flame, MapPinned
+  User as UserIcon, Filter as FilterIcon, ArrowUpDown, Zap,
+  MessageSquare, UserCheck, Paperclip, Search, Bell, TrendingUp, 
+  TrendingDown, Minus, Home, AlertCircle, Plus, LayoutGrid, List,
+  MoreHorizontal, AlertTriangle, Map as MapIcon, X, MapPin, LocateFixed, Check
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -19,12 +20,7 @@ import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from 'recharts';
-// Importamos HeatmapLayer
-import { GoogleMap, useJsApiLoader, OverlayView, HeatmapLayer } from '@react-google-maps/api';
-
-// --- CONFIGURAÇÃO GOOGLE MAPS ---
-// Definir bibliotecas fora do componente para evitar reload constante
-const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
+import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 
 // --- TIPOS ---
 export type TensaoType = 'baixa' | 'alta' | 'b_optante' | 'baixa_renda';
@@ -69,21 +65,22 @@ const TENSAO_OPTIONS: { value: TensaoType; label: string }[] = [
   { value: 'baixa_renda', label: 'Baixa Renda' },
 ];
 
+// Estilo Dark para o Google Maps
 const mapStyles = [
-  { elementType: "geometry", stylers: [{ color: "#1e293b" }] },
+  { elementType: "geometry", stylers: [{ color: "#1e293b" }] }, // Slate-900 base
   { elementType: "labels.text.stroke", stylers: [{ color: "#1e293b" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] }, // Slate-400 text
   { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#cbd5e1" }] },
   { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#64748b" }] },
   { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#0f172a" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#334155" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#334155" }] }, // Slate-700 roads
   { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1e293b" }] },
   { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#475569" }] },
   { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1e293b" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f172a" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f172a" }] }, // Slate-950 water
 ];
 
-// --- HELPERS ---
+// --- HELPERS VISUAIS ---
 const formatKwh = (val: string | number) => {
     const num = Number(val);
     if (!num) return '0';
@@ -112,8 +109,25 @@ const getTensaoColors = (tensao: TensaoType) => {
   }
 };
 
-// --- COMPONENTES ---
+// --- GRÁFICOS E CARDS ---
+const SparklineChart = ({ data, color }: { data: any[], color: string }) => (
+  <div className="h-[80px] w-full -ml-2 mt-2">
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data}>
+        <defs>
+          <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.4} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#gradient-${color})`} />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+);
+
 const MiniLineChart = ({ color }: { color: string }) => {
+    // Dados aleatórios para efeito visual na tabela
     const data = Array.from({length: 8}, () => ({ value: Math.random() * 100 }));
     return (
         <div className="h-[40px] w-[80px]">
@@ -128,19 +142,28 @@ const MiniLineChart = ({ color }: { color: string }) => {
 
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
+  const sparkData = Array.from({ length: 10 }, () => ({ value: Math.floor(Math.random() * 50) + 20 }));
+
   return (
-    <div className={`glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <p className={`text-xs font-bold uppercase tracking-wider text-slate-400`}>{title}</p>
-          <h3 className="text-2xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')} <span className="text-xs">{unit}</span></h3>
+    <div className={`glass-panel rounded-2xl overflow-hidden hover:scale-[1.02] transition-all duration-300 group relative border border-white/5 bg-slate-900/40 backdrop-blur-md`}>
+       <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.2)] border border-transparent`} />
+      <div className="p-6 pb-0 relative z-10">
+        <div className="flex justify-between items-start">
+          <div>
+            <p className={`text-xs font-bold ${styles.text} uppercase tracking-wider mb-1`}>{title}</p>
+            <h3 className="text-3xl font-bold text-white tracking-tight">
+              {value.toLocaleString('pt-BR')} <span className="text-sm text-slate-500 font-normal">{unit}</span>
+            </h3>
+          </div>
+          <div className={`p-2.5 rounded-xl ${styles.text} bg-white/5 transition-colors`}>
+            <Icon className="w-5 h-5" />
+          </div>
         </div>
-        <div className={`p-2 rounded-lg ${styles.text} bg-white/5`}><Icon className="w-5 h-5" /></div>
+        <div className={`mt-3 flex items-center gap-1.5 text-xs font-medium w-fit px-2.5 py-1 rounded-full ${trend === 'up' ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-400 bg-slate-700/50'}`}>
+          {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <Minus className="w-3 h-3" />} {trendValue}
+        </div>
       </div>
-      <div className="text-xs text-slate-500 flex items-center gap-1">
-        {trend === 'up' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-red-400" />}
-        {trendValue} vs mês anterior
-      </div>
+      <SparklineChart data={sparkData} color={styles.chartColor} />
     </div>
   );
 };
@@ -155,7 +178,6 @@ export default function FaturasPage() {
   // UI States
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
-  const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins'); // NOVO: Controle da camada do mapa
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTensao, setFilterTensao] = useState<TensaoType | 'all'>('all');
@@ -163,10 +185,10 @@ export default function FaturasPage() {
 
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '',
-    libraries: libraries // Importante para o Heatmap
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ''
   });
 
+  // Fetch Data
   useEffect(() => {
     const q = query(collection(db, 'faturas_clientes'), orderBy("createdAt", "desc"));
     const unsub = onSnapshot(q, (snap) => {
@@ -176,6 +198,7 @@ export default function FaturasPage() {
     return () => unsub();
   }, []);
 
+  // Filter & Logic
   const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
     let result = [...clientes];
     const totals = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
@@ -196,25 +219,6 @@ export default function FaturasPage() {
     return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
   }, [clientes, searchTerm, filterTensao, filterCidade]);
 
-  // Dados transformados para o Heatmap
-  const heatmapData = useMemo(() => {
-    if (!window.google) return [];
-    const points: any[] = [];
-    filteredClientes.forEach(c => {
-        c.unidades.forEach(u => {
-            if (u.latitude && u.longitude) {
-                // O peso (weight) é o consumo. Google normaliza, mas valores muito altos podem precisar de log.
-                // Vamos usar logaritmo para suavizar a diferença entre 1.000 e 1.000.000
-                points.push({
-                    location: new window.google.maps.LatLng(u.latitude, u.longitude),
-                    weight: Number(u.consumoKwh) || 1
-                });
-            }
-        });
-    });
-    return points;
-  }, [filteredClientes, isMapLoaded]);
-
   // Handlers
   const handleAddCliente = async () => {
     try {
@@ -234,6 +238,7 @@ export default function FaturasPage() {
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file) return;
     toast({ title: "🤖 IA Analisando...", description: "Lendo dados e localizando endereço..." });
+    
     try {
         const formData = new FormData(); formData.append('file', file);
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
@@ -288,36 +293,56 @@ export default function FaturasPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
+      
+      {/* Global CSS Inject for Animations/Glass */}
       <style jsx global>{`
-        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 10s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
       `}</style>
 
-      {/* Header */}
-      <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full mix-blend-screen filter blur-3xl opacity-40 animate-blob"></div>
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full mix-blend-screen filter blur-3xl opacity-40 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-emerald-500/10 rounded-full mix-blend-screen filter blur-3xl opacity-40 animate-blob animation-delay-4000"></div>
+      </div>
+
+      <main className="relative z-10 flex flex-col h-screen overflow-hidden">
+        
+        {/* Header */}
+        <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-lg shadow-cyan-500/20"><Zap className="h-5 w-5 text-white" /></div>
             <h2 className="text-xl font-bold text-white tracking-tight">Sent Energia</h2>
           </div>
           <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}>
-             <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><FilterIcon className="w-5 h-5" /></button>
+             <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button>
              <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
           </div>
-      </header>
+        </header>
 
-      {/* Body */}
-      <main>
-        <div className="p-6 pb-20 overflow-y-auto h-[calc(100vh-80px)]">
-         {/* KPIs */}
-         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 pb-20">
+          
+          {/* KPIs */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Alta Tensão" value={kpiData.alta} unit="kWh" color="blue" icon={Zap} trend="up" trendValue="+12%" />
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Home} trend="up" trendValue="+4%" />
             <KPICard title="B Optante" value={kpiData.b_optante} unit="kWh" color="orange" icon={AlertCircle} trend="stable" trendValue="0%" />
             <KPICard title="Baixa Renda" value={kpiData.baixa_renda} unit="kWh" color="yellow" icon={Minus} trend="down" trendValue="-2%" />
-         </div>
+          </div>
 
-         {/* Filters */}
-         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
                 <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex">
                    <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><List className="w-4 h-4" /></button>
@@ -335,50 +360,50 @@ export default function FaturasPage() {
                 </Select>
             </div>
             <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg shadow-cyan-500/20 transition-all hover:scale-105"><PlusCircle className="w-4 h-4 mr-2" /> Novo Cliente</Button>
-         </div>
+          </div>
 
-         {/* VIEW: LIST */}
-         {viewMode === 'list' && (
+          {/* === VIEW: LIST === */}
+          {viewMode === 'list' && (
             <div className="glass-panel rounded-2xl overflow-hidden animate-in fade-in duration-500">
                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-900/50 text-xs uppercase text-slate-500 font-bold border-b border-white/5">
-                     <tr><th className="p-5">Cliente / ID</th><th className="p-5 w-[120px]">Tendência</th><th className="p-5">Volume (kWh)</th><th className="p-5">Local</th><th className="p-5">Status</th><th className="p-5 text-right"></th></tr>
+                  <thead>
+                     <tr className="bg-slate-900/50 text-xs uppercase text-slate-500 font-bold tracking-wider border-b border-white/5">
+                        <th className="p-5 pl-6 w-12"></th><th className="p-5">Cliente / ID</th><th className="p-5 w-[120px]">Tendência</th><th className="p-5">Volume (kWh)</th><th className="p-5">Local</th><th className="p-5">Status</th><th className="p-5 text-right pr-8"></th>
+                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                      {filteredClientes.map((c) => {
                         const total = c.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
                         const style = getTensaoColors(c.tensao);
+                        const statusStyle = getStatusStyle(c.status);
+                        const isExpanded = selectedClienteId === c.id;
                         return (
-                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] transition-colors cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
+                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] transition-colors cursor-pointer border-l-[3px] ${statusStyle.border} ${isExpanded ? 'bg-white/[0.03]' : ''}`}>
+                              <td className="p-5 pl-6"><div className={`w-2 h-2 rounded-full ${isExpanded ? 'bg-cyan-400' : 'bg-slate-700'}`}></div></td>
                               <td className="p-5">
-                                 <div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white group-hover:text-cyan-400 transition-colors text-sm">{c.nome}</p><div className="flex gap-2 mt-0.5"><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></div>
+                                 <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div>
+                                    <div><p className="font-semibold text-white group-hover:text-cyan-400 transition-colors text-sm">{c.nome}</p><div className="flex gap-2 mt-0.5"><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div>
+                                 </div>
                               </td>
                               <td className="p-5"><MiniLineChart color={style.chartColor} /></td>
-                              <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
+                              <td className="p-5">
+                                 <div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div>
+                              </td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
-                              <td className="p-5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyle(c.status).badge}`}>{c.status || 'Nenhum'}</span></td>
-                              <td className="p-5 text-right"><Button variant="ghost" size="icon" className="text-slate-500 hover:text-white"><MoreHorizontal className="w-4 h-4" /></Button></td>
+                              <td className="p-5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusStyle.badge} ${statusStyle.glow}`}>{c.status || 'Nenhum'}</span></td>
+                              <td className="p-5 text-right pr-8"><Button variant="ghost" size="icon" className="text-slate-500 hover:text-white"><MoreHorizontal className="w-4 h-4" /></Button></td>
                            </tr>
                         );
                      })}
                   </tbody>
                </table>
             </div>
-         )}
+          )}
 
-         {/* VIEW: MAP (COM HEATMAP) */}
-         {viewMode === 'map' && (
+          {/* === VIEW: MAP (CORRIGIDO) === */}
+          {viewMode === 'map' && (
              <div className="w-full h-[650px] bg-slate-900 rounded-2xl border border-white/10 overflow-hidden relative animate-in fade-in duration-500 shadow-2xl">
-                {/* Controles do Mapa */}
-                <div className="absolute top-4 right-4 z-10 bg-slate-900/90 backdrop-blur p-1 rounded-lg border border-white/10 flex gap-1 shadow-xl">
-                    <button onClick={() => setMapLayer('pins')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-colors ${mapLayer === 'pins' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-                        <MapPinned className="w-3 h-3" /> Pinos
-                    </button>
-                    <button onClick={() => setMapLayer('heat')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-colors ${mapLayer === 'heat' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-                        <Flame className="w-3 h-3" /> Calor
-                    </button>
-                </div>
-
                 {isMapLoaded ? (
                   <GoogleMap
                     mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -386,20 +411,12 @@ export default function FaturasPage() {
                     zoom={11}
                     options={{ styles: mapStyles, disableDefaultUI: true, zoomControl: true }}
                   >
-                    {/* CAMADA 1: HEATMAP */}
-                    {mapLayer === 'heat' && (
-                        <HeatmapLayer 
-                            data={heatmapData} 
-                            options={{ radius: 40, opacity: 0.8 }} 
-                        />
-                    )}
-
-                    {/* CAMADA 2: PINOS (OVERLAY) */}
-                    {mapLayer === 'pins' && filteredClientes.map(c => {
+                    {filteredClientes.map(c => {
                       const uc = c.unidades.find(u => u.latitude && u.longitude);
                       if (!uc?.latitude) return null;
                       const kwh = Number(uc.consumoKwh) || 0;
                       const style = getTensaoColors(c.tensao);
+                      // Tamanho dinâmico do círculo (mínimo 32px, máximo 64px)
                       const size = Math.min(Math.max(32, kwh / 100), 64); 
 
                       return (
@@ -418,8 +435,9 @@ export default function FaturasPage() {
                              >
                                 <span className="text-[10px] font-bold text-white drop-shadow-md">{formatKwh(kwh)}</span>
                              </div>
-                             <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-white/10 pointer-events-none z-50">
-                                <span className="font-bold">{c.nome}</span>
+                             {/* Tooltip ao passar o mouse no mapa */}
+                             <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-white/10 pointer-events-none">
+                                {c.nome}
                              </div>
                           </div>
                         </OverlayView>
@@ -427,12 +445,12 @@ export default function FaturasPage() {
                     })}
                   </GoogleMap>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-slate-500"><Loader2 className="animate-spin w-8 h-8 mr-2 text-cyan-500" /> Carregando Mapa...</div>
+                  <div className="flex items-center justify-center h-full text-slate-500"><Loader2 className="animate-spin w-8 h-8 mr-2 text-cyan-500" /> Carregando Satélite...</div>
                 )}
              </div>
           )}
 
-          {/* VIEW: KANBAN */}
+          {/* === VIEW: KANBAN === */}
           {viewMode === 'kanban' && (
             <div className="flex gap-4 overflow-x-auto pb-4 h-full animate-in fade-in duration-500">
                {FATURA_STATUS_OPTIONS.map(status => (
@@ -461,7 +479,7 @@ export default function FaturasPage() {
         </div>
       </main>
 
-      {/* DRAWER (MANTER A MESMA LÓGICA RICA DE ANTES) */}
+      {/* === DRAWER (GAVETA LATERAL) === */}
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
@@ -471,7 +489,7 @@ export default function FaturasPage() {
                   <button onClick={() => setSelectedClienteId(null)} className="text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
                </div>
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  {/* Performance */}
+                  {/* Seção 1: Inteligência */}
                   {(() => {
                       const uc = selectedCliente.unidades[0];
                       const consumo = Number(uc?.consumoKwh || 0);
@@ -485,27 +503,27 @@ export default function FaturasPage() {
                                   <div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div>
                                   <div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div>
                                   <div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh</small></span></div>
-                                  <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div>
+                                  <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div><div className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_10px_white]" style={{left: `${(media / (media * 1.5)) * 100}%`}}></div></div>
                               </div>
                           )
                       }
                   })()}
-                  
-                  {/* UCs e Uploads */}
+
+                  {/* Seção 2: Unidades e Upload */}
                   <div className="space-y-4">
                       <div className="flex justify-between items-center border-b border-white/5 pb-2"><h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Home className="w-4 h-4" /> Unidades</h3><Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => handleUpdateField(selectedCliente.id, 'unidades', [...selectedCliente.unidades, { id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, nomeArquivo: null }])}>+ Adicionar UC</Button></div>
                       {selectedCliente.unidades.map((uc, i) => (
                           <div key={uc.id} className="bg-slate-800/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-all">
                               <div className="flex justify-between mb-3">
-                                  <div className="flex items-center gap-2"><span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>{uc.latitude ? <span className="text-xs text-emerald-400 flex items-center gap-1"><MapPin className="w-3 h-3"/> No Mapa</span> : <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/> Sem Mapa</span>}</div>
-                                  <button onClick={() => handleUpdateField(selectedCliente.id, 'unidades', selectedCliente.unidades.filter(u => u.id !== uc.id))} className="text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>
+                                  <div className="flex items-center gap-2"><span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>{uc.latitude ? <span className="text-xs text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"><MapPin className="w-3 h-3"/> {uc.cidade || 'No Mapa'}</span> : <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/> Sem Mapa</span>}</div>
+                                  {selectedCliente.unidades.length > 1 && <button onClick={() => handleUpdateField(selectedCliente.id, 'unidades', selectedCliente.unidades.filter(u => u.id !== uc.id))} className="text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>}
                               </div>
                               <div className="grid grid-cols-2 gap-3 mb-3">
                                   <div><Label className="text-[10px] text-slate-500 uppercase">Consumo (kWh)</Label><Input placeholder="0" defaultValue={uc.consumoKwh} className="h-9 bg-slate-900/50 border-white/10 text-white font-mono" onBlur={e => {const n=[...selectedCliente.unidades];n[i].consumoKwh=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
                                   <div><Label className="text-[10px] text-slate-500 uppercase">Média Histórica</Label><Input placeholder="0" defaultValue={uc.mediaConsumo} className="h-9 bg-slate-900/50 border-white/10 text-slate-400 font-mono" onBlur={e => {const n=[...selectedCliente.unidades];n[i].mediaConsumo=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
                               </div>
                               <div className="flex gap-2 mb-3">
-                                  <div className="flex-1"><Input placeholder="Endereço..." defaultValue={uc.endereco} className="h-9 bg-slate-900/50 border-white/10 text-xs text-white" onBlur={e => {const n=[...selectedCliente.unidades];n[i].endereco=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
+                                  <div className="flex-1"><Input placeholder="Endereço Completo..." defaultValue={uc.endereco} className="h-9 bg-slate-900/50 border-white/10 text-xs text-white" onBlur={e => {const n=[...selectedCliente.unidades];n[i].endereco=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
                                   <Button size="sm" variant="secondary" className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200" onClick={() => handleManualGeocode(selectedCliente.id, uc.id, uc.endereco || '')} title="Buscar Coordenadas"><LocateFixed className="w-4 h-4" /></Button>
                               </div>
                               <label className={`flex items-center justify-center w-full py-3 border border-dashed rounded-lg cursor-pointer transition-all ${uc.arquivoFaturaUrl ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400' : 'border-slate-600 hover:border-cyan-500 hover:bg-slate-800 text-slate-400'}`}>
