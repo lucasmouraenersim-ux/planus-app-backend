@@ -12,7 +12,7 @@ import {
   Filter as FilterIcon, Zap, Home, AlertCircle, 
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   MoreHorizontal, Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail
+  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail, Search as SearchIcon
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -259,7 +259,9 @@ export default function FaturasPage() {
 
   // Heatmap Data
   const heatmapData = useMemo(() => {
-    if (!window.google) return [];
+    if (!isMapLoaded || typeof window.google?.maps?.LatLng !== 'function') {
+      return [];
+    }
     const points: any[] = [];
     filteredClientes.forEach(c => {
         c.unidades.forEach(u => {
@@ -579,7 +581,7 @@ export default function FaturasPage() {
                   </div>
                </div>
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.credits || 0}cr</strong></div>
+                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{userCredits}cr</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
