@@ -13,7 +13,7 @@ import {
   Filter as FilterIcon, Zap, Home, AlertCircle, 
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   MoreHorizontal, Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail, Search as SearchIcon
+  Flame, MapPinned, Lock, Unlock, Coins, Phone, Mail, Search
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -56,7 +56,10 @@ export interface FaturaCliente {
   contatos: { id: string, nome: string, telefone: string, email?: string }[];
   status?: FaturaStatus;
   feedbackNotes?: string;
+  // NOVO: Controle de "Compra" do lead
   isUnlocked?: boolean; 
+  unlockedLeads?: string[];
+  credits?: number;
   createdAt: string | Timestamp; 
   lastUpdatedBy?: { uid: string; name: string };
 }
@@ -131,10 +134,10 @@ const MiniLineChart = ({ color }: { color: string }) => {
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
-    <div className={'glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all'}>
+    <div className={`glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className={'text-xs font-bold uppercase tracking-wider text-slate-400'}>{title}</p>
+          <p className={`text-xs font-bold uppercase tracking-wider text-slate-400`}>{title}</p>
           <h3 className="text-2xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')} <span className="text-xs">{unit}</span></h3>
         </div>
         <div className={`p-2 rounded-lg ${styles.text} bg-white/5`}><Icon className="w-5 h-5" /></div>
@@ -153,8 +156,7 @@ export default function FaturasPage() {
   const { toast } = useToast();
   const [clientes, setClientes] = useState<FaturaCliente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  const { appUser, updateAppUser, userAppRole } = useAuth();
+  const { appUser, updateAppUser } = useAuth();
   
   // UI States
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
@@ -184,8 +186,8 @@ export default function FaturasPage() {
   const handleUnlockLead = async (clienteId: string) => {
       if (!appUser) return;
 
-      const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
-      const currentCredits = appUser.personalBalance || 0;
+      const isAdmin = appUser.type === 'admin' || appUser.type === 'superadmin';
+      const currentCredits = appUser.credits || 0;
 
       if (!isAdmin && currentCredits < COST_PER_UNLOCK) {
           toast({ title: "Saldo Insuficiente", description: "Recarregue seus créditos para continuar.", variant: "destructive" });
@@ -198,14 +200,11 @@ export default function FaturasPage() {
           const result = await unlockContactAction(appUser.uid, clienteId);
 
           if (result.success) {
-              const newUnlockedList = [...(appUser.unlockedLeads || []), clienteId];
-              
-              if(appUser) {
-                updateAppUser({
-                    ...appUser,
-                    personalBalance: isAdmin ? appUser.personalBalance : (appUser.personalBalance || 0) - COST_PER_UNLOCK,
-                    unlockedLeads: newUnlockedList
-                });
+              if (!isAdmin && result.alreadyUnlocked !== true) {
+                const newCredits = (appUser.credits || 0) - COST_PER_UNLOCK;
+                updateAppUser({ ...appUser, credits: newCredits, unlockedLeads: [...(appUser.unlockedLeads || []), clienteId] });
+              } else {
+                updateAppUser({ ...appUser, unlockedLeads: [...(appUser.unlockedLeads || []), clienteId] });
               }
 
               setClientes(prev => prev.map(c => 
@@ -221,12 +220,11 @@ export default function FaturasPage() {
       }
   };
 
-
   const handleBuyCredits = () => {
-    if(!appUser) return;
-    const newCredits = (appUser.personalBalance || 0) + 50;
-    updateDoc(doc(db, 'users', appUser.uid), { personalBalance: newCredits });
-    updateAppUser({ ...appUser, personalBalance: newCredits });
+    if (!appUser) return;
+    const newCredits = (appUser.credits || 0) + 50;
+    updateAppUser({ ...appUser, credits: newCredits });
+    updateDoc(doc(db, 'users', appUser.uid), { credits: newCredits });
     toast({ title: "Compra Realizada", description: "50 Créditos adicionados à sua carteira." });
   }
 
@@ -237,13 +235,6 @@ export default function FaturasPage() {
     const cidades = new Set<string>();
 
     clientes.forEach(c => {
-        const isUnlockedForUser = appUser?.unlockedLeads?.includes(c.id);
-        const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
-
-        if (isAdmin || isUnlockedForUser) {
-          c.isUnlocked = true;
-        }
-
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
              const consumo = Number(u.consumoKwh) || 0;
@@ -256,13 +247,11 @@ export default function FaturasPage() {
     if (filterCidade !== 'all') result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
 
     return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
-  }, [clientes, searchTerm, filterTensao, filterCidade, appUser, userAppRole]);
+  }, [clientes, searchTerm, filterTensao, filterCidade]);
 
   // Heatmap Data
   const heatmapData = useMemo(() => {
-    if (!isMapLoaded || typeof window.google?.maps?.LatLng !== 'function') {
-      return [];
-    }
+    if (!isMapLoaded || !window.google) return [];
     const points: any[] = [];
     filteredClientes.forEach(c => {
         c.unidades.forEach(u => {
@@ -274,13 +263,13 @@ export default function FaturasPage() {
     return points;
   }, [filteredClientes, isMapLoaded]);
 
-  // Funções de CRUD (Mantidas da versão anterior para não quebrar nada)
+  // Funções de CRUD
   const handleAddCliente = async () => {
     try {
         const docRef = await addDoc(collection(db, 'faturas_clientes'), {
             nome: 'Novo Lead', tipoPessoa: 'pj', tensao: 'baixa',
             unidades: [{ id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null }],
-            contatos: [{ id: crypto.randomUUID(), nome: 'Decisor', telefone: '(65) 99999-8888', email: 'contato@empresa.com' }], // Dados Mock para teste de bloqueio
+            contatos: [{ id: crypto.randomUUID(), nome: 'Decisor', telefone: '(65) 99999-8888', email: 'contato@empresa.com' }],
             createdAt: Timestamp.now(), status: 'Nenhum', isUnlocked: false
         });
         setSelectedClienteId(docRef.id);
@@ -293,11 +282,11 @@ export default function FaturasPage() {
 
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file) return;
-    toast({ title: "Processando...", description: "Lendo fatura com IA..." });
+    toast({ title: "🤖 IA Analisando...", description: "Lendo dados e localizando endereço..." });
     try {
         const formData = new FormData(); formData.append('file', file);
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
-        if(!res.ok) throw new Error('Erro IA');
+        if (!res.ok) throw new Error('Falha na IA');
         const dadosIA = await res.json();
         const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
         const url = await uploadFile(file, path);
@@ -317,12 +306,11 @@ export default function FaturasPage() {
             } : u);
             await handleUpdateField(clienteId, 'unidades', novasUnidades);
             if(cliente.nome === 'Novo Lead' && dadosIA.nomeCliente) await handleUpdateField(clienteId, 'nome', dadosIA.nomeCliente);
-            toast({ title: "Sucesso!", description: "Dados atualizados." });
+            toast({ title: "Sucesso!", description: `Processado: ${dadosIA.cidade || 'Localizado'}` });
         }
-    } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
+    } catch(e: any) { toast({ title: "Erro IA", description: e.message, variant: "destructive" }); }
   };
-
-  const handleManualGeocode = async (clienteId: string, unidadeId: string, address: string) => {
+    const handleManualGeocode = async (clienteId: string, unidadeId: string, address: string) => {
     if(!address || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY) return;
     toast({ title: "Buscando...", description: "Consultando Google Maps..." });
     try {
@@ -333,7 +321,7 @@ export default function FaturasPage() {
             const cliente = clientes.find(c => c.id === clienteId);
             if(!cliente) return;
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { ...u, latitude: loc.lat, longitude: loc.lng, endereco: address } : u);
-            await handleUpdateField(clienteId, 'unidades', novasUnidades);
+            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
             toast({ title: "Encontrado!", description: "Localização atualizada." });
         } else { toast({ title: "Não encontrado", variant: "destructive" }); }
     } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
@@ -341,38 +329,31 @@ export default function FaturasPage() {
 
 
   const selectedCliente = useMemo(() => clientes.find(c => c.id === selectedClienteId), [clientes, selectedClienteId]);
+  
+  const isUserAdmin = appUser?.type === 'admin' || appUser?.type === 'superadmin';
 
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
+      <TermsModal />
       <style jsx global>{`
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .blur-text { filter: blur(4px); user-select: none; pointer-events: none; opacity: 0.6; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
       `}</style>
 
-      {/* Header com Carteira */}
+      {/* Header */}
       <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-lg shadow-cyan-500/20"><Zap className="h-5 w-5 text-white" /></div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Sent Energia</h2>
-          </div>
-          
+          <div className="flex items-center gap-3"><div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-lg"><Zap className="h-5 w-5 text-white" /></div><h2 className="text-xl font-bold text-white">Sent Energia</h2></div>
           <div className="flex items-center gap-6">
-             <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-lg shadow-yellow-900/10 cursor-pointer hover:bg-slate-800 transition-colors" onClick={handleBuyCredits} title="Clique para recarregar (Simulado)">
-                <Coins className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-bold text-yellow-100">{appUser?.personalBalance || 0} Créditos</span>
-                <PlusCircle className="w-3 h-3 text-yellow-500 ml-1" />
+             <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-lg cursor-pointer hover:bg-slate-800 transition-colors" onClick={handleBuyCredits}>
+                <Coins className="w-4 h-4 text-yellow-400" /><span className="text-sm font-bold text-yellow-100">{appUser?.credits || 0} Créditos</span><PlusCircle className="w-3 h-3 text-yellow-500 ml-1" />
              </div>
-
-             <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}>
-                <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><SearchIcon className="w-5 h-5" /></button>
-                <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
-             </div>
+             <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
 
+      {/* Content */}
       <div className="p-6 pb-20 overflow-y-auto h-[calc(100vh-80px)]">
          {/* KPIs */}
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -385,53 +366,30 @@ export default function FaturasPage() {
          {/* Filters */}
          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
-                <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex">
-                   <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><List className="w-4 h-4" /></button>
-                   <button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg transition-all ${viewMode === 'kanban' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><LayoutGrid className="w-4 h-4" /></button>
-                   <button onClick={() => setViewMode('map')} className={`p-2 rounded-lg transition-all ${viewMode === 'map' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}><MapIcon className="w-4 h-4" /></button>
-                </div>
-                <div className="h-8 w-px bg-white/10 mx-2"></div>
-                <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas Tensões</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
+                <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex"><button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><List className="w-4 h-4" /></button><button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setViewMode('map')} className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><MapIcon className="w-4 h-4" /></button></div>
+                <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
                 <Select value={filterCidade} onValueChange={setFilterCidade}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Cidades" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{cidadesDisponiveis.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
             </div>
-            {/* Botão de Adicionar Lead (Mock) */}
-            <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg transition-all"><PlusCircle className="w-4 h-4 mr-2" /> Novo Lead</Button>
+            <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg"><PlusCircle className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
 
-         {/* VIEW: LIST (Com Bloqueio de Dados) */}
+         {/* VIEW: LIST */}
          {viewMode === 'list' && (
             <div className="glass-panel rounded-2xl overflow-hidden animate-in fade-in duration-500">
                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-900/50 text-xs uppercase text-slate-500 font-bold tracking-wider border-b border-white/5">
+                  <thead className="bg-slate-900/50 text-xs uppercase text-slate-500 font-bold border-b border-white/5">
                      <tr><th className="p-5">Cliente / ID</th><th className="p-5">Consumo</th><th className="p-5">Contato</th><th className="p-5">Local</th><th className="p-5">Status</th><th className="p-5 text-right"></th></tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                      {filteredClientes.map((c) => {
                         const total = c.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
                         const style = getTensaoColors(c.tensao);
-                        const statusStyle = getStatusStyle(c.status);
-                        const isUnlocked = c.isUnlocked;
-
+                        const isUnlocked = c.isUnlocked || isUserAdmin;
                         return (
-                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] transition-colors cursor-pointer border-l-[3px] ${statusStyle.border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
-                              <td className="p-5">
-                                 <div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white group-hover:text-cyan-400 transition-colors text-sm">{c.nome}</p><div className="flex gap-2 mt-0.5"><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></div>
-                              </td>
-                              <td className="p-5">
-                                 <div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div>
-                              </td>
-                              {/* COLUNA CONTATO (COM LOGICA DE BLUR) */}
-                              <td className="p-5">
-                                  {isUnlocked ? (
-                                      <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 w-fit">
-                                          <Unlock className="w-3 h-3" /> Liberado
-                                      </div>
-                                  ) : (
-                                      <div className="flex items-center gap-2 text-slate-500 text-xs">
-                                          <Lock className="w-3 h-3" /> {COST_PER_UNLOCK} Créditos
-                                      </div>
-                                  )}
-                              </td>
+                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
+                              <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
+                              <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
+                              <td className="p-5">{isUnlocked ? <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 w-fit"><Unlock className="w-3 h-3" /> Liberado</div> : <div className="flex items-center gap-2 text-slate-500 text-xs"><Lock className="w-3 h-3" /> {COST_PER_UNLOCK} Créditos</div>}</td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
                               <td className="p-5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyle(c.status).badge}`}>{c.status || 'Nenhum'}</span></td>
                               <td className="p-5 text-right"><Button variant="ghost" size="icon" className="text-slate-500 hover:text-white"><MoreHorizontal className="w-4 h-4" /></Button></td>
@@ -443,12 +401,12 @@ export default function FaturasPage() {
             </div>
          )}
 
-         {/* VIEW: MAP (COM HEATMAP) */}
+         {/* VIEW: MAP */}
          {viewMode === 'map' && (
              <div className="w-full h-[650px] bg-slate-900 rounded-2xl border border-white/10 overflow-hidden relative animate-in fade-in duration-500 shadow-2xl">
                 <div className="absolute top-4 right-4 z-10 bg-slate-900/90 backdrop-blur p-1 rounded-lg border border-white/10 flex gap-1 shadow-xl">
-                    <button onClick={() => setMapLayer('pins')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-colors ${mapLayer === 'pins' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}><MapPinned className="w-3 h-3" /> Pinos</button>
-                    <button onClick={() => setMapLayer('heat')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 transition-colors ${mapLayer === 'heat' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-white'}`}><Flame className="w-3 h-3" /> Calor</button>
+                    <button onClick={() => setMapLayer('pins')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'pins' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}><MapPinned className="w-3 h-3" /> Pinos</button>
+                    <button onClick={() => setMapLayer('heat')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'heat' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}><Flame className="w-3 h-3" /> Calor</button>
                 </div>
                 {isMapLoaded ? (
                   <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={{ lat: -15.601, lng: -56.097 }} zoom={11} options={{ styles: mapStyles, disableDefaultUI: true, zoomControl: true }}>
@@ -457,18 +415,18 @@ export default function FaturasPage() {
                       const uc = c.unidades.find(u => u.latitude && u.longitude);
                       if (!uc?.latitude) return null;
                       const style = getTensaoColors(c.tensao);
+                      const isUnlocked = c.isUnlocked || isUserAdmin;
                       const size = Math.min(Math.max(32, (Number(uc.consumoKwh)||0) / 100), 64); 
-                      // Se não desbloqueado, pino cinza
-                      const pinClass = c.isUnlocked ? style.pinColor : 'bg-slate-600'; 
+                      // Pino cinza se bloqueado
+                      const pinClass = isUnlocked ? style.pinColor : 'bg-slate-600'; 
                       return (
                         <OverlayView key={c.id} position={{ lat: uc.latitude, lng: uc.longitude! }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                           <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => setSelectedClienteId(c.id)}>
                              <div className={`flex items-center justify-center rounded-full border-2 border-white/80 shadow-2xl transition-all duration-300 group-hover:scale-125 ${pinClass}`} style={{ width: `${size}px`, height: `${size}px` }}>
                                 <span className="text-[10px] font-bold text-white drop-shadow-md">{formatKwh(Number(uc.consumoKwh))}</span>
                              </div>
-                             {/* Se bloqueado, mostra cadeado no hover */}
                              <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-white/10 pointer-events-none z-50 flex items-center gap-1">
-                                {c.isUnlocked ? c.nome : <><Lock className="w-3 h-3 text-yellow-500" /> Bloqueado</>}
+                                {isUnlocked ? c.nome : <><Lock className="w-3 h-3 text-yellow-500" /> Bloqueado</>}
                              </div>
                           </div>
                         </OverlayView>
@@ -486,14 +444,12 @@ export default function FaturasPage() {
                   <div key={status} className="min-w-[300px] bg-slate-900/40 rounded-2xl border border-white/5 p-4 flex flex-col gap-4 backdrop-blur-sm">
                      <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase px-1"><span className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${getStatusStyle(status).border.replace('border-l-', 'bg-')}`}></div>{status}</span><span className="bg-slate-800 px-2 py-0.5 rounded-full text-white font-mono">{filteredClientes.filter(c => (c.status||'Nenhum') === status).length}</span></div>
                      <div className="flex-1 space-y-3 overflow-y-auto pr-1 custom-scrollbar">
-                        {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => {
-                           const tensaoStyle = getTensaoColors(c.tensao);
-                           return (
+                        {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => (
                            <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
-                              <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br ${tensaoStyle.gradient} flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
-                              <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{c.isUnlocked ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{(c.unidades.reduce((acc,u)=>acc+(Number(u.consumoKwh)||0),0)).toLocaleString()} kWh</div></div>
+                              <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
+                              <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || isUserAdmin) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{(c.unidades.reduce((acc,u)=>acc+(Number(u.consumoKwh)||0),0)).toLocaleString()} kWh</div></div>
                            </div>
-                        )})}
+                        ))}
                      </div>
                   </div>
                ))}
@@ -501,17 +457,18 @@ export default function FaturasPage() {
          )}
       </div>
 
-      {/* === DRAWER COM SISTEMA DE CRÉDITOS === */}
+      {/* === DRAWER COM LÓGICA HÍBRIDA (SUPERADMIN + CRÉDITOS) === */}
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
             <div className="relative w-full max-w-xl h-full bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+               
                <div className="px-6 py-6 border-b border-white/5 flex justify-between items-start bg-slate-800/50">
                   <div>
                       <h2 className="text-xl font-bold text-white mb-1">{selectedCliente.nome}</h2>
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
-                          {selectedCliente.isUnlocked ? 
+                          {(selectedCliente.isUnlocked || isUserAdmin) ? 
                             <span className="text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Unlock className="w-3 h-3"/> Lead Desbloqueado</span>
                             : 
                             <span className="text-xs text-yellow-400 border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Lock className="w-3 h-3"/> Lead Bloqueado</span>
@@ -523,21 +480,20 @@ export default function FaturasPage() {
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
                   
-                  {/* ÁREA DE CONTATOS (BLOQUEADA OU LIBERADA) */}
+                  {/* ÁREA DE CONTATOS (BLUR PARA USER, FULL PARA ADMIN/UNLOCKED) */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
                       </div>
 
-                      {selectedCliente.isUnlocked ? (
-                          // ESTADO DESBLOQUEADO
+                      {(selectedCliente.isUnlocked || isUserAdmin) ? (
+                          // ESTADO DESBLOQUEADO (OU ADMIN)
                           <div className="space-y-3">
                               {selectedCliente.contatos?.map((ct, idx) => (
                                   <div key={idx} className="bg-slate-900 p-3 rounded-lg border border-white/5 flex justify-between items-center">
                                       <div>
                                           <div className="text-white font-medium">{ct.nome}</div>
                                           <div className="text-sm text-cyan-400">{ct.telefone}</div>
-                                          {ct.email && <div className="text-xs text-slate-500">{ct.email}</div>}
                                       </div>
                                       <a href={`https://wa.me/55${ct.telefone.replace(/\D/g,'')}`} target="_blank" className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-full text-white"><Phone className="w-4 h-4" /></a>
                                   </div>
@@ -545,7 +501,7 @@ export default function FaturasPage() {
                               {(!selectedCliente.contatos || selectedCliente.contatos.length === 0) && <p className="text-sm text-slate-500">Nenhum contato cadastrado.</p>}
                           </div>
                       ) : (
-                          // ESTADO BLOQUEADO (BLUR)
+                          // ESTADO BLOQUEADO
                           <div className="relative">
                               <div className="space-y-3 filter blur-sm select-none pointer-events-none opacity-50">
                                   <div className="bg-slate-900 p-3 rounded-lg border border-white/5"><div className="h-4 w-32 bg-slate-700 rounded mb-2"></div><div className="h-3 w-24 bg-slate-700 rounded"></div></div>
@@ -555,33 +511,77 @@ export default function FaturasPage() {
                                   <div className="bg-slate-900/90 p-4 rounded-xl border border-white/10 shadow-2xl">
                                       <Lock className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
                                       <h4 className="text-white font-bold mb-1">Dados Protegidos</h4>
-                                      <p className="text-xs text-slate-400 mb-4 max-w-[200px]">Desbloqueie para ver telefones, e-mails e decisores.</p>
-                                      <Button onClick={() => handleUnlockLead(selectedCliente.id)} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold">
-                                          Liberar por {COST_PER_UNLOCK} Créditos
-                                      </Button>
+                                      <p className="text-xs text-slate-400 mb-4 max-w-[200px]">Desbloqueie para ver contatos.</p>
+                                      <Button onClick={() => handleUnlockLead(selectedCliente.id)} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold">Liberar por {COST_PER_UNLOCK} Créditos</Button>
                                   </div>
                               </div>
                           </div>
                       )}
                   </div>
 
-                  {/* RESTANTE DO DRAWER (IGUAL ANTES: MAPA, UCS, ETC) */}
-                  <div className="space-y-4">
-                      {selectedCliente.unidades.map((uc, i) => (
-                          <div key={uc.id} className="bg-slate-800/40 p-4 rounded-lg border border-white/5">
-                              <div className="flex justify-between mb-2">
-                                  <span className="text-xs font-bold bg-slate-700 px-1.5 py-0.5 rounded text-white">UC {i+1}</span>
-                                  {uc.latitude ? <span className="text-xs text-emerald-400 flex items-center gap-1"><MapPin className="w-3 h-3"/> Localizado</span> : <span className="text-xs text-slate-500">Sem Mapa</span>}
-                              </div>
-                              <div className="flex gap-2 mb-3">
-                                  <Input placeholder="Consumo" defaultValue={uc.consumoKwh} className="h-8 text-xs bg-slate-900 border-white/10" onBlur={e => {const n=[...selectedCliente.unidades];n[i].consumoKwh=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} />
-                              </div>
+                  {/* VISUALIZAÇÃO PREMIUM (PERFORMANCE E MAPA) - SÓ SE ESTIVER LIBERADO OU FOR ADMIN */}
+                  {(selectedCliente.isUnlocked || isUserAdmin) && (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+                          
+                          {/* PERFORMANCE (Copiado da versão bonita) */}
+                          {(() => {
+                              const uc = selectedCliente.unidades[0];
+                              const consumo = Number(uc?.consumoKwh || 0);
+                              const media = Number(uc?.mediaConsumo || 0);
+                              if(consumo > 0 && media > 0) {
+                                  const diff = consumo - media;
+                                  const pct = ((diff/media)*100).toFixed(1);
+                                  const isHigh = diff > 0;
+                                  return (
+                                      <div className="bg-slate-800/40 p-5 rounded-xl border border-white/5 relative overflow-hidden">
+                                          <div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div>
+                                          <div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div>
+                                          <div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh Atual</small></span></div>
+                                          <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div>
+                                      </div>
+                                  )
+                              }
+                              return null;
+                          })()}
+
+                          {/* UNIDADES E UPLOAD (EDITÁVEL PARA ADMIN/DONO) */}
+                          <div className="space-y-4">
+                              <div className="flex justify-between items-center border-b border-white/5 pb-2"><h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Home className="w-4 h-4" /> Unidades Consumidoras</h3><Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => { const n = [...selectedCliente.unidades, { id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, nomeArquivo: null }]; handleUpdateField(selectedCliente.id, 'unidades', n); }}>+ Adicionar UC</Button></div>
+                              {selectedCliente.unidades.map((uc, i) => (
+                                  <div key={uc.id} className="bg-slate-800/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-all group">
+                                      <div className="flex justify-between mb-3">
+                                          <div className="flex items-center gap-2"><span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>{uc.latitude ? <span className="text-xs text-emerald-400 flex items-center gap-1"><MapPin className="w-3 h-3"/> No Mapa</span> : <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3"/> Sem Mapa</span>}</div>
+                                          {selectedCliente.unidades.length > 1 && <button onClick={() => { const n = selectedCliente.unidades.filter(u => u.id !== uc.id); handleUpdateField(selectedCliente.id, 'unidades', n); }} className="text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>}
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-3 mb-3">
+                                          <div><Label className="text-[10px] text-slate-500 uppercase">Consumo (kWh)</Label><Input placeholder="0" defaultValue={uc.consumoKwh} className="h-9 bg-slate-900/50 border-white/10 text-white font-mono" onBlur={e => {const n=[...selectedCliente.unidades];n[i].consumoKwh=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
+                                          <div><Label className="text-[10px] text-slate-500 uppercase">Média Histórica</Label><Input placeholder="0" defaultValue={uc.mediaConsumo} className="h-9 bg-slate-900/50 border-white/10 text-slate-400 font-mono" onBlur={e => {const n=[...selectedCliente.unidades];n[i].mediaConsumo=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
+                                      </div>
+                                      <div className="flex gap-2 mb-3">
+                                          <div className="flex-1"><Input placeholder="Endereço Completo..." defaultValue={uc.endereco} className="h-9 bg-slate-900/50 border-white/10 text-xs text-white" onBlur={e => {const n=[...selectedCliente.unidades];n[i].endereco=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
+                                          <Button size="sm" variant="secondary" className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200" onClick={() => handleManualGeocode(selectedCliente.id, uc.id, uc.endereco || '')} title="Buscar Coordenadas"><LocateFixed className="w-4 h-4" /></Button>
+                                      </div>
+                                      <label className={`flex items-center justify-center w-full py-3 border border-dashed rounded-lg cursor-pointer transition-all ${uc.arquivoFaturaUrl ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400' : 'border-slate-600 hover:border-cyan-500 hover:bg-slate-800 text-slate-400'}`}>
+                                          {uc.arquivoFaturaUrl ? <Check className="w-4 h-4 mr-2" /> : <Upload className="w-4 h-4 mr-2" />} {uc.arquivoFaturaUrl ? 'Fatura OK (Trocar)' : 'Upload PDF (IA)'}
+                                          <input type="file" className="hidden" onChange={(e) => handleFileUpload(selectedCliente.id, uc.id, e.target.files?.[0] || null)} />
+                                      </label>
+                                      {uc.arquivoFaturaUrl && (<div className="flex justify-end mt-2"><a href={uc.arquivoFaturaUrl} target="_blank" className="text-xs text-cyan-500 hover:underline flex items-center gap-1"><Eye className="w-3 h-3"/> Ver PDF Original</a></div>)}
+                                  </div>
+                              ))}
                           </div>
-                      ))}
-                  </div>
+
+                          <div className="pt-4 border-t border-white/5">
+                              <Label className="text-xs text-slate-500 uppercase mb-2 block">Status / Pipeline</Label>
+                              <Select value={selectedCliente.status} onValueChange={(v) => handleUpdateField(selectedCliente.id, 'status', v)}><SelectTrigger className="w-full bg-slate-800 border-white/10"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-700 text-slate-300">{FATURA_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
+                              <Label className="text-xs text-slate-500 uppercase mt-4 mb-2 block">Notas Internas</Label>
+                              <Textarea placeholder="Detalhes..." defaultValue={selectedCliente.feedbackNotes} className="bg-slate-800/50 border-white/10 min-h-[100px]" onBlur={e => handleUpdateField(selectedCliente.id, 'feedbackNotes', e.target.value)} />
+                          </div>
+                      </div>
+                  )}
                </div>
+               
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.personalBalance || 0}cr</strong></div>
+                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.credits || 0}cr</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
