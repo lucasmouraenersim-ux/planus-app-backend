@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -77,28 +76,42 @@ function ProposalPageContent() {
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  const proposalData = useMemo(() => {
-    const tariffString = searchParams.get("tariff") || "0";
-    return {
-      clientName: searchParams.get("clienteNome") || "Cliente",
-      clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
-      consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
-      distributor: searchParams.get("distribuidora") || "Distribuidora Local",
-      comercializadora: searchParams.get("comercializadora") || "BC Energia",
-      avgConsumption: parseFloat(searchParams.get("item1Quantidade") || "0"),
-      currentPrice: parseFloat(tariffString.replace(',', '.')) || 0,
-      discountRate: parseFloat(searchParams.get("desconto") || "0"),
-      coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
-      address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
-    }
-  }, [searchParams]);
+  // --- CORREÇÃO: Função para tratar números brasileiros (vírgula e ponto) ---
+  const parseNumber = (val: string | null) => {
+    if (!val) return 0;
+    // Remove pontos de milhar (ex: 17.850 -> 17850) e troca vírgula por ponto (ex: 0,98 -> 0.98)
+    const clean = val.replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
+  // Parse dos dados da URL
+  const proposalData = useMemo(() => ({
+    clientName: searchParams.get("clienteNome") || "Cliente",
+    clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
+    consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
+    distributor: searchParams.get("distribuidora") || "Distribuidora Local",
+    comercializadora: searchParams.get("comercializadora") || "BC Energia",
+    // Usando a função corrigida para números
+    avgConsumption: parseNumber(searchParams.get("item1Quantidade")), 
+    currentPrice: parseNumber(searchParams.get("tariff")),
+    discountRate: parseNumber(searchParams.get("desconto")),
+    coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
+    address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
+  }), [searchParams]);
+
+  // Cálculos
   const calculated = useMemo(() => {
     const avgMonthlyCost = proposalData.avgConsumption * proposalData.currentPrice;
-    const bcPrice = proposalData.currentPrice * (1 - (proposalData.discountRate / 100));
+    
+    // Calcula o preço do kWh com desconto
+    const discountDecimal = proposalData.discountRate / 100;
+    const bcPrice = proposalData.currentPrice * (1 - discountDecimal);
+    
     const bcMonthlyCost = proposalData.avgConsumption * bcPrice;
     const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
     const annualEconomy = monthlyEconomy * 12;
+    
     return { avgMonthlyCost, bcPrice, bcMonthlyCost, monthlyEconomy, annualEconomy };
   }, [proposalData]);
 
@@ -125,7 +138,6 @@ function ProposalPageContent() {
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
           pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
       }
-      // Nome do arquivo atualizado
       pdf.save(`Proposta_Planus_${proposalData.clientName.replace(/\s/g, '_')}.pdf`);
       setIsGeneratingPDF(false);
   };
@@ -148,7 +160,7 @@ function ProposalPageContent() {
 
       <div ref={proposalRef} className="w-full max-w-[210mm] space-y-0">
         
-        {/* === PÁGINA 1: CAPA (BRANDING PLANUS) === */}
+        {/* === PÁGINA 1: CAPA === */}
         <div data-pdf-section="cover" className="relative w-full aspect-[210/297] bg-slate-900 text-white overflow-hidden flex flex-col">
             <div className="absolute inset-0 z-0">
                 <img src="https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop" className="w-full h-full object-cover opacity-30" alt="Solar Background" crossOrigin="anonymous"/>
@@ -158,7 +170,6 @@ function ProposalPageContent() {
             <div className="relative z-10 flex-1 flex flex-col justify-between p-16">
                 <div className="w-full border-b border-white/20 pb-6 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                         {/* LOGO OFICIAL NA CAPA */}
                          <img 
                             src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/b0c93c3d8a644f4a5c54974a14b804bab886dcac/LOGO_LOGO_BRANCA.png" 
                             alt="Planus Energia" 
