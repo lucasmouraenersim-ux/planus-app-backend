@@ -1,7 +1,8 @@
+
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -331,6 +332,62 @@ export default function FaturasPage() {
       await updateDoc(ref, updateData);
     } catch (e) { toast({ title: "Erro ao Salvar", variant: "destructive" }); }
   };
+  
+  const handleFileUpload = async (clienteId: string, unidadeId: string, file: File | null) => {
+    if (!file) return;
+
+    toast({ title: "Processando com IA...", description: "Lendo dados da fatura..." });
+    let dadosIA: any = {};
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/process-fatura', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha na API de processamento.');
+      }
+      
+      dadosIA = await response.json();
+
+      if (dadosIA.consumoKwh) {
+        toast({ 
+          title: "Dados Extraídos!", 
+          description: `Consumo: ${dadosIA.consumoKwh} kWh | Total: R$ ${dadosIA.valorTotal}` 
+        });
+      } else {
+        toast({ title: "Aviso", description: "IA não retornou dados completos, verifique manualmente.", variant: "default" });
+      }
+
+    } catch (e) {
+      toast({ title: "Aviso de IA", description: "Falha na leitura automática. O arquivo será anexado e os dados podem ser inseridos manualmente.", variant: "default" });
+    }
+
+    try {
+      const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
+      const url = await uploadFile(file, path);
+      
+      const cliente = clientes.find(c => c.id === clienteId);
+      if(cliente) {
+          const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { 
+              ...u, 
+              arquivoFaturaUrl: url, 
+              nomeArquivo: file.name,
+              consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
+              valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
+          } : u);
+          await handleUpdateField(clienteId, 'unidades', novasUnidades);
+          toast({ title: "Sucesso!", description: "Fatura anexada e dados atualizados." });
+      }
+    } catch (e) {
+      toast({ title: "Erro no Upload", description: "Não foi possível salvar o anexo.", variant: "destructive" });
+    }
+  };
+
 
   const handleFeedbackFileChange = async (e: React.ChangeEvent<HTMLInputElement>, clienteId: string) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -604,9 +661,8 @@ export default function FaturasPage() {
                             <Button size="icon" variant="ghost" className="h-8 w-8 hover:bg-slate-700" onClick={() => window.open(uc.arquivoFaturaUrl || '', '_blank')} disabled={!uc.arquivoFaturaUrl}><Eye className="w-4 h-4" /></Button>
                          </div>
                          <label className="flex items-center justify-center w-full py-2 border border-dashed border-slate-600 rounded-lg cursor-pointer hover:bg-slate-800 text-xs text-slate-400">
-                            <Upload className="w-3 h-3 mr-2" /> {uc.arquivoFaturaUrl ? 'Substituir Fatura' : 'Anexar Fatura'}
-                            <input type="file" className="hidden" onChange={(e) => handleUpdateField(selectedCliente.id, 'unidades', selectedCliente.unidades)} /> 
-                            {/* Nota: Lógica de upload completa está na função handleFileUpload original, simplificado aqui para brevidade do drawer */}
+                            <Upload className="w-3 h-3 mr-2" /> {uc.nomeArquivo || 'Anexar Fatura'}
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(selectedCliente.id, uc.id, e.target.files ? e.target.files[0] : null)} /> 
                          </label>
                       </div>
                    ))}

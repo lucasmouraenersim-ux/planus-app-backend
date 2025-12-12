@@ -5,6 +5,7 @@ import type { Timestamp } from 'firebase/firestore';
 export interface UnidadeConsumidora {
   id: string; // Unique ID for the unit within the client
   consumoKwh: string;
+  valorTotal?: string; // Novo: Para simular TUSD/TE e salvar o valor extraído pela IA
   temGeracao: boolean;
   arquivoFaturaUrl: string | null; // URL from Firebase Storage
   nomeArquivo: string | null; // Original name of the uploaded file
