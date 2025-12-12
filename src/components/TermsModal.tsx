@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -74,4 +75,10 @@ export function TermsModal() {
         <DialogFooter>
           <Button onClick={handleAccept} disabled={!accepted || loading} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white">
             {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
-            {loading ? "Registrando..." : "Aceitar e Continu
+            {loading ? "Registrando..." : "Aceitar e Continuar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
