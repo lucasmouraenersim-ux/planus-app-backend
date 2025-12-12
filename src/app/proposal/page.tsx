@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -23,7 +24,6 @@ const commercializerCatalog = [
   },
   {
     name: "Capibolt",
-    // ⚠️ SUBSTITUA O LINK ABAIXO PELA URL REAL DA IMAGEM DA CAPIBOLT
     logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/main/Capibolt.png", 
   },
   {
@@ -391,3 +391,5 @@ export default function ProposalPage() {
     </Suspense>
   );
 }
+
+    
