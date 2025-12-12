@@ -11,8 +11,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { 
   Download, Loader2, ArrowLeft, Leaf, Zap, Globe, ShieldCheck, 
-  HelpCircle, Wrench, PiggyBank, TrendingUp, Building, ShoppingBag, 
-  Utensils, Wheat, Home
+  PiggyBank, Wrench, TrendingUp, Building, ShoppingBag, 
+  Utensils, Wheat
 } from "lucide-react";
 
 // --- DADOS E MOCKS ---
@@ -48,7 +48,7 @@ const faqs = [
     },
     { 
         question: "Preciso fazer investimento?", 
-        answer: "Não! Zero investimento. Não precisa instalar placas, nem obras. A Sent Energia cuida de toda a geração e manutenção.",
+        answer: "Não! Zero investimento. Não precisa instalar placas, nem obras. A Planus Energia cuida de toda a geração e manutenção.",
         icon: PiggyBank 
     },
     { 
@@ -63,7 +63,6 @@ const faqs = [
     },
 ];
 
-// Placeholder de clientes (Idealmente substituir por Logos reais)
 const clients = [
     { category: "Indústrias", icon: Building, names: ["Teuto", "Super Frango", "Zuppa"] },
     { category: "Comércio", icon: ShoppingBag, names: ["Grupo Saga", "Big Lar", "Fujioka"] },
@@ -87,7 +86,7 @@ function ProposalPageContent() {
       distributor: searchParams.get("distribuidora") || "Distribuidora Local",
       comercializadora: searchParams.get("comercializadora") || "BC Energia",
       avgConsumption: parseFloat(searchParams.get("item1Quantidade") || "0"),
-      currentPrice: parseFloat(tariffString.replace(',', '.')) || 0, // CORRECTED HERE
+      currentPrice: parseFloat(tariffString.replace(',', '.')) || 0,
       discountRate: parseFloat(searchParams.get("desconto") || "0"),
       coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
       address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
@@ -126,14 +125,15 @@ function ProposalPageContent() {
           const imgData = canvas.toDataURL('image/jpeg', 0.95);
           pdf.addImage(imgData, 'JPEG', 0, 0, width, height);
       }
-      pdf.save(`Proposta_Sent_${proposalData.clientName.replace(/\s/g, '_')}.pdf`);
+      // Nome do arquivo atualizado
+      pdf.save(`Proposta_Planus_${proposalData.clientName.replace(/\s/g, '_')}.pdf`);
       setIsGeneratingPDF(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans p-4 md:p-8 flex flex-col items-center">
       
-      {/* Botões Flutuantes */}
+      {/* Barra de Ações Flutuante */}
       <div className="fixed bottom-6 right-6 z-50 flex gap-4 no-print">
         <Link href="/proposal-generator">
             <Button variant="secondary" className="h-14 rounded-full shadow-lg px-6 border border-slate-700 bg-slate-900 text-white hover:bg-slate-800">
@@ -148,8 +148,8 @@ function ProposalPageContent() {
 
       <div ref={proposalRef} className="w-full max-w-[210mm] space-y-0">
         
-        {/* === PÁGINA 1: CAPA === */}
-        <div data-pdf-section="cover" className="relative w-full aspect-[210/297] bg-slate-900 text-white overflow-hidden shadow-2xl flex flex-col">
+        {/* === PÁGINA 1: CAPA (BRANDING PLANUS) === */}
+        <div data-pdf-section="cover" className="relative w-full aspect-[210/297] bg-slate-900 text-white overflow-hidden flex flex-col">
             <div className="absolute inset-0 z-0">
                 <img src="https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=2072&auto=format&fit=crop" className="w-full h-full object-cover opacity-30" alt="Solar Background" crossOrigin="anonymous"/>
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900/50 to-slate-900"></div>
@@ -158,8 +158,13 @@ function ProposalPageContent() {
             <div className="relative z-10 flex-1 flex flex-col justify-between p-16">
                 <div className="w-full border-b border-white/20 pb-6 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-cyan-500 rounded flex items-center justify-center"><Zap className="w-6 h-6 text-white" /></div>
-                        <h1 className="text-3xl font-bold tracking-tight">SENT ENERGIA</h1>
+                         {/* LOGO OFICIAL NA CAPA */}
+                         <img 
+                            src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/b0c93c3d8a644f4a5c54974a14b804bab886dcac/LOGO_LOGO_BRANCA.png" 
+                            alt="Planus Energia" 
+                            className="h-12 w-auto object-contain"
+                            crossOrigin="anonymous"
+                         />
                     </div>
                     <div className="text-right">
                         <p className="text-xs text-cyan-400 font-bold uppercase tracking-wider">Código da Proposta</p>
@@ -168,13 +173,8 @@ function ProposalPageContent() {
                 </div>
 
                 <div className="py-10">
-                    <h2 className="text-7xl font-black leading-tight mb-6">
-                        Energia Limpa <br/>
-                        <span className="text-cyan-400">Inteligente.</span>
-                    </h2>
-                    <p className="text-2xl text-slate-300 font-light max-w-2xl leading-relaxed">
-                        Soluções de geração distribuída que reduzem custos e ampliam a sustentabilidade do seu negócio.
-                    </p>
+                    <h2 className="text-7xl font-black leading-tight mb-6">Energia Limpa <br/><span className="text-cyan-400">Inteligente.</span></h2>
+                    <p className="text-2xl text-slate-300 font-light max-w-2xl leading-relaxed">Soluções de geração distribuída que reduzem custos e ampliam a sustentabilidade do seu negócio.</p>
                 </div>
 
                 <div className="border-t border-white/20 pt-8 mt-auto">
@@ -194,15 +194,15 @@ function ProposalPageContent() {
         </div>
 
         {/* === PÁGINA 2: INSTITUCIONAL === */}
-        <div data-pdf-section="about" className="relative w-full aspect-[210/297] bg-white text-slate-900 p-12 shadow-2xl flex flex-col justify-between">
+        <div data-pdf-section="about" className="relative w-full aspect-[210/297] bg-white text-slate-900 p-12 flex flex-col justify-between">
             <div>
                 <div className="flex items-center gap-4 mb-10">
                     <div className="w-2 h-10 bg-cyan-600"></div>
-                    <div><h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Quem Somos</h2><p className="text-slate-500">A força da Sent Energia conectando você ao futuro.</p></div>
+                    <div><h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Quem Somos</h2><p className="text-slate-500">A força da Planus Energia conectando você ao futuro.</p></div>
                 </div>
 
                 <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                    A <strong className="text-cyan-600">Sent Energia</strong> integra um ecossistema de empresas especializadas em soluções de energia limpa, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões.
+                    A <strong className="text-cyan-600">Planus Energia</strong> integra um ecossistema de empresas especializadas em soluções de energia limpa, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões.
                 </p>
 
                 <div className="grid grid-cols-4 gap-4 mb-12">
@@ -237,7 +237,7 @@ function ProposalPageContent() {
                     ))}
                 </div>
             </div>
-            <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400"><span>Sent Energia Hub</span><span>Página 2/4</span></div>
+            <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400"><span>Planus Energia Hub</span><span>Página 2/4</span></div>
         </div>
 
         {/* === PÁGINA 3: PROPOSTA COMERCIAL === */}
@@ -269,7 +269,7 @@ function ProposalPageContent() {
                         <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Recomendado</div>
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">2</div>
-                            <span className="font-bold text-emerald-700 uppercase text-sm">Cenário Sent Energia</span>
+                            <span className="font-bold text-emerald-700 uppercase text-sm">Cenário Planus Energia</span>
                         </div>
                         <div className="space-y-3 text-sm">
                             <div className="flex justify-between"><span className="text-slate-500">Desconto Base</span><span className="font-bold text-emerald-600 bg-emerald-50 px-2 rounded">{proposalData.discountRate}% OFF</span></div>
@@ -329,7 +329,7 @@ function ProposalPageContent() {
                     </div>
                 )}
             </main>
-            <div className="border-t border-slate-200 pt-4 flex justify-between items-center text-xs text-slate-400"><span>Sent Energia Hub</span><span>Página 3/4</span></div>
+            <div className="border-t border-slate-200 pt-4 flex justify-between items-center text-xs text-slate-400"><span>Planus Energia Hub</span><span>Página 3/4</span></div>
         </div>
 
         {/* === PÁGINA 4: FAQ & CLIENTES === */}
@@ -375,14 +375,14 @@ function ProposalPageContent() {
             </div>
 
             <footer className="mt-auto pt-6 text-center text-xs text-slate-400 border-t border-slate-200">
-                <p>Sent Energia • Soluções em Energia Limpa</p>
+                <p>Planus Energia • Soluções em Energia Limpa</p>
                 <p className="mt-1">Proposta válida por 5 dias. Sujeito a aprovação de crédito.</p>
                 <div className="flex justify-end items-center mt-2">
                     <span className="mr-2">Entrega Garantida por:</span>
                     {selectedCommercializer.logo && <img src={selectedCommercializer.logo} alt="Parceiro" className="h-6 object-contain" crossOrigin="anonymous" />}
                 </div>
             </footer>
-            <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400 mt-4"><span>Sent Energia Hub</span><span>Página 4/4</span></div>
+            <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400 mt-4"><span>Planus Energia Hub</span><span>Página 4/4</span></div>
         </div>
 
       </div>
