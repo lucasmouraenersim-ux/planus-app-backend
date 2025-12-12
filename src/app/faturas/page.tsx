@@ -31,6 +31,7 @@ export interface UnidadeConsumidora {
   id: string;
   consumoKwh: string;
   valorTotal?: string; // Novo: Para simular TUSD/TE
+  mediaConsumo?: string; // <--- ADICIONADO
   precoUnitario?: number;
   temGeracao: boolean;
   arquivoFaturaUrl: string | null;
@@ -338,12 +339,14 @@ export default function FaturasPage() {
   const handleFileUpload = async (clienteId: string, unidadeId: string, file: File | null) => {
     if (!file) return;
 
+    // 1. Feedback visual imediato
     toast({ 
       title: "🤖 Analisando Fatura...", 
       description: "A IA está lendo o consumo e valores. Aguarde...",
     });
 
     try {
+      // 2. Envia para nossa API de IA
       const formData = new FormData();
       formData.append('file', file);
 
@@ -352,29 +355,34 @@ export default function FaturasPage() {
         body: formData,
       });
 
-      // Instead of throwing a generic error, we'll parse the JSON to get the specific error message.
       if (!response.ok) {
-        let errorData = { error: 'Falha na IA. Resposta não foi OK.' };
+        let errorData = { error: 'Falha na IA.' };
         try {
-          errorData = await response.json();
-        } catch (e) {
-          // The response was not JSON, use the status text.
-          errorData.error = response.statusText;
+            errorData = await response.json();
+        } catch(e) {
+            // response was not JSON
+            errorData.error = response.statusText;
         }
         throw new Error(errorData.error);
       }
       
       const dadosIA = await response.json();
 
-      toast({ 
-        title: "Leitura Concluída!", 
-        description: `Cliente: ${dadosIA.nomeCliente?.substring(0, 15) || 'N/A'}... | Consumo: ${dadosIA.consumoKwh || 0} kWh`,
-        className: "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
-      });
+      // 3. Mostra o que a IA achou (Feedback para o usuário)
+      if (dadosIA.consumoKwh) {
+        toast({ 
+          title: "Leitura Concluída!", 
+          description: `Cliente: ${dadosIA.nomeCliente?.substring(0, 15) || 'N/A'}... | Consumo: ${dadosIA.consumoKwh} kWh`,
+          className: "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
+        });
+      }
 
+
+      // 4. Faz o upload do arquivo para o Storage (Firebase)
       const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
       const url = await uploadFile(file, path);
 
+      // 5. Atualiza o banco de dados com os dados da IA + URL do arquivo
       const clienteAtual = clientes.find(c => c.id === clienteId);
       if(clienteAtual) {
           const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { 
@@ -383,6 +391,7 @@ export default function FaturasPage() {
               nomeArquivo: file.name,
               consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
               valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
+              mediaConsumo: dadosIA.mediaConsumo?.toString() || '',
               precoUnitario: dadosIA.precoUnitario,
           } : u);
           
@@ -395,22 +404,7 @@ export default function FaturasPage() {
       }
     } catch (e: any) {
       console.error(e);
-      // Display the specific error message from the API or a fallback.
-      toast({ title: "Erro na Análise", description: e.message || "Não foi possível ler a fatura automaticamente. O anexo foi salvo, mas os dados devem ser inseridos manualmente.", variant: "destructive" });
-      // Fallback: anexa o arquivo mesmo se a IA falhar
-      try {
-        if (file && clienteId && unidadeId) {
-            const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
-            const url = await uploadFile(file, path);
-            const clienteAtual = clientes.find(c => c.id === clienteId);
-            if (clienteAtual) {
-                const novasUnidades = clienteAtual.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name } : u);
-                await handleUpdateField(clienteId, 'unidades', novasUnidades);
-            }
-        }
-      } catch (uploadError) {
-        console.error("Upload fallback error:", uploadError);
-      }
+      toast({ title: "Erro na Análise", description: e.message || "Não foi possível ler a fatura automaticamente.", variant: "destructive" });
     }
   };
 
@@ -645,7 +639,6 @@ export default function FaturasPage() {
              {/* Drawer Body */}
              <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 
-                {/* 1. Alertas de Energia (Badges) */}
                 {(() => {
                    const total = selectedCliente.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
                    const { anomalies } = analyzeEnergyData(total);
@@ -663,6 +656,64 @@ export default function FaturasPage() {
                          ))}
                       </div>
                    );
+                })()}
+
+                {/* --- INTEELIGÊNCIA: ANALISE DE MÉDIA --- */}
+                {(() => {
+                   // Pega a UC mais recente (ou a primeira)
+                   const ucAtual = selectedCliente.unidades[0];
+                   const consumo = parseFloat(ucAtual?.consumoKwh || '0');
+                   const media = parseFloat(ucAtual?.mediaConsumo || '0');
+
+                   if (consumo > 0 && media > 0) {
+                      const diff = consumo - media;
+                      const percent = ((diff / media) * 100).toFixed(1);
+                      const isHigh = diff > 0;
+                      
+                      return (
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 mt-4">
+                           <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span>
+                              {isHigh ? (
+                                <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded flex items-center gap-1">
+                                   <TrendingUp className="w-3 h-3" /> {percent}% Acima da Média
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-1">
+                                   <TrendingDown className="w-3 h-3" /> {Math.abs(Number(percent))}% Abaixo da Média
+                                </span>
+                              )}
+                           </div>
+                           
+                           {/* Barra Visual */}
+                           <div className="relative pt-6 pb-2">
+                              {/* Linha da Média */}
+                              <div className="absolute top-0 left-0 text-[10px] text-slate-500 flex flex-col items-center" style={{ left: '50%', transform: 'translateX(-50%)' }}>
+                                 <span>Média Histórica</span>
+                                 <span className="font-bold text-white">{media} kWh</span>
+                                 <div className="h-3 w-px bg-slate-500 mt-1"></div>
+                              </div>
+                              
+                              {/* Barra de Progresso */}
+                              <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden flex">
+                                 {/* Lógica simples para barra: Se consumo for o dobro da média, enche tudo. Se for igual, 50% */}
+                                 <div 
+                                    className={`h-full ${isHigh ? 'bg-red-500' : 'bg-emerald-500'} transition-all duration-1000`} 
+                                    style={{ width: `${Math.min((consumo / (media * 2)) * 100, 100)}%` }}
+                                 ></div>
+                              </div>
+                              
+                              <div className="flex justify-between mt-1 text-[10px] text-slate-400">
+                                 <span>0 kWh</span>
+                                 <span className={isHigh ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
+                                    Fatura Atual: {consumo} kWh
+                                 </span>
+                              </div>
+                           </div>
+                        </div>
+                      );
+                   }
+                   return null;
                 })()}
 
                 {/* 2. Ações Rápidas */}
@@ -732,5 +783,3 @@ export default function FaturasPage() {
     </div>
   );
 }
-
-    

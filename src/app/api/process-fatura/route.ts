@@ -1,75 +1,68 @@
+// src/app/api/process-fatura/route.ts
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import pdf from 'pdf-parse';
 
 export async function POST(req: Request) {
-  console.log("🚀 [API] Iniciando processamento de fatura...");
-
-  // 1. Verificação de Segurança da Chave
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.error("❌ [API] ERRO CRÍTICO: Chave OPENAI_API_KEY não encontrada.");
-    return NextResponse.json(
-      { error: 'Configuração de servidor ausente: OPENAI_API_KEY faltando.' },
-      { status: 500 }
-    );
+  // 1. Verificar Chave de API
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("❌ ERRO: OPENAI_API_KEY não encontrada no .env.local");
+    return NextResponse.json({ error: 'Chave de API da OpenAI não configurada no servidor.' }, { status: 500 });
   }
 
-  const openai = new OpenAI({ apiKey: apiKey });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
-    // 2. Recebimento do Arquivo
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
     if (!file) {
-      console.error("❌ [API] Nenhum arquivo recebido.");
-      return NextResponse.json({ error: 'Arquivo não enviado.' }, { status: 400 });
+      return NextResponse.json({ error: 'Nenhum arquivo recebido pelo servidor.' }, { status: 400 });
     }
 
-    console.log(`📄 [API] Arquivo recebido: ${file.name}`);
+    console.log(`📄 Recebendo arquivo: ${file.name} (${file.size} bytes)`);
 
-    // 3. Conversão do PDF (Com tratamento de erro específico)
+    // 2. Tentar converter PDF para Texto
     let textoFatura = '';
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const buffer = Buffer.from(await file.arrayBuffer());
       const data = await pdf(buffer);
       textoFatura = data.text;
       
-      console.log(`📝 [API] Texto extraído com sucesso (${textoFatura.length} caracteres).`);
-      
-      if (!textoFatura || textoFatura.length < 50) {
-        throw new Error("O PDF parece ser uma imagem ou está vazio/protegido.");
+      console.log(`📝 Texto extraído (primeiros 100 chars): ${textoFatura.substring(0, 100)}...`);
+
+      if (!textoFatura || textoFatura.trim().length < 10) {
+        throw new Error("PDF parece estar vazio ou é uma imagem escaneada sem texto selecionável.");
       }
     } catch (pdfError: any) {
-      console.error("❌ [API] Erro ao ler PDF:", pdfError);
-      return NextResponse.json(
-        { error: 'Não foi possível ler o texto do PDF. Verifique se não é um PDF escaneado (imagem).' },
-        { status: 422 }
-      );
+      console.error("❌ Erro ao ler PDF:", pdfError);
+      return NextResponse.json({ error: `Erro ao ler o PDF: ${pdfError.message}` }, { status: 400 });
     }
 
-    // 4. Chamada OpenAI
-    console.log("🤖 [API] Enviando para OpenAI GPT-4o...");
+    // 3. Enviar para OpenAI
+    console.log("🤖 Enviando para OpenAI...");
+    
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "Você é um parser JSON de faturas de energia (OCR)."
+          content: `Você é um especialista em extração de dados de faturas de energia (OCR). 
+          Sua missão é estruturar dados bagunçados em JSON confiável.`
         },
         {
           role: "user",
-          content: `Extraia os dados deste texto de fatura da Energisa/Outras.
-          Se encontrar "RECICLATE" ou similar, esse é o nomeCliente.
+          content: `Extraia os dados desta fatura.
           
           Campos obrigatórios (JSON):
           - nomeCliente (string)
-          - consumoKwh (number) - Procure por "Consumo em kWh" ou coluna "Quant"
-          - valorTotal (number) - Valor final a pagar
+          - consumoKwh (number)
+          - valorTotal (number)
           - vencimento (string dd/mm/aaaa)
-          - precoUnitario (number) - Preço unitário com tributos
+          - precoUnitario (number)
+          
+          NOVO CAMPO IMPORTANTE:
+          - mediaConsumo (number): Procure no bloco "CONSUMO FATURADO" ou "Histórico" a linha escrito "Média". Retorne apenas o número (ex: 1751).
 
           Texto:
           """
@@ -81,19 +74,20 @@ export async function POST(req: Request) {
       temperature: 0,
     });
 
-    const resultString = completion.choices[0].message.content;
-    console.log("✅ [API] Resposta da IA:", resultString);
+    const conteudo = completion.choices[0].message.content;
+    console.log("✅ Resposta da IA:", conteudo);
 
-    if (!resultString) throw new Error("IA retornou vazio");
+    if (!conteudo) throw new Error("A IA retornou uma resposta vazia.");
 
-    const dados = JSON.parse(resultString);
-    return NextResponse.json(dados);
+    const result = JSON.parse(conteudo);
+    return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error("❌ [API] Erro Geral:", error);
-    return NextResponse.json(
-      { error: error.message || 'Erro interno no servidor' },
-      { status: 500 }
-    );
+    // Log detalhado no terminal do servidor
+    console.error("❌ ERRO GERAL NA API:", error);
+    
+    // Retorna o erro detalhado para o frontend ver
+    const errorMessage = (error as any).response?.data?.error?.message || (error as any).message || "Erro desconhecido";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
