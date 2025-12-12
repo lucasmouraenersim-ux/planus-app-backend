@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -184,7 +185,7 @@ export default function FaturasPage() {
       if (!appUser) return;
 
       const isAdmin = userAppRole === 'admin' || userAppRole === 'superadmin';
-      const currentCredits = appUser.credits || 0;
+      const currentCredits = appUser.personalBalance || 0;
 
       if (!isAdmin && currentCredits < COST_PER_UNLOCK) {
           toast({ title: "Saldo Insuficiente", description: "Recarregue seus créditos para continuar.", variant: "destructive" });
@@ -202,7 +203,7 @@ export default function FaturasPage() {
               if(appUser) {
                 updateAppUser({
                     ...appUser,
-                    credits: isAdmin ? appUser.credits : (appUser.credits || 0) - COST_PER_UNLOCK,
+                    personalBalance: isAdmin ? appUser.personalBalance : (appUser.personalBalance || 0) - COST_PER_UNLOCK,
                     unlockedLeads: newUnlockedList
                 });
               }
@@ -223,9 +224,9 @@ export default function FaturasPage() {
 
   const handleBuyCredits = () => {
     if(!appUser) return;
-    const newCredits = (appUser.credits || 0) + 50;
-    updateDoc(doc(db, 'users', appUser.uid), { credits: newCredits });
-    updateAppUser({ ...appUser, credits: newCredits });
+    const newCredits = (appUser.personalBalance || 0) + 50;
+    updateDoc(doc(db, 'users', appUser.uid), { personalBalance: newCredits });
+    updateAppUser({ ...appUser, personalBalance: newCredits });
     toast({ title: "Compra Realizada", description: "50 Créditos adicionados à sua carteira." });
   }
 
@@ -345,7 +346,6 @@ export default function FaturasPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
-      <TermsModal />
       <style jsx global>{`
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         .blur-text { filter: blur(4px); user-select: none; pointer-events: none; opacity: 0.6; }
@@ -362,7 +362,7 @@ export default function FaturasPage() {
           <div className="flex items-center gap-6">
              <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-lg shadow-yellow-900/10 cursor-pointer hover:bg-slate-800 transition-colors" onClick={handleBuyCredits} title="Clique para recarregar (Simulado)">
                 <Coins className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-bold text-yellow-100">{appUser?.credits || 0} Créditos</span>
+                <span className="text-sm font-bold text-yellow-100">{appUser?.personalBalance || 0} Créditos</span>
                 <PlusCircle className="w-3 h-3 text-yellow-500 ml-1" />
              </div>
 
@@ -581,7 +581,7 @@ export default function FaturasPage() {
                   </div>
                </div>
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{userCredits}cr</strong></div>
+                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.personalBalance || 0}cr</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
