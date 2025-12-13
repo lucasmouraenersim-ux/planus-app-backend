@@ -2,10 +2,20 @@
 
 import { db } from '@/lib/firebase';
 import { doc, runTransaction, Timestamp, collection } from 'firebase/firestore';
-// Importamos o carteiro que acabamos de criar
 import { sendTelegramNotification } from '@/lib/telegram';
 
-const PROPOSAL_COST = 2; // Custo em créditos
+const PROPOSAL_COST = 2;
+
+// Função auxiliar para limpar números (converte "1.500,00" ou "0,98" para numero real)
+const parseNumber = (value: any) => {
+  if (!value) return 0;
+  const str = String(value);
+  // Se tiver vírgula, assume formato BR: remove ponto de milhar e troca virgula por ponto
+  if (str.includes(',')) {
+    return parseFloat(str.replace(/\./g, '').replace(',', '.'));
+  }
+  return parseFloat(str);
+};
 
 export async function saveProposalAction(proposalData: any, userId: string, userRole: string) {
   try {
@@ -15,9 +25,9 @@ export async function saveProposalAction(proposalData: any, userId: string, user
 
     let proposalNumber = 0;
 
-    // 1. Executa a transação no Banco de Dados
+    // 1. Transação no Banco de Dados
     await runTransaction(db, async (transaction) => {
-      // Verifica Créditos (Se não for Admin)
+      // Verifica Créditos
       if (userRole !== 'superadmin' && userRole !== 'admin') {
         const userDoc = await transaction.get(userRef);
         if (!userDoc.exists()) throw "Usuário não encontrado";
@@ -29,7 +39,7 @@ export async function saveProposalAction(proposalData: any, userId: string, user
         transaction.update(userRef, { credits: currentCredits - PROPOSAL_COST });
       }
 
-      // Gera ID Sequencial (Proposta #1, #2...)
+      // Gera ID Sequencial
       const counterDoc = await transaction.get(counterRef);
       let currentCount = 0;
       if (counterDoc.exists()) {
@@ -49,30 +59,41 @@ export async function saveProposalAction(proposalData: any, userId: string, user
       });
     });
 
-    // 2. DISPARA A NOTIFICAÇÃO NO TELEGRAM (A Mágica)
+    // 2. Notificação Telegram
     try {
-        // Formata valores para moeda brasileira
-        const valorFormatado = Number(proposalData.currentTariff).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
-        const economiaAnual = (Number(proposalData.item1Quantidade) * Number(proposalData.currentTariff) * 12 * (Number(proposalData.desconto)/100)).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+        // Conversão Segura dos Números
+        const consumo = parseNumber(proposalData.item1Quantidade);
+        const tarifa = parseNumber(proposalData.currentTariff);
+        const desconto = parseNumber(proposalData.desconto);
+        
+        // Cálculo da Economia Anual: Consumo * Tarifa * 12 Meses * %Desconto
+        const economiaValor = consumo * tarifa * 12 * (desconto / 100);
+
+        // Formatação para BRL (R$ 1.200,00)
+        const economiaFormatada = economiaValor.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+        const tarifaFormatada = tarifa.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
 
         const message = `
 🚀 <b>Nova Proposta Gerada! (#${proposalNumber})</b>
 
-👤 <b>Promotor:</b> ${proposalData.generatorName || 'Usuário'}
+👤 <b>Promotor:</b> ${proposalData.generatorName || 'N/A'}
 🏢 <b>Cliente:</b> ${proposalData.clienteNome}
-⚡ <b>Consumo:</b> ${proposalData.item1Quantidade} kWh
-💲 <b>Tarifa:</b> ${valorFormatado}
-💰 <b>Economia Est.:</b> ${economiaAnual}/ano
+📱 <b>Tel:</b> ${proposalData.clienteTelefone || 'Não informado'}
+
+⚡ <b>Consumo:</b> ${consumo.toLocaleString('pt-BR')} kWh
+💲 <b>Tarifa:</b> ${tarifaFormatada}
+📉 <b>Desconto:</b> ${desconto}%
+💰 <b>Economia Est.:</b> ${economiaFormatada}/ano
+
 🏷️ <b>Parceiro:</b> ${proposalData.comercializadora}
-📍 <b>Local:</b> ${proposalData.clienteCidade || 'N/A'}
+📍 <b>Local:</b> ${proposalData.clienteCidade || ''}/${proposalData.clienteUF || ''}
 
 <i>Verifique o painel administrativo para mais detalhes.</i>
         `;
         
-        // Envia sem esperar (para não travar o site do usuário)
-        sendTelegramNotification(message);
+        await sendTelegramNotification(message);
     } catch (notifyError) {
-        console.error("Falha ao notificar telegram (não afetou o salvamento)", notifyError);
+        console.error("Falha ao notificar telegram", notifyError);
     }
 
     return { success: true, proposalNumber, message: 'Proposta salva com sucesso!' };
