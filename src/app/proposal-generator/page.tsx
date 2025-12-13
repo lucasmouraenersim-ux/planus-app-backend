@@ -1,4 +1,5 @@
 
+      
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -233,6 +234,7 @@ export default function ProposalGeneratorPage() {
 
       <div className="relative z-10 p-4 md:p-8 w-full max-w-7xl mx-auto flex-1 flex flex-col">
         
+        {/* Header */}
         <div className="mb-6 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -259,6 +261,7 @@ export default function ProposalGeneratorPage() {
           </div>
         </div>
 
+        {/* === PASSO 1 === */}
         {currentStep === 1 && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="lg:col-span-2 space-y-6">
@@ -341,18 +344,36 @@ export default function ProposalGeneratorPage() {
                 </div>
 
                 <div className="lg:col-span-1">
-                    <div className="sticky top-8 glass-card-premium rounded-2xl p-0 overflow-hidden group">
-                        <div className="relative bg-gradient-to-r from-slate-900 to-slate-800 p-6 border-b border-white/5">
-                            <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-1 flex items-center gap-2"><FileText className="w-3 h-3" /> Resumo da Simulação</h3>
-                            <div className="text-xl font-bold text-white truncate">{formData.clienteNome || 'Novo Cliente'}</div>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className="relative bg-emerald-600 rounded-xl p-5 text-center shadow-lg shadow-emerald-900/30">
-                                <p className="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-1">Economia Anual Estimada</p>
-                                <p className="text-3xl font-black text-white drop-shadow-md">R$ {economiaAnual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                    <div className="sticky top-8 glass-card-premium rounded-2xl p-6 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-2"><FileText className="w-3 h-3" /> Resumo da Simulação</h3>
+                                <div className="text-xl font-bold text-white truncate mt-1">{formData.clienteNome || 'Novo Cliente'}</div>
                             </div>
-                            <div className="text-xs text-center text-slate-500">Avance para escolher o parceiro.</div>
+                            <Sparkles className="w-6 h-6 text-cyan-500/50" />
                         </div>
+                        
+                        <div className="border-t border-white/10 pt-4 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-slate-400">Fatura Atual (Estimada)</span>
+                                <span className="text-sm font-medium text-slate-400 line-through">{valorFaturaAtual.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-cyan-400 font-medium flex items-center gap-2"><Zap className="w-4 h-4"/> Nova Fatura</span>
+                                <span className="text-lg font-bold text-white">{novoValorFatura.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
+                            </div>
+                        </div>
+
+                        <div className="relative bg-emerald-600 rounded-xl p-5 text-center shadow-lg shadow-emerald-900/30 mt-4">
+                            <p className="text-emerald-100 text-[10px] font-bold uppercase tracking-wider mb-1">Economia Anual Estimada</p>
+                            <p className="text-3xl font-black text-white drop-shadow-md">{economiaAnual.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</p>
+                             <div className="mt-3 bg-emerald-700/50 text-emerald-100 text-xs font-semibold inline-flex items-center gap-1.5 px-3 py-1 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" />
+                                {formData.desconto}% de Desconto Garantido
+                            </div>
+                        </div>
+
+                        <div className="text-xs text-center text-slate-500 pt-4">Avance para escolher o parceiro de energia.</div>
                     </div>
                 </div>
             </div>
@@ -401,3 +422,5 @@ export default function ProposalGeneratorPage() {
     </div>
   );
 }
+
+    
