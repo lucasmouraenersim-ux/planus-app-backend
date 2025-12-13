@@ -436,7 +436,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
   
-  const impersonateUser = async (targetUserId: string) => {
+const impersonateUser = async (targetUserId: string) => {
     // Validação de segurança básica
     if (!appUser || !firebaseUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
       toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
@@ -464,7 +464,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // 4. Troca a sessão. 
       // IMPORTANTE: signInWithCustomToken faz a troca direta sem passar pelo estado "deslogado".
-      // Isso evita que o layout redirecione para /login.
+      // Isso evita que o app "pense" que o usuário deslogou e mande para a tela de login.
       await signInWithCustomToken(auth, result.customToken);
 
       // 5. Marca flag local
@@ -489,22 +489,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const stopImpersonating = async () => {
+    // Se não tiver o token salvo, faz logout total por segurança
     if (!originalAdminToken) {
       await signOut(auth);
+      router.replace('/login');
       return;
     }
+
     try {
-      await signOut(auth);
+      // 1. ATIVA O LOADING: Isso esconde a tela de "Acesso Negado" imediatamente
+      setIsLoadingAuth(true);
+
+      // 2. Loga de volta como Admin
       await signInWithCustomToken(auth, originalAdminToken);
+
+      // 3. Limpa os estados de personificação
       setOriginalAdminUser(null);
       setOriginalAdminToken(null);
       setIsImpersonating(false);
-      toast({ title: "Personificação Encerrada", description: "Você retornou à sua conta de administrador." });
+
+      toast({ 
+        title: "Bem-vindo de volta", 
+        description: "Acesso administrativo restaurado com sucesso.",
+        className: "bg-emerald-500 text-white"
+      });
+
+      // 4. Redireciona para o Dashboard Admin para garantir que saia da tela do vendedor
+      router.push('/admin/dashboard');
+
     } catch (error) {
       console.error("Failed to stop impersonating:", error);
-      toast({ title: "Erro", description: "Falha ao retornar para sua conta. Por favor, faça login novamente.", variant: "destructive" });
+      toast({ title: "Sessão Expirada", description: "Por favor, faça login novamente.", variant: "destructive" });
+      // Se der erro, desloga tudo para segurança
       await signOut(auth);
+      router.replace('/login');
     }
+    // NOTA: Não colocamos setIsLoadingAuth(false) aqui. 
+    // O onAuthStateChanged vai rodar logo em seguida, detectar o Admin e desligar o loading sozinho.
   };
 
   useEffect(() => {
@@ -557,6 +578,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
   }
 
+  // If user is authenticated and not on a public page, show the main layout
   if (appUser && !isPublicPage) {
       return (
           <AuthContext.Provider value={contextValue}>
@@ -588,6 +610,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       )
   }
 
+  // For public pages or unauthenticated users
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
@@ -608,3 +631,5 @@ const TermsDialogWrapper = () => {
     if (!appUser) return null;
     return <TermsDialog isOpen={!appUser.termsAcceptedAt} onAccept={acceptUserTerms} />;
 };
+
+    
