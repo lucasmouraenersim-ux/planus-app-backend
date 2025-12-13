@@ -24,6 +24,7 @@ import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from 'recharts'
 import { GoogleMap, useJsApiLoader, OverlayView, HeatmapLayer } from '@react-google-maps/api';
 import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
+import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
 
 // --- CONFIGURAÇÃO GOOGLE MAPS ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -159,6 +160,7 @@ export default function FaturasPage() {
   const { appUser, updateAppUser } = useAuth();
   
   // UI States
+  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -190,7 +192,8 @@ export default function FaturasPage() {
       const currentCredits = appUser.credits || 0;
 
       if (!isAdmin && currentCredits < COST_PER_UNLOCK) {
-          toast({ title: "Saldo Insuficiente", description: "Recarregue seus créditos para continuar.", variant: "destructive" });
+          toast({ title: "Saldo Insuficiente", description: "Clique no seu saldo de créditos para recarregar.", variant: "destructive" });
+          setIsCreditModalOpen(true); // Abre o modal de compra
           return;
       }
 
@@ -220,48 +223,22 @@ export default function FaturasPage() {
       }
   };
 
-  const handleBuyCredits = () => {
-    if (!appUser) return;
-    const newCredits = (appUser.credits || 0) + 50;
-    updateAppUser({ ...appUser, credits: newCredits });
-    updateDoc(doc(db, 'users', appUser.uid), { credits: newCredits });
-    toast({ title: "Compra Realizada", description: "50 Créditos adicionados à sua carteira." });
-  }
-
-  // Filter Logic
-  const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
-    let result = [...clientes];
-    const totals = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
-    const cidades = new Set<string>();
-
-    clientes.forEach(c => {
-        c.unidades.forEach(u => {
-             if(u.cidade) cidades.add(u.cidade);
-             const consumo = Number(u.consumoKwh) || 0;
-             if (totals[c.tensao] !== undefined) totals[c.tensao] += consumo;
-        });
-    });
-
-    if (searchTerm) result = result.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (filterTensao !== 'all') result = result.filter(c => c.tensao === filterTensao);
-    if (filterCidade !== 'all') result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
-
-    return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
-  }, [clientes, searchTerm, filterTensao, filterCidade]);
-
-  // Heatmap Data
-  const heatmapData = useMemo(() => {
-    if (!isMapLoaded || !window.google) return [];
-    const points: any[] = [];
-    filteredClientes.forEach(c => {
-        c.unidades.forEach(u => {
-            if (u.latitude && u.longitude) {
-                points.push({ location: new window.google.maps.LatLng(u.latitude, u.longitude), weight: Number(u.consumoKwh) || 1 });
-            }
-        });
-    });
-    return points;
-  }, [filteredClientes, isMapLoaded]);
+  const handleManualGeocode = async (clienteId: string, unidadeId: string, address: string) => {
+    if(!address || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY) return;
+    toast({ title: "Buscando...", description: "Consultando Google Maps..." });
+    try {
+        const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}`);
+        const data = await response.json();
+        if(data.results && data.results.length > 0) {
+            const loc = data.results[0].geometry.location;
+            const cliente = clientes.find(c => c.id === clienteId);
+            if(!cliente) return;
+            const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { ...u, latitude: loc.lat, longitude: loc.lng, endereco: address } : u);
+            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
+            toast({ title: "Encontrado!", description: "Localização atualizada." });
+        } else { toast({ title: "Não encontrado", variant: "destructive" }); }
+    } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
+  };
 
   // Funções de CRUD
   const handleAddCliente = async () => {
@@ -310,33 +287,58 @@ export default function FaturasPage() {
         }
     } catch(e: any) { toast({ title: "Erro IA", description: e.message, variant: "destructive" }); }
   };
-    const handleManualGeocode = async (clienteId: string, unidadeId: string, address: string) => {
-    if(!address || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY) return;
-    toast({ title: "Buscando...", description: "Consultando Google Maps..." });
-    try {
-        const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}`);
-        const data = await response.json();
-        if(data.results && data.results.length > 0) {
-            const loc = data.results[0].geometry.location;
-            const cliente = clientes.find(c => c.id === clienteId);
-            if(!cliente) return;
-            const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { ...u, latitude: loc.lat, longitude: loc.lng, endereco: address } : u);
-            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
-            toast({ title: "Encontrado!", description: "Localização atualizada." });
-        } else { toast({ title: "Não encontrado", variant: "destructive" }); }
-    } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
-  };
+
+  // Filter Logic
+  const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
+    let result = [...clientes];
+    const totals = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
+    const cidades = new Set<string>();
+
+    clientes.forEach(c => {
+        c.unidades.forEach(u => {
+             if(u.cidade) cidades.add(u.cidade);
+             const consumo = Number(u.consumoKwh) || 0;
+             if (totals[c.tensao] !== undefined) totals[c.tensao] += consumo;
+        });
+    });
+
+    if (searchTerm) result = result.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (filterTensao !== 'all') result = result.filter(c => c.tensao === filterTensao);
+    if (filterCidade !== 'all') result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
+
+    return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
+  }, [clientes, searchTerm, filterTensao, filterCidade]);
+
+  // Heatmap Data
+  const heatmapData = useMemo(() => {
+    if (!isMapLoaded || !window.google) return [];
+    const points: any[] = [];
+    filteredClientes.forEach(c => {
+        c.unidades.forEach(u => {
+            if (u.latitude && u.longitude) {
+                points.push({ location: new window.google.maps.LatLng(u.latitude, u.longitude), weight: Number(u.consumoKwh) || 1 });
+            }
+        });
+    });
+    return points;
+  }, [filteredClientes, isMapLoaded]);
 
 
   const selectedCliente = useMemo(() => clientes.find(c => c.id === selectedClienteId), [clientes, selectedClienteId]);
   
   const isUserAdmin = appUser?.type === 'admin' || appUser?.type === 'superadmin';
+  const currentBalance = appUser?.credits || 0;
 
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
       <TermsModal />
+      <CreditPurchaseModal 
+        isOpen={isCreditModalOpen} 
+        onClose={() => setIsCreditModalOpen(false)} 
+      />
+
       <style jsx global>{`
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
@@ -346,9 +348,17 @@ export default function FaturasPage() {
       <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
           <div className="flex items-center gap-3"><div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-lg"><Zap className="h-5 w-5 text-white" /></div><h2 className="text-xl font-bold text-white">Sent Energia</h2></div>
           <div className="flex items-center gap-6">
-             <div className="hidden md:flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-lg cursor-pointer hover:bg-slate-800 transition-colors" onClick={handleBuyCredits}>
-                <Coins className="w-4 h-4 text-yellow-400" /><span className="text-sm font-bold text-yellow-100">{appUser?.credits || 0} Créditos</span><PlusCircle className="w-3 h-3 text-yellow-500 ml-1" />
-             </div>
+             <button 
+                onClick={() => setIsCreditModalOpen(true)}
+                className="hidden md:flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-full border border-yellow-500/20 shadow-lg shadow-yellow-900/10 hover:bg-slate-800 hover:border-yellow-500/50 hover:scale-105 transition-all group"
+                title="Clique para recarregar"
+             >
+                <Coins className="w-4 h-4 text-yellow-400 group-hover:animate-bounce" />
+                <span className="text-sm font-bold text-yellow-100">
+                    {isUserAdmin ? "Ilimitado" : `${currentBalance} Créditos`}
+                </span>
+                {!isUserAdmin && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
+             </button>
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
@@ -457,7 +467,7 @@ export default function FaturasPage() {
          )}
       </div>
 
-      {/* === DRAWER COM LÓGICA HÍBRIDA (SUPERADMIN + CRÉDITOS) === */}
+      {/* DRAWER */}
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
@@ -480,7 +490,7 @@ export default function FaturasPage() {
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
                   
-                  {/* ÁREA DE CONTATOS (BLUR PARA USER, FULL PARA ADMIN/UNLOCKED) */}
+                  {/* ÁREA DE CONTATOS */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
@@ -519,11 +529,10 @@ export default function FaturasPage() {
                       )}
                   </div>
 
-                  {/* VISUALIZAÇÃO PREMIUM (PERFORMANCE E MAPA) - SÓ SE ESTIVER LIBERADO OU FOR ADMIN */}
+                  {/* VISUALIZAÇÃO PREMIUM */}
                   {(selectedCliente.isUnlocked || isUserAdmin) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-                          
-                          {/* PERFORMANCE (Copiado da versão bonita) */}
+                          {/* Gráfico */}
                           {(() => {
                               const uc = selectedCliente.unidades[0];
                               const consumo = Number(uc?.consumoKwh || 0);
@@ -544,7 +553,7 @@ export default function FaturasPage() {
                               return null;
                           })()}
 
-                          {/* UNIDADES E UPLOAD (EDITÁVEL PARA ADMIN/DONO) */}
+                          {/* Unidades e Upload */}
                           <div className="space-y-4">
                               <div className="flex justify-between items-center border-b border-white/5 pb-2"><h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Home className="w-4 h-4" /> Unidades Consumidoras</h3><Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => { const n = [...selectedCliente.unidades, { id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, nomeArquivo: null }]; handleUpdateField(selectedCliente.id, 'unidades', n); }}>+ Adicionar UC</Button></div>
                               {selectedCliente.unidades.map((uc, i) => (
@@ -565,11 +574,11 @@ export default function FaturasPage() {
                                           {uc.arquivoFaturaUrl ? <Check className="w-4 h-4 mr-2" /> : <Upload className="w-4 h-4 mr-2" />} {uc.arquivoFaturaUrl ? 'Fatura OK (Trocar)' : 'Upload PDF (IA)'}
                                           <input type="file" className="hidden" onChange={(e) => handleFileUpload(selectedCliente.id, uc.id, e.target.files?.[0] || null)} />
                                       </label>
-                                      {uc.arquivoFaturaUrl && (<div className="flex justify-end mt-2"><a href={uc.arquivoFaturaUrl} target="_blank" className="text-xs text-cyan-500 hover:underline flex items-center gap-1"><Eye className="w-3 h-3"/> Ver PDF Original</a></div>)}
+                                      {uc.arquivoFaturaUrl && (<div className="flex justify-end mt-2"><a href={uc.arquivoFaturaUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-500 hover:underline flex items-center gap-1"><Eye className="w-3 h-3"/> Ver PDF Original</a></div>)}
                                   </div>
                               ))}
                           </div>
-
+                          
                           <div className="pt-4 border-t border-white/5">
                               <Label className="text-xs text-slate-500 uppercase mb-2 block">Status / Pipeline</Label>
                               <Select value={selectedCliente.status} onValueChange={(v) => handleUpdateField(selectedCliente.id, 'status', v)}><SelectTrigger className="w-full bg-slate-800 border-white/10"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-700 text-slate-300">{FATURA_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
@@ -581,7 +590,7 @@ export default function FaturasPage() {
                </div>
                
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo atual: <strong className="text-yellow-400">{appUser?.credits || 0}cr</strong></div>
+                  <div className="text-xs text-slate-500">Saldo: <strong className="text-yellow-400">{isUserAdmin ? "Ilimitado" : `${currentBalance} cr`}</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
