@@ -178,6 +178,7 @@ const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
                                 {isAdminOrSuper && (
                                     <>
                                         <MenuItem href="/admin/dashboard" icon={ShieldAlert} label="Painel Admin" active={currentPathname === '/admin/dashboard'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
+                                        <MenuItem href="/admin/proposals" icon={BarChart3} label="Histórico Propostas" active={currentPathname === '/admin/proposals'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                         <MenuItem href="/admin/goals" icon={Target} label="Metas & Objetivos" active={currentPathname === '/admin/goals'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                         <MenuItem href="/admin/training" icon={TrainingIcon} label="Treinamentos" active={currentPathname === '/admin/training'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                     </>
