@@ -1,8 +1,8 @@
-
 'use server';
 
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, increment, addDoc, collection, Timestamp, arrayUnion } from 'firebase/firestore';
+import { sendTelegramNotification } from '@/lib/telegram'; // <--- IMPORTAR
 
 // Custo por lead (para quem não é admin)
 const COST_PER_LEAD = 5;
@@ -19,6 +19,8 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
   }
   try {
     const userRef = doc(db, 'users', userId);
+    const leadRef = doc(db, 'faturas_clientes', leadId); // Referência do Lead
+
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
@@ -63,6 +65,29 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
     await updateDoc(userRef, {
       unlockedLeads: arrayUnion(leadId)
     });
+    
+    // --- APÓS O SUCESSO DO DESBLOQUEIO (Antes do return) ---
+
+    // 1. Buscar dados para a notificação
+    const leadSnap = await getDoc(leadRef);
+    const leadData = leadSnap.data();
+    const userSnapAfterUnlock = await getDoc(userRef); // Recarrega para garantir dados frescos
+    const userDataAfterUnlock = userSnapAfterUnlock.data();
+
+    // 2. Montar Mensagem
+    const message = `
+🔓 <b>Lead Desbloqueado!</b>
+
+👤 <b>Comprador:</b> ${userDataAfterUnlock?.displayName || 'Usuário'}
+🏢 <b>Empresa Revelada:</b> ${leadData?.nome || 'Desconhecida'}
+📍 <b>Local:</b> ${leadData?.unidades?.[0]?.cidade || 'N/A'} - ${leadData?.unidades?.[0]?.estado || ''}
+💰 <b>Saldo Restante:</b> ${userDataAfterUnlock?.credits} créditos
+
+<i>Monitoramento de Leads - Planus</i>
+    `;
+
+    // 3. Enviar
+    sendTelegramNotification(message);
 
     return { success: true, message: isAdmin ? 'Acesso Admin: Liberado.' : 'Contato comprado com sucesso!' };
 

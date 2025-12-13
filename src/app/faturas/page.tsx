@@ -25,6 +25,7 @@ import { GoogleMap, useJsApiLoader, OverlayView, HeatmapLayer } from '@react-goo
 import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
 import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
+import { registerInvoiceAction } from '@/actions/registerInvoice';
 
 // --- CONFIGURAÇÃO GOOGLE MAPS ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -240,7 +241,6 @@ export default function FaturasPage() {
     } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
   };
 
-  // Funções de CRUD
   const handleAddCliente = async () => {
     try {
         const docRef = await addDoc(collection(db, 'faturas_clientes'), {
@@ -258,35 +258,75 @@ export default function FaturasPage() {
   };
 
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
-    if (!file) return;
-    toast({ title: "🤖 IA Analisando...", description: "Lendo dados e localizando endereço..." });
+    if (!file || !appUser) return;
+    toast({ title: "🤖 Processando...", description: "Lendo dados, salvando e notificando..." });
+    
     try {
+        // 1. Leitura com IA (Mantido igual)
         const formData = new FormData(); formData.append('file', file);
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error('Falha na IA');
-        const dadosIA = await res.json();
+        let dadosIA: any = {};
+        
+        if (res.ok) {
+            dadosIA = await res.json();
+        } else {
+            console.warn("IA falhou, seguindo apenas com upload");
+        }
+
+        // 2. Upload do Arquivo (Mantido igual)
         const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
         const url = await uploadFile(file, path);
+
         if (unidadeId) {
             const cliente = clientes.find(c => c.id === clienteId);
             if (!cliente) return;
+            
+            // Monta o objeto de unidades atualizado
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
-                ...u, arquivoFaturaUrl: url, nomeArquivo: file.name,
-                consumoKwh: dadosIA.consumoKwh?.toString(),
-                valorTotal: dadosIA.valorTotal?.toString(),
-                mediaConsumo: dadosIA.mediaConsumo?.toString(),
-                endereco: dadosIA.enderecoCompleto,
-                cidade: dadosIA.cidade,
-                estado: dadosIA.estado,
-                latitude: dadosIA.latitude,
-                longitude: dadosIA.longitude
+                ...u, 
+                arquivoFaturaUrl: url, 
+                nomeArquivo: file.name,
+                consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
+                valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
+                mediaConsumo: dadosIA.mediaConsumo?.toString() || u.mediaConsumo,
+                endereco: dadosIA.enderecoCompleto || u.endereco,
+                cidade: dadosIA.cidade || u.cidade,
+                estado: dadosIA.estado || u.estado,
+                latitude: dadosIA.latitude || u.latitude,
+                longitude: dadosIA.longitude || u.longitude
             } : u);
-            await handleUpdateField(clienteId, 'unidades', novasUnidades);
-            if(cliente.nome === 'Novo Lead' && dadosIA.nomeCliente) await handleUpdateField(clienteId, 'nome', dadosIA.nomeCliente);
-            toast({ title: "Sucesso!", description: `Processado: ${dadosIA.cidade || 'Localizado'}` });
+
+            // 3. ATUALIZAÇÃO VIA SERVER ACTION (Com Notificação)
+            const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
+            const finalName = (isNewLead && dadosIA.nomeCliente) ? dadosIA.nomeCliente : cliente.nome;
+
+            const result = await registerInvoiceAction({
+                leadId: clienteId,
+                leadName: finalName,
+                isNewLead: isNewLead,
+                unidades: novasUnidades,
+                user: { 
+                    uid: appUser!.uid, 
+                    name: appUser!.displayName || 'Usuário', 
+                    role: appUser!.type 
+                },
+                aiData: dadosIA
+            });
+
+            if (result.success) {
+                // Atualiza localmente para feedback instantâneo na UI
+                // (O onSnapshot do Firebase faria isso, mas atualizar localmente é mais rápido visualmente)
+                toast({ title: "Sucesso!", description: "Fatura salva e Admin notificado." });
+            } else {
+                toast({ title: "Erro", description: "Falha ao salvar no servidor.", variant: "destructive" });
+            }
         }
-    } catch(e: any) { toast({ title: "Erro IA", description: e.message, variant: "destructive" }); }
+    } catch(e: any) { 
+        console.error(e);
+        toast({ title: "Erro", description: "Falha no processo.", variant: "destructive" }); 
+    }
   };
+
 
   // Filter Logic
   const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
