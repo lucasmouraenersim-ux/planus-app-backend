@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A server action for an administrator to create a new user.
@@ -125,6 +124,4 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserOutp
     } else if (error.code === 'auth/invalid-password') {
       message = "A senha fornecida é inválida. Deve ter pelo menos 6 caracteres.";
     }
-    return { success: false, message };
-  }
-}
+    return { success: false,

@@ -173,7 +173,7 @@ export default function FaturasPage() {
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '',
-    libraries: libraries
+    libraries: ["visualization"],
   });
 
   // Load Data
@@ -366,7 +366,7 @@ export default function FaturasPage() {
 
   const selectedCliente = useMemo(() => clientes.find(c => c.id === selectedClienteId), [clientes, selectedClienteId]);
   
-  const isUserAdmin = appUser?.type === 'admin' || appUser?.type === 'superadmin';
+  const canSeeEverything = appUser?.type === 'superadmin' || appUser?.type === 'admin' || appUser?.type === 'advogado';
   const currentBalance = appUser?.credits || 0;
 
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>;
@@ -395,9 +395,9 @@ export default function FaturasPage() {
              >
                 <Coins className="w-4 h-4 text-yellow-400 group-hover:animate-bounce" />
                 <span className="text-sm font-bold text-yellow-100">
-                    {isUserAdmin ? "Ilimitado" : `${currentBalance} Créditos`}
+                    {canSeeEverything ? "Ilimitado" : `${currentBalance} Créditos`}
                 </span>
-                {!isUserAdmin && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
+                {!canSeeEverything && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
              </button>
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
@@ -434,12 +434,12 @@ export default function FaturasPage() {
                      {filteredClientes.map((c) => {
                         const total = c.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
                         const style = getTensaoColors(c.tensao);
-                        const isUnlocked = c.isUnlocked || isUserAdmin;
+                        const isUnlocked = c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id)));
                         return (
                            <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
                               <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
                               <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
-                              <td className="p-5">{isUnlocked ? <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 w-fit"><Unlock className="w-3 h-3" /> Liberado</div> : <div className="flex items-center gap-2 text-slate-500 text-xs"><Lock className="w-3 h-3" /> {COST_PER_UNLOCK} Créditos</div>}</td>
+                              <td className="p-5">{(isUnlocked || canSeeEverything) ? <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 w-fit"><Unlock className="w-3 h-3" /> Liberado</div> : <div className="flex items-center gap-2 text-slate-500 text-xs"><Lock className="w-3 h-3" /> {COST_PER_UNLOCK} Créditos</div>}</td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
                               <td className="p-5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyle(c.status).badge}`}>{c.status || 'Nenhum'}</span></td>
                               <td className="p-5 text-right"><Button variant="ghost" size="icon" className="text-slate-500 hover:text-white"><MoreHorizontal className="w-4 h-4" /></Button></td>
@@ -465,7 +465,7 @@ export default function FaturasPage() {
                       const uc = c.unidades.find(u => u.latitude && u.longitude);
                       if (!uc?.latitude) return null;
                       const style = getTensaoColors(c.tensao);
-                      const isUnlocked = c.isUnlocked || isUserAdmin;
+                      const isUnlocked = c.isUnlocked || (appUser && appUser.unlockedLeads?.includes(c.id)) || canSeeEverything;
                       const size = Math.min(Math.max(32, (Number(uc.consumoKwh)||0) / 100), 64); 
                       // Pino cinza se bloqueado
                       const pinClass = isUnlocked ? style.pinColor : 'bg-slate-600'; 
@@ -497,7 +497,7 @@ export default function FaturasPage() {
                         {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => (
                            <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
                               <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
-                              <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || isUserAdmin) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{(c.unidades.reduce((acc,u)=>acc+(Number(u.consumoKwh)||0),0)).toLocaleString()} kWh</div></div>
+                              <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{(c.unidades.reduce((acc,u)=>acc+(Number(u.consumoKwh)||0),0)).toLocaleString()} kWh</div></div>
                            </div>
                         ))}
                      </div>
@@ -518,7 +518,7 @@ export default function FaturasPage() {
                       <h2 className="text-xl font-bold text-white mb-1">{selectedCliente.nome}</h2>
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
-                          {(selectedCliente.isUnlocked || isUserAdmin) ? 
+                          {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) ? 
                             <span className="text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Unlock className="w-3 h-3"/> Lead Desbloqueado</span>
                             : 
                             <span className="text-xs text-yellow-400 border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Lock className="w-3 h-3"/> Lead Bloqueado</span>
@@ -536,7 +536,7 @@ export default function FaturasPage() {
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
                       </div>
 
-                      {(selectedCliente.isUnlocked || isUserAdmin) ? (
+                      {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) ? (
                           // ESTADO DESBLOQUEADO (OU ADMIN)
                           <div className="space-y-3">
                               {selectedCliente.contatos?.map((ct, idx) => (
@@ -570,7 +570,7 @@ export default function FaturasPage() {
                   </div>
 
                   {/* VISUALIZAÇÃO PREMIUM */}
-                  {(selectedCliente.isUnlocked || isUserAdmin) && (
+                  {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           {/* Gráfico */}
                           {(() => {
@@ -630,7 +630,7 @@ export default function FaturasPage() {
                </div>
                
                <div className="p-4 border-t border-white/5 bg-slate-800/80 flex justify-between items-center gap-4">
-                  <div className="text-xs text-slate-500">Saldo: <strong className="text-yellow-400">{isUserAdmin ? "Ilimitado" : `${currentBalance} cr`}</strong></div>
+                  <div className="text-xs text-slate-500">Saldo: <strong className="text-yellow-400">{canSeeEverything ? "Ilimitado" : `${currentBalance} cr`}</strong></div>
                   <div className="flex gap-2"><Button variant="ghost" onClick={() => deleteDoc(doc(db, 'faturas_clientes', selectedCliente.id))} className="text-red-400 hover:bg-red-500/10">Excluir</Button><Button onClick={() => setSelectedClienteId(null)} className="bg-cyan-600 hover:bg-cyan-500 shadow-lg">Salvar</Button></div>
                </div>
             </div>
