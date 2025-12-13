@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { initializeAdmin } from '@/lib/firebase/admin';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -12,6 +11,12 @@ const ASAAS_API_URL = process.env.ASAAS_ENV === 'sandbox'
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
 export async function POST(req: Request) {
+  // ADICIONE ISTO AQUI PARA DEBUGAR:
+  console.log("🔍 DEBUG ENV:");
+  console.log("ASAAS_ENV:", process.env.ASAAS_ENV);
+  console.log("ASAAS_API_KEY (tamanho):", process.env.ASAAS_API_KEY ? process.env.ASAAS_API_KEY.length : "NÃO EXISTE");
+  // ----------------------------------
+
   console.log("🚀 [API Checkout] Iniciando processamento...");
 
   try {
