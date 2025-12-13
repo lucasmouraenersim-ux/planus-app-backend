@@ -1509,5 +1509,3 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     </div>
   );
 }
-
-```
