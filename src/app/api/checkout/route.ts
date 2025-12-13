@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase/admin';
+import { initializeAdmin } from '@/lib/firebase/admin';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 // Define a URL base (Produção ou Sandbox)
@@ -15,6 +15,8 @@ export async function POST(req: Request) {
   console.log("🚀 [API Checkout] Iniciando processamento...");
 
   try {
+    const { db } = await initializeAdmin(); // Chama a função para obter o db
+    
     // 1. Validação de Segurança Básica
     if (!ASAAS_API_KEY) {
       console.error("❌ [API Checkout] ERRO: ASAAS_API_KEY não encontrada no .env.local");
