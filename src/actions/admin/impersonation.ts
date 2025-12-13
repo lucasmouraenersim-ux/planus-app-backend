@@ -1,10 +1,12 @@
-
 'use server';
+/**
+ * @fileOverview A server action for an administrator to generate a custom
+ * authentication token to impersonate another user.
+ */
 
 import { z } from 'zod';
 import { initializeAdmin } from '@/lib/firebase/admin';
-import { headers } from 'next/headers';
-import admin from 'firebase-admin';
+import type { FirebaseError } from 'firebase-admin';
 
 const ImpersonationInputSchema = z.object({
   adminUserId: z.string().min(1, 'Admin User ID é obrigatório.'),
@@ -48,8 +50,10 @@ export async function generateImpersonationToken(
       }
     }
     
-    // Gera o token customizado para o UID alvo
-    const customToken = await adminAuth.createCustomToken(targetUserId);
+    // Gera o token customizado para o UID alvo com uma claim de personificação
+    const customToken = await adminAuth.createCustomToken(targetUserId, {
+      impersonated: true
+    });
 
     return {
       success: true,
@@ -57,12 +61,15 @@ export async function generateImpersonationToken(
       message: 'Token de personificação gerado com sucesso.',
     };
 
-  } catch (error: any) {
-    console.error('[IMPERSONATION_ACTION] Erro Crítico:', error);
-    let message = 'Ocorreu um erro inesperado ao tentar personificar o usuário.';
+  } catch (error) {
+    const err = error as FirebaseError;
+    console.error('[IMPERSONATION_ACTION] Erro Crítico:', err);
     
-    if (error.code === 'auth/user-not-found') {
+    let message = 'Ocorreu um erro inesperado ao tentar personificar o usuário.';
+    if (err.code === 'auth/user-not-found') {
       message = 'O usuário alvo ou o administrador não foi encontrado.';
+    } else if (err.code === 'app/invalid-credential') {
+        message = "Erro de Configuração do Servidor: A chave da conta de serviço do Firebase é inválida ou está ausente.";
     }
 
     return { success: false, message };

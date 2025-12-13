@@ -46,6 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // --- NOVO: Impersonation State ---
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [originalAdminUser, setOriginalAdminUser] = useState<AppUser | null>(null);
+  const [originalAdminToken, setOriginalAdminToken] = useState<string | null>(null);
 
 
   // --- FCM Logic ---
@@ -287,7 +288,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
   
-  // --- NOVO: Lógica de Impersonation ---
+  // --- Lógica de Impersonation ---
   const impersonateUser = async (targetUserId: string) => {
     if (!appUser || !firebaseUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
       toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
@@ -295,10 +296,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     
     try {
-      // 1. Store current admin session
-      const adminToken = await firebaseUser.getIdToken();
-      sessionStorage.setItem('adminToken', adminToken);
+      // 1. Store current admin user and get their token
       setOriginalAdminUser(appUser);
+      const token = await firebaseUser.getIdToken();
+      setOriginalAdminToken(token); // Store in state instead of session storage
       
       // 2. Get custom token for target user from server action
       const result = await generateImpersonationToken({ adminUserId: appUser.uid, targetUserId });
@@ -306,37 +307,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(result.message || "Falha ao gerar token de personificação.");
       }
       
-      // 3. Sign in with the custom token
+      // 3. Sign out of the current user (this will trigger onAuthStateChanged)
+      await signOut(auth);
+
+      // 4. Sign in with the new custom token (this will also trigger onAuthStateChanged)
       await signInWithCustomToken(auth, result.customToken);
-      setIsImpersonating(true);
-      toast({ title: "Iniciando personificação...", description: "Você agora está navegando como o usuário selecionado." });
-      // The onAuthStateChanged listener will handle the UI update
+      
+      setIsImpersonating(true); // Set state
+      toast({ title: "Iniciando personificação...", description: `Navegando como o usuário selecionado.` });
+      // onAuthStateChanged will handle the rest of the UI update
     } catch (error: any) {
       console.error("Impersonation failed:", error);
       toast({ title: "Erro de Personificação", description: error.message, variant: "destructive" });
-      // Clear stored admin session if impersonation fails
-      sessionStorage.removeItem('adminToken');
+      // Clean up on failure
       setOriginalAdminUser(null);
+      setOriginalAdminToken(null);
+      setIsImpersonating(false);
     }
   };
 
   const stopImpersonating = async () => {
-    const adminToken = sessionStorage.getItem('adminToken');
-    if (!adminToken || !originalAdminUser) {
-      // If something is wrong, just log out completely for safety
-      await signOut(auth);
+    if (!originalAdminToken) {
+      await signOut(auth); // Fallback to full logout
       return;
     }
     
     try {
-      // Artificially sign out to trigger onAuthStateChanged
-      await signOut(auth);
-      // Immediately sign back in with the stored admin token
-      await signInWithCustomToken(auth, adminToken);
-      
-      sessionStorage.removeItem('adminToken');
-      setIsImpersonating(false);
+      await signOut(auth); // Log out the impersonated user
+      await signInWithCustomToken(auth, originalAdminToken); // Sign back in as admin
+
+      // Clear impersonation state
       setOriginalAdminUser(null);
+      setOriginalAdminToken(null);
+      setIsImpersonating(false);
+      
       toast({ title: "Personificação Encerrada", description: "Você retornou à sua conta de administrador." });
     } catch (error) {
       console.error("Failed to stop impersonating:", error);
@@ -349,8 +353,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoadingAuth(true);
-      const storedAdminToken = sessionStorage.getItem('adminToken');
-      
+
       if (user) {
         setFirebaseUser(user);
         const fetchedAppUser = await fetchFirestoreUser(user);
@@ -358,18 +361,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
 
-        // Check if currently impersonating
-        if (storedAdminToken && fetchedAppUser && fetchedAppUser.type !== 'admin' && fetchedAppUser.type !== 'superadmin') {
-            setIsImpersonating(true);
-            // We need to fetch the original admin user's data to store it
-            if (!originalAdminUser) {
-                // This part is tricky because we can't easily get the admin user data without being logged in as them.
-                // We will rely on the data stored when impersonation started.
-            }
-        } else {
+        // Check if the signed-in user is the original admin
+        if (originalAdminUser && user.uid === originalAdminUser.uid) {
             setIsImpersonating(false);
             setOriginalAdminUser(null);
-            sessionStorage.removeItem('adminToken');
+            setOriginalAdminToken(null);
+        } else if (originalAdminUser) {
+            // If originalAdminUser exists, it means we are in an impersonated session
+            setIsImpersonating(true);
         }
 
         await refreshUsers();
@@ -383,7 +382,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoadingAllUsers(false);
         setIsImpersonating(false);
         setOriginalAdminUser(null);
-        sessionStorage.removeItem('adminToken');
+        setOriginalAdminToken(null);
       }
       setIsLoadingAuth(false);
     });
@@ -404,7 +403,3 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

@@ -578,40 +578,28 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
         </CardContent>
       </Card>
        
-      <Tabs defaultValue="commissions">
+      <Card>
         <CardHeader>
             <div className="flex justify-between items-center">
-                <TabsList>
-                    <TabsTrigger value="commissions">Comissões a Receber (Controle de Caixa)</TabsTrigger>
-                    <TabsTrigger value="recurrence">Recorrências Pagas</TabsTrigger>
-                </TabsList>
+                <CardTitle>Comissões a Receber (Controle de Caixa)</CardTitle>
                 <div className="flex items-center space-x-2">
                     <Label htmlFor="monthly-dashboard-switch" className="text-sm font-medium">Visualizar Dashboard do Mês</Label>
                     <Switch id="monthly-dashboard-switch" checked={showMonthlyDashboard} onCheckedChange={setShowMonthlyDashboard} />
                 </div>
             </div>
+            <CardDescription>Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros para o mês selecionado.</CardDescription>
+            <div className="flex flex-wrap gap-2 pt-2">
+                <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(allReceivables.map(r => r.company))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+            </div>
         </CardHeader>
-        <TabsContent value="commissions">
-            <Card>
-                <CardHeader>
-                    <CardDescription>Filtre para visualizar comissões específicas. Mostrando {paginatedReceivables.length} de {filteredReceivables.length} registros para o mês selecionado.</CardDescription>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                        <Select value={receivableCompanyFilter} onValueChange={setReceivableCompanyFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Empresa" /></SelectTrigger><SelectContent><SelectItem value="all">Todas as Empresas</SelectItem>{[...new Set(allReceivables.map(r => r.company))].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
-                        <Select value={receivablePromoterFilter} onValueChange={setReceivablePromoterFilter}><SelectTrigger className="h-8 text-xs w-full sm:w-auto flex-1"><SelectValue placeholder="Filtrar por Promotor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os Promotores</SelectItem>{promotersWithLeads.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                </CardHeader>
-                {showMonthlyDashboard && monthlyDashboardMetrics && ( <CardContent className="mb-4 space-y-4">
-                    <div className="grid md:grid-cols-3 gap-4 text-center"><Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card><Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card><Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card></div>
-                    <div className="grid md:grid-cols-3 gap-4"><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div><div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div><div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div><div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div><div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div><div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div><div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div><div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div><div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div><div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div><div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div></CardContent></Card></div>
-                </CardContent>)}
-                <CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Empresa</TableHead><TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead></TableRow></TableHeader><TableBody>{paginatedReceivables.map(r => (<TableRow key={r.leadId}><TableCell>{r.clientName}</TableCell><TableCell>{r.company}</TableCell><TableCell>{formatCurrency(r.immediateCommission)}</TableCell><TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.secondCommission)}</TableCell><TableCell>{r.isSecondPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>) : format(r.secondPaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.thirdCommission)}</TableCell><TableCell>{r.isThirdPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>) : format(r.thirdPaymentDate, 'dd/MM/yy')}</TableCell></TableRow>))}</TableBody></Table></CardContent>
-                <CardFooter className="flex justify-end items-center gap-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button></CardFooter>
-            </Card>
-        </TabsContent>
-        <TabsContent value="recurrence">
-          <p>Conteúdo da aba de recorrências aqui...</p>
-        </TabsContent>
-      </Tabs>
+        {showMonthlyDashboard && monthlyDashboardMetrics && ( <CardContent className="mb-4 space-y-4">
+            <div className="grid md:grid-cols-3 gap-4 text-center"><Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card><Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card><Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card></div>
+            <div className="grid md:grid-cols-3 gap-4"><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div><div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div><div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div><div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div><div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div><div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div><div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div><div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div><div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div><div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div><div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div></CardContent></Card></div>
+        </CardContent>)}
+        <CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Empresa</TableHead><TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead></TableRow></TableHeader><TableBody>{paginatedReceivables.map(r => (<TableRow key={r.leadId}><TableCell>{r.clientName}</TableCell><TableCell>{r.company}</TableCell><TableCell>{formatCurrency(r.immediateCommission)}</TableCell><TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.secondCommission)}</TableCell><TableCell>{r.isSecondPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>) : format(r.secondPaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.thirdCommission)}</TableCell><TableCell>{r.isThirdPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>) : format(r.thirdPaymentDate, 'dd/MM/yy')}</TableCell></TableRow>))}</TableBody></Table></CardContent>
+        <CardFooter className="flex justify-end items-center gap-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button></CardFooter>
+      </Card>
 
        <Card>
         <CardHeader>
@@ -1373,10 +1361,10 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
         
          {/* Other Tabs Content */}
         <TabsContent value="commissions">
-           {/* ... existing CompanyCommissionsTable component ... */}
+           <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
         </TabsContent>
         <TabsContent value="management">
-            {/* ... existing CompanyManagementTab component ... */}
+            <CompanyManagementTab leads={allLeads} tableData={[]} />
         </TabsContent>
         {userAppRole === 'superadmin' && showSensitiveTabs && (
           <TabsContent value="personal_finance">
@@ -1389,7 +1377,136 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       </Tabs>
       
       {/* ... (All your existing dialogs and modals) ... */}
+       <Dialog open={isUserTypeSelectionOpen} onOpenChange={setIsUserTypeSelectionOpen}>
+        <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border-white/10 text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Adicionar Novo Usuário</DialogTitle>
+            <DialogDescription>
+              Selecione o tipo de usuário que deseja criar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col space-y-4 py-4">
+            <Button
+              variant="outline"
+              className="justify-start h-16 text-left"
+              onClick={() => { setIsUserTypeSelectionOpen(false); setIsAddUserModalOpen(true); }}
+            >
+              <div className="flex items-center gap-3">
+                  <Rocket className="w-6 h-6 text-primary"/>
+                  <div>
+                    <p className="font-semibold">Usuário Padrão (Vendedor, Admin, etc.)</p>
+                    <p className="text-xs text-muted-foreground">Para membros da equipe com acesso ao CRM, carteira, etc.</p>
+                  </div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start h-16 text-left"
+              onClick={() => { setIsUserTypeSelectionOpen(false); setIsFaturasUserModalOpen(true); }}
+            >
+               <div className="flex items-center gap-3">
+                  <FileIcon className="w-6 h-6 text-blue-400"/>
+                  <div>
+                    <p className="font-semibold">Usuário de Faturas (Parceiro)</p>
+                    <p className="text-xs text-muted-foreground">Acesso restrito à ferramenta de Inteligência de Faturas.</p>
+                  </div>
+              </div>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: ADD STANDARD USER */}
+      <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}>
+        <DialogContent className="sm:max-w-lg bg-card/95 backdrop-blur-xl border border-white/10 text-foreground">
+          <DialogHeader><DialogTitle className="text-xl">Criar Novo Usuário</DialogTitle><DialogDescription>Preencha os dados para adicionar um novo membro à equipe.</DialogDescription></DialogHeader>
+          <Form {...addUserForm}>
+            <form onSubmit={addUserForm.handleSubmit(handleAddUser)} className="space-y-4 py-2">
+              <FormField control={addUserForm.control} name="displayName" render={({ field }) => (<FormItem><FormLabel>Nome de Exibição</FormLabel><FormControl><Input placeholder="Ex: João da Silva" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={addUserForm.control} name="documento" render={({ field }) => (<FormItem><FormLabel>CPF / CNPJ (apenas números)</FormLabel><FormControl><Input placeholder="00000000000" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={addUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email de Acesso</FormLabel><FormControl><Input type="email" placeholder="email@dominio.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={addUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha Temporária</FormLabel><FormControl><Input type="password" placeholder="******" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={addUserForm.control} name="phone" render={({ field }) => (<FormItem><FormLabel>Telefone (Opcional)</FormLabel><FormControl><Input placeholder="(XX) XXXXX-XXXX" {...field} /></FormControl><FormMessage /></FormItem>)} />
+              <FormField control={addUserForm.control} name="type" render={({ field }) => (<FormItem><FormLabel>Tipo de Usuário</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger></FormControl><SelectContent>{USER_TYPE_ADD_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="ghost" onClick={() => { setIsAddUserModalOpen(false); addUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmittingUser}>
+                  {isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                  Cadastrar Usuário
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* MODAL: ADD FATURAS USER */}
+      <Dialog open={isFaturasUserModalOpen} onOpenChange={setIsFaturasUserModalOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-card/95 backdrop-blur-xl border border-white/10 text-foreground">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-blue-500/20 rounded-lg"><FileIcon className="w-5 h-5 text-blue-400" /></div>
+                <DialogTitle className="text-xl">Novo Usuário de Faturas</DialogTitle>
+            </div>
+            <DialogDescription>
+              Este usuário terá acesso restrito à área de Inteligência de Faturas. 
+              <br/><span className="text-yellow-500 text-xs">O CPF/CNPJ é obrigatório para fins de contrato e LGPD.</span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...faturasUserForm}>
+            <form onSubmit={faturasUserForm.handleSubmit(handleAddFaturasUser)} className="space-y-4 py-2">
+              
+              <FormField control={faturasUserForm.control} name="displayName" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Nome do Responsável / Empresa</FormLabel>
+                    <FormControl><Input placeholder="Ex: João Silva ou Empresa X" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={faturasUserForm.control} name="documento" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>CPF ou CNPJ</FormLabel>
+                    <FormControl><Input placeholder="Apenas números" {...field} onChange={(e) => {
+                        // Máscara simples ou apenas números
+                        const val = e.target.value.replace(/\D/g, '');
+                        field.onChange(val);
+                    }} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+              )} />
+
+              <div className="grid grid-cols-1 gap-4">
+                  <FormField control={faturasUserForm.control} name="email" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Email de Acesso</FormLabel>
+                        <FormControl><Input type="email" placeholder="email@parceiro.com" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
+                  
+                  <FormField control={faturasUserForm.control} name="password" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Senha Temporária</FormLabel>
+                        <FormControl><Input type="password" placeholder="******" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="ghost" onClick={() => { setIsFaturasUserModalOpen(false); faturasUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmittingUser} className="bg-blue-600 hover:bg-blue-500 text-white">
+                  {isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                  Cadastrar Parceiro
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
+```
