@@ -7,7 +7,7 @@ import React, { useContext, useState, useEffect, ReactNode, useCallback, createC
 import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider, signInWithCustomToken, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc, query, orderBy } from 'firebase/firestore';
 import { auth, db, messaging } from '@/lib/firebase';
-import { uploadFile } from './storage';
+import { uploadFile } from '@/lib/firebase/storage';
 import type { LeadWithId } from '@/types/crm';
 import { getToken, onMessage } from 'firebase/messaging';
 import { useToast } from '@/hooks/use-toast';
