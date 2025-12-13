@@ -212,10 +212,11 @@ export default function ProposalGeneratorPage() {
   const valorFaturaAtual = consumo * tarifa;
   const economiaMensal = valorFaturaAtual * (desconto / 100);
   const economiaAnual = economiaMensal * 12;
+  const novoValorFatura = valorFaturaAtual - economiaMensal;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
-       <style jsx global>{\`
+       <style jsx global>{`
         .glass-panel { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
         .glass-card-premium { background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5); backdrop-filter: blur(20px); }
         .carousel-active { transform: scale(1.3); z-index: 10; opacity: 1; }
@@ -224,7 +225,7 @@ export default function ProposalGeneratorPage() {
         .active-ring { position: absolute; inset: -4px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0%, #06b6d4 50%, #10b981 100%); animation: spin-slow 3s linear infinite; padding: 3px; -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
         .animate-blob { animation: blob 10s infinite; }
         @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
-      \`}</style>
+      `}</style>
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl opacity-30 animate-blob"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl opacity-30 animate-blob"></div>
@@ -239,8 +240,8 @@ export default function ProposalGeneratorPage() {
               Gerador de Propostas
             </h1>
             <div className="flex items-center gap-2 mt-2">
-                <div className={'h-1 w-8 rounded-full transition-all ${currentStep >= 1 ? 'bg-cyan-500' : 'bg-slate-700'}'}></div>
-                <div className={'h-1 w-8 rounded-full transition-all ${currentStep >= 2 ? 'bg-cyan-500' : 'bg-slate-700'}'}></div>
+                <div className={`h-1 w-8 rounded-full transition-all ${currentStep >= 1 ? 'bg-cyan-500' : 'bg-slate-700'}`}></div>
+                <div className={`h-1 w-8 rounded-full transition-all ${currentStep >= 2 ? 'bg-cyan-500' : 'bg-slate-700'}`}></div>
                 <span className="text-xs text-slate-400 ml-2">Passo {currentStep} de 2</span>
             </div>
           </div>
@@ -369,7 +370,7 @@ export default function ProposalGeneratorPage() {
                             const provider = providers[index];
                             const isActive = offset === 0;
                             return (
-                                <div key={provider.id} onClick={() => setActiveIndex(index)} className={'relative transition-all duration-500 ease-out cursor-pointer rounded-full overflow-visible flex items-center justify-center bg-white ${isActive ? 'w-44 h-44 carousel-active' : 'w-24 h-24 carousel-inactive'}'}>
+                                <div key={provider.id} onClick={() => setActiveIndex(index)} className={`relative transition-all duration-500 ease-out cursor-pointer rounded-full overflow-visible flex items-center justify-center bg-white ${isActive ? 'w-44 h-44 carousel-active' : 'w-24 h-24 carousel-inactive'}`}>
                                     {isActive && <div className="active-ring"></div>}
                                     <div className="w-full h-full rounded-full flex items-center justify-center p-4 shadow-2xl relative z-10 border-4 border-slate-900 bg-white overflow-hidden"><img src={provider.logo} alt={provider.name} className="w-full h-full object-contain" /></div>
                                     {isActive && (<div className="absolute bottom-0 right-0 bg-emerald-500 text-white p-2 rounded-full shadow-lg z-20"><CheckCircle2 className="w-6 h-6" /></div>)}
@@ -382,7 +383,7 @@ export default function ProposalGeneratorPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-5xl">
                     <div className="glass-panel p-8 rounded-2xl flex flex-col justify-center text-center border-t-4 border-t-cyan-500 relative overflow-hidden group">
-                        <div className={'absolute inset-0 bg-${providers[activeIndex].color}-500/5 group-hover:bg-${providers[activeIndex].color}-500/10 transition-colors'}></div>
+                        <div className={`absolute inset-0 bg-${providers[activeIndex].color}-500/5 group-hover:bg-${providers[activeIndex].color}-500/10 transition-colors`}></div>
                         <div className="relative z-10">
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-400 text-sm font-bold mb-6 uppercase tracking-wider shadow-lg">{React.createElement(providers[activeIndex].icon, { className: "w-4 h-4" })} Vantagem Competitiva</div>
                             <h3 className="text-3xl font-bold text-white mb-4">{providers[activeIndex].name}</h3>
