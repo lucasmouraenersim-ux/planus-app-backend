@@ -92,7 +92,13 @@ const addUserFormSchema = z.object({
 
 type AddUserFormData = z.infer<typeof addUserFormSchema>;
 
+// ATUALIZADO: Schema para Usuário de Faturas com CPF e Nome
 const faturasUserFormSchema = z.object({
+  displayName: z.string().min(3, "Nome é obrigatório."),
+  documento: z.string().min(11, "CPF/CNPJ inválido.").refine(val => {
+    const clean = val.replace(/\D/g, '');
+    return clean.length === 11 || clean.length === 14;
+  }, "Deve ser um CPF (11) ou CNPJ (14)."),
   email: z.string().email("Email inválido."),
   password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres."),
 });
@@ -1120,34 +1126,27 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
   const handleAddFaturasUser = async (data: FaturasUserFormData) => {
     setIsSubmittingUser(true);
     try {
-      // For 'Usuário Faturas', we create a user with type 'advogado'
-      // and a random document number since it's required but not provided in this form.
-      const randomDoc = Math.floor(10000000000 + Math.random() * 90000000000).toString();
       const result = await createUser({
         ...data,
-        type: 'advogado',
-        documento: randomDoc,
+        type: 'advogado', // Mantém o tipo interno como advogado/parceiro
+        // O documento e displayName agora vêm do formulário, não são mais randômicos
       });
 
       if (result.success) {
         await onUsersChange();
-        toast({ title: "Usuário Faturas Criado", description: result.message });
+        toast({ title: "Usuário Criado", description: `Parceiro ${data.displayName} adicionado com sucesso.` });
         setIsFaturasUserModalOpen(false);
         faturasUserForm.reset();
       } else {
         toast({
-          title: "Erro ao Criar Usuário",
+          title: "Erro ao Criar",
           description: result.message,
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error("CRITICAL ERROR adding faturas user:", error);
-      toast({
-        title: "Erro de Rede",
-        description: "Não foi possível conectar ao servidor.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro de Rede", description: "Falha na conexão.", variant: "destructive" });
     } finally {
       setIsSubmittingUser(false);
     }
@@ -1713,22 +1712,64 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       </Dialog>
       
       <Dialog open={isFaturasUserModalOpen} onOpenChange={setIsFaturasUserModalOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card/80 backdrop-blur-xl border text-foreground">
+        <DialogContent className="sm:max-w-[425px] bg-card/95 backdrop-blur-xl border border-white/10 text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-primary">Adicionar Usuário de Faturas</DialogTitle>
+            <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-blue-500/20 rounded-lg"><FileIcon className="w-5 h-5 text-blue-400" /></div>
+                <DialogTitle className="text-xl">Novo Usuário de Faturas</DialogTitle>
+            </div>
             <DialogDescription>
-              Este usuário terá acesso apenas à página de faturas.
+              Este usuário terá acesso restrito à área de Inteligência de Faturas. 
+              <br/><span className="text-yellow-500 text-xs">O CPF/CNPJ é obrigatório para fins de contrato e LGPD.</span>
             </DialogDescription>
           </DialogHeader>
+          
           <Form {...faturasUserForm}>
-            <form onSubmit={faturasUserForm.handleSubmit(handleAddFaturasUser)} className="space-y-4 py-3">
-              <FormField control={faturasUserForm.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email*</FormLabel><FormControl><Input type="email" placeholder="email@advogado.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <FormField control={faturasUserForm.control} name="password" render={({ field }) => (<FormItem><FormLabel>Senha*</FormLabel><FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl><FormMessage /></FormItem>)} />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => { setIsFaturasUserModalOpen(false); faturasUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmittingUser}>
+            <form onSubmit={faturasUserForm.handleSubmit(handleAddFaturasUser)} className="space-y-4 py-2">
+              
+              <FormField control={faturasUserForm.control} name="displayName" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Nome do Responsável / Empresa</FormLabel>
+                    <FormControl><Input placeholder="Ex: João Silva ou Empresa X" {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={faturasUserForm.control} name="documento" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>CPF ou CNPJ</FormLabel>
+                    <FormControl><Input placeholder="Apenas números" {...field} onChange={(e) => {
+                        // Máscara simples ou apenas números
+                        const val = e.target.value.replace(/\D/g, '');
+                        field.onChange(val);
+                    }} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+              )} />
+
+              <div className="grid grid-cols-1 gap-4">
+                  <FormField control={faturasUserForm.control} name="email" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Email de Acesso</FormLabel>
+                        <FormControl><Input type="email" placeholder="email@parceiro.com" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
+                  
+                  <FormField control={faturasUserForm.control} name="password" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Senha Temporária</FormLabel>
+                        <FormControl><Input type="password" placeholder="******" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                  )} />
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="ghost" onClick={() => { setIsFaturasUserModalOpen(false); faturasUserForm.reset(); }} disabled={isSubmittingUser}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmittingUser} className="bg-blue-600 hover:bg-blue-500 text-white">
                   {isSubmittingUser ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
-                  Criar Usuário
+                  Cadastrar Parceiro
                 </Button>
               </DialogFooter>
             </form>
