@@ -289,20 +289,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   // --- NOVO: Lógica de Impersonation ---
   const impersonateUser = async (targetUserId: string) => {
-    if (!appUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
+    if (!appUser || !firebaseUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
       toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
       return;
     }
     
     try {
       // 1. Store current admin session
-      const adminToken = await firebaseUser?.getIdToken();
-      if (!adminToken) throw new Error("Não foi possível obter o token de administrador.");
+      const adminToken = await firebaseUser.getIdToken();
       sessionStorage.setItem('adminToken', adminToken);
       setOriginalAdminUser(appUser);
       
       // 2. Get custom token for target user from server action
-      const result = await generateImpersonationToken({ targetUserId });
+      const result = await generateImpersonationToken({ adminUserId: appUser.uid, targetUserId });
       if (!result.success || !result.customToken) {
         throw new Error(result.message || "Falha ao gerar token de personificação.");
       }

@@ -7,6 +7,7 @@ import { headers } from 'next/headers';
 import admin from 'firebase-admin';
 
 const ImpersonationInputSchema = z.object({
+  adminUserId: z.string().min(1, 'Admin User ID é obrigatório.'),
   targetUserId: z.string().min(1, 'Target User ID é obrigatório.'),
 });
 
@@ -25,18 +26,26 @@ export async function generateImpersonationToken(
 ): Promise<ImpersonationOutput> {
   try {
     const { auth: adminAuth } = await initializeAdmin();
-    const { targetUserId } = input;
+    const { adminUserId, targetUserId } = input;
 
     // --- CRUCIAL: Verificação de Permissão do Chamador ---
-    // Em um ambiente de produção real, o token do chamador seria verificado.
-    // Aqui, vamos confiar que a UI impede o acesso a não-admins.
-    // No entanto, adicionar um log para auditoria é uma boa prática.
-    console.log(`[IMPERSONATION] Tentativa de gerar token para UID: ${targetUserId}`);
+    const adminUserRecord = await adminAuth.getUser(adminUserId);
+    const adminClaims = adminUserRecord.customClaims || {};
+
+    if (adminClaims.role !== 'admin' && adminClaims.role !== 'superadmin') {
+      return { success: false, message: "Permissão negada. Apenas administradores podem personificar usuários." };
+    }
+    
+    console.log(`[IMPERSONATION] Admin '${adminUserRecord.displayName}' (UID: ${adminUserId}) is attempting to impersonate UID: ${targetUserId}`);
 
     // Garante que um admin não pode personificar outro admin/superadmin
     const targetUserRecord = await adminAuth.getUser(targetUserId);
-    if (targetUserRecord.customClaims?.role === 'admin' || targetUserRecord.customClaims?.role === 'superadmin') {
-      return { success: false, message: "Não é permitido personificar outros administradores." };
+    const targetClaims = targetUserRecord.customClaims || {};
+    if (targetClaims.role === 'admin' || targetClaims.role === 'superadmin') {
+      // Allow superadmin to impersonate admin, but not the other way around
+      if (adminClaims.role !== 'superadmin') {
+        return { success: false, message: "Administradores não podem personificar outros administradores." };
+      }
     }
     
     // Gera o token customizado para o UID alvo
@@ -53,7 +62,7 @@ export async function generateImpersonationToken(
     let message = 'Ocorreu um erro inesperado ao tentar personificar o usuário.';
     
     if (error.code === 'auth/user-not-found') {
-      message = 'O usuário alvo não foi encontrado.';
+      message = 'O usuário alvo ou o administrador não foi encontrado.';
     }
 
     return { success: false, message };
