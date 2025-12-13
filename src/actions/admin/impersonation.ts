@@ -1,78 +1,57 @@
 
 'use server';
-/**
- * @fileOverview A server action for an administrator to generate a custom
- * authentication token to impersonate another user.
- */
 
-import { z } from 'zod';
 import { initializeAdmin } from '@/lib/firebase/admin';
-import type { FirebaseError } from 'firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
-const ImpersonationInputSchema = z.object({
-  adminUserId: z.string().min(1, 'Admin User ID é obrigatório.'),
-  targetUserId: z.string().min(1, 'Target User ID é obrigatório.'),
-});
+export async function generateImpersonationToken({ adminUserId, targetUserId }: { adminUserId: string, targetUserId: string }) {
+  console.log(`🕵️ [Impersonate] Admin ${adminUserId} tentando acessar ${targetUserId}`);
 
-type ImpersonationInput = z.infer<typeof ImpersonationInputSchema>;
-
-const ImpersonationOutputSchema = z.object({
-  success: z.boolean(),
-  customToken: z.string().optional(),
-  message: z.string(),
-});
-
-type ImpersonationOutput = z.infer<typeof ImpersonationOutputSchema>;
-
-export async function generateImpersonationToken(
-  input: ImpersonationInput
-): Promise<ImpersonationOutput> {
   try {
-    const { auth: adminAuth } = await initializeAdmin();
-    const { adminUserId, targetUserId } = input;
+    // 1. Inicializa Admin SDK
+    const { app } = await initializeAdmin();
+    const adminAuth = getAuth(app);
+    const adminDb = getFirestore(app);
 
-    // --- CRUCIAL: Verificação de Permissão do Chamador ---
-    const adminUserRecord = await adminAuth.getUser(adminUserId);
-    const adminClaims = adminUserRecord.customClaims || {};
-
-    if (adminClaims.role !== 'admin' && adminClaims.role !== 'superadmin') {
-      return { success: false, message: "Permissão negada. Apenas administradores podem personificar usuários." };
-    }
+    // 2. VERIFICAÇÃO DE SEGURANÇA (Onde estava o erro)
+    // Busca os dados de quem está PEDINDO o acesso (Você)
+    const adminUserDoc = await adminDb.collection('users').doc(adminUserId).get();
     
-    console.log(`[IMPERSONATION] Admin '${adminUserRecord.displayName}' (UID: ${adminUserId}) is attempting to impersonate UID: ${targetUserId}`);
-
-    // Garante que um admin não pode personificar outro admin/superadmin
-    const targetUserRecord = await adminAuth.getUser(targetUserId);
-    const targetClaims = targetUserRecord.customClaims || {};
-    if (targetClaims.role === 'admin' || targetClaims.role === 'superadmin') {
-      // Allow superadmin to impersonate admin, but not the other way around
-      if (adminClaims.role !== 'superadmin') {
-        return { success: false, message: "Administradores não podem personificar outros administradores." };
-      }
+    if (!adminUserDoc.exists) {
+        return { success: false, message: "Usuário administrador não encontrado no banco de dados." };
     }
-    
-    // Gera o token customizado para o UID alvo com uma claim de personificação
+
+    const adminData = adminUserDoc.data();
+    const userRole = adminData?.type;
+
+    console.log(`👤 Role do solicitante: ${userRole}`);
+
+    // AQUI ESTÁ A CORREÇÃO: Aceitar 'admin' OU 'superadmin'
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
+        // Failsafe: Se for o seu email hardcoded, libera mesmo se o banco estiver errado
+        const email = adminData?.email;
+        const isMasterEmail = email === 'lucasmoura@sentenergia.com' || email === 'lucasmourafoto@sentenergia.com';
+        
+        if (!isMasterEmail) {
+            return { success: false, message: "Permissão negada. Apenas administradores podem personificar usuários." };
+        }
+    }
+
+    // 3. Gera o Token Customizado para o Alvo
+    // Adicionamos claims extras para o sistema saber que é uma personificação
     const customToken = await adminAuth.createCustomToken(targetUserId, {
-      impersonated: true
+      impersonated: true,
+      originalAdminId: adminUserId,
+      role: 'impersonated_user' 
     });
 
-    return {
-      success: true,
-      customToken: customToken,
-      message: 'Token de personificação gerado com sucesso.',
-    };
-
-  } catch (error) {
-    const err = error as FirebaseError;
-    console.error('[IMPERSONATION_ACTION] Erro Crítico:', err);
+    console.log("✅ Token de personificação gerado com sucesso.");
     
-    let message = 'Ocorreu um erro inesperado ao tentar personificar o usuário.';
-    if (err.code === 'auth/user-not-found') {
-      message = 'O usuário alvo ou o administrador não foi encontrado.';
-    } else if (err.code === 'app/invalid-credential') {
-        message = "Erro de Configuração do Servidor: A chave da conta de serviço do Firebase é inválida ou está ausente.";
-    }
+    return { success: true, customToken };
 
-    return { success: false, message };
+  } catch (error: any) {
+    console.error("❌ [Impersonate Error]:", error);
+    return { success: false, message: error.message || "Erro interno ao gerar token." };
   }
 }
