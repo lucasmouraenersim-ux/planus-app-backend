@@ -1,3 +1,4 @@
+
 "use client";
 
 import './globals.css';
@@ -15,7 +16,7 @@ import {
   BarChart3, Calculator, UsersRound, Wallet, Rocket, CircleUserRound, LogOut, 
   FileText, ShieldAlert, Loader2, Info, Network, Target, ListChecks, 
   BookOpen as TrainingIcon, Image as ImageIcon, Zap, Send, LayoutDashboard, 
-  Menu, Sparkles, Trophy
+  Menu, Sparkles, Trophy, UserCog
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ import { CommandMenu } from '@/components/ui/command-menu';
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const pathname = usePathname();
     const router = useRouter();
-    const { appUser, isLoadingAuth } = useAuth();
+    const { appUser, isLoadingAuth, isImpersonating, stopImpersonating, originalAdminUser } = useAuth();
     
     const isPublicPage = pathname === '/' || pathname === '/login' || pathname === '/register';
     const isImmersivePage = pathname === '/hub'; 
@@ -54,6 +55,20 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
     if (appUser) {
         return (
             <SidebarProvider defaultOpen={true}>
+                {isImpersonating && (
+                    <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black px-4 py-2 flex items-center justify-center gap-4 text-sm font-semibold">
+                        <UserCog className="w-5 h-5" />
+                        <span>Você está navegando como <strong>{appUser.displayName}</strong>.</span>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 bg-black/10 hover:bg-black/20 text-black"
+                            onClick={stopImpersonating}
+                        >
+                            Retornar para Admin ({originalAdminUser?.displayName})
+                        </Button>
+                    </div>
+                )}
                 <AuthenticatedAppShell>{children}</AuthenticatedAppShell>
             </SidebarProvider>
         );

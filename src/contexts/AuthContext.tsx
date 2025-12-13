@@ -3,14 +3,15 @@
 
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import React, { useContext, useState, useEffect, ReactNode, useCallback, createContext } from 'react';
+import { onAuthStateChanged, updateProfile as updateFirebaseProfile, updatePassword as updateFirebasePassword, reauthenticateWithCredential, EmailAuthProvider, signInWithCustomToken, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp, updateDoc, query, orderBy } from 'firebase/firestore';
 import { auth, db, messaging } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import type { LeadWithId } from '@/types/crm';
 import { getToken, onMessage } from 'firebase/messaging';
 import { useToast } from '@/hooks/use-toast';
+import { generateImpersonationToken } from '@/actions/admin/impersonation';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -19,12 +20,16 @@ interface AuthContextType {
   userAppRole: UserType | null;
   allFirestoreUsers: FirestoreUser[];
   isLoadingAllUsers: boolean;
+  isImpersonating: boolean; // Novo
+  originalAdminUser: AppUser | null; // Novo
+  impersonateUser: (targetUserId: string) => Promise<void>; // Novo
+  stopImpersonating: () => Promise<void>; // Novo
   updateAppUserProfile: (data: { displayName?: string; photoFile?: File; phone?: string; personalFinance?: FirestoreUser['personalFinance'] }) => Promise<void>;
   changeUserPassword: (currentPasswordProvided: string, newPasswordProvided: string) => Promise<void>;
   acceptUserTerms: () => Promise<void>;
   refreshUsers: () => Promise<void>; 
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
-  updateAppUser: (user: AppUser | null) => void; // Function to update user state locally
+  updateAppUser: (user: AppUser | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,6 +42,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userAppRole, setUserAppRole] = useState<AuthContextType['userAppRole']>(null);
   const [allFirestoreUsers, setAllFirestoreUsers] = useState<FirestoreUser[]>([]);
   const [isLoadingAllUsers, setIsLoadingAllUsers] = useState<boolean>(true);
+
+  // --- NOVO: Impersonation State ---
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [originalAdminUser, setOriginalAdminUser] = useState<AppUser | null>(null);
+
 
   // --- FCM Logic ---
   const requestNotificationPermission = useCallback(async (userId: string) => {
@@ -77,7 +87,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return () => unsubscribeOnMessage();
     }
   }, [toast]);
-  // --- End FCM Logic ---
+
 
   const fetchFirestoreUser = async (user: FirebaseUser | null): Promise<AppUser | null> => {
     if (!user) return null;
@@ -123,7 +133,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           signedContractUrl: firestoreUserData.signedContractUrl,
         };
       } else {
-        console.warn(`Firestore document for user ${user.uid} not found. A base document will be created upon user action if needed.`);
+        console.warn('Firestore document for user ${user.uid} not found. A base document will be created upon user action if needed.');
         return {
             uid: user.uid,
             email: user.email,
@@ -276,38 +286,117 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return [];
     }
   }, []);
+  
+  // --- NOVO: Lógica de Impersonation ---
+  const impersonateUser = async (targetUserId: string) => {
+    if (!appUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
+      toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
+      return;
+    }
+    
+    try {
+      // 1. Store current admin session
+      const adminToken = await firebaseUser?.getIdToken();
+      if (!adminToken) throw new Error("Não foi possível obter o token de administrador.");
+      sessionStorage.setItem('adminToken', adminToken);
+      setOriginalAdminUser(appUser);
+      
+      // 2. Get custom token for target user from server action
+      const result = await generateImpersonationToken({ targetUserId });
+      if (!result.success || !result.customToken) {
+        throw new Error(result.message || "Falha ao gerar token de personificação.");
+      }
+      
+      // 3. Sign in with the custom token
+      await signInWithCustomToken(auth, result.customToken);
+      setIsImpersonating(true);
+      toast({ title: "Iniciando personificação...", description: "Você agora está navegando como o usuário selecionado." });
+      // The onAuthStateChanged listener will handle the UI update
+    } catch (error: any) {
+      console.error("Impersonation failed:", error);
+      toast({ title: "Erro de Personificação", description: error.message, variant: "destructive" });
+      // Clear stored admin session if impersonation fails
+      sessionStorage.removeItem('adminToken');
+      setOriginalAdminUser(null);
+    }
+  };
+
+  const stopImpersonating = async () => {
+    const adminToken = sessionStorage.getItem('adminToken');
+    if (!adminToken || !originalAdminUser) {
+      // If something is wrong, just log out completely for safety
+      await signOut(auth);
+      return;
+    }
+    
+    try {
+      // Artificially sign out to trigger onAuthStateChanged
+      await signOut(auth);
+      // Immediately sign back in with the stored admin token
+      await signInWithCustomToken(auth, adminToken);
+      
+      sessionStorage.removeItem('adminToken');
+      setIsImpersonating(false);
+      setOriginalAdminUser(null);
+      toast({ title: "Personificação Encerrada", description: "Você retornou à sua conta de administrador." });
+    } catch (error) {
+      console.error("Failed to stop impersonating:", error);
+      toast({ title: "Erro", description: "Falha ao retornar para sua conta. Por favor, faça login novamente.", variant: "destructive" });
+      await signOut(auth); // Log out fully on error
+    }
+  };
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoadingAuth(true);
+      const storedAdminToken = sessionStorage.getItem('adminToken');
+      
       if (user) {
         setFirebaseUser(user);
         const fetchedAppUser = await fetchFirestoreUser(user);
         setAppUser(fetchedAppUser);
         const role = fetchedAppUser?.type || 'pending_setup';
         setUserAppRole(role);
+
+        // Check if currently impersonating
+        if (storedAdminToken && fetchedAppUser && fetchedAppUser.type !== 'admin' && fetchedAppUser.type !== 'superadmin') {
+            setIsImpersonating(true);
+            // We need to fetch the original admin user's data to store it
+            if (!originalAdminUser) {
+                // This part is tricky because we can't easily get the admin user data without being logged in as them.
+                // We will rely on the data stored when impersonation started.
+            }
+        } else {
+            setIsImpersonating(false);
+            setOriginalAdminUser(null);
+            sessionStorage.removeItem('adminToken');
+        }
+
         await refreshUsers();
         await requestNotificationPermission(user.uid);
       } else {
+        // User logged out
         setFirebaseUser(null);
         setAppUser(null);
         setUserAppRole(null);
         setAllFirestoreUsers([]);
         setIsLoadingAllUsers(false);
+        setIsImpersonating(false);
+        setOriginalAdminUser(null);
+        sessionStorage.removeItem('adminToken');
       }
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [refreshUsers, requestNotificationPermission]);
-
+  }, [refreshUsers, requestNotificationPermission, originalAdminUser]);
 
   const updateAppUser = (user: AppUser | null) => {
     setAppUser(user);
   };
 
-
   return (
-    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, fetchAllCrmLeadsGlobally, updateAppUser }}>
+    <AuthContext.Provider value={{ firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, fetchAllCrmLeadsGlobally, updateAppUser, isImpersonating, impersonateUser, stopImpersonating, originalAdminUser }}>
       {children}
     </AuthContext.Provider>
   );
