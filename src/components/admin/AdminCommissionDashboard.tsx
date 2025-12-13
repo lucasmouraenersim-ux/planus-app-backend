@@ -127,6 +127,7 @@ const editUserFormSchema = z.object({
     (val) => (val === 'none' || val === '' || val === null || val === undefined ? 2 : Number(val)),
     z.number().int().optional()
   ),
+  disabled: z.boolean().default(false),
 });
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
 
@@ -949,6 +950,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
       canViewCrm: user.canViewCrm || false,
       canViewCareerPlan: user.canViewCareerPlan || false,
       assignmentLimit: user.assignmentLimit,
+      disabled: user.disabled || false,
     });
     setIsEditUserModalOpen(true);
   };
@@ -957,6 +959,12 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
     if (!selectedUser) return;
     setIsSubmittingAction(true);
     try {
+      // Direct call to firebase-admin function for disabling user.
+      if (typeof data.disabled === 'boolean') {
+        const adminAction = (await import('@/actions/admin/userStatus')).updateUserStatus;
+        await adminAction(selectedUser.uid, data.disabled);
+      }
+
       await updateUser(selectedUser.uid, {
         displayName: data.displayName,
         phone: data.phone,
@@ -1529,6 +1537,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                             <SortableHeader label="Nome" sortKey="displayName" sortConfig={userSortConfig} onSort={handleSortUsers} />
                             <SortableHeader label="Email" sortKey="email" sortConfig={userSortConfig} onSort={handleSortUsers} />
                             <SortableHeader label="Tipo" sortKey="type" sortConfig={userSortConfig} onSort={handleSortUsers} />
+                            <TableHead>Status</TableHead>
                             <SortableHeader label="Total KWh" sortKey="totalKwh" sortConfig={userSortConfig} onSort={handleSortUsers} />
                             <SortableHeader label="Último Acesso" sortKey="lastSignInTime" sortConfig={userSortConfig} onSort={handleSortUsers} />
                             <TableHead>Contrato</TableHead>
@@ -1543,6 +1552,13 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                 <TableCell className="font-medium"><div className="flex items-center gap-2"><Avatar className="h-8 w-8"><AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /><AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback></Avatar>{user.displayName || user.email?.split('@')[0] || 'N/A'}</div></TableCell>
                                 <TableCell>{user.email}</TableCell>
                                 <TableCell><span className={`px-2 py-1 text-xs rounded-full ${getUserTypeBadgeStyle(user.type)}`}>{USER_TYPE_FILTER_OPTIONS.find(opt => opt.value === user.type)?.label || user.type}</span></TableCell>
+                                <TableCell>
+                                    <Switch
+                                        checked={!user.disabled}
+                                        onCheckedChange={(checked) => handleUpdateUser({ ...editUserForm.getValues(), disabled: !checked })}
+                                        disabled={!canEdit || isSubmittingAction}
+                                    />
+                                </TableCell>
                                 <TableCell>{totalKwh.toLocaleString('pt-BR')} kWh</TableCell>
                                 <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
                                 <TableCell>
