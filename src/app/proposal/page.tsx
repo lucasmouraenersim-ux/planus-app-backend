@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSearchParams } from "next/navigation";
@@ -14,7 +15,7 @@ import {
   Utensils, Wheat
 } from "lucide-react";
 
-// --- DADOS E MOCKS ---
+// --- DADOS E MOCKS (Mantidos iguais) ---
 const commercializerCatalog = [
   { name: "BC Energia", logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/bc761e2a925f19d5436b3642acb35fac8e3075f8/BC-ENERGIA.png" },
   { name: "Bolt Energy", logo: "https://raw.githubusercontent.com/LucasMouraChaser/campanhassent/bc761e2a925f19d5436b3642acb35fac8e3075f8/Bolt%20Energy.jpg" },
@@ -68,7 +69,6 @@ const clients = [
     { category: "Agro", icon: Wheat, names: ["São Salvador", "Milhão", "Grupo Cereal"] },
 ];
 
-// Helper de Formatação
 const formatCurrency = (val: number) => val.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
 
 function ProposalPageContent() {
@@ -76,78 +76,44 @@ function ProposalPageContent() {
   const proposalRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  // --- FUNÇÃO DE PARSE ROBUSTA (CORRIGIDA) ---
   const parseNumber = (val: string | null) => {
     if (!val) return 0;
-    
-    // 1. Remove caracteres não numéricos (exceto ponto, virgula e traço)
-    // Remove "R$", espaços, letras, etc.
     let clean = val.replace(/[^0-9.,-]/g, '');
-
-    // 2. Resolve ambiguidade Ponto vs Vírgula
     if (clean.includes(',')) {
-        // Se tem vírgula, assume padrão BR (1.500,00)
-        // Remove pontos de milhar
-        clean = clean.replace(/\./g, '');
-        // Troca vírgula por ponto decimal
-        clean = clean.replace(',', '.');
+        clean = clean.replace(/\./g, '').replace(',', '.');
     } else {
-        // Se SÓ tem ponto (ex: 1.500 ou 1.12)
-        // Se tiver mais de um ponto (1.000.000), é milhar -> remove todos
         if ((clean.match(/\./g) || []).length > 1) {
             clean = clean.replace(/\./g, '');
         } 
-        // Se tiver 1 ponto e for um valor alto (consumo), pode ser milhar (1.500)
-        // Mas se for valor baixo (tarifa), pode ser decimal (1.12)
-        // Como o JS nativo trata "1.500" como 1.5, precisamos cuidar.
-        // HACK: Se for consumo (> 100) e tiver ponto, remove o ponto.
-        // Mas vamos confiar que o input veio limpo ou no padrão US se não tiver vírgula.
     }
-
     const parsed = parseFloat(clean);
     return isNaN(parsed) ? 0 : parsed;
   };
 
   // Parse dos dados da URL
-  const proposalData = useMemo(() => {
-      // Captura raw strings para debug se necessário
-      const rawKwh = searchParams.get("item1Quantidade");
-      const rawTariff = searchParams.get("currentTariff");
-      const rawDiscount = searchParams.get("desconto");
-
-      // Tratamento especial para Consumo que pode vir como "1.500" (milhar)
-      // Se não tiver vírgula e tiver ponto, remove o ponto para garantir que 1.500 vire 1500 e não 1.5
-      let kwh = parseNumber(rawKwh);
-      if (rawKwh && !rawKwh.includes(',') && rawKwh.includes('.') && kwh < 100) {
-           kwh = kwh * 1000; // Correção para bug comum de milhar
-      }
-
-      return {
-        clientName: searchParams.get("clienteNome") || "Cliente",
-        clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
-        consumerUnit: searchParams.get("codigoClienteInstalacao") || "",
-        distributor: searchParams.get("distribuidora") || "Distribuidora Local",
-        comercializadora: searchParams.get("comercializadora") || "BC Energia",
-        
-        avgConsumption: kwh,
-        currentPrice: parseNumber(rawTariff),
-        discountRate: parseNumber(rawDiscount),
-        
-        coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
-        address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
-      }
-  }, [searchParams]);
+  const proposalData = useMemo(() => ({
+    clientName: searchParams.get("clienteNome") || "Cliente",
+    clientCpfCnpj: searchParams.get("clienteCnpjCpf") || "",
+    // --- NOVOS CAMPOS ADICIONADOS AQUI ---
+    consumerUnit: searchParams.get("codigoClienteInstalacao") || "-",
+    distributor: searchParams.get("distribuidora") || "Não informada",
+    connectionType: searchParams.get("ligacao") || "-",
+    // -------------------------------------
+    comercializadora: searchParams.get("comercializadora") || "BC Energia",
+    avgConsumption: parseNumber(searchParams.get("item1Quantidade")), 
+    currentPrice: parseNumber(searchParams.get("currentTariff")),
+    discountRate: parseNumber(searchParams.get("desconto")),
+    coversTariffFlag: searchParams.get("cobreBandeira") === 'true',
+    address: `${searchParams.get("clienteRua") || ''}, ${searchParams.get("clienteCidade") || ''} - ${searchParams.get("clienteUF") || ''}`
+  }), [searchParams]);
 
   // Cálculos
   const calculated = useMemo(() => {
     const avgMonthlyCost = proposalData.avgConsumption * proposalData.currentPrice;
-    
     const bcPrice = proposalData.currentPrice * (1 - (proposalData.discountRate / 100));
     const bcMonthlyCost = proposalData.avgConsumption * bcPrice;
-    
     const monthlyEconomy = avgMonthlyCost - bcMonthlyCost;
     const annualEconomy = monthlyEconomy * 12;
-    
     return { avgMonthlyCost, bcPrice, bcMonthlyCost, monthlyEconomy, annualEconomy };
   }, [proposalData]);
 
@@ -247,11 +213,7 @@ function ProposalPageContent() {
                     <div className="w-2 h-10 bg-cyan-600"></div>
                     <div><h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Quem Somos</h2><p className="text-slate-500">A força da Planus Energia conectando você ao futuro.</p></div>
                 </div>
-
-                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
-                    A <strong className="text-cyan-600">Planus Energia</strong> integra um ecossistema de empresas especializadas em soluções de energia limpa, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões.
-                </p>
-
+                <p className="text-lg text-slate-600 mb-8 leading-relaxed">A <strong className="text-cyan-600">Planus Energia</strong> integra um ecossistema de empresas especializadas em soluções de energia limpa, conectando consumidores às nossas usinas fotovoltaicas e comercializadoras parceiras. Atuamos com responsabilidade ESG, neutralizando emissões.</p>
                 <div className="grid grid-cols-4 gap-4 mb-12">
                     {stats.map((stat, i) => (
                         <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
@@ -261,7 +223,6 @@ function ProposalPageContent() {
                         </div>
                     ))}
                 </div>
-
                 <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Leaf className="w-5 h-5 text-emerald-500"/> Nossas Usinas</h3>
                 <div className="grid grid-cols-3 gap-6 mb-12">
                     {plants.map((plant, i) => (
@@ -274,7 +235,6 @@ function ProposalPageContent() {
                         </div>
                     ))}
                 </div>
-
                 <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Globe className="w-5 h-5 text-blue-500"/> Comercializadoras Parceiras</h3>
                 <div className="grid grid-cols-6 gap-3 items-center">
                     {commercializerCatalog.map((c, i) => (
@@ -298,13 +258,20 @@ function ProposalPageContent() {
 
             <main className="flex-1">
                 <div className="grid grid-cols-2 gap-8 mb-8">
-                    {/* Cenário Atual */}
+                    {/* Cenário Atual - COM NOVOS CAMPOS */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">1</div>
                             <span className="font-bold text-slate-600 uppercase text-sm">Cenário Atual</span>
                         </div>
                         <div className="space-y-3 text-sm">
+                             {/* DADOS TÉCNICOS ADICIONADOS AQUI */}
+                             <div className="flex justify-between items-center"><span className="text-slate-500">Distribuidora</span><span className="font-medium text-slate-800 text-right">{proposalData.distributor}</span></div>
+                             <div className="flex justify-between items-center"><span className="text-slate-500">Unidade (UC)</span><span className="font-medium text-slate-800">{proposalData.consumerUnit}</span></div>
+                             <div className="flex justify-between items-center"><span className="text-slate-500">Tipo de Ligação</span><span className="font-medium text-slate-800 lowercase first-letter:uppercase">{proposalData.connectionType}</span></div>
+                             <div className="h-px bg-slate-100 my-2"></div>
+                             {/* FIM DADOS TÉCNICOS */}
+
                             <div className="flex justify-between"><span className="text-slate-500">Consumo Médio</span><span className="font-medium">{proposalData.avgConsumption.toLocaleString()} kWh</span></div>
                             <div className="flex justify-between"><span className="text-slate-500">Tarifa Vigente</span><span className="font-medium">{formatCurrency(proposalData.currentPrice)}</span></div>
                             <div className="bg-slate-100 p-3 rounded-lg flex justify-between items-center mt-2"><span className="font-bold text-slate-700">Custo Mensal</span><span className="font-black text-slate-800 text-lg">{formatCurrency(calculated.avgMonthlyCost)}</span></div>
@@ -386,7 +353,6 @@ function ProposalPageContent() {
                     <div className="w-2 h-10 bg-cyan-600"></div>
                     <div><h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Perguntas Frequentes</h2><p className="text-slate-500">Tire suas dúvidas sobre o modelo.</p></div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-6 mb-12">
                     {faqs.map((faq, i) => (
                         <div key={i} className="bg-slate-50 p-5 rounded-xl border border-slate-100">
@@ -398,12 +364,10 @@ function ProposalPageContent() {
                         </div>
                     ))}
                 </div>
-
                 <div className="flex items-center gap-4 mb-6">
                     <div className="w-2 h-10 bg-emerald-500"></div>
                     <div><h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">Quem Confia</h2><p className="text-slate-500">Alguns dos nossos clientes por setor.</p></div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                     {clients.map((group, i) => (
                         <div key={i} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
@@ -437,6 +401,7 @@ function ProposalPageContent() {
   );
 }
 
+// Lógica de Suspense para carregar parâmetros da URL
 export default function ProposalPage() {
   return (
     <Suspense fallback={<div>Carregando...</div>}>
