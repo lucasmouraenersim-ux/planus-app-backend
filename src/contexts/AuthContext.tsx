@@ -44,7 +44,6 @@ interface AuthContextType {
   acceptUserTerms: () => Promise<void>;
   refreshUsers: () => Promise<void>; 
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
-  updateAppUser: (user: AppUser | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -208,92 +207,10 @@ const MenuSectionLabel = ({ label, collapsed }: { label: string, collapsed: bool
     );
 }
 
-const AuthenticatedAppShell = ({ children }: { children: React.ReactNode }) => {
-    const { isImpersonating, stopImpersonating, originalAdminUser, appUser } = useAuth();
-    const pathname = usePathname();
-    const isImmersivePage = pathname === '/hub' || pathname.startsWith('/meteorologia');
-
-    if (isImmersivePage) {
-        return (
-            <>
-                {isImpersonating && (
-                    <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black px-4 py-2 flex items-center justify-center gap-4 text-sm font-semibold">
-                        <UserCog className="w-5 h-5" />
-                        <span>Você está navegando como <strong>{appUser?.displayName}</strong>.</span>
-                        <Button size="sm" variant="secondary" className="h-7 bg-black/10 hover:bg-black/20 text-black" onClick={stopImpersonating}>
-                            Retornar para Admin ({originalAdminUser?.displayName})
-                        </Button>
-                    </div>
-                )}
-                {children}
-            </>
-        );
-    }
-    
-    return (
-        <SidebarProvider defaultOpen={true}>
-            {isImpersonating && (
-                <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black px-4 py-2 flex items-center justify-center gap-4 text-sm font-semibold">
-                    <UserCog className="w-5 h-5" />
-                    <span>Você está navegando como <strong>{appUser?.displayName}</strong>.</span>
-                    <Button size="sm" variant="secondary" className="h-7 bg-black/10 hover:bg-black/20 text-black" onClick={stopImpersonating}>
-                        Retornar para Admin ({originalAdminUser?.displayName})
-                    </Button>
-                </div>
-            )}
-            <AppSidebar />
-            <div className="relative flex min-h-svh flex-1 flex-col peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow bg-[#020617] overflow-hidden">
-                <div className="fixed inset-0 z-0 pointer-events-none">
-                    <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[120px] animate-float"></div>
-                    <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] animate-float" style={{animationDelay: '2s'}}></div>
-                </div>
-                <MobileHeader />
-                <main className="relative z-10 flex-1 overflow-auto h-full">
-                    {children}
-                </main>
-            </div>
-            <TermsDialogWrapper />
-            <CommandMenu />
-        </SidebarProvider>
-    );
-};
-
-const TermsDialogWrapper = () => {
-  const { appUser, acceptUserTerms } = useAuth();
-  return <TermsDialog isOpen={!!appUser && !appUser.termsAcceptedAt} onAccept={acceptUserTerms} />;
-};
-
-const AppContent = ({ children }: { children: React.ReactNode }) => {
-    const { appUser, isLoadingAuth } = useAuth();
-    const router = useRouter();
-    const pathname = usePathname();
-
-    const isPublicPage = ['/login', '/register', '/'].includes(pathname) || pathname.startsWith('/meteorologia');
-
-    React.useEffect(() => {
-        if (!isLoadingAuth && !appUser && !isPublicPage) {
-            router.replace('/login');
-        }
-    }, [isLoadingAuth, appUser, isPublicPage, router, pathname]);
-
-    if (isLoadingAuth && !isPublicPage) {
-        return (
-            <div className="flex flex-col justify-center items-center h-screen bg-[#020617] text-primary">
-                <Loader2 className="animate-spin h-12 w-12 text-cyan-500" />
-            </div>
-        );
-    }
-
-    if (appUser && !isPublicPage) {
-        return <AuthenticatedAppShell>{children}</AuthenticatedAppShell>;
-    }
-
-    return <>{children}</>;
-}
-
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { toast } = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -377,7 +294,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           trainingProgress: firestoreUserData.trainingProgress,
           personalFinance: firestoreUserData.personalFinance,
           signedContractUrl: firestoreUserData.signedContractUrl,
-        };
+          disabled: firestoreUserData.disabled
+        } as AppUser;
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
         return {
@@ -519,30 +437,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
   
   const impersonateUser = async (targetUserId: string) => {
+    // Validação de segurança básica
     if (!appUser || !firebaseUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
       toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
       return;
     }
+
     try {
+      // 1. Feedback visual apenas no Toast (Não bloqueia a tela inteira)
+      toast({ title: "Iniciando Acesso...", description: "Preparando ambiente do usuário..." });
+
+      // 2. Salva o Admin atual na memória para poder voltar depois
       setOriginalAdminUser(appUser);
       const token = await firebaseUser.getIdToken();
       setOriginalAdminToken(token);
+
+      // 3. Gera o token de personificação no servidor
       const result = await generateImpersonationToken({ adminUserId: appUser.uid, targetUserId });
+
       if (!result.success || !result.customToken) {
-        throw new Error(result.message || "Falha ao gerar token de personificação.");
+        // Se falhar, limpa o estado de admin salvo para não ficar preso
+        setOriginalAdminUser(null);
+        setOriginalAdminToken(null);
+        throw new Error(result.message || "Falha ao gerar token.");
       }
-      await signOut(auth);
+
+      // 4. Troca a sessão. 
+      // IMPORTANTE: signInWithCustomToken faz a troca direta sem passar pelo estado "deslogado".
+      // Isso evita que o layout redirecione para /login.
       await signInWithCustomToken(auth, result.customToken);
+
+      // 5. Marca flag local
       setIsImpersonating(true);
-      toast({ title: "Iniciando personificação...", description: `Navegando como o usuário selecionado.` });
+      
+      toast({ 
+        title: "Acesso Realizado com Sucesso", 
+        description: "Você está visualizando o sistema como o cliente.",
+        className: "bg-yellow-500 text-black border-none"
+      });
+
     } catch (error: any) {
       console.error("Impersonation failed:", error);
-      toast({ title: "Erro de Personificação", description: error.message, variant: "destructive" });
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      
+      // Rollback dos estados em caso de erro
       setOriginalAdminUser(null);
       setOriginalAdminToken(null);
       setIsImpersonating(false);
     }
   };
+
 
   const stopImpersonating = async () => {
     if (!originalAdminToken) {
@@ -594,23 +538,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const updateAppUser = (user: AppUser | null) => {
-    setAppUser(user);
-  };
+  }, [refreshUsers, requestNotificationPermission, originalAdminUser]);
 
   const contextValue = { 
     firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, 
     updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, 
-    fetchAllCrmLeadsGlobally, updateAppUser, isImpersonating, impersonateUser, 
+    fetchAllCrmLeadsGlobally, isImpersonating, impersonateUser, 
     stopImpersonating, originalAdminUser 
   };
+  
+  const isPublicPage = ['/login', '/register', '/', '/sobre', '/politica-de-privacidade'].includes(pathname) || pathname.startsWith('/meteorologia');
+
+  if (isLoadingAuth && !isPublicPage) {
+    return (
+        <div className="flex flex-col justify-center items-center h-screen bg-[#020617] text-primary">
+            <Loader2 className="animate-spin h-12 w-12 text-cyan-500" />
+        </div>
+    );
+  }
+
+  if (appUser && !isPublicPage) {
+      return (
+          <AuthContext.Provider value={contextValue}>
+              <SidebarProvider defaultOpen={true}>
+                  {isImpersonating && (
+                      <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-black px-4 py-2 flex items-center justify-center gap-4 text-sm font-semibold">
+                          <UserCog className="w-5 h-5" />
+                          <span>Você está navegando como <strong>{appUser?.displayName}</strong>.</span>
+                          <Button size="sm" variant="secondary" className="h-7 bg-black/10 hover:bg-black/20 text-black" onClick={stopImpersonating}>
+                              Retornar para Admin ({originalAdminUser?.displayName})
+                          </Button>
+                      </div>
+                  )}
+                  <AppSidebar />
+                  <div className="relative flex min-h-svh flex-1 flex-col peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow bg-[#020617] overflow-hidden">
+                      <div className="fixed inset-0 z-0 pointer-events-none">
+                          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[120px] animate-float"></div>
+                          <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px] animate-float" style={{animationDelay: '2s'}}></div>
+                      </div>
+                      <MobileHeader />
+                      <main className="relative z-10 flex-1 overflow-auto h-full">
+                          {children}
+                      </main>
+                  </div>
+                  <TermsDialogWrapper />
+                  <CommandMenu />
+              </SidebarProvider>
+          </AuthContext.Provider>
+      )
+  }
 
   return (
     <AuthContext.Provider value={contextValue}>
-      <AppContent>{children}</AppContent>
+      {children}
     </AuthContext.Provider>
   );
 };
@@ -621,4 +601,10 @@ export const useAuth = (): AuthContextType => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
+};
+
+const TermsDialogWrapper = () => {
+    const { appUser, acceptUserTerms } = useAuth();
+    if (!appUser) return null;
+    return <TermsDialog isOpen={!appUser.termsAcceptedAt} onAccept={acceptUserTerms} />;
 };
