@@ -2,8 +2,7 @@
 import './globals.css';
 import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/contexts/AuthContext';
-import ClientLayout from '@/components/ClientLayout'; // Importa o novo Client Component
+import { AuthProvider } from '@/contexts/AuthContext'; // Importa o provedor
 
 export default function RootLayout({
   children,
@@ -18,11 +17,9 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased bg-background text-foreground selection:bg-cyan-500/30 selection:text-cyan-100">
         <AuthProvider>
-          <ClientLayout>
-            {children}
-          </ClientLayout>
-          <Toaster />
+          {children}
         </AuthProvider>
+        <Toaster />
       </body>
     </html>
   );
