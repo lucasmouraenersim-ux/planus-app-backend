@@ -1,32 +1,52 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from "react-day-picker";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Award, TrendingUp, Filter, Crown, UserCircle, DollarSign, Hash, ListOrdered, Zap, X, Loader2, CalendarIcon, ClipboardCheck } from 'lucide-react';
+import { 
+    Award, Filter, Crown, UserCircle, DollarSign, Hash, 
+    ListOrdered, Zap, Loader2, CalendarIcon, Trophy, Sparkles, Medal, TrendingUp 
+} from 'lucide-react';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser, UserType } from '@/types/user';
 import { cn } from "@/lib/utils";
 
+// --- HELPERS ---
+
+// Confetti Effect Component (CSS puro para não instalar deps)
+const ConfettiRain = () => (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-30">
+        {[...Array(20)].map((_, i) => (
+            <div 
+                key={i} 
+                className="absolute top-0 w-1 h-1 bg-yellow-400 rounded-full animate-fall"
+                style={{
+                    left: `${Math.random() * 100}%`,
+                    animationDuration: `${Math.random() * 3 + 2}s`,
+                    animationDelay: `${Math.random() * 2}s`
+                }}
+            />
+        ))}
+        <style jsx>{`
+            @keyframes fall {
+                0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+                100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+            }
+            .animate-fall { animation: fall linear infinite; }
+        `}</style>
+    </div>
+);
 
 interface RankingDisplayEntry {
   rankPosition: number;
@@ -49,15 +69,15 @@ interface RankingDisplayEntry {
 }
 
 const PERIOD_OPTIONS = [
-  { value: 'monthly_current', label: 'Mensal (Ciclo de Vendas)' },
+  { value: 'monthly_current', label: 'Ciclo Atual (21 a 20)' },
   { value: 'all_time', label: 'Todo o Período' },
-  { value: 'custom', label: 'Selecionar intervalo' },
+  { value: 'custom', label: 'Personalizado' },
 ];
 
 const CRITERIA_OPTIONS = [
   { value: 'totalSalesValue', label: 'Volume de Vendas (R$)' },
-  { value: 'numberOfSales', label: 'Número de Vendas' },
-  { value: 'totalKwh', label: 'Total de KWh' },
+  { value: 'numberOfSales', label: 'Quantidade de Vendas' },
+  { value: 'totalKwh', label: 'Volume de Energia (kWh)' },
 ];
 
 const STAGE_FILTER_OPTIONS = [
@@ -65,31 +85,23 @@ const STAGE_FILTER_OPTIONS = [
     { value: 'assinado_finalizado', label: 'Assinados + Finalizados' },
 ];
 
-
 const getMedalForSeller = (entry: RankingDisplayEntry): string => {
-  if (entry.isOuro) return '🥇';
-  if (entry.hasEverHit30kInAMonth) return '🥇'; 
-  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) return '🥈';
-  return '🥉';
+  if (entry.isOuro) return '💎'; // Diamante para Ouro/VIP
+  if (entry.hasEverHit30kInAMonth) return '🔥'; // Fogo para High Performer
+  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) return '⭐';
+  return '';
 };
 
 const formatValueForDisplay = (value: string | number | undefined, type: 'currency' | 'kwh' | 'plain'): string => {
     if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
         return type === 'currency' ? 'R$ 0,00' : (type === 'kwh' ? '0 kWh' : '0');
     }
-
     const numValue = Number(value);
     if (isNaN(numValue)) return String(value);
-
-    if (type === 'currency') {
-        return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-    if (type === 'kwh') {
-        return `${numValue.toLocaleString('pt-BR')} kWh`;
-    }
+    if (type === 'currency') return numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    if (type === 'kwh') return `${numValue.toLocaleString('pt-BR')} kWh`;
     return numValue.toLocaleString('pt-BR');
 };
-
 
 function RankingPageContent() {
   const { appUser, allFirestoreUsers, fetchAllCrmLeadsGlobally } = useAuth();
@@ -116,9 +128,7 @@ function RankingPageContent() {
   }, [fetchAllCrmLeadsGlobally]);
   
   const processedData = useMemo(() => {
-    if (isLoading) {
-      return { ranking: [], totalKwhSoldInPeriod: 0, podium: [] };
-    }
+    if (isLoading) return { ranking: [], totalKwhSoldInPeriod: 0, podium: [] };
   
     const commissionRateOverrides: Record<string, number> = {
       'karatty victoria': 60, 'diogo rodrigo bottona': 60, 'francisco gregorio da silva filho': 60,
@@ -131,13 +141,9 @@ function RankingPageContent() {
     const leadsForRanking = allLeads.filter(lead => targetStages.includes(lead.stageId));
     const allFinalizedLeads = allLeads.filter(lead => lead.stageId === 'finalizado');
   
-    // 1. Discover all sellers from user list and leads
-    const sellerMetrics = new Map<string, { 
-      totalSalesValue: number; numberOfSales: number; totalKwh: number;
-      user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType };
-    }>();
-    
+    const sellerMetrics = new Map<string, { totalSalesValue: number; numberOfSales: number; totalKwh: number; user: FirestoreUser | { uid: string; displayName: string; photoURL?: string; type: UserType }; }>();
     const userMapByName = new Map<string, FirestoreUser>();
+    
     allFirestoreUsers.forEach(user => {
       if (user.displayName) userMapByName.set(user.displayName.trim().toLowerCase(), user);
       if ((user.type === 'vendedor' || user.type === 'superadmin' || user.type === 'admin') && !sellersToExclude.includes((user.displayName || '').toLowerCase())) {
@@ -154,7 +160,6 @@ function RankingPageContent() {
       }
     });
 
-    // 2. Filter leads based on the selected period
     const getPeriodBounds = (period: string, customRange?: DateRange) => {
       const today = new Date();
       if (period === 'custom' && customRange?.from) {
@@ -192,7 +197,6 @@ function RankingPageContent() {
     
     const totalKwhSoldInPeriod = periodLeads.reduce((sum, lead) => sum + (Number(lead.kwh) || 0), 0);
   
-    // 3. Calculate metrics for the period using filtered leads
     periodLeads.forEach(lead => {
       if (!lead.sellerName || sellersToExclude.includes(lead.sellerName.trim().toLowerCase())) return;
       const sellerNameLower = lead.sellerName.trim().toLowerCase();
@@ -208,7 +212,6 @@ function RankingPageContent() {
       }
     });
 
-    // 4. Calculate all-time metrics for medals using all finalized leads
     const allTimeKwhMetrics: Record<string, number> = {};
     const monthlySalesByUser: Record<string, Record<string, number>> = {};
     
@@ -230,9 +233,7 @@ function RankingPageContent() {
 
     const hasEverHit30kMap: Record<string, boolean> = {};
     Object.keys(monthlySalesByUser).forEach(userId => {
-        if (Object.values(monthlySalesByUser[userId]).some(monthlyTotal => monthlyTotal >= 30000)) {
-            hasEverHit30kMap[userId] = true;
-        }
+        if (Object.values(monthlySalesByUser[userId]).some(monthlyTotal => monthlyTotal >= 30000)) hasEverHit30kMap[userId] = true;
     });
     
     const { start: cycleStart, end: cycleEnd } = getPeriodBounds('monthly_current');
@@ -246,24 +247,23 @@ function RankingPageContent() {
         return acc;
     }, {} as Record<string, number>);
   
-    // 5. Format for display
     const unsortedRanking = Array.from(sellerMetrics.values()).map(metrics => {
       let mainScoreValue = 0;
       if (selectedCriteria === 'totalSalesValue') mainScoreValue = metrics.totalSalesValue;
       else if (selectedCriteria === 'numberOfSales') mainScoreValue = metrics.numberOfSales;
       else mainScoreValue = metrics.totalKwh;
       
-      const sellerNameLower = (metrics.user.displayName || '').toLowerCase();
       const metricKey = metrics.user.uid;
+      const sellerNameLower = (metrics.user.displayName || '').toLowerCase();
 
       return {
         userId: metricKey, userName: metrics.user.displayName || 'N/A', userPhotoUrl: metrics.user.photoURL || undefined,
         mainScoreValue,
         mainScoreDisplay: selectedCriteria === 'totalSalesValue' ? formatValueForDisplay(metrics.totalSalesValue, 'currency') : (selectedCriteria === 'numberOfSales' ? `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas` : formatValueForDisplay(metrics.totalKwh, 'kwh')),
-        detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Nº Vendas" : "Volume (R$)",
+        detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Vendas" : "Volume (R$)",
         detailScore1Value: selectedCriteria === 'totalSalesValue' ? metrics.numberOfSales : metrics.totalSalesValue,
         detailScore1Type: selectedCriteria === 'totalSalesValue' ? 'plain' : 'currency',
-        detailScore2Label: selectedCriteria === 'numberOfSales' ? "Total KWh" : (selectedCriteria === 'totalKwh' ? "Nº Vendas" : "Total KWh"),
+        detailScore2Label: selectedCriteria === 'numberOfSales' ? "KWh" : (selectedCriteria === 'totalKwh' ? "Vendas" : "KWh"),
         detailScore2Value: selectedCriteria === 'numberOfSales' ? metrics.totalKwh : (selectedCriteria === 'totalKwh' ? metrics.numberOfSales : metrics.totalKwh),
         detailScore2Type: selectedCriteria === 'numberOfSales' ? 'kwh' : (selectedCriteria === 'totalKwh' ? 'plain' : 'kwh'),
         kwh: metrics.totalKwh,
@@ -276,279 +276,233 @@ function RankingPageContent() {
   
     const finalRanking = unsortedRanking.sort((a, b) => b.mainScoreValue - a.mainScoreValue).map((entry, index) => ({ ...entry, rankPosition: index + 1 }));
     return { ranking: finalRanking, totalKwhSoldInPeriod, podium: finalRanking.slice(0, 3) };
-
   }, [allLeads, allFirestoreUsers, selectedPeriod, selectedCriteria, selectedStageFilter, isLoading, date]);
 
-
   const { ranking, totalKwhSoldInPeriod, podium } = processedData;
-  const criteriaLabel = useMemo(() => CRITERIA_OPTIONS.find(c => c.value === selectedCriteria)?.label || "Performance", [selectedCriteria]);
-  const loggedInUserRank = useMemo(() => ranking.find(entry => entry.userId === appUser?.uid), [ranking, appUser]);
+  const loggedInUserRank = ranking.find(entry => entry.userId === appUser?.uid);
 
-  const getPodiumBorderColor = (index: number) => {
-    if (index === 0) return 'border-yellow-400 shadow-yellow-400/30';
-    if (index === 1) return 'border-slate-400 shadow-slate-400/30';
-    if (index === 2) return 'border-yellow-600 shadow-yellow-600/30';
-    return 'border-border';
+  // --- PODIUM COMPONENT ---
+  const PodiumSpot = ({ entry, rank, delay }: { entry: RankingDisplayEntry, rank: 1 | 2 | 3, delay: string }) => {
+    const isGold = rank === 1;
+    const isSilver = rank === 2;
+    const isBronze = rank === 3;
+    
+    // Alturas e cores baseadas no rank
+    const heightClass = isGold ? "h-64" : isSilver ? "h-52" : "h-44";
+    const bgGradient = isGold 
+        ? "bg-gradient-to-t from-yellow-600/20 to-yellow-400/10 border-yellow-500/50" 
+        : isSilver 
+            ? "bg-gradient-to-t from-slate-400/20 to-slate-300/10 border-slate-400/50"
+            : "bg-gradient-to-t from-orange-700/20 to-orange-500/10 border-orange-500/50";
+    
+    const ringColor = isGold ? "ring-yellow-400" : isSilver ? "ring-slate-300" : "ring-orange-600";
+    const textColor = isGold ? "text-yellow-400" : isSilver ? "text-slate-300" : "text-orange-500";
+    const medalIcon = isGold ? "🥇" : isSilver ? "🥈" : "🥉";
+
+    return (
+        <div className={`flex flex-col items-center justify-end animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-both`} style={{ animationDelay: delay }}>
+            <div className="relative mb-4 group">
+                <div className={`absolute inset-0 rounded-full blur-xl opacity-50 ${isGold ? 'bg-yellow-400' : isSilver ? 'bg-slate-300' : 'bg-orange-500'}`}></div>
+                <Avatar className={`w-20 h-20 md:w-28 md:h-28 ring-4 ${ringColor} shadow-2xl z-10 relative group-hover:scale-105 transition-transform duration-300`}>
+                    <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} />
+                    <AvatarFallback className="text-xl font-bold bg-slate-900 text-white">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="absolute -top-3 -right-3 text-3xl animate-bounce" style={{ animationDuration: '3s' }}>{medalIcon}</div>
+            </div>
+            
+            <div className={`w-full ${heightClass} ${bgGradient} backdrop-blur-md rounded-t-3xl border-t border-x flex flex-col items-center justify-start pt-6 px-4 relative overflow-hidden`}>
+                <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+                <h3 className="font-bold text-white text-center text-sm md:text-lg leading-tight mb-1">{entry.userName.split(' ')[0]}</h3>
+                <p className={`text-xs md:text-sm font-bold opacity-80 mb-2`}>{entry.userName.split(' ').slice(1).join(' ')}</p>
+                <div className={`text-xl md:text-3xl font-black ${textColor} mt-auto mb-4 tracking-tighter`}>
+                    {entry.mainScoreDisplay}
+                </div>
+                {getMedalForSeller(entry) && <div className="absolute bottom-2 right-2 text-xl" title="High Performer">{getMedalForSeller(entry)}</div>}
+            </div>
+        </div>
+    );
   };
-  
-  const getPodiumTextColor = (index: number) => {
-    if (index === 0) return 'text-yellow-400';
-    if (index === 1) return 'text-slate-400';
-    if (index === 2) return 'text-yellow-600';
-    return 'text-foreground';
-  };
-  
+
+  // --- LIST ROW COMPONENT ---
+  const RankingRow = ({ entry }: { entry: RankingDisplayEntry }) => (
+    <div className={`group relative flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-slate-900/40 hover:bg-white/5 transition-all duration-300 ${entry.userId === appUser?.uid ? 'ring-1 ring-cyan-500 bg-cyan-900/10' : ''}`}>
+        <div className="w-8 text-center font-bold text-slate-500 text-lg group-hover:text-white transition-colors">
+            #{entry.rankPosition}
+        </div>
+        
+        <Avatar className="h-10 w-10 md:h-12 md:w-12 border border-white/10 group-hover:border-cyan-500/50 transition-colors">
+            <AvatarImage src={entry.userPhotoUrl} />
+            <AvatarFallback className="bg-slate-800 text-xs">{entry.userName.substring(0,2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+        
+        <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+                <p className="font-bold text-slate-200 truncate group-hover:text-cyan-400 transition-colors">{entry.userName}</p>
+                {getMedalForSeller(entry) && <span className="text-xs" title="Badge de Honra">{getMedalForSeller(entry)}</span>}
+            </div>
+            <div className="flex items-center gap-4 text-xs text-slate-500 mt-0.5">
+                {entry.detailScore1Label && <span>{entry.detailScore1Label}: <span className="text-slate-300">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</span></span>}
+                {entry.detailScore2Label && <span className="hidden sm:inline">• {entry.detailScore2Label}: <span className="text-slate-300">{formatValueForDisplay(entry.detailScore2Value, entry.detailScore2Type || 'plain')}</span></span>}
+            </div>
+        </div>
+        
+        <div className="text-right">
+            <p className="text-lg md:text-xl font-bold text-white tracking-tight">{entry.mainScoreDisplay}</p>
+        </div>
+    </div>
+  );
+
   if (isLoading || !appUser) {
     return (
-      <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
-        <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
-        <p className="text-lg font-medium">Carregando ranking...</p>
+      <div className="flex flex-col justify-center items-center h-screen bg-slate-950 text-cyan-500">
+        <Loader2 className="animate-spin h-12 w-12 mb-4" />
+        <p className="text-slate-400 animate-pulse tracking-widest uppercase text-sm">Carregando Leaderboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 text-foreground">
-      <header className="text-center mb-12">
-        <Award className="w-16 h-16 text-primary mx-auto mb-4" />
-        <h1 className="text-4xl md:text-5xl font-headline font-bold text-primary tracking-tight">
-          Ranking de Performance
-        </h1>
-        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          Acompanhe os top performers e sua posição na equipe Planus Energia.
-        </p>
-      </header>
-
-      <Card className="mb-8 bg-primary/10 border-primary shadow-xl text-center">
-        <CardHeader>
-          <CardTitle className="text-xl font-medium text-primary flex items-center justify-center">
-            <Zap className="w-6 h-6 mr-2" />
-            Total de KWh (Time)
-          </CardTitle>
-          <CardDescription>Performance total da equipe no período selecionado.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-6xl font-bold text-foreground">{totalKwhSoldInPeriod.toLocaleString('pt-BR')} <span className="text-2xl text-muted-foreground">kWh</span></p>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-8 bg-card/70 backdrop-blur-lg border shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-xl text-primary flex items-center">
-            <Filter className="mr-2 h-5 w-5" />
-            Filtros do Ranking
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label htmlFor="period-select" className="block text-sm font-medium text-muted-foreground mb-1">Período</label>
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger id="period-select"><SelectValue placeholder="Selecione o período" /></SelectTrigger>
-              <SelectContent>
-                {PERIOD_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-           <div className="flex flex-col">
-            <label htmlFor="date" className="block text-sm font-medium text-muted-foreground mb-1">Intervalo de Datas</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "justify-start text-left font-normal",
-                    !date && "text-muted-foreground",
-                    selectedPeriod !== 'custom' && "cursor-not-allowed opacity-50"
-                  )}
-                  disabled={selectedPeriod !== 'custom'}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date?.from ? (
-                    date.to ? (
-                      <>
-                        {format(date.from, "dd/MM/yy")} - {format(date.to, "dd/MM/yy")}
-                      </>
-                    ) : (
-                      format(date.from, "dd/MM/yy")
-                    )
-                  ) : (
-                    <span>Selecione</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={date?.from}
-                  selected={date}
-                  onSelect={setDate}
-                  numberOfMonths={2}
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div>
-            <label htmlFor="criteria-select" className="block text-sm font-medium text-muted-foreground mb-1">Critério</label>
-            <Select value={selectedCriteria} onValueChange={setSelectedCriteria}>
-              <SelectTrigger id="criteria-select"><SelectValue placeholder="Selecione o critério" /></SelectTrigger>
-              <SelectContent>
-                {CRITERIA_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="stage-filter-select" className="block text-sm font-medium text-muted-foreground mb-1">Estágio do Lead</label>
-            <Select value={selectedStageFilter} onValueChange={setSelectedStageFilter}>
-              <SelectTrigger id="stage-filter-select"><SelectValue placeholder="Selecione o estágio" /></SelectTrigger>
-              <SelectContent>
-                {STAGE_FILTER_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans relative overflow-hidden pb-20">
+      <ConfettiRain />
       
-      {isLoading ? (
-         <div className="flex flex-col justify-center items-center h-64 bg-transparent text-primary">
-            <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
-            <p className="text-lg font-medium">Carregando ranking...</p>
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] bg-cyan-900/10 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="container max-w-5xl mx-auto px-4 py-8 relative z-10">
+        
+        {/* Header */}
+        <div className="text-center mb-10 space-y-2">
+            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl mb-4 border border-yellow-500/30 shadow-lg shadow-yellow-500/10">
+                <Trophy className="w-8 h-8 text-yellow-400" />
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight">
+                Hall da Fama
+            </h1>
+            <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base">
+                Celebre os consultores que estão transformando o mercado de energia.
+            </p>
         </div>
-      ) : ranking.filter(r => r.mainScoreValue > 0).length > 0 ? (
-        <>
-          {podium.filter(p => p.mainScoreValue > 0).length > 0 && (
-            <section className="mb-12">
-              <h2 className="text-3xl font-semibold text-center text-foreground mb-8">Pódio dos Campeões <Crown className="inline-block text-yellow-400 ml-2 h-7 w-7" /></h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {podium.filter(p => p.mainScoreValue > 0).map((entry, index) => (
-                  <Card key={entry.userId} className={`bg-card/80 backdrop-blur-xl border-2 ${getPodiumBorderColor(index)} shadow-lg text-center p-6 flex flex-col items-center hover:shadow-2xl transition-all duration-300 ease-in-out transform hover:-translate-y-1`}>
-                    <div className={`text-5xl font-black mb-3 ${getPodiumTextColor(index)}`}>
-                      {entry.rankPosition}º
-                    </div>
-                    <div className="relative">
-                      <Avatar className="w-24 h-24 mb-4 border-4 border-primary/50">
-                        <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
-                        <AvatarFallback className="text-2xl">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="absolute -bottom-2 -right-1 text-4xl bg-card p-0.5 rounded-full shadow-lg">
-                        {getMedalForSeller(entry)}
-                      </div>
-                    </div>
-                    <h3 className="text-xl font-semibold text-primary mb-1 truncate max-w-full mt-2">{entry.userName}</h3>
-                    <p className="text-2xl font-bold text-foreground">{entry.mainScoreDisplay}</p>
-                    <p className="text-xs text-muted-foreground">{criteriaLabel}</p>
-                  </Card>
-                ))}
-              </div>
-            </section>
-          )}
 
-          {loggedInUserRank && loggedInUserRank.mainScoreValue > 0 && (
-            <Card className="my-8 bg-primary/10 border-primary/50 border-2 shadow-xl p-6">
-              <CardHeader className="p-0 pb-3 text-center md:text-left">
-                <CardTitle className="text-2xl text-primary flex items-center justify-center md:justify-start">
-                  <UserCircle className="mr-3 h-7 w-7" /> Minha Posição no Ranking
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 flex flex-col md:flex-row items-center justify-around text-center md:text-left space-y-4 md:space-y-0 md:space-x-4">
-                <div className="text-center">
-                  <p className="text-5xl font-bold text-primary">{loggedInUserRank.rankPosition}º</p>
-                  <p className="text-muted-foreground">Sua Posição</p>
+        {/* Global KPI */}
+        <div className="mb-10 text-center animate-in zoom-in duration-500">
+            <div className="inline-block relative group">
+                <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full group-hover:bg-cyan-500/30 transition-all duration-500"></div>
+                <div className="relative bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-full px-8 py-4 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-cyan-400 fill-cyan-400" />
+                    </div>
+                    <div className="text-left">
+                        <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Total do Time</p>
+                        <p className="text-2xl md:text-3xl font-black text-white">{totalKwhSoldInPeriod.toLocaleString('pt-BR')} <span className="text-sm font-medium text-slate-500">kWh</span></p>
+                    </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-3xl font-semibold text-foreground">{loggedInUserRank.mainScoreDisplay}</p>
-                  <p className="text-muted-foreground">{criteriaLabel}</p>
-                </div>
-                {loggedInUserRank.detailScore1Label && (
-                   <div className="text-center hidden sm:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore1Value, loggedInUserRank.detailScore1Type || 'plain')}</p>
-                    <p className="text-muted-foreground">{loggedInUserRank.detailScore1Label}</p>
-                  </div>
-                )}
-                 {loggedInUserRank.detailScore2Label && (
-                   <div className="text-center hidden md:block">
-                    <p className="text-2xl font-semibold text-foreground">{formatValueForDisplay(loggedInUserRank.detailScore2Value, loggedInUserRank.detailScore2Type || 'plain')}</p>
-                    <p className="text-muted-foreground">{loggedInUserRank.detailScore2Label}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+            </div>
+        </div>
 
-          <Card className="bg-card/70 backdrop-blur-lg border shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-2xl text-primary">Classificação Completa</CardTitle>
-              <CardDescription>Desempenho da equipe para {PERIOD_OPTIONS.find(p=>p.value === selectedPeriod)?.label || selectedPeriod} por {criteriaLabel.toLowerCase()}.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]"><Hash className="h-4 w-4 text-muted-foreground"/></TableHead>
-                    <TableHead>Consultor</TableHead>
-                    <TableHead className="text-right">{selectedCriteria === 'totalSalesValue' ? <DollarSign className="h-4 w-4 inline-block mr-1 text-muted-foreground"/> : <ListOrdered className="h-4 w-4 inline-block mr-1 text-muted-foreground"/>} {criteriaLabel}</TableHead>
-                    {ranking[0]?.detailScore1Label && <TableHead className="text-right hidden md:table-cell">{ranking[0].detailScore1Label}</TableHead>}
-                    {ranking[0]?.detailScore2Label && <TableHead className="text-right hidden lg:table-cell">{ranking[0].detailScore2Label}</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ranking.filter(r => r.mainScoreValue > 0).map((entry) => (
-                    <TableRow key={entry.userId} className={entry.userId === appUser?.uid ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-muted/50'}>
-                      <TableCell className="font-bold text-lg text-center">{entry.rankPosition}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          <div className="relative inline-block">
-                             <Avatar className="h-9 w-9">
-                              <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} data-ai-hint="user avatar" />
-                              <AvatarFallback>{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div className="absolute -bottom-1.5 -right-1.5 text-lg bg-card p-0.5 rounded-full shadow">
-                              {getMedalForSeller(entry)}
+        {/* Filters Bar */}
+        <div className="flex flex-wrap gap-3 justify-center mb-12 p-1.5 bg-slate-900/50 border border-white/5 rounded-2xl backdrop-blur-md max-w-4xl mx-auto">
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger className="w-[160px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="w-px h-6 bg-white/10 my-auto hidden sm:block"></div>
+            {selectedPeriod === 'custom' && (
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-white/5 gap-2 font-normal h-10">
+                            <CalendarIcon className="w-4 h-4" />
+                            {date?.from ? (date.to ? `${format(date.from, "dd/MM")} - ${format(date.to, "dd/MM")}` : format(date.from, "dd/MM")) : <span>Datas</span>}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-slate-900 border-slate-800" align="center">
+                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={1} className="text-slate-200" />
+                    </PopoverContent>
+                </Popover>
+            )}
+            <Select value={selectedCriteria} onValueChange={setSelectedCriteria}>
+                <SelectTrigger className="w-[180px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{CRITERIA_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+             <div className="w-px h-6 bg-white/10 my-auto hidden sm:block"></div>
+             <Select value={selectedStageFilter} onValueChange={setSelectedStageFilter}>
+                <SelectTrigger className="w-[180px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{STAGE_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+            </Select>
+        </div>
+
+        {/* Podium Section */}
+        {podium.length > 0 && (
+            <div className="flex justify-center items-end gap-2 md:gap-6 mb-16 h-[340px]">
+                {podium[1] && <PodiumSpot entry={podium[1]} rank={2} delay="200ms" />}
+                {podium[0] && <PodiumSpot entry={podium[0]} rank={1} delay="0ms" />}
+                {podium[2] && <PodiumSpot entry={podium[2]} rank={3} delay="400ms" />}
+            </div>
+        )}
+
+        {/* My Position Card */}
+        {loggedInUserRank && (
+            <div className="mb-8 animate-in slide-in-from-bottom-4 fade-in duration-700 delay-500">
+                <div className="relative overflow-hidden rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-slate-900/40 p-1">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]"></div>
+                    <div className="flex items-center justify-between p-4 px-6">
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-center justify-center w-12">
+                                <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider mb-1">Rank</span>
+                                <span className="text-2xl font-black text-white">#{loggedInUserRank.rankPosition}</span>
                             </div>
-                          </div>
-                          <span className="font-medium">{entry.userName}</span>
+                            <Avatar className="h-12 w-12 border-2 border-cyan-500/50">
+                                <AvatarImage src={loggedInUserRank.userPhotoUrl} />
+                                <AvatarFallback className="bg-cyan-900 text-cyan-200 font-bold">{loggedInUserRank.userName.substring(0,2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <p className="font-bold text-white text-lg">Você</p>
+                                <p className="text-cyan-400 text-sm">{loggedInUserRank.mainScoreDisplay}</p>
+                            </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-primary">{entry.mainScoreDisplay}</TableCell>
-                      {entry.detailScore1Label && <TableCell className="text-right hidden md:table-cell">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</TableCell>}
-                      {entry.detailScore2Label && <TableCell className="text-right hidden lg:table-cell">{formatValueForDisplay(entry.detailScore2Value, entry.detailScore2Type || 'plain')}</TableCell>}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <Card className="bg-card/70 backdrop-blur-lg border shadow-xl mt-8">
-          <CardContent className="p-10 text-center">
-            <ListOrdered className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <p className="text-xl text-muted-foreground">Nenhum dado de ranking encontrado para os filtros selecionados.</p>
-            <p className="text-sm text-muted-foreground mt-2">Tente ajustar o período ou critério, ou finalize mais leads!</p>
-          </CardContent>
-        </Card>
-      )}
+                        <div className="hidden md:block text-right">
+                             <p className="text-xs text-slate-400">Próximo nível</p>
+                             <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
+                                <TrendingUp className="w-3 h-3" /> Continue acelerando
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Full List */}
+        <div className="space-y-3 animate-in slide-in-from-bottom-10 fade-in duration-1000 delay-300">
+            <h3 className="text-lg font-bold text-slate-400 mb-4 flex items-center gap-2">
+                <ListOrdered className="w-5 h-5" /> Classificação Geral
+            </h3>
+            
+            {ranking.length > 0 ? (
+                ranking.slice(3).map((entry) => (
+                    <RankingRow key={entry.userId} entry={entry} />
+                ))
+            ) : (
+                <div className="text-center py-20 border border-dashed border-slate-800 rounded-2xl">
+                    <Filter className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                    <p className="text-slate-500">Nenhum resultado para este filtro.</p>
+                </div>
+            )}
+            
+            {ranking.length <= 3 && ranking.length > 0 && (
+                <p className="text-center text-slate-600 py-8 text-sm">Apenas os campeões pontuaram neste período.</p>
+            )}
+        </div>
+
+      </div>
     </div>
   );
 }
 
-
 export default function RankingPage() {
   return (
-    <Suspense fallback={
-      <div className="flex flex-col justify-center items-center h-screen bg-transparent text-primary">
-        <Loader2 className="animate-spin rounded-full h-12 w-12 text-primary mb-4" />
-        <p className="text-lg font-medium">Carregando Ranking...</p>
-      </div>
-    }>
+    <Suspense fallback={<div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-10 h-10 text-cyan-500 animate-spin"/></div>}>
       <RankingPageContent />
     </Suspense>
   );
