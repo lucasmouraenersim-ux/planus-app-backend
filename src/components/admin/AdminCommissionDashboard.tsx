@@ -190,6 +190,16 @@ interface PersonalRevenue {
   date: string;
 }
 
+// Helper para verificar se o usuário está online (ativo nos últimos 5 minutos)
+const isUserOnline = (lastSeen?: string) => {
+  if (!lastSeen) return false;
+  const lastSeenDate = parseISO(lastSeen);
+  const now = new Date();
+  const diffInMinutes = (now.getTime() - lastSeenDate.getTime()) / 1000 / 60;
+  return diffInMinutes < 5; // Considera online se visto nos últimos 5 minutos
+};
+
+
 const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number, prefix?: string, suffix?: string }) => {
   const [displayValue, setDisplayValue] = useState(0);
   const duration = 800;
@@ -1159,7 +1169,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           </TabsList>
           
           <TabsContent value="dashboard" className="space-y-6">
-              {/* ... (rest of the dashboard tab content) */}
+              {/* ... (rest of the dashboard tab content) ... */}
           </TabsContent>
           
           <TabsContent value="users">
@@ -1193,19 +1203,28 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                       <TableBody>
                           {filteredUsers.map(user => {
                             const totalKwh = userKwhTotals.get(user.uid) || 0;
-                            const isOnline = onlineStatus[user.uid] === 'online';
+                            const isOnline = isUserOnline(user.lastSeen);
                             return (
                               <TableRow key={user.uid}>
                                   <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <div className="relative">
-                                        <Avatar className="h-8 w-8">
-                                          <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} />
-                                          <AvatarFallback>{(user.displayName || user.email || 'U').charAt(0).toUpperCase()}</AvatarFallback>
-                                        </Avatar>
-                                        <span className={`absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full border-2 border-background ${isOnline ? 'bg-green-500' : 'bg-slate-500'}`} />
-                                      </div>
-                                      {user.displayName || user.email?.split('@')[0] || 'N/A'}
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative">
+                                            <Avatar className="h-9 w-9 border border-white/10">
+                                                <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} />
+                                                <AvatarFallback className="font-bold text-xs">{(user.displayName || user.email || 'U').substring(0, 2).toUpperCase()}</AvatarFallback>
+                                            </Avatar>
+                                            {/* Indicador de Status Online */}
+                                            <span className={cn(
+                                                "absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full ring-2 ring-slate-950",
+                                                isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-600"
+                                            )} />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-semibold text-slate-200">{user.displayName || 'Sem Nome'}</span>
+                                            {isOnline && (
+                                                <span className="text-[10px] text-emerald-500 font-medium">Online agora</span>
+                                            )}
+                                        </div>
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -1248,7 +1267,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           
            {/* Other Tabs Content */}
           <TabsContent value="commissions">
-             <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
+             <CompanyCommissionsTable leads={allLeads} tableData={[]} />
           </TabsContent>
           <TabsContent value="management">
               <CompanyManagementTab leads={allLeads} tableData={[]} />
