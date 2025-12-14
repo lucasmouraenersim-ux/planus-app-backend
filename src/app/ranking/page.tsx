@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -11,42 +12,58 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { 
-    Award, Filter, Crown, UserCircle, DollarSign, Hash, 
-    ListOrdered, Zap, Loader2, CalendarIcon, Trophy, Sparkles, Medal, TrendingUp 
+    Award, Filter, Crown, UserCircle, ListOrdered, Zap, Loader2, CalendarIcon, 
+    Trophy, TrendingUp, Sparkles, Flame, Star, Hexagon
 } from 'lucide-react';
 import type { LeadWithId } from '@/types/crm';
 import type { FirestoreUser, UserType } from '@/types/user';
 import { cn } from "@/lib/utils";
 
-// --- HELPERS ---
+// --- VISUAL ASSETS & EFFECTS ---
 
-// Confetti Effect Component (CSS puro para não instalar deps)
-const ConfettiRain = () => (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-30">
-        {[...Array(20)].map((_, i) => (
+// Fundo com Grid em movimento e Luzes
+const CinematicBackground = () => (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#020617]">
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+        
+        {/* Spotlights */}
+        <div className="absolute top-[-10%] left-[20%] w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute top-[10%] right-[10%] w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[100px] animate-pulse" style={{ animationDuration: '10s' }} />
+        <div className="absolute bottom-[-10%] left-[30%] w-[800px] h-[400px] bg-blue-600/10 rounded-full blur-[120px]" />
+    </div>
+);
+
+// Efeito de partículas de ouro para o #1
+const GoldParticles = () => (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[...Array(8)].map((_, i) => (
             <div 
                 key={i} 
-                className="absolute top-0 w-1 h-1 bg-yellow-400 rounded-full animate-fall"
+                className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-float-up opacity-0"
                 style={{
                     left: `${Math.random() * 100}%`,
-                    animationDuration: `${Math.random() * 3 + 2}s`,
-                    animationDelay: `${Math.random() * 2}s`
+                    bottom: '-10px',
+                    animationDelay: `${Math.random() * 2}s`,
+                    animationDuration: `${3 + Math.random() * 2}s`
                 }}
             />
         ))}
         <style jsx>{`
-            @keyframes fall {
-                0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
-                100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+            @keyframes float-up {
+                0% { transform: translateY(0) scale(0); opacity: 0; }
+                50% { opacity: 0.8; }
+                100% { transform: translateY(-100px) scale(1); opacity: 0; }
             }
-            .animate-fall { animation: fall linear infinite; }
+            .animate-float-up { animation: float-up infinite ease-out; }
         `}</style>
     </div>
 );
+
+// --- TYPES & CONSTANTS ---
 
 interface RankingDisplayEntry {
   rankPosition: number;
@@ -69,28 +86,21 @@ interface RankingDisplayEntry {
 }
 
 const PERIOD_OPTIONS = [
-  { value: 'monthly_current', label: 'Ciclo Atual (21 a 20)' },
+  { value: 'monthly_current', label: 'Ciclo Atual' },
   { value: 'all_time', label: 'Todo o Período' },
   { value: 'custom', label: 'Personalizado' },
 ];
 
 const CRITERIA_OPTIONS = [
-  { value: 'totalSalesValue', label: 'Volume de Vendas (R$)' },
-  { value: 'numberOfSales', label: 'Quantidade de Vendas' },
-  { value: 'totalKwh', label: 'Volume de Energia (kWh)' },
+  { value: 'totalSalesValue', label: 'Volume (R$)' },
+  { value: 'numberOfSales', label: 'Vendas (Qtd)' },
+  { value: 'totalKwh', label: 'Energia (kWh)' },
 ];
 
 const STAGE_FILTER_OPTIONS = [
-    { value: 'finalizado', label: 'Apenas Finalizados' },
+    { value: 'finalizado', label: 'Finalizados' },
     { value: 'assinado_finalizado', label: 'Assinados + Finalizados' },
 ];
-
-const getMedalForSeller = (entry: RankingDisplayEntry): string => {
-  if (entry.isOuro) return '💎'; // Diamante para Ouro/VIP
-  if (entry.hasEverHit30kInAMonth) return '🔥'; // Fogo para High Performer
-  if (entry.totalKwhAllTime >= 20000 && entry.kwhThisSalesCycle >= 20000) return '⭐';
-  return '';
-};
 
 const formatValueForDisplay = (value: string | number | undefined, type: 'currency' | 'kwh' | 'plain'): string => {
     if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
@@ -112,6 +122,7 @@ function RankingPageContent() {
   const [date, setDate] = useState<DateRange | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
 
+  // --- DATA PROCESSING LOGIC (MANTIDA IGUAL) ---
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -259,8 +270,8 @@ function RankingPageContent() {
       return {
         userId: metricKey, userName: metrics.user.displayName || 'N/A', userPhotoUrl: metrics.user.photoURL || undefined,
         mainScoreValue,
-        mainScoreDisplay: selectedCriteria === 'totalSalesValue' ? formatValueForDisplay(metrics.totalSalesValue, 'currency') : (selectedCriteria === 'numberOfSales' ? `${formatValueForDisplay(metrics.numberOfSales, 'plain')} Vendas` : formatValueForDisplay(metrics.totalKwh, 'kwh')),
-        detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Vendas" : "Volume (R$)",
+        mainScoreDisplay: selectedCriteria === 'totalSalesValue' ? formatValueForDisplay(metrics.totalSalesValue, 'currency') : (selectedCriteria === 'numberOfSales' ? `${formatValueForDisplay(metrics.numberOfSales, 'plain')}` : formatValueForDisplay(metrics.totalKwh, 'kwh')),
+        detailScore1Label: selectedCriteria === 'totalSalesValue' ? "Vendas" : "Volume",
         detailScore1Value: selectedCriteria === 'totalSalesValue' ? metrics.numberOfSales : metrics.totalSalesValue,
         detailScore1Type: selectedCriteria === 'totalSalesValue' ? 'plain' : 'currency',
         detailScore2Label: selectedCriteria === 'numberOfSales' ? "KWh" : (selectedCriteria === 'totalKwh' ? "Vendas" : "KWh"),
@@ -281,218 +292,260 @@ function RankingPageContent() {
   const { ranking, totalKwhSoldInPeriod, podium } = processedData;
   const loggedInUserRank = ranking.find(entry => entry.userId === appUser?.uid);
 
-  // --- PODIUM COMPONENT ---
-  const PodiumSpot = ({ entry, rank, delay }: { entry: RankingDisplayEntry, rank: 1 | 2 | 3, delay: string }) => {
+  // --- SUB-COMPONENTS ---
+
+  const PodiumCard = ({ entry, rank, delay }: { entry: RankingDisplayEntry, rank: 1 | 2 | 3, delay: string }) => {
     const isGold = rank === 1;
     const isSilver = rank === 2;
     const isBronze = rank === 3;
     
-    // Alturas e cores baseadas no rank
-    const heightClass = isGold ? "h-64" : isSilver ? "h-52" : "h-44";
-    const bgGradient = isGold 
-        ? "bg-gradient-to-t from-yellow-600/20 to-yellow-400/10 border-yellow-500/50" 
+    const config = isGold 
+        ? { h: 'h-[360px] md:h-[420px]', w: 'w-full md:w-[320px] z-20', gradient: 'from-yellow-500/20 via-yellow-900/5 to-slate-950', border: 'border-yellow-500', glow: 'shadow-yellow-500/20', text: 'text-yellow-400', ring: 'ring-yellow-400', icon: '👑' }
         : isSilver 
-            ? "bg-gradient-to-t from-slate-400/20 to-slate-300/10 border-slate-400/50"
-            : "bg-gradient-to-t from-orange-700/20 to-orange-500/10 border-orange-500/50";
-    
-    const ringColor = isGold ? "ring-yellow-400" : isSilver ? "ring-slate-300" : "ring-orange-600";
-    const textColor = isGold ? "text-yellow-400" : isSilver ? "text-slate-300" : "text-orange-500";
-    const medalIcon = isGold ? "🥇" : isSilver ? "🥈" : "🥉";
+            ? { h: 'h-[300px] md:h-[350px]', w: 'w-full md:w-[280px] z-10 mt-12', gradient: 'from-slate-400/20 via-slate-800/5 to-slate-950', border: 'border-slate-400', glow: 'shadow-slate-400/20', text: 'text-slate-300', ring: 'ring-slate-300', icon: '🥈' }
+            : { h: 'h-[280px] md:h-[320px]', w: 'w-full md:w-[280px] z-0 mt-20', gradient: 'from-orange-700/20 via-orange-900/5 to-slate-950', border: 'border-orange-600', glow: 'shadow-orange-600/20', text: 'text-orange-500', ring: 'ring-orange-600', icon: '🥉' };
 
     return (
-        <div className={`flex flex-col items-center justify-end animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-both`} style={{ animationDelay: delay }}>
-            <div className="relative mb-4 group">
-                <div className={`absolute inset-0 rounded-full blur-xl opacity-50 ${isGold ? 'bg-yellow-400' : isSilver ? 'bg-slate-300' : 'bg-orange-500'}`}></div>
-                <Avatar className={`w-20 h-20 md:w-28 md:h-28 ring-4 ${ringColor} shadow-2xl z-10 relative group-hover:scale-105 transition-transform duration-300`}>
-                    <AvatarImage src={entry.userPhotoUrl} alt={entry.userName} />
-                    <AvatarFallback className="text-xl font-bold bg-slate-900 text-white">{entry.userName.substring(0, 2).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="absolute -top-3 -right-3 text-3xl animate-bounce" style={{ animationDuration: '3s' }}>{medalIcon}</div>
+        <div className={`relative flex flex-col items-center justify-end ${config.w} ${config.h} group transition-all duration-500 hover:-translate-y-2 animate-in fade-in slide-in-from-bottom-12 fill-mode-both`} style={{ animationDelay: delay }}>
+            
+            {/* Spotlight behind card */}
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[50%] rounded-full blur-[60px] opacity-0 group-hover:opacity-40 transition-opacity duration-700 bg-current ${config.text}`}></div>
+
+            {/* Avatar Floating */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/3 z-30">
+                <div className={`relative rounded-full p-1 bg-gradient-to-b from-white/20 to-transparent backdrop-blur-sm ${config.glow} shadow-2xl`}>
+                    <Avatar className={`w-24 h-24 md:w-32 md:h-32 border-4 ${config.border} shadow-xl`}>
+                        <AvatarImage src={entry.userPhotoUrl} className="object-cover" />
+                        <AvatarFallback className="text-2xl font-black bg-slate-900 text-white">{entry.userName.substring(0,2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    {/* Badge Icon */}
+                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-slate-950 rounded-full flex items-center justify-center text-2xl border border-white/10 shadow-lg animate-bounce" style={{ animationDuration: '3s' }}>
+                        {config.icon}
+                    </div>
+                </div>
+            </div>
+
+            {/* Card Body */}
+            <div className={`w-full h-full rounded-3xl border-t border-x border-b-0 ${config.border} bg-gradient-to-b ${config.gradient} backdrop-blur-xl flex flex-col items-center pt-24 pb-6 px-4 relative overflow-hidden`}>
+                {isGold && <GoldParticles />}
+                
+                {/* Shine Effect */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                <div className="text-center z-10 space-y-1">
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tight leading-none drop-shadow-md">
+                        {entry.userName.split(' ')[0]}
+                    </h3>
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-60 text-white">
+                        {entry.userName.split(' ').slice(1).join(' ')}
+                    </p>
+                </div>
+
+                <div className="mt-auto w-full text-center z-10">
+                    <p className="text-xs text-slate-400 uppercase tracking-widest font-medium mb-1">Performance</p>
+                    <div className={`text-2xl md:text-3xl font-black ${config.text} drop-shadow-lg`}>
+                        {entry.mainScoreDisplay}
+                    </div>
+                    
+                    {/* Secondary Metrics Pill */}
+                    <div className="mt-4 flex justify-center gap-3">
+                        {entry.detailScore1Value && (
+                            <div className="px-3 py-1 rounded-full bg-black/40 border border-white/5 text-[10px] text-slate-300 backdrop-blur-sm">
+                                {entry.detailScore1Label}: <span className="text-white font-bold">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Rank Number Watermark */}
+                <div className="absolute bottom-[-20px] left-1/2 -translate-x-1/2 text-[120px] font-black text-white/5 select-none pointer-events-none z-0">
+                    {rank}
+                </div>
+            </div>
+
+            {/* Neon Base */}
+            <div className={`absolute bottom-0 w-[80%] h-[2px] ${config.text} bg-current shadow-[0_0_20px_2px_currentColor] rounded-full`}></div>
+        </div>
+    );
+  };
+
+  const RankingRow = ({ entry }: { entry: RankingDisplayEntry }) => {
+    const isMe = entry.userId === appUser?.uid;
+    return (
+        <div className={`group relative flex items-center gap-4 p-4 md:p-5 rounded-2xl border transition-all duration-300 ${isMe ? 'bg-cyan-950/30 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]' : 'bg-slate-900/40 border-white/5 hover:bg-slate-800/60 hover:border-white/10'}`}>
+            <div className="w-10 text-center">
+                <span className={`text-xl font-black ${isMe ? 'text-cyan-400' : 'text-slate-600 group-hover:text-white transition-colors'}`}>
+                    #{entry.rankPosition}
+                </span>
             </div>
             
-            <div className={`w-full ${heightClass} ${bgGradient} backdrop-blur-md rounded-t-3xl border-t border-x flex flex-col items-center justify-start pt-6 px-4 relative overflow-hidden`}>
-                <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
-                <h3 className="font-bold text-white text-center text-sm md:text-lg leading-tight mb-1">{entry.userName.split(' ')[0]}</h3>
-                <p className={`text-xs md:text-sm font-bold opacity-80 mb-2`}>{entry.userName.split(' ').slice(1).join(' ')}</p>
-                <div className={`text-xl md:text-3xl font-black ${textColor} mt-auto mb-4 tracking-tighter`}>
-                    {entry.mainScoreDisplay}
+            <div className="relative">
+                <Avatar className={`h-12 w-12 border-2 ${isMe ? 'border-cyan-500' : 'border-slate-700 group-hover:border-slate-500'} transition-colors`}>
+                    <AvatarImage src={entry.userPhotoUrl} />
+                    <AvatarFallback className="bg-slate-900 text-slate-300 text-xs font-bold">{entry.userName.substring(0,2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                {entry.isOuro && <div className="absolute -top-1 -right-1 text-xs bg-yellow-500 text-black rounded-full p-0.5" title="Ouro">💎</div>}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <p className={`font-bold truncate text-base ${isMe ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>
+                        {entry.userName}
+                    </p>
+                    {entry.hasEverHit30kInAMonth && <Flame className="w-4 h-4 text-orange-500 fill-orange-500 animate-pulse" />}
                 </div>
-                {getMedalForSeller(entry) && <div className="absolute bottom-2 right-2 text-xl" title="High Performer">{getMedalForSeller(entry)}</div>}
+                <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                     <span className="flex items-center gap-1"><Hexagon className="w-3 h-3"/> {entry.detailScore1Label}: <span className="text-slate-300 font-medium">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</span></span>
+                     <span className="hidden sm:inline-flex items-center gap-1">• {entry.detailScore2Label}: <span className="text-slate-300 font-medium">{formatValueForDisplay(entry.detailScore2Value, entry.detailScore2Type || 'plain')}</span></span>
+                </div>
+            </div>
+            
+            <div className="text-right">
+                <p className={`text-lg md:text-xl font-black tracking-tight ${isMe ? 'text-cyan-400' : 'text-white'}`}>
+                    {entry.mainScoreDisplay}
+                </p>
             </div>
         </div>
     );
   };
 
-  // --- LIST ROW COMPONENT ---
-  const RankingRow = ({ entry }: { entry: RankingDisplayEntry }) => (
-    <div className={`group relative flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-slate-900/40 hover:bg-white/5 transition-all duration-300 ${entry.userId === appUser?.uid ? 'ring-1 ring-cyan-500 bg-cyan-900/10' : ''}`}>
-        <div className="w-8 text-center font-bold text-slate-500 text-lg group-hover:text-white transition-colors">
-            #{entry.rankPosition}
-        </div>
-        
-        <Avatar className="h-10 w-10 md:h-12 md:w-12 border border-white/10 group-hover:border-cyan-500/50 transition-colors">
-            <AvatarImage src={entry.userPhotoUrl} />
-            <AvatarFallback className="bg-slate-800 text-xs">{entry.userName.substring(0,2).toUpperCase()}</AvatarFallback>
-        </Avatar>
-        
-        <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-                <p className="font-bold text-slate-200 truncate group-hover:text-cyan-400 transition-colors">{entry.userName}</p>
-                {getMedalForSeller(entry) && <span className="text-xs" title="Badge de Honra">{getMedalForSeller(entry)}</span>}
-            </div>
-            <div className="flex items-center gap-4 text-xs text-slate-500 mt-0.5">
-                {entry.detailScore1Label && <span>{entry.detailScore1Label}: <span className="text-slate-300">{formatValueForDisplay(entry.detailScore1Value, entry.detailScore1Type || 'plain')}</span></span>}
-                {entry.detailScore2Label && <span className="hidden sm:inline">• {entry.detailScore2Label}: <span className="text-slate-300">{formatValueForDisplay(entry.detailScore2Value, entry.detailScore2Type || 'plain')}</span></span>}
-            </div>
-        </div>
-        
-        <div className="text-right">
-            <p className="text-lg md:text-xl font-bold text-white tracking-tight">{entry.mainScoreDisplay}</p>
-        </div>
-    </div>
-  );
-
   if (isLoading || !appUser) {
     return (
-      <div className="flex flex-col justify-center items-center h-screen bg-slate-950 text-cyan-500">
-        <Loader2 className="animate-spin h-12 w-12 mb-4" />
-        <p className="text-slate-400 animate-pulse tracking-widest uppercase text-sm">Carregando Leaderboard...</p>
+      <div className="flex flex-col justify-center items-center h-screen bg-slate-950 text-cyan-500 relative overflow-hidden">
+        <CinematicBackground />
+        <div className="relative z-10 flex flex-col items-center">
+            <Loader2 className="animate-spin h-14 w-14 mb-4 text-cyan-400 opacity-80" />
+            <p className="text-cyan-400/60 animate-pulse tracking-[0.2em] uppercase text-xs font-bold">Calculando Performance...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans relative overflow-hidden pb-20">
-      <ConfettiRain />
-      
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none">
-          <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px]" />
-          <div className="absolute bottom-[-10%] right-[10%] w-[500px] h-[500px] bg-cyan-900/10 rounded-full blur-[120px]" />
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans relative overflow-x-hidden pb-32 selection:bg-cyan-500/30">
+      <CinematicBackground />
 
-      <div className="container max-w-5xl mx-auto px-4 py-8 relative z-10">
+      <div className="container max-w-6xl mx-auto px-4 py-8 relative z-10">
         
-        {/* Header */}
-        <div className="text-center mb-10 space-y-2">
-            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl mb-4 border border-yellow-500/30 shadow-lg shadow-yellow-500/10">
-                <Trophy className="w-8 h-8 text-yellow-400" />
+        {/* HERO SECTION */}
+        <div className="text-center mb-12 space-y-4 animate-in fade-in slide-in-from-top-10 duration-1000">
+            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-b from-yellow-500/10 to-transparent rounded-2xl border border-yellow-500/20 shadow-[0_0_40px_rgba(234,179,8,0.1)] mb-2 group cursor-default">
+                <Trophy className="w-8 h-8 text-yellow-400 group-hover:scale-110 transition-transform duration-300" />
             </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight">
-                Hall da Fama
+            <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter drop-shadow-2xl">
+                Hall da <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-600">Fama</span>
             </h1>
-            <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base">
-                Celebre os consultores que estão transformando o mercado de energia.
+            <p className="text-slate-400 max-w-lg mx-auto text-sm md:text-base font-medium">
+                Os líderes que estão definindo o futuro da energia na Planus.
             </p>
         </div>
 
-        {/* Global KPI */}
-        <div className="mb-10 text-center animate-in zoom-in duration-500">
-            <div className="inline-block relative group">
-                <div className="absolute inset-0 bg-cyan-500/20 blur-xl rounded-full group-hover:bg-cyan-500/30 transition-all duration-500"></div>
-                <div className="relative bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-full px-8 py-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-cyan-400 fill-cyan-400" />
+        {/* CONTROLS BAR */}
+        <div className="flex flex-wrap gap-2 md:gap-4 justify-center mb-16 animate-in fade-in duration-1000 delay-300">
+             <div className="p-1.5 bg-slate-900/60 border border-white/10 rounded-2xl backdrop-blur-xl flex flex-wrap gap-2 shadow-2xl">
+                <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                    <SelectTrigger className="w-[140px] md:w-[180px] bg-white/5 border-0 text-slate-200 focus:bg-white/10 h-10 rounded-xl transition-all"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+
+                {selectedPeriod === 'custom' && (
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" className="bg-white/5 border-0 text-slate-200 hover:bg-white/10 h-10 rounded-xl px-4 gap-2">
+                                <CalendarIcon className="w-4 h-4 text-cyan-400" />
+                                {date?.from ? (date.to ? `${format(date.from, "dd/MM")} - ${format(date.to, "dd/MM")}` : format(date.from, "dd/MM")) : <span>Datas</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 bg-slate-900 border-slate-800" align="center">
+                            <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={1} className="text-slate-200" />
+                        </PopoverContent>
+                    </Popover>
+                )}
+
+                <div className="w-px h-6 bg-white/10 my-auto hidden sm:block"></div>
+
+                <Select value={selectedCriteria} onValueChange={setSelectedCriteria}>
+                    <SelectTrigger className="w-[140px] md:w-[180px] bg-white/5 border-0 text-slate-200 focus:bg-white/10 h-10 rounded-xl transition-all"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{CRITERIA_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+
+                <Select value={selectedStageFilter} onValueChange={setSelectedStageFilter}>
+                    <SelectTrigger className="w-[140px] md:w-[180px] bg-white/5 border-0 text-slate-200 focus:bg-white/10 h-10 rounded-xl transition-all"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{STAGE_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+            </div>
+        </div>
+
+        {/* TEAM TOTAL KPI */}
+        <div className="flex justify-center mb-20 animate-in zoom-in duration-700 delay-200">
+            <div className="relative group cursor-default">
+                <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                <div className="relative px-8 py-4 bg-slate-950/80 rounded-2xl border border-cyan-500/30 flex items-center gap-5 backdrop-blur-xl">
+                    <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
+                        <Zap className="w-6 h-6 fill-current" />
                     </div>
-                    <div className="text-left">
-                        <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Total do Time</p>
-                        <p className="text-2xl md:text-3xl font-black text-white">{totalKwhSoldInPeriod.toLocaleString('pt-BR')} <span className="text-sm font-medium text-slate-500">kWh</span></p>
+                    <div>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold mb-0.5">Performance do Time</p>
+                        <p className="text-3xl font-black text-white tabular-nums tracking-tight">
+                            {totalKwhSoldInPeriod.toLocaleString('pt-BR')} <span className="text-lg font-bold text-slate-500">kWh</span>
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* Filters Bar */}
-        <div className="flex flex-wrap gap-3 justify-center mb-12 p-1.5 bg-slate-900/50 border border-white/5 rounded-2xl backdrop-blur-md max-w-4xl mx-auto">
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                <SelectTrigger className="w-[160px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{PERIOD_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <div className="w-px h-6 bg-white/10 my-auto hidden sm:block"></div>
-            {selectedPeriod === 'custom' && (
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-white/5 gap-2 font-normal h-10">
-                            <CalendarIcon className="w-4 h-4" />
-                            {date?.from ? (date.to ? `${format(date.from, "dd/MM")} - ${format(date.to, "dd/MM")}` : format(date.from, "dd/MM")) : <span>Datas</span>}
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-slate-900 border-slate-800" align="center">
-                        <Calendar initialFocus mode="range" defaultMonth={date?.from} selected={date} onSelect={setDate} numberOfMonths={1} className="text-slate-200" />
-                    </PopoverContent>
-                </Popover>
-            )}
-            <Select value={selectedCriteria} onValueChange={setSelectedCriteria}>
-                <SelectTrigger className="w-[180px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{CRITERIA_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-             <div className="w-px h-6 bg-white/10 my-auto hidden sm:block"></div>
-             <Select value={selectedStageFilter} onValueChange={setSelectedStageFilter}>
-                <SelectTrigger className="w-[180px] bg-transparent border-0 text-slate-300 hover:text-white hover:bg-white/5 h-10"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">{STAGE_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-        </div>
-
-        {/* Podium Section */}
+        {/* PODIUM AREA */}
         {podium.length > 0 && (
-            <div className="flex justify-center items-end gap-2 md:gap-6 mb-16 h-[340px]">
-                {podium[1] && <PodiumSpot entry={podium[1]} rank={2} delay="200ms" />}
-                {podium[0] && <PodiumSpot entry={podium[0]} rank={1} delay="0ms" />}
-                {podium[2] && <PodiumSpot entry={podium[2]} rank={3} delay="400ms" />}
+            <div className="flex flex-col md:flex-row justify-center items-end gap-6 md:gap-4 mb-24 px-4 min-h-[450px]">
+                {/* 2nd Place */}
+                <div className="order-2 md:order-1 w-full md:w-auto flex justify-center">
+                    {podium[1] && <PodiumCard entry={podium[1]} rank={2} delay="200ms" />}
+                </div>
+                
+                {/* 1st Place */}
+                <div className="order-1 md:order-2 w-full md:w-auto flex justify-center -mt-10 md:mt-0 z-20">
+                    {podium[0] && <PodiumCard entry={podium[0]} rank={1} delay="0ms" />}
+                </div>
+                
+                {/* 3rd Place */}
+                <div className="order-3 md:order-3 w-full md:w-auto flex justify-center">
+                    {podium[2] && <PodiumCard entry={podium[2]} rank={3} delay="400ms" />}
+                </div>
             </div>
         )}
 
-        {/* My Position Card */}
-        {loggedInUserRank && (
-            <div className="mb-8 animate-in slide-in-from-bottom-4 fade-in duration-700 delay-500">
-                <div className="relative overflow-hidden rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-slate-900/40 p-1">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)]"></div>
-                    <div className="flex items-center justify-between p-4 px-6">
-                        <div className="flex items-center gap-4">
-                            <div className="flex flex-col items-center justify-center w-12">
-                                <span className="text-xs text-cyan-400 font-bold uppercase tracking-wider mb-1">Rank</span>
-                                <span className="text-2xl font-black text-white">#{loggedInUserRank.rankPosition}</span>
-                            </div>
-                            <Avatar className="h-12 w-12 border-2 border-cyan-500/50">
-                                <AvatarImage src={loggedInUserRank.userPhotoUrl} />
-                                <AvatarFallback className="bg-cyan-900 text-cyan-200 font-bold">{loggedInUserRank.userName.substring(0,2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <p className="font-bold text-white text-lg">Você</p>
-                                <p className="text-cyan-400 text-sm">{loggedInUserRank.mainScoreDisplay}</p>
-                            </div>
-                        </div>
-                        <div className="hidden md:block text-right">
-                             <p className="text-xs text-slate-400">Próximo nível</p>
-                             <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
-                                <TrendingUp className="w-3 h-3" /> Continue acelerando
-                             </div>
-                        </div>
+        {/* LEADERBOARD LIST */}
+        <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-20 fade-in duration-1000 delay-500">
+            <div className="flex items-center justify-between mb-6 px-2">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <ListOrdered className="w-5 h-5 text-cyan-500" /> 
+                    Ranking Geral
+                </h3>
+                {loggedInUserRank && (
+                    <div className="text-xs font-medium text-slate-400 bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                        Sua posição: <span className="text-white font-bold">#{loggedInUserRank.rankPosition}</span>
                     </div>
-                </div>
+                )}
             </div>
-        )}
 
-        {/* Full List */}
-        <div className="space-y-3 animate-in slide-in-from-bottom-10 fade-in duration-1000 delay-300">
-            <h3 className="text-lg font-bold text-slate-400 mb-4 flex items-center gap-2">
-                <ListOrdered className="w-5 h-5" /> Classificação Geral
-            </h3>
-            
-            {ranking.length > 0 ? (
-                ranking.slice(3).map((entry) => (
-                    <RankingRow key={entry.userId} entry={entry} />
-                ))
-            ) : (
-                <div className="text-center py-20 border border-dashed border-slate-800 rounded-2xl">
-                    <Filter className="w-12 h-12 text-slate-700 mx-auto mb-4" />
-                    <p className="text-slate-500">Nenhum resultado para este filtro.</p>
-                </div>
-            )}
-            
-            {ranking.length <= 3 && ranking.length > 0 && (
-                <p className="text-center text-slate-600 py-8 text-sm">Apenas os campeões pontuaram neste período.</p>
-            )}
+            <div className="space-y-3">
+                {ranking.length > 0 ? (
+                    ranking.slice(3).map((entry) => (
+                        <RankingRow key={entry.userId} entry={entry} />
+                    ))
+                ) : (
+                    <div className="text-center py-20 border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
+                        <Filter className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                        <p className="text-slate-500 font-medium">Nenhum resultado encontrado.</p>
+                    </div>
+                )}
+                
+                {ranking.length <= 3 && ranking.length > 0 && (
+                    <div className="text-center py-10">
+                        <p className="text-slate-600 text-sm">Apenas o pódio pontuou neste filtro.</p>
+                    </div>
+                )}
+            </div>
         </div>
 
       </div>
@@ -502,7 +555,11 @@ function RankingPageContent() {
 
 export default function RankingPage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="w-10 h-10 text-cyan-500 animate-spin"/></div>}>
+    <Suspense fallback={
+        <div className="h-screen bg-slate-950 flex items-center justify-center">
+            <Loader2 className="w-10 h-10 text-cyan-500 animate-spin"/>
+        </div>
+    }>
       <RankingPageContent />
     </Suspense>
   );
