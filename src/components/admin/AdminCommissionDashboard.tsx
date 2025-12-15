@@ -74,7 +74,7 @@ import {
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider } from '../ui/tooltip';
 
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -211,7 +211,10 @@ const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number, pr
     const animationFrame = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp;
       const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      const nextValue = startValue + (value - startValue) * progress;
+      
+      const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      
+      const nextValue = startValue + (value - startValue) * ease;
       
       setDisplayValue(nextValue);
       
@@ -1242,18 +1245,36 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                  <DropdownMenu>
-                                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                      <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                      <DropdownMenuItem onSelect={() => handleImpersonate(user.uid)} disabled={isImpersonatingUser}><LogIn className="mr-2 h-4 w-4" /> Acessar Painel</DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}><Edit2 className="h-4 w-4 mr-2" /> Ver / Editar Detalhes</DropdownMenuItem>
-                                      {canEdit && <DropdownMenuSeparator />}
-                                      {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}><ShieldAlert className="mr-2 h-4 w-4" /> Redefinir Senha</DropdownMenuItem>)}
-                                      {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenDeleteModal(user)}><Trash2 className="mr-2 h-4 w-4" /> Excluir Usuário</DropdownMenuItem>)}
-                                      </DropdownMenuContent>
-                                  </DropdownMenu>
+                                  <AlertDialog onOpenChange={(open) => !open && setUserToDelete(null)}>
+                                      <DropdownMenu>
+                                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                          <DropdownMenuItem onSelect={() => handleImpersonate(user.uid)} disabled={isImpersonatingUser}><LogIn className="mr-2 h-4 w-4" /> Acessar Painel</DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem onSelect={() => handleOpenEditModal(user)}><Edit2 className="h-4 w-4 mr-2" /> Ver / Editar Detalhes</DropdownMenuItem>
+                                          {canEdit && <DropdownMenuSeparator />}
+                                          {canEdit && (<DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={() => handleOpenResetPasswordModal(user)}><ShieldAlert className="mr-2 h-4 w-4" /> Redefinir Senha</DropdownMenuItem>)}
+                                          {canEdit && (
+                                              <AlertDialogTrigger asChild>
+                                                  <DropdownMenuItem className="text-destructive focus:text-destructive-foreground focus:bg-destructive" onSelect={(e) => { e.preventDefault(); setUserToDelete(user); }}>
+                                                      <Trash2 className="mr-2 h-4 w-4" /> Excluir Usuário
+                                                  </DropdownMenuItem>
+                                              </AlertDialogTrigger>
+                                          )}
+                                          </DropdownMenuContent>
+                                      </DropdownMenu>
+                                      <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Tem certeza que deseja excluir?</AlertDialogTitle>
+                                            <AlertDialogDescription>Esta ação não pode ser desfeita. O usuário <strong>{userToDelete?.displayName}</strong> será removido permanentemente.</AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90">Sim, Excluir</AlertDialogAction>
+                                          </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
                                   </TableCell>
                               </TableRow>
                             );
@@ -1267,7 +1288,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
           
            {/* Other Tabs Content */}
           <TabsContent value="commissions">
-             <CompanyCommissionsTable leads={allLeads} tableData={[]} />
+             <CompanyCommissionsTable leads={allLeads} allUsers={initialUsers} />
           </TabsContent>
           <TabsContent value="management">
               <CompanyManagementTab leads={allLeads} tableData={[]} />
@@ -1416,3 +1437,4 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 }
 
     
+
