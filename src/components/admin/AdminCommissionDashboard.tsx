@@ -48,6 +48,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
@@ -74,7 +75,7 @@ import {
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider } from '../ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -598,7 +599,6 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
     </div>
   );
 }
-
 const SortableHeader = ({
   label,
   sortKey,
@@ -1245,7 +1245,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
-                                  <AlertDialog onOpenChange={(open) => !open && setUserToDelete(null)}>
+                                  <AlertDialog>
                                       <DropdownMenu>
                                           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><Settings className="h-4 w-4" /><span className="sr-only">Ações</span></Button></DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
@@ -1438,3 +1438,5 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
 
     
 
+
+```
