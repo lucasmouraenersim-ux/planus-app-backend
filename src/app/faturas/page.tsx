@@ -45,7 +45,7 @@ const mapStyles = [
 
 // --- TIPOS ---
 export type TensaoType = 'baixa' | 'alta' | 'b_optante' | 'baixa_renda';
-export type FaturaStatus = 'Nenhum' | 'Contato?', 'Proposta', 'Fechamento' | 'Fechado';
+export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | 'Fechado';
 
 export interface UnidadeConsumidora {
   id: string;
@@ -72,7 +72,7 @@ export interface FaturaCliente {
   id: string;
   nome: string;
   tipoPessoa: 'pf' | 'pj';
-  tensao: TensaoType;
+  tensao: TensaoType; // Agora editável
   unidades: UnidadeConsumidora[];
   contatos: { id: string, nome: string, telefone: string, email?: string }[];
   status?: FaturaStatus;
@@ -112,7 +112,6 @@ const getTensaoColors = (tensao: TensaoType) => {
   }
 };
 
-// --- KPI CARD ---
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
@@ -245,7 +244,7 @@ export default function FaturasPage() {
         if (res.ok) {
             dadosIA = await res.json();
             
-            // Notificações Inteligentes
+            // Lógica de Notificações
             if (dadosIA.gdEligibility === 'inelegivel') {
                 toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
@@ -266,18 +265,23 @@ export default function FaturasPage() {
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
 
-            // Atualiza Unidades
+            // ATUALIZAÇÃO LOCAL DAS UNIDADES
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name,
+                // Dados Básicos
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '',
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '',
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '',
+                
+                // Dados Técnicos (IA)
                 tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
                 injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '',
                 injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '',
                 gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao',
+                
+                // Endereço
                 endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '',
                 cidade: safeStr(dadosIA.cidade) || u.cidade || '',
                 estado: safeStr(dadosIA.estado) || u.estado || '',
@@ -285,23 +289,24 @@ export default function FaturasPage() {
                 longitude: dadosIA.longitude ?? u.longitude ?? null
             } : u);
 
+            // Atualiza Unidades no Firebase
             await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
-            // Atualiza Nome e Classificação (Tensão)
-            const updates: any = {};
+            // Atualiza Nome do Cliente (se novo)
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
-            
-            if (isNewLead && dadosIA.nomeCliente) updates.nome = dadosIA.nomeCliente;
-            if (dadosIA.tensaoType) updates.tensao = dadosIA.tensaoType;
+            if (isNewLead && dadosIA.nomeCliente) {
+                await updateDoc(doc(db, 'faturas_clientes', clienteId), { nome: dadosIA.nomeCliente });
+            }
 
-            if (Object.keys(updates).length > 0) {
-                await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
+            // ATUALIZA CLASSIFICAÇÃO/TENSÃO SE IA DESCOBRIU
+            if (dadosIA.tensaoType) {
+                await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
             }
 
             // Server Action (Notificação)
             await registerInvoiceAction({
                 leadId: clienteId,
-                leadName: updates.nome || cliente.nome,
+                leadName: (isNewLead && dadosIA.nomeCliente) ? dadosIA.nomeCliente : cliente.nome,
                 isNewLead: isNewLead,
                 unidades: novasUnidades,
                 user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type },
@@ -324,9 +329,14 @@ export default function FaturasPage() {
     clientes.forEach(c => {
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
+             
+             // CÁLCULO INTELIGENTE DO CONSUMO NO CARD
+             // Consumo Real = Consumo - InjetadaMUC (Mesma unidade)
+             // Se injetadaOUC existe, não subtrai, pois é oportunidade de migração
              const consumoBruto = Number(u.consumoKwh) || 0;
              const injetadaMUC = Number(u.injetadaMUC) || 0;
              const consumoLiquido = Math.max(0, consumoBruto - injetadaMUC);
+
              if (totals[c.tensao] !== undefined) totals[c.tensao] += consumoLiquido;
         });
     });
@@ -493,10 +503,8 @@ export default function FaturasPage() {
             <div className="relative w-full max-w-xl h-full bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                
                <div className="px-6 py-6 border-b border-white/5 flex justify-between items-start bg-slate-800/50">
-                  <div className="flex-1 mr-4">
-                      <h2 className="text-xl font-bold text-white mb-2">{selectedCliente.nome}</h2>
-                      
-                      {/* CAMPO DE TENSÃO EDITÁVEL */}
+                  <div>
+                      <h2 className="text-xl font-bold text-white mb-1">{selectedCliente.nome}</h2>
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
                           <Select 
@@ -582,7 +590,7 @@ export default function FaturasPage() {
                                       <div className="flex justify-between mb-4">
                                           <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
-                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Inelegível (GD)</span>}
+                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/>Inelegível (GD)</span>}
                                               {uc.gdEligibility === 'elegivel' && <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded font-bold">Elegível (Excedente)</span>}
                                               {uc.gdEligibility === 'oportunidade' && <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold">Oportunidade (oUC)</span>}
                                           </div>
