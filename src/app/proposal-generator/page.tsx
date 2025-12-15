@@ -116,39 +116,47 @@ export default function ProposalGeneratorPage() {
   };
 
   const handleAIUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      
-      setInvoiceFile(file);
-      setIsProcessingAI(true);
-      toast({ title: "🤖 Lendo Fatura...", description: "A IA está extraindo os dados..." });
-
-      try {
-          const form = new FormData();
-          form.append('file', file);
-          const res = await fetch('/api/process-fatura', { method: 'POST', body: form });
-          const data = await res.json();
-
-          if (data.consumoKwh) {
-              setFormData(prev => ({
-                  ...prev,
-                  clienteNome: data.nomeCliente || prev.clienteNome,
-                  item1Quantidade: data.consumoKwh.toString(),
-                  currentTariff: data.precoUnitario ? data.precoUnitario.toString() : prev.currentTariff,
-                  clienteRua: data.enderecoCompleto?.split(',')[0] || prev.clienteRua,
-                  clienteCidade: data.cidade || prev.clienteCidade,
-                  clienteUF: data.estado || prev.clienteUF,
-                  distribuidora: data.distribuidora || prev.distribuidora,
-                  codigoClienteInstalacao: data.uc || prev.codigoClienteInstalacao
-              }));
-              toast({ title: "Sucesso!", description: "Dados preenchidos automaticamente.", className: "bg-emerald-500 text-white" });
-          }
-      } catch (error) {
-          toast({ title: "Erro na Leitura", description: "Não foi possível ler os dados, preencha manualmente.", variant: "destructive" });
-      } finally {
-          setIsProcessingAI(false);
-      }
-  };
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setInvoiceFile(file);
+    setIsProcessingAI(true);
+    toast({ title: "🤖 Lendo Fatura...", description: "A IA está extraindo os dados..." });
+    
+    try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/process-fatura', { method: 'POST', body: form });
+        const data = await res.json();
+        
+        console.log("Dados recebidos da API:", data); // Debug
+        
+        if (data.consumoKwh) {
+            setFormData(prev => ({
+                ...prev,
+                clienteNome: data.nomeCliente || prev.clienteNome,
+                item1Quantidade: data.consumoKwh?.toString() || prev.item1Quantidade,
+                // Corrigido: usa tarifaUnit ou unitPrice
+                currentTariff: (data.tarifaUnit || data.unitPrice)?.toString() || prev.currentTariff,
+                clienteRua: data.enderecoCompleto?.split(',')[0] || prev.clienteRua,
+                clienteCidade: data.cidade || prev.clienteCidade,
+                clienteUF: data.estado || prev.clienteUF,
+                // Corrigido: usa distribuidora
+                distribuidora: data.distribuidora || prev.distribuidora,
+                // Corrigido: usa codigoCliente
+                codigoClienteInstalacao: data.codigoCliente || prev.codigoClienteInstalacao
+            }));
+            toast({ title: "Sucesso!", description: "Dados preenchidos automaticamente.", className: "bg-emerald-500 text-white" });
+        } else {
+            toast({ title: "Aviso", description: "Alguns dados não foram encontrados.", variant: "destructive" });
+        }
+    } catch (error) {
+        console.error("Erro no upload:", error);
+        toast({ title: "Erro na Leitura", description: "Não foi possível ler os dados, preencha manualmente.", variant: "destructive" });
+    } finally {
+        setIsProcessingAI(false);
+    }
+};
 
   const handleSubmit = async () => {
     if (!formData.comercializadora) {
