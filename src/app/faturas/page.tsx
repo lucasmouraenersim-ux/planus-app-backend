@@ -24,6 +24,7 @@ import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
 import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
 import { registerInvoiceAction } from '@/actions/registerInvoice';
+import { cn } from "@/lib/utils";
 
 // --- CONFIGURAÇÃO GOOGLE MAPS ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -119,13 +120,13 @@ const getTensaoColors = (tensao: TensaoType) => {
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
-    <div className={'glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all'}>
+    <div className={`glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className={'text-xs font-bold uppercase tracking-wider text-slate-400'}>{title}</p>
+          <p className={`text-xs font-bold uppercase tracking-wider text-slate-400`}>{title}</p>
           <h3 className="text-2xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')} <span className="text-xs">{unit}</span></h3>
         </div>
-        <div className={'p-2 rounded-lg ${styles.text} bg-white/5'}><Icon className="w-5 h-5" /></div>
+        <div className={`p-2 rounded-lg ${styles.text} bg-white/5`}><Icon className="w-5 h-5" /></div>
       </div>
       <div className="text-xs text-slate-500 flex items-center gap-1">
         {trend === 'up' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-red-400" />}
@@ -234,21 +235,17 @@ export default function FaturasPage() {
       await updateDoc(doc(db, 'faturas_clientes', id), { [field]: value, lastUpdatedAt: Timestamp.now() });
   };
 
-  // --- LÓGICA DE UPLOAD CORRIGIDA (SEM ERRO UNDEFINED) ---
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file || !appUser) return;
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
     
     try {
-        // 1. Leitura com IA
         const formData = new FormData(); formData.append('file', file);
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
         let dadosIA: any = {};
         
         if (res.ok) {
             dadosIA = await res.json();
-            
-            // Feedback Visual de Elegibilidade
             if (dadosIA.gdEligibility === 'inelegivel') {
                 toast({ title: "Atenção: GD Existente", description: "Cliente gera a própria energia e sobra pouco saldo.", variant: "destructive", duration: 5000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
@@ -258,7 +255,6 @@ export default function FaturasPage() {
             console.warn("IA falhou, seguindo apenas com upload");
         }
 
-        // 2. Upload do Arquivo
         const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
         const url = await uploadFile(file, path);
 
@@ -266,26 +262,19 @@ export default function FaturasPage() {
             const cliente = clientes.find(c => c.id === clienteId);
             if (!cliente) return;
             
-            // Helper para evitar undefined
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
 
-            // 3. Atualizar Estado Local e Firestore
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name,
-                // Campos Básicos (Com fallback seguro para evitar undefined)
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '',
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '',
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '',
-                
-                // Campos Técnicos (Novos)
                 tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
                 injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '',
                 injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '',
                 gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao',
-                
-                // Endereço
                 endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '',
                 cidade: safeStr(dadosIA.cidade) || u.cidade || '',
                 estado: safeStr(dadosIA.estado) || u.estado || '',
@@ -293,16 +282,13 @@ export default function FaturasPage() {
                 longitude: dadosIA.longitude ?? u.longitude ?? null
             } : u);
 
-            // Atualiza o documento no Firestore
-            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
-
-            // Se for lead novo, atualiza o nome
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
             if (isNewLead && dadosIA.nomeCliente) {
                 await updateDoc(doc(db, 'faturas_clientes', clienteId), { nome: dadosIA.nomeCliente });
             }
 
-            // 4. Server Action (Notificação)
+            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
+
             await registerInvoiceAction({
                 leadId: clienteId,
                 leadName: (isNewLead && dadosIA.nomeCliente) ? dadosIA.nomeCliente : cliente.nome,
@@ -380,7 +366,10 @@ export default function FaturasPage() {
                 <span className="text-sm font-bold text-yellow-100">{canSeeEverything ? "Ilimitado" : `${currentBalance} Créditos`}</span>
                 {!canSeeEverything && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
              </button>
-             <div className={'relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}'}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={'h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}'} /></div>
+             <div className={cn('relative transition-all duration-300', searchOpen ? 'w-64' : 'w-10')}>
+                <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button>
+                <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={cn('h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white', searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none')} />
+             </div>
           </div>
       </header>
 
@@ -389,7 +378,7 @@ export default function FaturasPage() {
          {/* Filters */}
          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
-                <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex"><button onClick={() => setViewMode('list')} className={'p-2 rounded-lg ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-500'}'}><List className="w-4 h-4" /></button><button onClick={() => setViewMode('kanban')} className={'p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'text-slate-500'}'}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setViewMode('map')} className={'p-2 rounded-lg ${viewMode === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-500'}'}><MapIcon className="w-4 h-4" /></button></div>
+                <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex"><button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><List className="w-4 h-4" /></button><button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setViewMode('map')} className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><MapIcon className="w-4 h-4" /></button></div>
                 <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
                 <Select value={filterCidade} onValueChange={setFilterCidade}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Cidades" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{cidadesDisponiveis.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
             </div>
@@ -408,11 +397,11 @@ export default function FaturasPage() {
                         const total = c.unidades.reduce((acc, u) => acc + (Number(u.consumoKwh) || 0), 0);
                         const style = getTensaoColors(c.tensao);
                         return (
-                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={'group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}'}>
-                              <td className="p-5"><div className="flex items-center gap-4"><div className={'w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm'}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
-                              <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={'h-full rounded-full bg-gradient-to-r ${style.gradient}'} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
+                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
+                              <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
+                              <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
-                              <td className="p-5"><span className={'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyle(c.status).badge}'}>{c.status || 'Nenhum'}</span></td>
+                              <td className="p-5"><span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyle(c.status).badge}`}>{c.status || 'Nenhum'}</span></td>
                               <td className="p-5 text-right"><Button variant="ghost" size="icon" className="text-slate-500 hover:text-white"><MoreHorizontal className="w-4 h-4" /></Button></td>
                            </tr>
                         );
@@ -426,8 +415,8 @@ export default function FaturasPage() {
          {viewMode === 'map' && (
              <div className="w-full h-[650px] bg-slate-900 rounded-2xl border border-white/10 overflow-hidden relative animate-in fade-in duration-500 shadow-2xl">
                 <div className="absolute top-4 right-4 z-10 bg-slate-900/90 backdrop-blur p-1 rounded-lg border border-white/10 flex gap-1 shadow-xl">
-                    <button onClick={() => setMapLayer('pins')} className={'px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'pins' ? 'bg-cyan-600 text-white' : 'text-slate-400'}'}>Pinos</button>
-                    <button onClick={() => setMapLayer('heat')} className={'px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'heat' ? 'bg-orange-600 text-white' : 'text-slate-400'}'}>Calor</button>
+                    <button onClick={() => setMapLayer('pins')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'pins' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>Pinos</button>
+                    <button onClick={() => setMapLayer('heat')} className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-2 ${mapLayer === 'heat' ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>Calor</button>
                 </div>
                 {isMapLoaded ? (
                   <GoogleMap mapContainerStyle={{ width: '100%', height: '100%' }} center={{ lat: -15.601, lng: -56.097 }} zoom={11} options={{ styles: mapStyles, disableDefaultUI: true }}>
@@ -441,7 +430,7 @@ export default function FaturasPage() {
                       return (
                         <OverlayView key={c.id} position={{ lat: uc.latitude, lng: uc.longitude! }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
                           <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => setSelectedClienteId(c.id)}>
-                             <div className={'flex items-center justify-center rounded-full border-2 border-white/80 shadow-2xl transition-all duration-300 group-hover:scale-125 ${pinClass}'} style={{ width: '32px', height: '32px' }}>
+                             <div className={`flex items-center justify-center rounded-full border-2 border-white/80 shadow-2xl transition-all duration-300 group-hover:scale-125 ${pinClass}`} style={{ width: `32px`, height: `32px` }}>
                                 <span className="text-[8px] font-bold text-white drop-shadow-md">{formatKwh(Number(uc.consumoKwh))}</span>
                              </div>
                           </div>
@@ -458,11 +447,11 @@ export default function FaturasPage() {
             <div className="flex gap-4 overflow-x-auto pb-4 h-full animate-in fade-in duration-500">
                {FATURA_STATUS_OPTIONS.map(status => (
                   <div key={status} className="min-w-[300px] bg-slate-900/40 rounded-2xl border border-white/5 p-4 flex flex-col gap-4 backdrop-blur-sm">
-                     <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase px-1"><span className="flex items-center gap-2"><div className={'w-2 h-2 rounded-full ${getStatusStyle(status).border.replace('border-l-', 'bg-')}'}></div>{status}</span><span className="bg-slate-800 px-2 py-0.5 rounded-full text-white font-mono">{filteredClientes.filter(c => (c.status||'Nenhum') === status).length}</span></div>
+                     <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase px-1"><span className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${getStatusStyle(status).border.replace('border-l-', 'bg-')}`}></div>{status}</span><span className="bg-slate-800 px-2 py-0.5 rounded-full text-white font-mono">{filteredClientes.filter(c => (c.status||'Nenhum') === status).length}</span></div>
                      <div className="flex-1 space-y-3 overflow-y-auto pr-1 custom-scrollbar">
                         {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => (
                            <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
-                              <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={'w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]'}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
+                              <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
                               <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{(c.unidades.reduce((acc,u)=>acc+(Number(u.consumoKwh)||0),0)).toLocaleString()} kWh</div></div>
                            </div>
                         ))}
@@ -527,7 +516,7 @@ export default function FaturasPage() {
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           
-                          {/* PERFORMANCE DE CONSUMO (Restored) */}
+                          {/* PERFORMANCE DE CONSUMO */}
                           {(() => {
                               const uc = selectedCliente.unidades[0];
                               const consumo = Number(uc?.consumoKwh || 0);
@@ -539,9 +528,9 @@ export default function FaturasPage() {
                                   return (
                                       <div className="bg-slate-800/40 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                                           <div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div>
-                                          <div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={'text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}'}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div>
+                                          <div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div>
                                           <div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh Atual</small></span></div>
-                                          <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={'h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}'} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div>
+                                          <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div>
                                       </div>
                                   )
                               }
@@ -557,12 +546,9 @@ export default function FaturasPage() {
                               {selectedCliente.unidades.map((uc, i) => (
                                   <div key={uc.id} className="bg-slate-800/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-all group">
                                       
-                                      {/* Header da UC com Status GD */}
                                       <div className="flex justify-between mb-4">
                                           <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
-                                              
-                                              {/* BADGE DE ELEGIBILIDADE */}
                                               {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold">Ineligível (GD)</span>}
                                               {uc.gdEligibility === 'elegivel' && <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded font-bold">Elegível (Excedente)</span>}
                                               {uc.gdEligibility === 'oportunidade' && <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold">Oportunidade (oUC)</span>}
@@ -570,7 +556,6 @@ export default function FaturasPage() {
                                           {selectedCliente.unidades.length > 1 && <button onClick={() => { const n = selectedCliente.unidades.filter(u => u.id !== uc.id); handleUpdateField(selectedCliente.id, 'unidades', n); }} className="text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>}
                                       </div>
 
-                                      {/* Campos Principais */}
                                       <div className="grid grid-cols-2 gap-3 mb-3">
                                           <div>
                                               <Label className="text-[10px] text-slate-500 uppercase">Consumo (kWh)</Label>
@@ -582,7 +567,6 @@ export default function FaturasPage() {
                                           </div>
                                       </div>
 
-                                      {/* --- NOVOS CAMPOS TÉCNICOS --- */}
                                       <div className="bg-black/20 p-3 rounded-lg mb-3 border border-white/5">
                                           <p className="text-[10px] text-cyan-500 font-bold uppercase mb-2 flex items-center gap-1"><Sun className="w-3 h-3"/> Dados Técnicos (IA)</p>
                                           <div className="grid grid-cols-3 gap-2">
@@ -601,13 +585,12 @@ export default function FaturasPage() {
                                           </div>
                                       </div>
 
-                                      {/* Endereço e Botão Upload */}
                                       <div className="flex gap-2 mb-3">
                                           <div className="flex-1"><Input placeholder="Endereço Completo..." defaultValue={uc.endereco} className="h-9 bg-slate-900/50 border-white/10 text-xs text-white" onBlur={e => {const n=[...selectedCliente.unidades];n[i].endereco=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
                                           <Button size="sm" variant="secondary" className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200" onClick={() => handleManualGeocode(selectedCliente.id, uc.id, uc.endereco || '')} title="Buscar Coordenadas"><LocateFixed className="w-4 h-4" /></Button>
                                       </div>
                                       
-                                      <label className={'flex items-center justify-center w-full py-3 border border-dashed rounded-lg cursor-pointer transition-all ${uc.arquivoFaturaUrl ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400' : 'border-slate-600 hover:border-cyan-500 hover:bg-slate-800 text-slate-400'}'}>
+                                      <label className={`flex items-center justify-center w-full py-3 border border-dashed rounded-lg cursor-pointer transition-all ${uc.arquivoFaturaUrl ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400' : 'border-slate-600 hover:border-cyan-500 hover:bg-slate-800 text-slate-400'}`}>
                                           {uc.arquivoFaturaUrl ? <Check className="w-4 h-4 mr-2" /> : <Upload className="w-4 h-4 mr-2" />} {uc.arquivoFaturaUrl ? 'Fatura Salva (Trocar)' : 'Upload PDF para IA'}
                                           <input type="file" className="hidden" onChange={(e) => handleFileUpload(selectedCliente.id, uc.id, e.target.files?.[0] || null)} />
                                       </label>
