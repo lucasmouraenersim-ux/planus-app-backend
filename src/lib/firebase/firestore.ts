@@ -33,6 +33,12 @@ export async function createCrmLead(
     kwh: kwh,
     value: originalValue,
     valueAfterDiscount,
+    // --- ADICIONADO NOVOS CAMPOS ---
+    unitPrice: leadData.unitPrice || undefined,
+    injectedEnergyMUC: leadData.injectedEnergyMUC || 0,
+    injectedEnergyOUC: leadData.injectedEnergyOUC || 0,
+    gdEligibility: leadData.gdEligibility || 'padrao',
+    // -----------------------------------
     phone: leadData.phone ? leadData.phone.replace(/\D/g, '') : undefined, // Normalize phone on creation
     userId,
     createdAt: Timestamp.now(),

@@ -115,6 +115,12 @@ export interface LeadDocumentData {
   financialStatus?: 'none' | 'Adimplente' | 'Inadimplente' | 'Em atraso' | 'Nunca pagou' | 'Cancelou';
   recorrenciaPaga?: boolean;
   paidRecurrenceMonths?: string[];
+
+  // --- NOVOS CAMPOS DE INTELIGÊNCIA DA FATURA ---
+  unitPrice?: number; // Preço unitário do kWh (Tarifa com tributos)
+  injectedEnergyMUC?: number; // Energia Injetada da Mesma Unidade Consumidora
+  injectedEnergyOUC?: number; // Energia Injetada de Outra Unidade Consumidora
+  gdEligibility?: 'elegivel' | 'inelegivel' | 'oportunidade' | 'padrao'; // Status calculado pelo sistema
 }
 
 export interface LeadWithId extends Omit<LeadDocumentData, 'createdAt' | 'lastContact' | 'signedAt' | 'completedAt' | 'lastAnalyzedAt'> {
