@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import pdf from 'pdf-parse';
@@ -24,34 +25,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Erro ao ler PDF' }, { status: 422 });
     }
 
-    // 2. Inteligência (Prompt Matemático para Energisa)
+    // 2. Inteligência (Prompt Atualizado com Regras de Classificação)
     const completion = await openai.chat.completions.create({
       model: "gpt-4o", 
       messages: [
         { 
             role: "system", 
-            content: `Você é um motor de processamento de faturas de energia. 
-            Sua principal habilidade é ler tabelas desformatadas, identificar múltiplas linhas de "Energia Injetada" e SOMAR seus valores.`
+            content: `Você é um motor de cálculo de faturas de energia. 
+            Sua prioridade é identificar tabelas desformatadas, SOMAR valores de GDI e ler textos de CLASSIFICAÇÃO técnica.`
         },
         {
           role: "user",
-          content: `Extraia os dados técnicos desta fatura da Energisa.
+          content: `Extraia os dados técnicos desta fatura.
 
           1. TARIFA UNITÁRIA (tarifaUnit):
-             - Procure na linha "Consumo em kWh".
-             - Pegue o número com 5 ou 6 casas decimais (ex: 1,087600).
+             - Procure na linha "Consumo em kWh". Pegue o número com 5 ou 6 casas decimais (ex: 1,087600).
 
-          2. ENERGIA INJETADA (GDI) - ATENÇÃO MÁXIMA AQUI:
-             - A fatura lista a injeção em VÁRIAS LINHAS separadas por mês (ex: "Energia Atv Injetada GDI mUC 3/2025", "Energia Atv Injetada GDI mUC 1/2025", etc).
-             - VOCÊ DEVE ENCONTRAR TODAS ESSAS LINHAS E SOMAR A QUANTIDADE (kWh).
-             - Regra mUC: Some todos os kWh das linhas que contêm "mUC".
-             - Regra oUC: Some todos os kWh das linhas que contêm "oUC".
-             - O valor em kWh é o número positivo (ex: 4.768,00 ou 1.433,00) que aparece ANTES da tarifa unitária. 
-             - IGNORE o valor monetário (que é negativo, ex: -R$ 5.000). QUEREMOS O KWH.
+          2. ENERGIA INJETADA (GDI) - SOMA:
+             - Encontre TODAS as linhas que contêm "Energia Atv Injetada", "Injeção" ou "GDI".
+             - Some os kWh das linhas com "mUC" -> 'injetadaMUC'.
+             - Some os kWh das linhas com "oUC" -> 'injetadaOUC'.
+             - IMPORTANTE: O valor em kWh é o número POSITIVO (ex: 4.768,00). Ignore o valor em R$ (que é negativo).
 
-          3. DADOS GERAIS:
+          3. CLASSIFICAÇÃO E TENSÃO (CRÍTICO):
+             - classificacaoTexto: Extraia o texto que vem depois de "Classificação:". Procure por palavras chaves como "BAIXA TENSÃO", "ALTA TENSÃO", "GRUPO A", "BAIXA RENDA".
+             - tensaoNominalDisp: Procure por "TENSÃO NOMINAL EM VOLTS" e pegue o valor do campo "DISP" (Disponível). Retorne apenas o número (ex: 127, 220, 13800).
+             - temReativaExcedente: Procure nos Itens da Fatura se existe alguma linha contendo "Energia Reativa Exced", "Reativa Excedente" ou "UFER". Retorne true ou false.
+
+          4. DADOS GERAIS:
              - nomeCliente, consumoKwh, valorTotal, vencimento.
-             - mediaConsumo: Procure no histórico "Média: XXX" ou calcule a média dos últimos meses listados no histórico.
+             - mediaConsumo: Procure por "Média: XXX" ou "Média Histórica".
 
           LOCALIZAÇÃO:
           - enderecoCompleto, cidade, estado.
@@ -64,8 +67,11 @@ export async function POST(req: Request) {
             "vencimento": string,
             "mediaConsumo": number,
             "tarifaUnit": number,
-            "injectedEnergyMUC": number (SOMA TOTAL kWh de todas as linhas mUC),
-            "injectedEnergyOUC": number (SOMA TOTAL kWh de todas as linhas oUC),
+            "injectedEnergyMUC": number,
+            "injectedEnergyOUC": number,
+            "classificacaoTexto": string,
+            "tensaoNominalDisp": number,
+            "temReativaExcedente": boolean,
             "enderecoCompleto": string,
             "cidade": string,
             "estado": string
@@ -81,26 +87,45 @@ export async function POST(req: Request) {
 
     const dados = JSON.parse(completion.choices[0].message.content || '{}');
 
-    // 3. Regras de Negócio e Cálculos Finais
+    // 3. Regras de Negócio e Pós-Processamento
     const consumo = Number(dados.consumoKwh || 0);
     const injetadaMUC = Number(dados.injectedEnergyMUC || 0);
     const injetadaOUC = Number(dados.injectedEnergyOUC || 0);
     const tarifa = Number(dados.tarifaUnit || 0);
 
+    // --- LÓGICA DE ELEGIBILIDADE GD ---
     let gdEligibility: 'padrao' | 'oportunidade' | 'elegivel' | 'inelegivel' = 'padrao';
-
-    // Regra:
-    // Se oUC > 0 -> Oportunidade (recebe de fora).
-    // Se mUC > 0 -> Verifica se sobra saldo. (Consumo - Geração mUC > 1000?)
-    
     if (injetadaOUC > 0) {
         gdEligibility = 'oportunidade';
     } else if (injetadaMUC > 0) {
-        const saldoLiquido = consumo - injetadaMUC;
-        if (saldoLiquido > 1000) {
-            gdEligibility = 'elegivel'; // Tem solar, mas consome muito mais
+        // Cálculo do saldo líquido para ver se compensa
+        const saldo = consumo - injetadaMUC;
+        if (saldo > 1000) gdEligibility = 'elegivel';
+        else gdEligibility = 'inelegivel';
+    }
+
+    // --- LÓGICA DE CLASSIFICAÇÃO (TENSÃO) ---
+    // Regra:
+    // 1. Baixa Renda: Texto explícito.
+    // 2. Alta Tensão: Texto "Alta Tensão" ou "Grupo A".
+    // 3. B Optante: Tensão Disp >= 13800 OU tem "Energia Reativa Exced".
+    // 4. Baixa (Padrão): Resto.
+    
+    let tensaoType: 'baixa' | 'alta' | 'b_optante' | 'baixa_renda' = 'baixa';
+    const classText = (dados.classificacaoTexto || '').toUpperCase();
+    const tensaoDisp = Number(dados.tensaoNominalDisp || 0);
+    const temReativa = dados.temReativaExcedente === true;
+
+    if (classText.includes('BAIXA RENDA')) {
+        tensaoType = 'baixa_renda';
+    } else if (classText.includes('ALTA TENSÃO') || classText.includes('GRUPO A')) {
+        tensaoType = 'alta';
+    } else {
+        // Verifica B Optante
+        if (tensaoDisp >= 13800 || temReativa) {
+            tensaoType = 'b_optante';
         } else {
-            gdEligibility = 'inelegivel'; // Solar cobre quase tudo
+            tensaoType = 'baixa';
         }
     }
 
@@ -110,10 +135,10 @@ export async function POST(req: Request) {
         try {
             const address = `${dados.enderecoCompleto || ''}, ${dados.cidade || ''} - ${dados.estado || ''}, Brasil`;
             const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}`;
-            const googleRes = await fetch(url);
-            const googleJson = await googleRes.json();
-            if (googleJson.results?.length > 0) {
-                const loc = googleJson.results[0].geometry.location;
+            const res = await fetch(url);
+            const json = await res.json();
+            if (json.results?.length > 0) {
+                const loc = json.results[0].geometry.location;
                 geoData = { latitude: loc.lat, longitude: loc.lng };
             }
         } catch (err) { console.error("Geocoding error", err); }
@@ -125,11 +150,9 @@ export async function POST(req: Request) {
         injectedEnergyMUC: injetadaMUC,
         injectedEnergyOUC: injetadaOUC,
         gdEligibility,
+        tensaoType, // Envia o tipo calculado para o front
         ...geoData
     });
 
   } catch (error: any) {
-    console.error("Erro Processamento:", error);
-    return NextResponse.json({ error: error.message || 'Falha interna.' }, { status: 500 });
-  }
-}
+    return NextResponse.json({ error
