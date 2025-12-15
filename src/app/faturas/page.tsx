@@ -12,7 +12,7 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, AlertTriangle
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -45,7 +45,7 @@ const mapStyles = [
 
 // --- TIPOS ---
 export type TensaoType = 'baixa' | 'alta' | 'b_optante' | 'baixa_renda';
-export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | 'Fechado';
+export type FaturaStatus = 'Nenhum' | 'Contato?', 'Proposta', 'Fechamento' | 'Fechado';
 
 export interface UnidadeConsumidora {
   id: string;
@@ -232,6 +232,7 @@ export default function FaturasPage() {
       await updateDoc(doc(db, 'faturas_clientes', id), { [field]: value, lastUpdatedAt: Timestamp.now() });
   };
 
+  // --- LÓGICA DE UPLOAD ---
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file || !appUser) return;
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
@@ -244,6 +245,7 @@ export default function FaturasPage() {
         if (res.ok) {
             dadosIA = await res.json();
             
+            // Notificações Inteligentes
             if (dadosIA.gdEligibility === 'inelegivel') {
                 toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
@@ -264,6 +266,7 @@ export default function FaturasPage() {
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
 
+            // Atualiza Unidades
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
                 ...u, 
                 arquivoFaturaUrl: url, 
@@ -284,6 +287,7 @@ export default function FaturasPage() {
 
             await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
+            // Atualiza Nome e Classificação (Tensão)
             const updates: any = {};
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
             
@@ -294,6 +298,7 @@ export default function FaturasPage() {
                 await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
             }
 
+            // Server Action (Notificação)
             await registerInvoiceAction({
                 leadId: clienteId,
                 leadName: updates.nome || cliente.nome,
@@ -319,11 +324,9 @@ export default function FaturasPage() {
     clientes.forEach(c => {
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
-             
              const consumoBruto = Number(u.consumoKwh) || 0;
              const injetadaMUC = Number(u.injetadaMUC) || 0;
              const consumoLiquido = Math.max(0, consumoBruto - injetadaMUC);
-
              if (totals[c.tensao] !== undefined) totals[c.tensao] += consumoLiquido;
         });
     });
@@ -407,7 +410,12 @@ export default function FaturasPage() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                      {filteredClientes.map((c) => {
-                        const total = c.unidades.reduce((acc, u) => acc + Math.max(0, (Number(u.consumoKwh) || 0) - (Number(u.injetadaMUC) || 0)), 0);
+                        const total = c.unidades.reduce((acc, u) => {
+                            const bruto = Number(u.consumoKwh) || 0;
+                            const mUC = Number(u.injetadaMUC) || 0;
+                            return acc + Math.max(0, bruto - mUC);
+                        }, 0);
+                        
                         const style = getTensaoColors(c.tensao);
                         return (
                            <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
@@ -485,27 +493,31 @@ export default function FaturasPage() {
             <div className="relative w-full max-w-xl h-full bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                
                <div className="px-6 py-6 border-b border-white/5 flex justify-between items-start bg-slate-800/50">
-                  <div>
-                      <h2 className="text-xl font-bold text-white mb-1">{selectedCliente.nome}</h2>
+                  <div className="flex-1 mr-4">
+                      <h2 className="text-xl font-bold text-white mb-2">{selectedCliente.nome}</h2>
+                      
+                      {/* CAMPO DE TENSÃO EDITÁVEL */}
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
-                          {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) ? 
-                            <span className="text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Unlock className="w-3 h-3"/> Desbloqueado</span>
-                            : 
-                            <span className="text-xs text-yellow-400 border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 rounded flex items-center gap-1"><Lock className="w-3 h-3"/> Bloqueado</span>
-                          }
-                          {selectedCliente.tensao !== 'baixa' && (
-                              <span className={`text-xs px-2 py-0.5 rounded flex items-center gap-1 border ${selectedCliente.tensao === 'alta' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' : selectedCliente.tensao === 'b_optante' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'}`}>
-                                  {selectedCliente.tensao === 'alta' ? '⚡ Alta Tensão' : selectedCliente.tensao === 'b_optante' ? '⚠️ B Optante' : '🏠 Baixa Renda'}
-                              </span>
-                          )}
+                          <Select 
+                            value={selectedCliente.tensao} 
+                            onValueChange={(v: TensaoType) => handleUpdateField(selectedCliente.id, 'tensao', v)}
+                          >
+                            <SelectTrigger className="h-6 w-[120px] text-[10px] bg-slate-800 border-white/10 text-white">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-slate-900 border-slate-800 text-slate-300">
+                                {TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                       </div>
                   </div>
                   <button onClick={() => setSelectedClienteId(null)} className="text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
                </div>
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  {/* ... (O resto do drawer) ... */}
+                  {/* ... (Blocos de Contato e Unidades mantidos iguais) ... */}
+                  
                   {/* DADOS DE CONTATO */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
@@ -535,11 +547,12 @@ export default function FaturasPage() {
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           
-                          {/* GRÁFICO DE PERFORMANCE */}
+                          {/* GRÁFICO DE PERFORMANCE RESTAURADO */}
                           {(() => {
                               const uc = selectedCliente.unidades[0];
                               const consumo = Number(uc?.consumoKwh || 0);
                               const media = Number(uc?.mediaConsumo || 0);
+                              
                               if(consumo > 0 && media > 0) {
                                   const diff = consumo - media;
                                   const pct = ((diff/media)*100).toFixed(1);
@@ -569,7 +582,7 @@ export default function FaturasPage() {
                                       <div className="flex justify-between mb-4">
                                           <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
-                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold">Ineligível (GD)</span>}
+                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Inelegível (GD)</span>}
                                               {uc.gdEligibility === 'elegivel' && <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded font-bold">Elegível (Excedente)</span>}
                                               {uc.gdEligibility === 'oportunidade' && <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold">Oportunidade (oUC)</span>}
                                           </div>
