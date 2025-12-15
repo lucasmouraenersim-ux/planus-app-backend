@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -11,8 +10,8 @@ import { Label } from '@/components/ui/label';
 import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
-  MoreHorizontal, Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, Info
+  Map as MapIcon, X, MapPin, LocateFixed, Check, 
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -24,7 +23,6 @@ import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
 import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
 import { registerInvoiceAction } from '@/actions/registerInvoice';
-import { cn } from "@/lib/utils";
 
 // --- CONFIGURAÇÃO GOOGLE MAPS ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -47,7 +45,7 @@ export interface UnidadeConsumidora {
   latitude?: number;
   longitude?: number;
   
-  // Novos Campos IA
+  // Campos IA
   tarifaUnit?: string;        
   injetadaMUC?: string;       
   injetadaOUC?: string;       
@@ -67,10 +65,8 @@ export interface FaturaCliente {
   unlockedLeads?: string[];
   credits?: number;
   createdAt: string | Timestamp; 
-  lastUpdatedBy?: { uid: string; name: string };
 }
 
-// --- CONSTANTES ---
 const COST_PER_UNLOCK = 5; 
 const FATURA_STATUS_OPTIONS: FaturaStatus[] = ['Nenhum', 'Contato?', 'Proposta', 'Fechamento', 'Fechado'];
 const TENSAO_OPTIONS: { value: TensaoType; label: string }[] = [
@@ -88,7 +84,7 @@ const mapStyles = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f172a" }] },
 ];
 
-// --- HELPERS VISUAIS ---
+// --- HELPERS ---
 const formatKwh = (val: string | number) => {
     const num = Number(val);
     if (!num) return '0';
@@ -117,26 +113,28 @@ const getTensaoColors = (tensao: TensaoType) => {
   }
 };
 
+// --- KPI CARD (DASHBOARD) ---
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
-    <div className={`glass-panel p-6 rounded-2xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <p className={`text-xs font-bold uppercase tracking-wider text-slate-400`}>{title}</p>
-          <h3 className="text-2xl font-bold text-white mt-1">{value.toLocaleString('pt-BR')} <span className="text-xs">{unit}</span></h3>
+    <div className={`bg-slate-900/40 border border-white/5 p-6 rounded-2xl relative overflow-hidden group hover:border-${color}-500/30 transition-all`}>
+      <div className={`absolute top-0 right-0 p-16 ${styles.bg} opacity-5 blur-[60px] rounded-full`}></div>
+      <div className="relative z-10">
+        <div className="flex justify-between items-start mb-4">
+            <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">{title}</p>
+                <h3 className="text-3xl font-black text-white">{value.toLocaleString('pt-BR')} <span className="text-sm font-medium text-slate-500">{unit}</span></h3>
+            </div>
+            <div className={`p-2.5 rounded-xl bg-white/5 border border-white/5 ${styles.text}`}><Icon className="w-6 h-6" /></div>
         </div>
-        <div className={`p-2 rounded-lg ${styles.text} bg-white/5`}><Icon className="w-5 h-5" /></div>
-      </div>
-      <div className="text-xs text-slate-500 flex items-center gap-1">
-        {trend === 'up' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-red-400" />}
-        {trendValue} vs mês anterior
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+            {trend === 'up' ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> : <Minus className="w-4 h-4 text-slate-500" />}
+            <span className={trend === 'up' ? 'text-emerald-400 font-bold' : 'text-slate-400'}>{trendValue}</span> vs mês anterior
+        </div>
       </div>
     </div>
   );
 };
-
-// --- PÁGINA PRINCIPAL ---
 
 export default function FaturasPage() {
   const { toast } = useToast();
@@ -246,10 +244,13 @@ export default function FaturasPage() {
         
         if (res.ok) {
             dadosIA = await res.json();
+            
             if (dadosIA.gdEligibility === 'inelegivel') {
-                toast({ title: "Atenção: GD Existente", description: "Cliente gera a própria energia e sobra pouco saldo.", variant: "destructive", duration: 5000 });
+                toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
-                toast({ title: "Oportunidade GD", description: "Cliente recebe energia de outra unidade (oUC).", className: "bg-blue-600 text-white", duration: 5000 });
+                toast({ title: "Oportunidade GD (oUC)", description: "Cliente recebe energia de fora. Pode migrar.", className: "bg-blue-600 text-white", duration: 6000 });
+            } else if (dadosIA.gdEligibility === 'elegivel') {
+                toast({ title: "Lead Qualificado!", description: "Mesmo com GD, sobra saldo para vender!", className: "bg-emerald-600 text-white", duration: 6000 });
             }
         } else {
             console.warn("IA falhou, seguindo apenas com upload");
@@ -282,12 +283,12 @@ export default function FaturasPage() {
                 longitude: dadosIA.longitude ?? u.longitude ?? null
             } : u);
 
+            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
+
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
             if (isNewLead && dadosIA.nomeCliente) {
                 await updateDoc(doc(db, 'faturas_clientes', clienteId), { nome: dadosIA.nomeCliente });
             }
-
-            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
             await registerInvoiceAction({
                 leadId: clienteId,
@@ -306,7 +307,6 @@ export default function FaturasPage() {
     }
   };
 
-  // Filter Logic
   const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
     let result = [...clientes];
     const totals = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
@@ -327,7 +327,6 @@ export default function FaturasPage() {
     return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
   }, [clientes, searchTerm, filterTensao, filterCidade]);
 
-  // Heatmap Data
   const heatmapData = useMemo(() => {
     if (!isMapLoaded || !window.google) return [];
     const points: any[] = [];
@@ -353,7 +352,6 @@ export default function FaturasPage() {
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
 
       <style jsx global>{`
-        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
       `}</style>
 
@@ -366,15 +364,20 @@ export default function FaturasPage() {
                 <span className="text-sm font-bold text-yellow-100">{canSeeEverything ? "Ilimitado" : `${currentBalance} Créditos`}</span>
                 {!canSeeEverything && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
              </button>
-             <div className={cn('relative transition-all duration-300', searchOpen ? 'w-64' : 'w-10')}>
-                <button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button>
-                <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={cn('h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white', searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none')} />
-             </div>
+             <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
 
       {/* Content */}
       <div className="p-6 pb-20 overflow-y-auto h-[calc(100vh-80px)]">
+         
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
+            <KPICard title="Alta Tensão" value={kpiData.alta} unit="kWh" color="blue" icon={Zap} trend="stable" trendValue="0%" />
+            <KPICard title="B Optante" value={kpiData.b_optante} unit="kWh" color="orange" icon={Flame} trend="up" trendValue="+3%" />
+            <KPICard title="Baixa Renda" value={kpiData.baixa_renda} unit="kWh" color="yellow" icon={Minus} trend="down" trendValue="-1%" />
+         </div>
+
          {/* Filters */}
          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
@@ -385,9 +388,8 @@ export default function FaturasPage() {
             <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg"><PlusCircle className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
 
-         {/* VIEW: LIST */}
          {viewMode === 'list' && (
-            <div className="glass-panel rounded-2xl overflow-hidden animate-in fade-in duration-500">
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl overflow-hidden animate-in fade-in duration-500">
                <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-900/50 text-xs uppercase text-slate-500 font-bold border-b border-white/5">
                      <tr><th className="p-5">Cliente</th><th className="p-5">Consumo</th><th className="p-5">Local</th><th className="p-5">Status</th><th className="p-5 text-right"></th></tr>
@@ -411,7 +413,6 @@ export default function FaturasPage() {
             </div>
          )}
 
-         {/* VIEW: MAP */}
          {viewMode === 'map' && (
              <div className="w-full h-[650px] bg-slate-900 rounded-2xl border border-white/10 overflow-hidden relative animate-in fade-in duration-500 shadow-2xl">
                 <div className="absolute top-4 right-4 z-10 bg-slate-900/90 backdrop-blur p-1 rounded-lg border border-white/10 flex gap-1 shadow-xl">
@@ -442,7 +443,6 @@ export default function FaturasPage() {
              </div>
          )}
 
-         {/* VIEW: KANBAN */}
          {viewMode === 'kanban' && (
             <div className="flex gap-4 overflow-x-auto pb-4 h-full animate-in fade-in duration-500">
                {FATURA_STATUS_OPTIONS.map(status => (
@@ -462,7 +462,7 @@ export default function FaturasPage() {
          )}
       </div>
 
-      {/* DRAWER LATERAL (ONDE A MÁGICA ACONTECE) */}
+      {/* DRAWER LATERAL */}
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
@@ -485,12 +485,10 @@ export default function FaturasPage() {
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
                   
-                  {/* DADOS DO CLIENTE */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
                       </div>
-
                       {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) ? (
                           <div className="space-y-3">
                               {selectedCliente.contatos?.map((ct, idx) => (
@@ -512,11 +510,9 @@ export default function FaturasPage() {
                       )}
                   </div>
 
-                  {/* UNIDADES CONSUMIDORAS (EDITÁVEL) */}
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           
-                          {/* PERFORMANCE DE CONSUMO */}
                           {(() => {
                               const uc = selectedCliente.unidades[0];
                               const consumo = Number(uc?.consumoKwh || 0);

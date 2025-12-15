@@ -24,47 +24,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Erro ao ler PDF' }, { status: 422 });
     }
 
-    // 2. Extrair Dados com IA (Prompt "Cirúrgico" para Energisa)
+    // 2. Inteligência (Prompt Matemático para Energisa)
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // OBRIGATÓRIO ser gpt-4o para essa precisão visual
+      model: "gpt-4o", 
       messages: [
         { 
             role: "system", 
-            content: `Você é um motor de OCR especializado em faturas de energia da ENERGISA. 
-            Sua missão é encontrar valores técnicos escondidos em tabelas desformatadas.
-            
-            REGRA DE OURO: Números decimais no Brasil usam vírgula (,) e milhar usa ponto (.).
-            Exemplo: 1.200,50 é mil e duzentos. 1,127570 é um e doze centavos (tarifa).`
+            content: `Você é um motor de processamento de faturas de energia. 
+            Sua principal habilidade é ler tabelas desformatadas, identificar múltiplas linhas de "Energia Injetada" e SOMAR seus valores.`
         },
         {
           role: "user",
-          content: `Extraia os dados técnicos desta fatura. O texto está "achatado", então use padrões para achar os valores.
+          content: `Extraia os dados técnicos desta fatura da Energisa.
 
           1. TARIFA UNITÁRIA (tarifaUnit):
-             - Procure na seção "Itens da Fatura".
-             - Encontre a linha que começa com "Consumo em kWh" ou "Consumo Ativo".
-             - NESTA MESMA LINHA, procure um número que tenha **5 ou 6 casas decimais**.
-             - Exemplo de padrão: "Consumo em kWh ... 1,127570 ...".
-             - Se houver TUSD e TE separados, some os valores unitários ou pegue o "Preço Unit com Tributos" se disponível.
-             - O valor deve ser algo entre 0,50 e 2,00.
+             - Procure na linha "Consumo em kWh".
+             - Pegue o número com 5 ou 6 casas decimais (ex: 1,087600).
 
-          2. ENERGIA INJETADA (Geração Distribuída):
-             - Procure por linhas contendo "Energia Atv Injetada", "Injeção" ou "GDI".
-             - Se a linha tiver "mUC" -> Extraia o valor em kWh para 'injetadaMUC'.
-             - Se a linha tiver "oUC" -> Extraia o valor em kWh para 'injetadaOUC'.
-             - DICA: O valor em kWh é positivo (ex: 455,00) e costuma vir antes do valor em reais (que é negativo, ex: -500,00). Ignore o valor monetário negativo.
+          2. ENERGIA INJETADA (GDI) - ATENÇÃO MÁXIMA AQUI:
+             - A fatura lista a injeção em VÁRIAS LINHAS separadas por mês (ex: "Energia Atv Injetada GDI mUC 3/2025", "Energia Atv Injetada GDI mUC 1/2025", etc).
+             - VOCÊ DEVE ENCONTRAR TODAS ESSAS LINHAS E SOMAR A QUANTIDADE (kWh).
+             - Regra mUC: Some todos os kWh das linhas que contêm "mUC".
+             - Regra oUC: Some todos os kWh das linhas que contêm "oUC".
+             - O valor em kWh é o número positivo (ex: 4.768,00 ou 1.433,00) que aparece ANTES da tarifa unitária. 
+             - IGNORE o valor monetário (que é negativo, ex: -R$ 5.000). QUEREMOS O KWH.
 
-          3. CONSUMO E GERAIS:
-             - consumoKwh: O valor principal de consumo do mês (Geralmente na primeira linha dos itens).
-             - valorTotal: O valor final a pagar (R$).
-             - vencimento: Data de vencimento.
-             - nomeCliente: Nome do titular.
-             - mediaConsumo: Média histórica dos últimos meses.
+          3. DADOS GERAIS:
+             - nomeCliente, consumoKwh, valorTotal, vencimento.
+             - mediaConsumo: Procure no histórico "Média: XXX" ou calcule a média dos últimos meses listados no histórico.
 
           LOCALIZAÇÃO:
           - enderecoCompleto, cidade, estado.
 
-          Retorne APENAS um JSON válido com este formato (sem markdown):
+          Retorne APENAS JSON:
           {
             "nomeCliente": string,
             "consumoKwh": number,
@@ -72,55 +64,47 @@ export async function POST(req: Request) {
             "vencimento": string,
             "mediaConsumo": number,
             "tarifaUnit": number,
-            "injectedEnergyMUC": number,
-            "injectedEnergyOUC": number,
+            "injectedEnergyMUC": number (SOMA TOTAL kWh de todas as linhas mUC),
+            "injectedEnergyOUC": number (SOMA TOTAL kWh de todas as linhas oUC),
             "enderecoCompleto": string,
             "cidade": string,
             "estado": string
           }
 
-          --- INÍCIO DO TEXTO DA FATURA ---
-          ${textoFatura.substring(0, 10000)}
-          --- FIM DO TEXTO ---`
+          TEXTO DA FATURA:
+          """${textoFatura.substring(0, 12000)}"""` 
         }
       ],
       response_format: { type: "json_object" },
-      temperature: 0, // Zero criatividade, máxima precisão
+      temperature: 0,
     });
 
     const dados = JSON.parse(completion.choices[0].message.content || '{}');
 
-    // 3. Pós-Processamento e Regras de Negócio
-    
-    // Normalizar números (Garantir que venham como Number JS)
+    // 3. Regras de Negócio e Cálculos Finais
     const consumo = Number(dados.consumoKwh || 0);
     const injetadaMUC = Number(dados.injectedEnergyMUC || 0);
     const injetadaOUC = Number(dados.injectedEnergyOUC || 0);
     const tarifa = Number(dados.tarifaUnit || 0);
 
-    // Cálculo de Elegibilidade (Sua Regra de Negócio)
     let gdEligibility: 'padrao' | 'oportunidade' | 'elegivel' | 'inelegivel' = 'padrao';
 
-    if (injetadaMUC > 0 || injetadaOUC > 0) {
-        // Caso 2: oUC (Vem de fora) -> Oportunidade
-        if (injetadaOUC > 0) {
-            gdEligibility = 'oportunidade';
-        }
-        // Caso 1: mUC (Mesma unidade) -> Verifica se sobra
-        else if (injetadaMUC > 0) {
-            // Se consome 2000 e gera 1000, sobra 1000 para nós (Elegível)
-            // Se consome 2000 e gera 1900, sobra 100 (Inelegível)
-            const saldoParaVenda = consumo - injetadaMUC;
-            
-            if (saldoParaVenda > 1000) {
-                gdEligibility = 'elegivel';
-            } else {
-                gdEligibility = 'inelegivel';
-            }
+    // Regra:
+    // Se oUC > 0 -> Oportunidade (recebe de fora).
+    // Se mUC > 0 -> Verifica se sobra saldo. (Consumo - Geração mUC > 1000?)
+    
+    if (injetadaOUC > 0) {
+        gdEligibility = 'oportunidade';
+    } else if (injetadaMUC > 0) {
+        const saldoLiquido = consumo - injetadaMUC;
+        if (saldoLiquido > 1000) {
+            gdEligibility = 'elegivel'; // Tem solar, mas consome muito mais
+        } else {
+            gdEligibility = 'inelegivel'; // Solar cobre quase tudo
         }
     }
 
-    // 4. Geocoding (Google Maps)
+    // 4. Geocoding
     let geoData = { latitude: null, longitude: null };
     if (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY && (dados.enderecoCompleto || dados.cidade)) {
         try {
@@ -135,10 +119,8 @@ export async function POST(req: Request) {
         } catch (err) { console.error("Geocoding error", err); }
     }
 
-    // Retorno Final Formatado
     return NextResponse.json({
         ...dados,
-        // Campos normalizados para o frontend
         unitPrice: tarifa, 
         injectedEnergyMUC: injetadaMUC,
         injectedEnergyOUC: injetadaOUC,
@@ -147,7 +129,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error("Erro Processamento Fatura:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Erro Processamento:", error);
+    return NextResponse.json({ error: error.message || 'Falha interna.' }, { status: 500 });
   }
 }
