@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -19,7 +18,6 @@ import { db } from '@/lib/firebase';
 import { uploadFile } from '@/lib/firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { GoogleMap, useJsApiLoader, OverlayView, HeatmapLayer } from '@react-google-maps/api';
 import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
@@ -33,7 +31,6 @@ const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localCo
 export type TensaoType = 'baixa' | 'alta' | 'b_optante' | 'baixa_renda';
 export type FaturaStatus = 'Nenhum' | 'Contato?' | 'Proposta' | 'Fechamento' | 'Fechado';
 
-// ATUALIZADO: Incluindo campos técnicos de GD e Tarifa
 export interface UnidadeConsumidora {
   id: string;
   consumoKwh: string;
@@ -49,9 +46,9 @@ export interface UnidadeConsumidora {
   longitude?: number;
   
   // Novos Campos IA
-  tarifaUnit?: string;        // Preço do kWh
-  injetadaMUC?: string;       // GD Mesma Unidade
-  injetadaOUC?: string;       // GD Outra Unidade
+  tarifaUnit?: string;        
+  injetadaMUC?: string;       
+  injetadaOUC?: string;       
   gdEligibility?: 'elegivel' | 'inelegivel' | 'oportunidade' | 'padrao';
 }
 
@@ -236,7 +233,7 @@ export default function FaturasPage() {
       await updateDoc(doc(db, 'faturas_clientes', id), { [field]: value, lastUpdatedAt: Timestamp.now() });
   };
 
-  // --- LÓGICA DE UPLOAD ATUALIZADA ---
+  // --- LÓGICA DE UPLOAD CORRIGIDA (SEM ERRO UNDEFINED) ---
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file || !appUser) return;
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
@@ -268,36 +265,41 @@ export default function FaturasPage() {
             const cliente = clientes.find(c => c.id === clienteId);
             if (!cliente) return;
             
-            // 3. Atualizar Estado Local e Firestore com NOVOS CAMPOS
+            // Helper para evitar undefined
+            const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
+
+            // 3. Atualizar Estado Local e Firestore
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name,
-                // Campos Básicos
-                consumoKwh: dadosIA.consumoKwh?.toString() || u.consumoKwh,
-                valorTotal: dadosIA.valorTotal?.toString() || u.valorTotal,
-                mediaConsumo: dadosIA.mediaConsumo?.toString() || u.mediaConsumo,
+                // Campos Básicos (Com fallback seguro para evitar undefined)
+                consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '',
+                valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '',
+                mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '',
+                
                 // Campos Técnicos (Novos)
-                tarifaUnit: dadosIA.unitPrice?.toString() || u.tarifaUnit,
-                injetadaMUC: dadosIA.injectedEnergyMUC?.toString() || u.injetadaMUC,
-                injetadaOUC: dadosIA.injectedEnergyOUC?.toString() || u.injetadaOUC,
-                gdEligibility: dadosIA.gdEligibility || u.gdEligibility,
+                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
+                injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '',
+                injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '',
+                gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao',
+                
                 // Endereço
-                endereco: dadosIA.enderecoCompleto || u.endereco,
-                cidade: dadosIA.cidade || u.cidade,
-                estado: dadosIA.estado || u.estado,
-                latitude: dadosIA.latitude || u.latitude,
-                longitude: dadosIA.longitude || u.longitude
+                endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '',
+                cidade: safeStr(dadosIA.cidade) || u.cidade || '',
+                estado: safeStr(dadosIA.estado) || u.estado || '',
+                latitude: dadosIA.latitude ?? u.latitude ?? null,
+                longitude: dadosIA.longitude ?? u.longitude ?? null
             } : u);
+
+            // Atualiza o documento no Firestore
+            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
             // Se for lead novo, atualiza o nome
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
             if (isNewLead && dadosIA.nomeCliente) {
                 await updateDoc(doc(db, 'faturas_clientes', clienteId), { nome: dadosIA.nomeCliente });
             }
-
-            // Atualiza Unidades
-            await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
             // 4. Server Action (Notificação)
             await registerInvoiceAction({
@@ -313,7 +315,7 @@ export default function FaturasPage() {
         }
     } catch(e: any) { 
         console.error(e);
-        toast({ title: "Erro", description: "Falha no processo.", variant: "destructive" }); 
+        toast({ title: "Erro", description: "Falha no processo. Verifique o console.", variant: "destructive" }); 
     }
   };
 
@@ -524,6 +526,27 @@ export default function FaturasPage() {
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           
+                          {/* PERFORMANCE DE CONSUMO (Restored) */}
+                          {(() => {
+                              const uc = selectedCliente.unidades[0];
+                              const consumo = Number(uc?.consumoKwh || 0);
+                              const media = Number(uc?.mediaConsumo || 0);
+                              if(consumo > 0 && media > 0) {
+                                  const diff = consumo - media;
+                                  const pct = ((diff/media)*100).toFixed(1);
+                                  const isHigh = diff > 0;
+                                  return (
+                                      <div className="bg-slate-800/40 p-5 rounded-xl border border-white/5 relative overflow-hidden">
+                                          <div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div>
+                                          <div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div>
+                                          <div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh Atual</small></span></div>
+                                          <div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div>
+                                      </div>
+                                  )
+                              }
+                              return null;
+                          })()}
+
                           <div className="space-y-4">
                               <div className="flex justify-between items-center border-b border-white/5 pb-2">
                                   <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Zap className="w-4 h-4" /> Unidades Consumidoras</h3>
@@ -533,6 +556,7 @@ export default function FaturasPage() {
                               {selectedCliente.unidades.map((uc, i) => (
                                   <div key={uc.id} className="bg-slate-800/30 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-all group">
                                       
+                                      {/* Header da UC com Status GD */}
                                       <div className="flex justify-between mb-4">
                                           <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
@@ -545,6 +569,7 @@ export default function FaturasPage() {
                                           {selectedCliente.unidades.length > 1 && <button onClick={() => { const n = selectedCliente.unidades.filter(u => u.id !== uc.id); handleUpdateField(selectedCliente.id, 'unidades', n); }} className="text-slate-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button>}
                                       </div>
 
+                                      {/* Campos Principais */}
                                       <div className="grid grid-cols-2 gap-3 mb-3">
                                           <div>
                                               <Label className="text-[10px] text-slate-500 uppercase">Consumo (kWh)</Label>
@@ -558,7 +583,7 @@ export default function FaturasPage() {
 
                                       {/* --- NOVOS CAMPOS TÉCNICOS --- */}
                                       <div className="bg-black/20 p-3 rounded-lg mb-3 border border-white/5">
-                                          <p className="text-[10px] text-cyan-500 font-bold uppercase mb-2 flex items-center gap-1"><Info className="w-3 h-3"/> Dados Técnicos (IA)</p>
+                                          <p className="text-[10px] text-cyan-500 font-bold uppercase mb-2 flex items-center gap-1"><Sun className="w-3 h-3"/> Dados Técnicos (IA)</p>
                                           <div className="grid grid-cols-3 gap-2">
                                               <div>
                                                   <Label className="text-[9px] text-slate-500">Tarifa Unit. (R$)</Label>
@@ -575,6 +600,7 @@ export default function FaturasPage() {
                                           </div>
                                       </div>
 
+                                      {/* Endereço e Botão Upload */}
                                       <div className="flex gap-2 mb-3">
                                           <div className="flex-1"><Input placeholder="Endereço Completo..." defaultValue={uc.endereco} className="h-9 bg-slate-900/50 border-white/10 text-xs text-white" onBlur={e => {const n=[...selectedCliente.unidades];n[i].endereco=e.target.value;handleUpdateField(selectedCliente.id,'unidades',n)}} /></div>
                                           <Button size="sm" variant="secondary" className="h-9 bg-slate-700 hover:bg-slate-600 text-slate-200" onClick={() => handleManualGeocode(selectedCliente.id, uc.id, uc.endereco || '')} title="Buscar Coordenadas"><LocateFixed className="w-4 h-4" /></Button>
@@ -609,3 +635,8 @@ export default function FaturasPage() {
     </div>
   );
 }
+Resumo Técnico das Correções:
+safeStr(): Adicionei uma função helper local para garantir que qualquer valor null ou undefined vindo da IA se torne uma string vazia '' antes de ser salvo no estado e, consequentemente, no Firestore.
+Mapeamento Seguro: Ao atualizar o estado em novasUnidades, cada campo agora usa a função safeStr ou um fallback (|| u.consumoKwh || '') para garantir que nunca passamos undefined para o objeto a ser salvo.
+Restauração do Card: Reintroduzi o bloco de código que calcula e exibe o card de "Performance de Consumo" dentro do drawer lateral, mantendo a funcionalidade que havíamos discutido.
+Agora, o upload de faturas deve ser robusto contra respostas incompletas da IA, e a interface voltará a exibir a útil comparação de consumo.
