@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import pdf from 'pdf-parse';
 
 export async function POST(req: Request) {
+  // 1. Verificação de Segurança
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: 'Falta OPENAI_API_KEY' }, { status: 500 });
   }
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'Arquivo não enviado' }, { status: 400 });
 
-    // 1. Ler PDF
+    // 2. Ler PDF
     let textoFatura = '';
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Erro ao ler PDF' }, { status: 422 });
     }
 
-    // 2. Inteligência (Prompt Atualizado com Regras de Classificação)
+    // 3. Inteligência (Prompt Completo)
     const completion = await openai.chat.completions.create({
       model: "gpt-4o", 
       messages: [
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
 
     const dados = JSON.parse(completion.choices[0].message.content || '{}');
 
-    // 3. Regras de Negócio e Pós-Processamento
+    // 4. Regras de Negócio e Pós-Processamento
     const consumo = Number(dados.consumoKwh || 0);
     const injetadaMUC = Number(dados.injectedEnergyMUC || 0);
     const injetadaOUC = Number(dados.injectedEnergyOUC || 0);
@@ -105,12 +106,6 @@ export async function POST(req: Request) {
     }
 
     // --- LÓGICA DE CLASSIFICAÇÃO (TENSÃO) ---
-    // Regra:
-    // 1. Baixa Renda: Texto explícito.
-    // 2. Alta Tensão: Texto "Alta Tensão" ou "Grupo A".
-    // 3. B Optante: Tensão Disp >= 13800 OU tem "Energia Reativa Exced".
-    // 4. Baixa (Padrão): Resto.
-    
     let tensaoType: 'baixa' | 'alta' | 'b_optante' | 'baixa_renda' = 'baixa';
     const classText = (dados.classificacaoTexto || '').toUpperCase();
     const tensaoDisp = Number(dados.tensaoNominalDisp || 0);
@@ -129,7 +124,7 @@ export async function POST(req: Request) {
         }
     }
 
-    // 4. Geocoding
+    // 5. Geocoding
     let geoData = { latitude: null, longitude: null };
     if (process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY && (dados.enderecoCompleto || dados.cidade)) {
         try {
@@ -150,9 +145,12 @@ export async function POST(req: Request) {
         injectedEnergyMUC: injetadaMUC,
         injectedEnergyOUC: injetadaOUC,
         gdEligibility,
-        tensaoType, // Envia o tipo calculado para o front
+        tensaoType, 
         ...geoData
     });
 
   } catch (error: any) {
-    return NextResponse.json({ error
+    console.error("Erro no processamento:", error);
+    return NextResponse.json({ error: error.message || "Erro interno" }, { status: 500 });
+  }
+}
