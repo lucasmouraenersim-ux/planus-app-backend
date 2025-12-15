@@ -1,7 +1,8 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, Timestamp, addDoc, collection } from 'firebase/firestore';
+import { updateCrmLeadDetails, createCrmLead } from '@/lib/firebase/firestore'; // Importar as novas funções do CRM
+import { doc, updateDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { sendTelegramNotification } from '@/lib/telegram';
 
 export async function registerInvoiceAction(data: {
@@ -13,27 +14,40 @@ export async function registerInvoiceAction(data: {
   aiData?: any; // Dados lidos pela IA (opcional)
 }) {
   try {
-    // 1. Atualizar ou Criar no Banco de Dados
+    // 1. Atualizar ou Criar Lead no CRM principal (`crm_leads`)
+    const leadDataForCrm = {
+      name: data.leadName,
+      kwh: data.aiData?.consumoKwh ? parseInt(String(data.aiData.consumoKwh).replace(/\D/g, ''), 10) : undefined,
+      value: data.aiData?.valorTotal,
+      uf: data.aiData?.estado,
+      phone: data.aiData?.telefone, // Supondo que a IA possa extrair o telefone
+      // Adicione outros campos que a IA extrai e que são relevantes para o CRM
+    };
+
+    // Remove chaves com valor undefined
+    Object.keys(leadDataForCrm).forEach(key => (leadDataForCrm as any)[key] === undefined && delete (leadDataForCrm as any)[key]);
+
     if (data.isNewLead) {
-        // Se for novo lead (ainda não existe ID, ou lógica de criação)
-        // No seu caso atual, você cria o doc vazio primeiro no front, então geralmente é update.
-        // Vamos assumir Update para simplificar, já que seu front gera o ID.
-        await updateDoc(doc(db, 'faturas_clientes', data.leadId), {
-            nome: data.leadName,
-            unidades: data.unidades,
-            lastUpdatedBy: { uid: data.user.uid, name: data.user.name },
-            lastUpdatedAt: Timestamp.now(),
-            // Se for assistente, podemos marcar uma flag de "Revisado" ou similar
-        });
+       // Se for realmente um novo lead, você pode querer chamar createCrmLead.
+       // No entanto, o fluxo atual cria o doc primeiro no front, então update é mais comum.
+       // Vamos manter o update, mas o ideal seria unificar a criação. Por agora, atualizamos o que foi criado.
+       await updateCrmLeadDetails(data.leadId, leadDataForCrm);
     } else {
-        await updateDoc(doc(db, 'faturas_clientes', data.leadId), {
-            unidades: data.unidades,
-            lastUpdatedBy: { uid: data.user.uid, name: data.user.name },
-            lastUpdatedAt: Timestamp.now()
-        });
+       await updateCrmLeadDetails(data.leadId, leadDataForCrm);
     }
 
-    // 2. Preparar Notificação
+    // 2. Lógica Antiga: Atualizar `faturas_clientes` (Podemos manter por compatibilidade ou remover no futuro)
+    const faturaRef = doc(db, 'faturas_clientes', data.leadId);
+    await updateDoc(faturaRef, {
+        nome: data.leadName,
+        unidades: data.unidades,
+        lastUpdatedBy: { uid: data.user.uid, name: data.user.name },
+        lastUpdatedAt: Timestamp.now(),
+        // Se for assistente, podemos marcar uma flag de "Revisado" ou similar
+    });
+
+
+    // 3. Preparar Notificação (Mantido)
     const consumo = data.aiData?.consumoKwh || data.unidades[0]?.consumoKwh || '0';
     const cidade = data.aiData?.cidade || data.unidades[0]?.cidade || 'N/A';
     
@@ -49,13 +63,13 @@ ${cargo}: <b>${data.user.name}</b>
 📍 <b>Cidade:</b> ${cidade}
 🤖 <b>IA Usada:</b> ${data.aiData ? 'Sim' : 'Não'}
 
-<i>Banco de Dados Atualizado.</i>
+<i>Lead criado/atualizado no CRM.</i>
     `;
 
-    // 3. Enviar
+    // 4. Enviar (Mantido)
     await sendTelegramNotification(message);
 
-    return { success: true, message: 'Dados salvos e notificação enviada.' };
+    return { success: true, message: 'Dados salvos, CRM atualizado e notificação enviada.' };
 
   } catch (error) {
     console.error("Erro ao salvar fatura:", error);
