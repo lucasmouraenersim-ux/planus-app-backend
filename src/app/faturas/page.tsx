@@ -205,7 +205,6 @@ export default function FaturasPage() {
     const lead = clientes.find(c => c.id === clienteId);
     if (!lead) return;
 
-    // 1. Verificação rápida no Front (UX)
     const custoLead = calculateLeadCost(Number(lead.unidades?.[0]?.consumoKwh || 0));
     if ((appUser.credits || 0) < custoLead) {
         toast({
@@ -213,14 +212,13 @@ export default function FaturasPage() {
             description: "Você está sem saldo para desbloquear esse lead. Quer adicionar mais saldo para voltar a encontrar clientes para seu negócio?",
             variant: "destructive",
         });
-        setIsCreditModalOpen(true); // Abre o modal de compra automaticamente
+        setIsCreditModalOpen(true);
         return;
     }
 
     setLoadingUnlock(clienteId);
 
     try {
-        // 2. Chama o Backend
         const result = await unlockContactAction(appUser.uid, lead.id);
 
         if (result.success) {
@@ -234,7 +232,6 @@ export default function FaturasPage() {
                 description: "Lead desbloqueado. Bons negócios!", 
                 className: "bg-green-600 text-white border-none" 
             });
-            // ADICIONE ISSO:
             logUserActivity({
                 userId: appUser.uid,
                 userName: appUser.displayName || 'Anônimo',
@@ -248,16 +245,14 @@ export default function FaturasPage() {
                 }
             });
         } else {
-            // 3. Tratamento de Erro vindo do Backend
             if (result.code === 'no_credits') {
                 toast({
                     title: "Saldo Esgotado",
                     description: "Você está sem saldo para desbloquear esse lead. Quer adicionar mais saldo para voltar a encontrar clientes para seu negócio?",
                     variant: "destructive",
                 });
-                setIsCreditModalOpen(true); // Abre o modal de compra
+                setIsCreditModalOpen(true);
             } else {
-                // Erro real de sistema
                 toast({
                     title: "Erro",
                     description: result.message || "Erro ao processar o desbloqueio.",
@@ -295,13 +290,11 @@ export default function FaturasPage() {
     try {
         const docRef = await addDoc(collection(db, 'faturas_clientes'), {
             nome: 'Novo Lead', tipoPessoa: 'pj', tensao: 'baixa',
-            // ADICIONADO: tensao default na unidade
             unidades: [{ id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, tensao: 'baixa' }],
             contatos: [{ id: crypto.randomUUID(), nome: 'Decisor', telefone: '(65) 99999-8888', email: 'contato@empresa.com' }],
             createdAt: Timestamp.now(), status: 'Nenhum', isUnlocked: false
         });
         setSelectedClienteId(docRef.id);
-        // ADICIONE ISSO:
         logUserActivity({
             userId: appUser.uid,
             userName: appUser.displayName || 'Anônimo',
@@ -331,7 +324,6 @@ export default function FaturasPage() {
             else if (dadosIA.gdEligibility === 'oportunidade') toast({ title: "Oportunidade GD (oUC)", description: "Cliente recebe energia de fora. Pode migrar.", className: "bg-blue-600 text-white", duration: 6000 });
             else if (dadosIA.gdEligibility === 'elegivel') toast({ title: "Lead Qualificado!", description: "Mesmo com GD, sobra saldo para vender!", className: "bg-emerald-600 text-white", duration: 6000 });
 
-            // Se for a primeira unidade ou não tiver tensão no cliente, atualiza a principal
             if (dadosIA.tensaoType) {
                 await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
                 toast({ title: "Classificação Atualizada", description: `IA detectou: ${dadosIA.tensaoType.toUpperCase().replace('_', ' ')}` });
@@ -362,7 +354,6 @@ export default function FaturasPage() {
                 estado: safeStr(dadosIA.estado) || u.estado || '', 
                 latitude: dadosIA.latitude ?? u.latitude ?? null, 
                 longitude: dadosIA.longitude ?? u.longitude ?? null,
-                // ADICIONADO: Salva a tensão detectada na UC específica
                 tensao: dadosIA.tensaoType || u.tensao || 'baixa' 
             } : u);
 
@@ -374,7 +365,6 @@ export default function FaturasPage() {
             await registerInvoiceAction({ leadId: clienteId, leadName: updates.nome || cliente.nome, isNewLead, unidades: novasUnidades, user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type }, aiData: dadosIA });
             toast({ title: "Sucesso!", description: "Dados atualizados com inteligência." });
             
-            // ADICIONE ISSO:
             logUserActivity({
                 userId: appUser.uid,
                 userName: appUser.displayName || 'Anônimo',
@@ -395,7 +385,6 @@ export default function FaturasPage() {
     const totals = { alta: 0, baixa: 0, b_optante: 0, baixa_renda: 0 };
     const cidades = new Set<string>();
 
-    // MODIFICADO: Calcula total baseado na tensão de CADA unidade
     clientes.forEach(c => {
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
@@ -403,7 +392,6 @@ export default function FaturasPage() {
              const injetadaMUC = Number(u.injetadaMUC) || 0;
              const consumoLiquido = Math.max(0, consumoBruto - injetadaMUC);
              
-             // Usa tensão da UC ou fallback para a do cliente
              const tensaoEfetiva = u.tensao || c.tensao || 'baixa';
              
              if (totals[tensaoEfetiva] !== undefined) totals[tensaoEfetiva] += consumoLiquido;
@@ -411,7 +399,7 @@ export default function FaturasPage() {
     });
 
     if (searchTerm) result = result.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (filterTensao !== 'all') result = result.filter(c => c.tensao === filterTensao); // Filtro geral mantém comportamento por cliente
+    if (filterTensao !== 'all') result = result.filter(c => c.tensao === filterTensao); 
     if (filterCidade !== 'all') result = result.filter(c => c.unidades.some(u => u.cidade === filterCidade));
 
     return { filteredClientes: result, kpiData: totals, cidadesDisponiveis: Array.from(cidades) };
@@ -542,31 +530,116 @@ export default function FaturasPage() {
                       <h2 className="text-xl font-bold text-white mb-2">{selectedCliente.nome}</h2>
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
-                          {/* SELETOR PRINCIPAL DO CLIENTE - Mantido, mas agora impacta menos o KPI */}
                           <Select value={selectedCliente.tensao} onValueChange={(v: TensaoType) => handleUpdateField(selectedCliente.id, 'tensao', v)}><SelectTrigger className="h-6 w-[120px] text-[10px] bg-slate-800 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300">{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
                       </div>
                   </div>
                   <button onClick={() => setSelectedClienteId(null)} className="text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
                </div>
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  {/* UNLOCK LOGIC */}
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) ? (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-                          {/* Contact Info */}
+                          {/* --- INÍCIO DA SEÇÃO DE CONTATOS (SUBSTITUA A ATUAL POR ESTA) --- */}
                           <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
-                              <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3></div>
+                              <div className="flex items-center justify-between mb-4">
+                                  <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                      <Phone className="w-4 h-4" /> Contatos
+                                  </h3>
+                                  <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      className="h-6 text-xs text-cyan-500 hover:text-cyan-400 gap-1"
+                                      onClick={() => {
+                                          const novosContatos = [
+                                              ...(selectedCliente.contatos || []), 
+                                              { id: crypto.randomUUID(), nome: 'Novo Contato', telefone: '', email: '' }
+                                          ];
+                                          handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
+                                      }}
+                                  >
+                                      <PlusCircle className="w-3 h-3" /> Adicionar
+                                  </Button>
+                              </div>
+
                               <div className="space-y-3">
-                                  {selectedCliente.contatos?.map((ct, idx) => (
-                                      <div key={idx} className="bg-slate-900 p-3 rounded-lg border border-white/5 flex justify-between items-center">
-                                          <div><div className="text-white font-medium">{ct.nome}</div><div className="text-sm text-cyan-400">{ct.telefone}</div></div>
-                                          <a href={`https://wa.me/55${ct.telefone.replace(/\D/g,'')}`} target="_blank" className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-full text-white"><Phone className="w-4 h-4" /></a>
+                                  {(selectedCliente.contatos || []).map((ct, idx) => (
+                                      <div key={ct.id || idx} className="bg-slate-900 p-3 rounded-lg border border-white/5 group transition-all hover:border-white/20">
+                                          <div className="flex justify-between items-start gap-3">
+                                              <div className="flex-1 space-y-2">
+                                                  <div>
+                                                      <Label className="text-[10px] text-slate-500 uppercase">Nome / Cargo</Label>
+                                                      <Input 
+                                                          defaultValue={ct.nome} 
+                                                          className="h-7 text-xs bg-slate-950/50 border-white/5 text-white focus:border-cyan-500/50"
+                                                          onBlur={(e) => {
+                                                              const n = [...(selectedCliente.contatos || [])];
+                                                              n[idx].nome = e.target.value;
+                                                              handleUpdateField(selectedCliente.id, 'contatos', n);
+                                                          }}
+                                                      />
+                                                  </div>
+                                                  <div className="grid grid-cols-2 gap-2">
+                                                      <div>
+                                                          <Label className="text-[10px] text-slate-500 uppercase">Telefone</Label>
+                                                          <Input 
+                                                              defaultValue={ct.telefone} 
+                                                              placeholder="(00) 00000-0000"
+                                                              className="h-7 text-xs bg-slate-950/50 border-white/5 text-cyan-400 font-mono focus:border-cyan-500/50"
+                                                              onBlur={(e) => {
+                                                                  const n = [...(selectedCliente.contatos || [])];
+                                                                  n[idx].telefone = e.target.value;
+                                                                  handleUpdateField(selectedCliente.id, 'contatos', n);
+                                                              }}
+                                                          />
+                                                      </div>
+                                                      <div>
+                                                          <Label className="text-[10px] text-slate-500 uppercase">Email</Label>
+                                                          <Input 
+                                                              defaultValue={ct.email} 
+                                                              placeholder="email@exemplo.com"
+                                                              className="h-7 text-xs bg-slate-950/50 border-white/5 text-slate-300 focus:border-cyan-500/50"
+                                                              onBlur={(e) => {
+                                                                  const n = [...(selectedCliente.contatos || [])];
+                                                                  n[idx].email = e.target.value;
+                                                                  handleUpdateField(selectedCliente.id, 'contatos', n);
+                                                              }}
+                                                          />
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                              <div className="flex flex-col gap-2 pt-4">
+                                                  {ct.telefone && ct.telefone.length > 8 && (
+                                                      <a 
+                                                          href={`https://wa.me/55${ct.telefone.replace(/\D/g,'')}`} 
+                                                          target="_blank" rel="noopener noreferrer"
+                                                          className="p-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-md text-white flex items-center justify-center transition-colors"
+                                                          title="Chamar no WhatsApp"
+                                                      >
+                                                          <Phone className="w-3.5 h-3.5" />
+                                                      </a>
+                                                  )}
+                                                  <button 
+                                                      onClick={() => {
+                                                          const n = (selectedCliente.contatos || []).filter((_, i) => i !== idx);
+                                                          handleUpdateField(selectedCliente.id, 'contatos', n);
+                                                      }}
+                                                      className="p-1.5 bg-slate-800 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-md flex items-center justify-center transition-colors"
+                                                      title="Excluir Contato"
+                                                  >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                              </div>
+                                          </div>
                                       </div>
                                   ))}
+                                  {(!selectedCliente.contatos || selectedCliente.contatos.length === 0) && (
+                                      <div className="text-center py-4 text-xs text-slate-500 italic">
+                                          Nenhum contato cadastrado.
+                                      </div>
+                                  )}
                               </div>
                           </div>
-                          {/* Performance Graph */}
+                          {/* --- FIM DA SEÇÃO DE CONTATOS --- */}
                           {(() => { const uc = selectedCliente.unidades[0]; const consumo = Number(uc?.consumoKwh || 0); const media = Number(uc?.mediaConsumo || 0); if(consumo > 0 && media > 0) { const diff = consumo - media; const pct = ((diff/media)*100).toFixed(1); const isHigh = diff > 0; return (<div className="bg-slate-800/40 p-5 rounded-xl border border-white/5 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div><div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div><div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh Atual</small></span></div><div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div></div>) } return null; })()}
-                          {/* Consumer Units */}
                           <div className="space-y-4">
                               <div className="flex justify-between items-center border-b border-white/5 pb-2"><h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Zap className="w-4 h-4" /> Unidades Consumidoras</h3><Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => { const n = [...selectedCliente.unidades, { id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, nomeArquivo: null, tensao: 'baixa' }]; handleUpdateField(selectedCliente.id, 'unidades', n); }}>+ Adicionar UC</Button></div>
                               {selectedCliente.unidades.map((uc, i) => (
@@ -574,7 +647,6 @@ export default function FaturasPage() {
                                       <div className="flex justify-between mb-4">
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
-                                            {/* ADICIONADO: SELETOR DE TENSÃO DA UC */}
                                             <Select value={uc.tensao || selectedCliente.tensao} onValueChange={(v) => {
                                                 const n = [...selectedCliente.unidades];
                                                 n[i].tensao = v as TensaoType;
@@ -619,3 +691,4 @@ export default function FaturasPage() {
     </div>
   );
 }
+
