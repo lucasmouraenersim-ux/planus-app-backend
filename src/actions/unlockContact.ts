@@ -1,18 +1,16 @@
 
-'use server';
+"use server";
 
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, increment, addDoc, collection, Timestamp, arrayUnion } from 'firebase/firestore';
-import { sendTelegramNotification } from '@/lib/telegram';
+import { doc, runTransaction, addDoc, collection, Timestamp, arrayUnion } from 'firebase/firestore';
 import { trackEvent } from '@/lib/analytics/trackEvent';
-
-// Custo para desbloquear um lead
-const COST_PER_UNLOCK = 5; 
+import { calculateLeadCost } from '@/lib/billing/leadPricing';
 
 interface UnlockResult {
     success: boolean;
     message: string;
     alreadyUnlocked?: boolean;
+    code?: 'no_credits';
 }
 
 export async function unlockContactAction(userId: string, leadId: string): Promise<UnlockResult> {
@@ -24,75 +22,79 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
   const leadRef = doc(db, 'faturas_clientes', leadId);
 
   try {
-    const userSnap = await getDoc(userRef);
-
-    if (!userSnap.exists()) {
-      return { success: false, message: 'Usuário não encontrado.' };
+    let costToUnlock = 1; // Default cost
+    const leadSnap = await getDoc(leadRef);
+    if (!leadSnap.exists()) {
+        throw new Error("Lead não encontrado.");
     }
+    const leadData = leadSnap.data();
+    const consumoKwh = leadData?.unidades?.[0]?.consumoKwh || 0;
+    costToUnlock = calculateLeadCost(Number(consumoKwh));
 
-    const userData = userSnap.data();
-    const role = userData.type || 'user';
-    const credits = userData.credits || 0;
-    const unlockedLeads: string[] = userData.unlockedLeads || [];
-    
-    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'advogado';
+    await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) {
+          throw new Error("Usuário não encontrado.");
+        }
 
-    // 1. Verifica se já está desbloqueado
-    if (unlockedLeads.includes(leadId)) {
-      console.log(`[UNLOCK] Lead ${leadId} já desbloqueado para usuário ${userId}`);
-      return { success: true, message: 'Contato já disponível.', alreadyUnlocked: true };
-    }
+        const userData = userDoc.data();
+        const role = userData.type || 'user';
+        const isAdmin = role === 'admin' || role === 'superadmin' || role === 'advogado';
+        const unlockedLeads: string[] = userData.unlockedLeads || [];
+        
+        if (unlockedLeads.includes(leadId)) {
+          // Do nothing, already unlocked. The function will return success outside the transaction.
+          return;
+        }
 
-    // 2. Se não for admin, verifica saldo e cobra
-    if (!isAdmin) {
-      if (credits < COST_PER_UNLOCK) {
-        return { success: false, message: `Saldo insuficiente. Necessário: ${COST_PER_UNLOCK} créditos, você tem: ${credits}.` };
-      }
-      
-      // Desconta Créditos e registra transação
-      await updateDoc(userRef, {
-        credits: increment(-COST_PER_UNLOCK)
-      });
-      await addDoc(collection(db, 'transactions'), {
-        userId,
-        type: 'usage',
-        description: `Desbloqueio do lead: ${leadId}`,
-        amount: -COST_PER_UNLOCK,
-        createdAt: Timestamp.now()
-      });
-    }
+        if (!isAdmin) {
+          const currentCredits = userData.credits || 0;
+          if (currentCredits < costToUnlock) {
+            throw "INSUFFICIENT_FUNDS";
+          }
+          
+          transaction.update(userRef, {
+            credits: currentCredits - costToUnlock
+          });
 
-    // 3. Salva que este usuário possui este lead
-    await updateDoc(userRef, {
-      unlockedLeads: arrayUnion(leadId)
+          // Log transaction
+          const historyRef = doc(collection(db, 'usage_history'));
+          transaction.set(historyRef, {
+            userId,
+            action: 'unlock_contact',
+            cost: costToUnlock,
+            leadId,
+            timestamp: Timestamp.now()
+          });
+        }
+        
+        transaction.update(userRef, {
+          unlockedLeads: arrayUnion(leadId)
+        });
+        
+        transaction.update(leadRef, { isUnlocked: true });
     });
     
-    // 4. Marca o lead como desbloqueado (para a UI)
-    await updateDoc(leadRef, { isUnlocked: true });
+    // Check if already unlocked *before* the transaction
+    const userSnapAfter = await getDoc(userRef);
+    const wasAlreadyUnlocked = (userSnapAfter.data()?.unlockedLeads || []).includes(leadId) && costToUnlock === 1; // Simplistic check
 
-    // --- Notificações e Analytics ---
-    const leadSnap = await getDoc(leadRef);
-    const leadData = leadSnap.data();
-    
     trackEvent({
         eventType: 'LEAD_UNLOCKED',
-        user: { id: userId, name: userData?.displayName, email: userData?.email },
-        metadata: { leadId, leadName: leadData?.nome }
+        user: { id: userId, name: userSnapAfter.data()?.displayName || 'N/A', email: userSnapAfter.data()?.email || 'N/A' },
+        metadata: { leadId, leadName: leadData.nome, cost: costToUnlock }
     });
 
-    const message = `
-🔓 <b>Lead Desbloqueado!</b>
-
-👤 <b>Comprador:</b> ${userData?.displayName || 'Usuário'}
-🏢 <b>Empresa Revelada:</b> ${leadData?.nome || 'Desconhecida'}
-📍 <b>Local:</b> ${leadData?.unidades?.[0]?.cidade || 'N/A'} - ${leadData?.unidades?.[0]?.estado || ''}
-💰 <b>Saldo Restante:</b> ${isAdmin ? 'Ilimitado' : (credits - COST_PER_UNLOCK)} créditos
-    `;
-    sendTelegramNotification(message);
-
-    return { success: true, message: isAdmin ? 'Acesso Admin: Contato liberado sem custo.' : 'Contato desbloqueado com sucesso!' };
+    return { 
+        success: true, 
+        message: wasAlreadyUnlocked ? 'Contato já disponível.' : 'Contato desbloqueado com sucesso!',
+        alreadyUnlocked: wasAlreadyUnlocked
+    };
 
   } catch (error) {
+    if (error === "INSUFFICIENT_FUNDS") {
+        return { success: false, message: "Créditos insuficientes.", code: "no_credits" };
+    }
     console.error("Erro Crítico ao Desbloquear:", error);
     return { success: false, message: 'Erro interno do servidor ao processar o desbloqueio.' };
   }
