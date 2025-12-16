@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -63,15 +64,15 @@ export function CameraCapture({ onCapture, label }: CameraCaptureProps) {
     startCamera();
   };
 
-  useEffect(() => {
-    // Return a cleanup function to stop the camera stream when the component unmounts
-    return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
+    useEffect(() => {
+        // Funcao de limpeza para parar a camera quando o componente é desmontado
+        return () => {
+            if (videoRef.current && videoRef.current.srcObject) {
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, []);
 
   return (
     <div className="flex flex-col items-center gap-3 bg-black/40 p-4 rounded-xl border border-white/10">

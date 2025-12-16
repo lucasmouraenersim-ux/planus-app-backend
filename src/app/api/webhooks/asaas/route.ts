@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase/admin'; 
 import { doc, updateDoc, increment, addDoc, collection, getDoc, Timestamp } from 'firebase/firestore';
@@ -26,15 +27,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No user ID' }, { status: 400 });
     }
 
-    const isSdrPlan = payment.description?.includes('Plano SDR');
+    const isSdrPlan = payment.description?.includes('Plano Empresarial');
 
     try {
         let creditsToAdd = 0;
         
         if (isSdrPlan) {
-            creditsToAdd = 300;
+            creditsToAdd = 200; // Entrega 200 créditos todo mês que pagar
             await updateDoc(doc(db, 'users', userId), { plan: 'sdr_pro', subscriptionId: payment.subscription });
         } else {
+            // Lógica anterior de pacotes avulsos
             if (valorPago >= 200) creditsToAdd = 100;
             else if (valorPago >= 125) creditsToAdd = 50;
             else if (valorPago >= 30) creditsToAdd = 10;

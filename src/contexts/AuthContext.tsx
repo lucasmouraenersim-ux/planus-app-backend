@@ -123,7 +123,7 @@ const AppSidebar = () => {
                             <MenuItem href="/proposal-generator" icon={FileText} label="Gerador Proposta" active={currentPathname.includes('/proposal')} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                         </>
                     )}
-                    {(userAppRole === 'superadmin' || appUser.displayName?.toLowerCase() === 'jhonathas' || userAppRole === 'advogado' || userAppRole === 'vendedor') && (
+                    {(isAdminOrSuper || appUser.displayName?.toLowerCase() === 'jhonathas' || userAppRole === 'advogado' || userAppRole === 'vendedor') && (
                         <MenuItem 
                             href="/faturas" 
                             icon={Zap} 

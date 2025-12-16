@@ -1,3 +1,4 @@
+
 "use client";
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -97,16 +98,17 @@ export function CreditPurchaseModal({ isOpen, onClose }: CreditPurchaseModalProp
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <PlanCard 
                             id="plan_sdr_quarterly" 
-                            credits={300} 
-                            price={150} 
-                            label="Fidelidade Trimestral" 
+                            credits={200} 
+                            price={200} 
+                            label="Assinatura Mensal (Fidelidade Trimestral)" 
                             isSub={true}
                             bestValue
                         />
-                         <div className="border border-dashed border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 text-center text-slate-500">
+                         <div className="border border-dashed border-slate-700 rounded-xl flex flex-col items-center justify-center p-6 text-center text-slate-500 hover:border-cyan-500/30 transition-colors">
                             <Building2 className="w-12 h-12 mb-2 opacity-50"/>
-                            <h4 className="font-bold">Plano Personalizado?</h4>
-                            <p className="text-xs mt-1">Acima de 1000 créditos/mês<br/>Fale com nosso comercial.</p>
+                            <h4 className="font-bold text-slate-300">Precisa de mais volume?</h4>
+                            <p className="text-xs mt-1">Planos acima de 1000 créditos.<br/>Fale com nosso comercial.</p>
+                            <Button variant="link" className="text-cyan-400 mt-2 h-auto p-0 text-xs">Entrar em contato</Button>
                          </div>
                     </div>
                 </TabsContent>

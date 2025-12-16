@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -5,16 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Wallet, Copy, Share2, DollarSign, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { useRouter } from 'next/navigation';
 
 export default function CarteiraPage() {
     const { appUser } = useAuth();
     const { toast } = useToast();
-    const router = useRouter();
     
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://sentenergia.com.br';
+    // Seu link real do site
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://planusenergia.com.br';
     const referralLink = `${baseUrl}/register?ref=${appUser?.uid}`;
 
     const handleCopy = () => {
@@ -23,18 +21,16 @@ export default function CarteiraPage() {
     };
 
     const handleWithdraw = () => {
-        toast({ title: "Solicitação Enviada", description: "Entraremos em contato para realizar o PIX do seu saldo." });
-    };
-
-    const handleLogout = async () => {
-      await signOut(auth);
-      router.replace('/login');
+        // Aqui você pode abrir um modal pedindo a chave PIX
+        // ou criar um registro na coleção 'saques' no firebase
+        toast({ title: "Solicitação Enviada", description: "Entraremos em contato para o PIX." });
     };
 
     return (
         <div className="p-8 min-h-screen bg-slate-950 text-white">
             <div className="max-w-4xl mx-auto space-y-8">
                 
+                {/* CABEÇALHO */}
                 <div>
                     <h1 className="text-3xl font-bold flex items-center gap-3">
                         <Wallet className="w-8 h-8 text-cyan-500" /> Minha Carteira
@@ -44,19 +40,21 @@ export default function CarteiraPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     
+                    {/* CARTÃO DE SALDO */}
                     <Card className="bg-slate-900 border-slate-800 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-20 bg-emerald-500/10 blur-[80px] rounded-full"></div>
                         <CardHeader>
-                            <CardTitle className="text-slate-400 text-sm font-bold uppercase tracking-wider">Saldo de Afiliado</CardTitle>
+                            <CardTitle className="text-slate-400 text-sm font-bold uppercase tracking-wider">Saldo Disponível</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-4xl font-mono font-bold text-emerald-400 mb-6">
-                                R$ {(appUser?.mlmBalance || 0).toFixed(2).replace('.',',')}
+                                R$ {appUser?.mlmBalance?.toFixed(2).replace('.', ',') || '0,00'}
                             </div>
                             <div className="flex gap-3">
                                 <Button onClick={handleWithdraw} className="bg-emerald-600 hover:bg-emerald-500 w-full font-bold">
                                     <DollarSign className="w-4 h-4 mr-2" /> Sacar via PIX
                                 </Button>
+                                {/* Opção de trocar saldo por créditos no futuro */}
                             </div>
                             <p className="text-[10px] text-slate-500 mt-4 text-center">
                                 O saldo provém de 10% de comissão sobre recargas de indicados.
@@ -64,6 +62,7 @@ export default function CarteiraPage() {
                         </CardContent>
                     </Card>
 
+                    {/* CARTÃO DE AFILIADO */}
                     <Card className="bg-gradient-to-br from-purple-900/40 to-slate-900 border-purple-500/20">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-purple-300">
@@ -86,7 +85,7 @@ export default function CarteiraPage() {
                                 </div>
                             </div>
                             <Button variant="outline" className="w-full border-purple-500/50 text-purple-300 hover:bg-purple-900/50 hover:text-white" onClick={() => {
-                                if (navigator.share) navigator.share({ title: 'Sent Energia', text: 'Cadastre-se na plataforma de consultores Sent Energia!', url: referralLink });
+                                if (navigator.share) navigator.share({ title: 'Planus Energia', text: 'Cadastre-se na plataforma de consultores!', url: referralLink });
                             }}>
                                 <Share2 className="w-4 h-4 mr-2" /> Compartilhar Link
                             </Button>
@@ -94,6 +93,7 @@ export default function CarteiraPage() {
                     </Card>
                 </div>
 
+                {/* HISTÓRICO (Placeholder) */}
                 <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
                     <h3 className="text-lg font-bold text-white mb-4">Histórico de Transações</h3>
                     <div className="text-center py-8 text-slate-500 text-sm">

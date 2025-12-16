@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
@@ -33,9 +34,9 @@ export async function POST(req: Request) {
         case 'pack_whale': price = 900; description = '500 Créditos (Atacado)'; break;
 
         case 'plan_sdr_quarterly': 
-            price = 150; 
+            price = 200; // Valor mensal
             cycle = 'MONTHLY'; 
-            description = 'Plano SDR (Fidelidade)'; 
+            description = 'Plano Empresarial (200 Créditos/mês)'; 
             isSubscription = true; 
             break;
             
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
 
     let cpfCnpj = (userData.cpf || userData.documento || '').replace(/\D/g, '');
     if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+        console.warn(`⚠️ Usuário ${userId} sem doc válido. Usando CNPJ de fallback.`);
         cpfCnpj = '47960950000121';
     }
     

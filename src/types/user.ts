@@ -103,6 +103,17 @@ export type FirestoreUser = {
   selfieUrl?: string;
   adminNotes?: string; // Reason for rejection
   kycSubmittedAt?: Timestamp | string;
+  credits?: number;
+  unlockedLeads?: string[];
+  asaasCustomerId?: string; // Asaas customer ID
+  referredBy?: string; // UID of the user who referred this one
+  myReferralCode?: string; // This user's own referral code (usually their UID)
+  plan?: string; // e.g., 'sdr_pro'
+  subscriptionId?: string; // Asaas subscription ID
+  lastSeen?: string; // ISO string for online status
+  isOnline?: boolean;
+  disabled?: boolean; // Added for user status
+  approvedAt?: string | null; // Date of approval
 };
 
 // User object available in the auth context or passed as props
@@ -154,4 +165,8 @@ export type AppUser = {
   documentUrl?: string;
   selfieUrl?: string;
   adminNotes?: string;
+  credits?: number;
+  unlockedLeads?: string[];
+  disabled?: boolean;
+  approvedAt?: string | null;
 };

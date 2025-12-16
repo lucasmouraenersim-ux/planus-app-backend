@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -77,10 +78,16 @@ export function UserOnboarding() {
   }
 
   const handleTermsAccepted = async () => {
-    await acceptUserTerms();
-    await refreshUsers();
-    setStep('docs');
-  }
+    if (!appUser) return;
+    try {
+        await acceptUserTerms();
+        await refreshUsers();
+        setStep('docs');
+    } catch (error) {
+        console.error("Failed to accept terms:", error);
+        toast({ title: "Erro", description: "Não foi possível salvar a aceitação dos termos.", variant: "destructive" });
+    }
+  };
 
   const handleUploadDocs = async () => {
       if (!docFile || !selfieFile || !appUser) {
