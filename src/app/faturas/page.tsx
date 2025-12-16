@@ -601,7 +601,6 @@ export default function FaturasPage() {
                                           </div>
                                       </div>
 
-                                      {/* Campos Técnicos IA */}
                                       <div className="bg-black/20 p-3 rounded-lg mb-3 border border-white/5">
                                           <p className="text-[10px] text-cyan-500 font-bold uppercase mb-2 flex items-center gap-1"><Sun className="w-3 h-3"/> Dados Técnicos (IA)</p>
                                           <div className="grid grid-cols-3 gap-2">
