@@ -1,4 +1,4 @@
-# sent-app-backend
+# sent-pp-backend
 
 Este é o backend para o aplicativo Sent Energia, construído com Next.js e Firebase.
 

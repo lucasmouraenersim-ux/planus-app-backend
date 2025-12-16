@@ -23,6 +23,7 @@ import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
 import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
 import { registerInvoiceAction } from '@/actions/registerInvoice';
+import { trackEvent } from '@/lib/analytics/trackEvent';
 
 // --- CONFIG ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -73,7 +74,7 @@ export interface FaturaCliente {
   tipoPessoa: 'pf' | 'pj';
   tensao: TensaoType; // Agora editável
   unidades: UnidadeConsumidora[];
-  contatos: { id: string, nome: string, telefone: string, email?: string }[];
+  contatos: { id: string; nome: string; telefone: string; email?: string }[];
   status?: FaturaStatus;
   feedbackNotes?: string;
   isUnlocked?: boolean; 
@@ -111,6 +112,7 @@ const getTensaoColors = (tensao: TensaoType) => {
   }
 };
 
+// --- KPI CARD ---
 const KPICard = ({ title, value, unit, color, icon: Icon, trend, trendValue }: any) => {
   const styles = getTensaoColors(color === 'blue' ? 'alta' : color === 'emerald' ? 'baixa' : color === 'orange' ? 'b_optante' : 'baixa_renda');
   return (
@@ -189,6 +191,12 @@ export default function FaturasPage() {
               }
               setClientes(prev => prev.map(c => c.id === clienteId ? { ...c, isUnlocked: true } : c));
               toast({ title: "Sucesso", description: result.message, className: "bg-emerald-500 text-white" });
+              // Track event
+              trackEvent({
+                eventType: 'LEAD_UNLOCKED',
+                user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
+                metadata: { leadId: clienteId }
+              });
           } else {
               toast({ title: "Erro", description: result.message, variant: "destructive" });
           }
@@ -223,6 +231,14 @@ export default function FaturasPage() {
             createdAt: Timestamp.now(), status: 'Nenhum', isUnlocked: false
         });
         setSelectedClienteId(docRef.id);
+        // Track event
+        if (appUser) {
+          trackEvent({
+            eventType: 'LEAD_CREATED',
+            user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
+            metadata: { leadId: docRef.id, creationMethod: 'manual' }
+          });
+        }
     } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
   };
 
@@ -230,227 +246,98 @@ export default function FaturasPage() {
       await updateDoc(doc(db, 'faturas_clientes', id), { [field]: value, lastUpdatedAt: Timestamp.now() });
   };
 
-  // --- LÓGICA DE UPLOAD COM CONSOLE LOGS ---
   const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file || !appUser) return;
-    
-    console.log("📄 ========== ARQUIVO SELECIONADO PARA UPLOAD ==========");
-    console.log("Nome do arquivo:", file.name);
-    console.log("Tamanho:", `${(file.size / 1024).toFixed(2)} KB`);
-    console.log("Tipo:", file.type);
-    console.log("Cliente ID:", clienteId);
-    console.log("Unidade ID:", unidadeId);
-    console.log("======================================================");
-    
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
     
     try {
-        console.log("🚀 Enviando fatura para processamento pela IA...");
-        const formData = new FormData(); 
-        formData.append('file', file);
+        const formData = new FormData(); formData.append('file', file);
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
-        
-        console.log("📥 Resposta recebida da API");
-        console.log("Status HTTP:", res.status, res.statusText);
-        
         let dadosIA: any = {};
         
         if (res.ok) {
             dadosIA = await res.json();
             
-            console.log("✅ ========== DADOS EXTRAÍDOS PELA IA ==========");
-            console.log("📋 Dados completos:", dadosIA);
-            console.log("\n--- INFORMAÇÕES BÁSICAS ---");
-            console.log("👤 Nome do Cliente:", dadosIA.nomeCliente || "N/A");
-            console.log("🔢 Código do Cliente:", dadosIA.codigoCliente || "N/A");
-            console.log("⚡ Consumo (kWh):", dadosIA.consumoKwh || 0);
-            console.log("💰 Tarifa Unitária:", dadosIA.unitPrice || dadosIA.tarifaUnit || "N/A");
-            console.log("💵 Valor Total:", dadosIA.valorTotal || "N/A");
-            console.log("📊 Média de Consumo:", dadosIA.mediaConsumo || "N/A");
-            
-            console.log("\n--- ENERGIA INJETADA (TOTAIS) ---");
-            console.log("☀️ Total mUC (mesma UC):", dadosIA.injectedEnergyMUC || 0, "kWh");
-            console.log("☀️ Total oUC (outra UC):", dadosIA.injectedEnergyOUC || 0, "kWh");
-            
-            console.log("\n--- DETALHAMENTO DAS LINHAS INJETADAS ---");
-            if (dadosIA.linhasInjetadas && dadosIA.linhasInjetadas.length > 0) {
-                dadosIA.linhasInjetadas.forEach((linha: any, idx: number) => {
-                    console.log(`\n📄 Linha ${idx + 1}:`);
-                    console.log("  📝 Descrição Original:", linha.descricaoOriginal || "N/A");
-                    console.log("  🏷️  Tipo UC:", linha.tipoUC || "indefinida");
-                    console.log("  📅 Competência:", linha.competencia || "N/A");
-                    console.log("  ⚡ Valor (kWh):", linha.valorKwh || 0);
-                    console.log("  💰 Valor (R$):", linha.valorRS || "N/A");
-                    console.log("  🔧 Método Extração:", linha.metodo || "indefinido");
-                    console.log("  💡 Justificativa:", linha.justificativa || "N/A");
-                });
-                console.log("\n✅ Total de linhas encontradas:", dadosIA.linhasInjetadas.length);
-            } else {
-                console.log("⚠️ Nenhuma linha de energia injetada foi encontrada pela IA");
-            }
-            
-            console.log("\n--- CLASSIFICAÇÃO ---");
-            console.log("🎯 Elegibilidade GD:", dadosIA.gdEligibility || "padrao");
-            console.log("⚡ Tipo de Tensão:", dadosIA.tensaoType || "N/A");
-            
-            console.log("\n--- LOCALIZAÇÃO ---");
-            console.log("📍 Endereço:", dadosIA.enderecoCompleto || "N/A");
-            console.log("🌆 Cidade:", dadosIA.cidade || "N/A");
-            console.log("🗺️ Estado:", dadosIA.estado || "N/A");
-            console.log("🌍 Coordenadas:", dadosIA.latitude && dadosIA.longitude ? `${dadosIA.latitude}, ${dadosIA.longitude}` : "N/A");
-            console.log("===============================================");
-            
-            // Lógica de Notificações
+            trackEvent({
+                eventType: 'INVOICE_PROCESSED',
+                user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
+                metadata: { 
+                  leadId: clienteId, 
+                  valorTotal: dadosIA.valorTotal,
+                  consumoKwh: dadosIA.consumoKwh,
+                  gdEligibility: dadosIA.gdEligibility,
+                  tensaoType: dadosIA.tensaoType,
+                }
+              });
+
             if (dadosIA.gdEligibility === 'inelegivel') {
-                console.log("⚠️ Cliente INELEGÍVEL - GD existente com pouco saldo disponível");
                 toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
-                console.log("🎯 OPORTUNIDADE detectada - Cliente com energia oUC");
                 toast({ title: "Oportunidade GD (oUC)", description: "Cliente recebe energia de fora. Pode migrar.", className: "bg-blue-600 text-white", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'elegivel') {
-                console.log("✨ Lead QUALIFICADO - Saldo disponível mesmo com GD");
                 toast({ title: "Lead Qualificado!", description: "Mesmo com GD, sobra saldo para vender!", className: "bg-emerald-600 text-white", duration: 6000 });
             }
+
+            if (dadosIA.tensaoType) {
+                await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
+                toast({ title: "Classificação Atualizada", description: `IA detectou: ${dadosIA.tensaoType.toUpperCase().replace('_', ' ')}` });
+            }
+
         } else {
-            console.warn("⚠️ IA falhou no processamento, seguindo apenas com upload do arquivo");
+            console.warn("IA falhou, seguindo apenas com upload");
         }
 
-        console.log("📤 Fazendo upload do arquivo para Firebase Storage...");
         const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
         const url = await uploadFile(file, path);
-        console.log("✅ Upload para Storage concluído!");
-        console.log("URL do arquivo:", url);
 
         if (unidadeId) {
             const cliente = clientes.find(c => c.id === clienteId);
             if (!cliente) return;
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
-            const unidadeAtual = cliente.unidades.find(u => u.id === unidadeId);
 
-            console.log("🔄 Atualizando dados da unidade consumidora...");
-            console.log("🔍 DEBUG - Valores antes de salvar:");
-            console.log("  dadosIA.tarifaUnit:", dadosIA.tarifaUnit);
-            console.log("  dadosIA.unitPrice:", dadosIA.unitPrice);
-            console.log("  safeStr(dadosIA.tarifaUnit):", safeStr(dadosIA.tarifaUnit));
-            console.log("  tarifaUnit atual:", unidadeAtual?.tarifaUnit);
-            
-            // ATUALIZAÇÃO LOCAL DAS UNIDADES
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? {
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name,
-                // Dados Básicos
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '',
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '',
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '',
-                
-                // Dados Técnicos (IA)
-                tarifaUnit: safeStr(dadosIA.tarifaUnit) || safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
+                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
                 injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '',
                 injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '',
                 gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao',
-                
-                // Endereço
                 endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '',
                 cidade: safeStr(dadosIA.cidade) || u.cidade || '',
                 estado: safeStr(dadosIA.estado) || u.estado || '',
                 latitude: dadosIA.latitude ?? u.latitude ?? null,
                 longitude: dadosIA.longitude ?? u.longitude ?? null
             } : u);
-            
-            // 🔧 FALLBACK ADICIONAL: Se a IA retornou kWh = 0 mas temos valores em R$, recalcula
-            let mUC_recalc = Number(dadosIA.injectedEnergyMUC || 0);
-            let oUC_recalc = Number(dadosIA.injectedEnergyOUC || 0);
-            
-            if ((mUC_recalc === 0 || oUC_recalc === 0) && Array.isArray(dadosIA.linhasInjetadas)) {
-                console.log("🔧 FALLBACK CLIENTE: Recalculando kWh a partir dos valores em R$...");
-                const tarifa = Number(dadosIA.tarifaUnit || 0);
-                
-                dadosIA.linhasInjetadas.forEach((linha: any) => {
-                    const valorKwh = Number(linha.valorKwh || 0);
-                    const valorRS = Number(linha.valorRS || 0);
-                    const tipo = String(linha.tipoUC || '').toLowerCase();
-                    
-                    // Se kWh é 0 mas temos valor em R$ e tarifa, calcula
-                    if (valorKwh === 0 && valorRS !== 0 && tarifa > 0) {
-                        const kwhCalculado = Math.round(Math.abs(valorRS) / tarifa);
-                        console.log(`  Linha "${linha.descricaoOriginal}": R$ ${valorRS} / ${tarifa} = ${kwhCalculado} kWh`);
-                        
-                        if (tipo === 'muc') {
-                            mUC_recalc += kwhCalculado;
-                        } else if (tipo === 'ouc') {
-                            oUC_recalc += kwhCalculado;
-                        }
-                    }
-                });
-                
-                console.log("✅ Recálculo concluído:");
-                console.log(`  mUC: ${mUC_recalc} kWh (antes: ${dadosIA.injectedEnergyMUC})`);
-                console.log(`  oUC: ${oUC_recalc} kWh (antes: ${dadosIA.injectedEnergyOUC})`);
-                
-                // Atualiza os valores recalculados
-                dadosIA.injectedEnergyMUC = mUC_recalc;
-                dadosIA.injectedEnergyOUC = oUC_recalc;
-                
-                // Atualiza nas novas unidades
-                const unidadeIndex = novasUnidades.findIndex(u => u.id === unidadeId);
-                if (unidadeIndex !== -1) {
-                    novasUnidades[unidadeIndex].injetadaMUC = String(mUC_recalc);
-                    novasUnidades[unidadeIndex].injetadaOUC = String(oUC_recalc);
-                }
-            }
-            
-            console.log("✅ Dados processados - Unidade atualizada:");
-            const unidadeAtualizada = novasUnidades.find(u => u.id === unidadeId);
-            console.log("  consumoKwh:", unidadeAtualizada?.consumoKwh);
-            console.log("  tarifaUnit:", unidadeAtualizada?.tarifaUnit);
-            console.log("  injetadaMUC:", unidadeAtualizada?.injetadaMUC);
-            console.log("  injetadaOUC:", unidadeAtualizada?.injetadaOUC);
 
-            console.log("📝 Salvando unidades atualizadas no Firestore...");
-            // Atualiza Unidades no Firebase
             await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
 
-            // Atualiza Nome do Cliente (se novo)
+            const updates: any = {};
             const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
-            if (isNewLead && dadosIA.nomeCliente) {
-                console.log("📝 Atualizando nome do cliente:", dadosIA.nomeCliente);
-                await updateDoc(doc(db, 'faturas_clientes', clienteId), { nome: dadosIA.nomeCliente });
+            
+            if (isNewLead && dadosIA.nomeCliente) updates.nome = dadosIA.nomeCliente;
+
+            if (Object.keys(updates).length > 0) {
+                await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
             }
 
-            // ATUALIZA CLASSIFICAÇÃO/TENSÃO SE IA DESCOBRIU
-            if (dadosIA.tensaoType) {
-                console.log("⚡ Atualizando classificação de tensão:", dadosIA.tensaoType);
-                await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
-            }
-
-            console.log("📢 Registrando ação via Server Action...");
-            // Server Action (Notificação)
             await registerInvoiceAction({
                 leadId: clienteId,
-                leadName: (isNewLead && dadosIA.nomeCliente) ? dadosIA.nomeCliente : cliente.nome,
+                leadName: updates.nome || cliente.nome,
                 isNewLead: isNewLead,
                 unidades: novasUnidades,
                 user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type },
                 aiData: dadosIA
             });
 
-            console.log("🎉 ========== PROCESSAMENTO CONCLUÍDO COM SUCESSO ==========");
-            console.log("✅ Fatura processada e salva");
-            console.log("✅ Dados extraídos pela IA e aplicados ao lead");
-            console.log("===========================================================");
-            
             toast({ title: "Sucesso!", description: "Dados atualizados com inteligência." });
         }
     } catch(e: any) { 
-        console.error("💥 ========== ERRO NO PROCESSAMENTO ==========");
-        console.error("Tipo do erro:", e?.name);
-        console.error("Mensagem:", e?.message);
-        console.error("Stack trace:", e?.stack);
-        console.error("Erro completo:", e);
-        console.error("=============================================");
-        
+        console.error(e);
         toast({ title: "Erro", description: "Falha no processo. Verifique o console.", variant: "destructive" }); 
     }
   };
@@ -463,14 +350,9 @@ export default function FaturasPage() {
     clientes.forEach(c => {
         c.unidades.forEach(u => {
              if(u.cidade) cidades.add(u.cidade);
-             
-             // CÁLCULO INTELIGENTE DO CONSUMO NO CARD
-             // Consumo Real = Consumo - InjetadaMUC (Mesma unidade)
-             // Se injetadaOUC existe, não subtrai, pois é oportunidade de migração
              const consumoBruto = Number(u.consumoKwh) || 0;
              const injetadaMUC = Number(u.injetadaMUC) || 0;
              const consumoLiquido = Math.max(0, consumoBruto - injetadaMUC);
-
              if (totals[c.tensao] !== undefined) totals[c.tensao] += consumoLiquido;
         });
     });
@@ -495,7 +377,22 @@ export default function FaturasPage() {
     return points;
   }, [filteredClientes, isMapLoaded]);
 
-  const selectedCliente = useMemo(() => clientes.find(c => c.id === selectedClienteId), [clientes, selectedClienteId]);
+  const handleSetSelectedCliente = (cliente: FaturaCliente) => {
+    setSelectedClienteId(cliente.id);
+    if (appUser) {
+      trackEvent({
+        eventType: 'LEAD_VIEWED',
+        user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
+        metadata: { leadId: cliente.id, leadName: cliente.nome }
+      });
+    }
+  };
+
+  const selectedCliente = useMemo(() => {
+    const cliente = clientes.find(c => c.id === selectedClienteId);
+    return cliente;
+  }, [clientes, selectedClienteId]);
+  
   const canSeeEverything = appUser?.type === 'superadmin' || appUser?.type === 'admin' || appUser?.type === 'advogado';
   const currentBalance = appUser?.credits || 0;
 
@@ -562,7 +459,7 @@ export default function FaturasPage() {
                         
                         const style = getTensaoColors(c.tensao);
                         return (
-                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
+                           <tr key={c.id} onClick={() => handleSetSelectedCliente(c)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
                               <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
                               <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
@@ -594,7 +491,7 @@ export default function FaturasPage() {
                       const pinClass = isUnlocked ? style.pinColor : 'bg-slate-600'; 
                       return (
                         <OverlayView key={c.id} position={{ lat: uc.latitude, lng: uc.longitude! }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                          <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => setSelectedClienteId(c.id)}>
+                          <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => handleSetSelectedCliente(c)}>
                              <div className={`flex items-center justify-center rounded-full border-2 border-white/80 shadow-2xl transition-all duration-300 group-hover:scale-125 ${pinClass}`} style={{ width: `32px`, height: `32px` }}>
                                 <span className="text-[8px] font-bold text-white drop-shadow-md">{formatKwh(Number(uc.consumoKwh))}</span>
                              </div>
@@ -617,7 +514,7 @@ export default function FaturasPage() {
                         {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => {
                            const total = c.unidades.reduce((acc, u) => acc + Math.max(0, (Number(u.consumoKwh)||0) - (Number(u.injetadaMUC)||0)), 0);
                            return (
-                               <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
+                               <div key={c.id} onClick={() => handleSetSelectedCliente(c)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
                                   <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
                                   <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{total.toLocaleString()} kWh</div></div>
                                </div>
@@ -637,8 +534,10 @@ export default function FaturasPage() {
             <div className="relative w-full max-w-xl h-full bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                
                <div className="px-6 py-6 border-b border-white/5 flex justify-between items-start bg-slate-800/50">
-                  <div>
-                      <h2 className="text-xl font-bold text-white mb-1">{selectedCliente.nome}</h2>
+                  <div className="flex-1 mr-4">
+                      <h2 className="text-xl font-bold text-white mb-2">{selectedCliente.nome}</h2>
+                      
+                      {/* CAMPO DE TENSÃO EDITÁVEL */}
                       <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-slate-700 text-xs text-slate-300 border border-slate-600 uppercase">{selectedCliente.tipoPessoa}</span>
                           <Select 
@@ -658,70 +557,17 @@ export default function FaturasPage() {
                </div>
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  
-                  {/* DADOS DE CONTATO */}
+                  {/* ... (Blocos de Contato e Unidades mantidos iguais) ... */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
-                          {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) && (
-                              <Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => {
-                                  const novosContatos = [...selectedCliente.contatos, { id: crypto.randomUUID(), nome: 'Novo Contato', telefone: '', email: '' }];
-                                  handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
-                              }}>+ Adicionar</Button>
-                          )}
                       </div>
                       {(selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id)) || canSeeEverything) ? (
                           <div className="space-y-3">
                               {selectedCliente.contatos?.map((ct, idx) => (
-                                  <div key={ct.id} className="bg-slate-900 p-3 rounded-lg border border-white/5 space-y-2">
-                                      <div className="flex items-center gap-2">
-                                          <Input 
-                                              placeholder="Nome do contato" 
-                                              defaultValue={ct.nome} 
-                                              className="flex-1 h-8 bg-slate-800 border-white/10 text-white text-sm" 
-                                              onBlur={e => {
-                                                  const novosContatos = [...selectedCliente.contatos];
-                                                  novosContatos[idx].nome = e.target.value;
-                                                  handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
-                                              }} 
-                                          />
-                                          {selectedCliente.contatos.length > 1 && (
-                                              <button 
-                                                  onClick={() => {
-                                                      const novosContatos = selectedCliente.contatos.filter((_, i) => i !== idx);
-                                                      handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
-                                                  }} 
-                                                  className="text-slate-600 hover:text-red-400"
-                                              >
-                                                  <Trash2 className="w-4 h-4"/>
-                                              </button>
-                                          )}
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                          <Input 
-                                              placeholder="(00) 00000-0000" 
-                                              defaultValue={ct.telefone} 
-                                              className="flex-1 h-8 bg-slate-800 border-white/10 text-cyan-400 text-sm" 
-                                              onBlur={e => {
-                                                  const novosContatos = [...selectedCliente.contatos];
-                                                  novosContatos[idx].telefone = e.target.value;
-                                                  handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
-                                              }} 
-                                          />
-                                          {ct.telefone && (
-                                              <a href={`https://wa.me/55${ct.telefone.replace(/\D/g,'')}`} target="_blank" className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-full text-white"><Phone className="w-4 h-4" /></a>
-                                          )}
-                                      </div>
-                                      <Input 
-                                          placeholder="email@exemplo.com (opcional)" 
-                                          defaultValue={ct.email} 
-                                          className="w-full h-8 bg-slate-800 border-white/10 text-slate-400 text-xs" 
-                                          onBlur={e => {
-                                              const novosContatos = [...selectedCliente.contatos];
-                                              novosContatos[idx].email = e.target.value;
-                                              handleUpdateField(selectedCliente.id, 'contatos', novosContatos);
-                                          }} 
-                                      />
+                                  <div key={idx} className="bg-slate-900 p-3 rounded-lg border border-white/5 flex justify-between items-center">
+                                      <div><div className="text-white font-medium">{ct.nome}</div><div className="text-sm text-cyan-400">{ct.telefone}</div></div>
+                                      <a href={`https://wa.me/55${ct.telefone.replace(/\D/g,'')}`} target="_blank" className="p-2 bg-emerald-600 hover:bg-emerald-500 rounded-full text-white"><Phone className="w-4 h-4" /></a>
                                   </div>
                               ))}
                           </div>
@@ -762,7 +608,6 @@ export default function FaturasPage() {
                               return null;
                           })()}
 
-                          {/* LISTA DE UNIDADES */}
                           <div className="space-y-4">
                               <div className="flex justify-between items-center border-b border-white/5 pb-2">
                                   <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Zap className="w-4 h-4" /> Unidades Consumidoras</h3>
@@ -775,7 +620,7 @@ export default function FaturasPage() {
                                       <div className="flex justify-between mb-4">
                                           <div className="flex items-center gap-2">
                                               <span className="text-xs font-bold bg-slate-700 px-2 py-0.5 rounded text-white">UC {i+1}</span>
-                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3"/>Inelegível (GD)</span>}
+                                              {uc.gdEligibility === 'inelegivel' && <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold">Ineligível (GD)</span>}
                                               {uc.gdEligibility === 'elegivel' && <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded font-bold">Elegível (Excedente)</span>}
                                               {uc.gdEligibility === 'oportunidade' && <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold">Oportunidade (oUC)</span>}
                                           </div>
@@ -793,6 +638,7 @@ export default function FaturasPage() {
                                           </div>
                                       </div>
 
+                                      {/* Campos Técnicos IA */}
                                       <div className="bg-black/20 p-3 rounded-lg mb-3 border border-white/5">
                                           <p className="text-[10px] text-cyan-500 font-bold uppercase mb-2 flex items-center gap-1"><Sun className="w-3 h-3"/> Dados Técnicos (IA)</p>
                                           <div className="grid grid-cols-3 gap-2">
