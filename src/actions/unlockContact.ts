@@ -1,8 +1,10 @@
+
 'use server';
 
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, increment, addDoc, collection, Timestamp, arrayUnion } from 'firebase/firestore';
-import { sendTelegramNotification } from '@/lib/telegram'; // <--- IMPORTAR
+import { sendTelegramNotification } from '@/lib/telegram';
+import { trackEvent } from '@/lib/analytics/trackEvent'; // <-- IMPORTADO
 
 // Custo por lead (para quem não é admin)
 const COST_PER_LEAD = 5;
@@ -68,13 +70,12 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
     
     // --- APÓS O SUCESSO DO DESBLOQUEIO (Antes do return) ---
 
-    // 1. Buscar dados para a notificação
     const leadSnap = await getDoc(leadRef);
     const leadData = leadSnap.data();
-    const userSnapAfterUnlock = await getDoc(userRef); // Recarrega para garantir dados frescos
+    const userSnapAfterUnlock = await getDoc(userRef);
     const userDataAfterUnlock = userSnapAfterUnlock.data();
 
-    // 2. Montar Mensagem
+    // 2. Montar Mensagem Telegram
     const message = `
 🔓 <b>Lead Desbloqueado!</b>
 
@@ -85,8 +86,15 @@ export async function unlockContactAction(userId: string, leadId: string): Promi
 
 <i>Monitoramento de Leads - Planus</i>
     `;
+    
+    // 3. Rastreamento do Evento (NOVO)
+    trackEvent({
+        eventType: 'LEAD_UNLOCKED',
+        user: { id: userId, name: userDataAfterUnlock?.displayName, email: userDataAfterUnlock?.email },
+        metadata: { leadId, leadName: leadData?.nome }
+    });
 
-    // 3. Enviar
+    // 4. Enviar
     sendTelegramNotification(message);
 
     return { success: true, message: isAdmin ? 'Acesso Admin: Liberado.' : 'Contato comprado com sucesso!' };

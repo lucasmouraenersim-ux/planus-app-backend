@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { CHAT_TEMPLATES, type MessageTemplate } from '@/config/chat-templates';
+import { trackEvent } from '@/lib/analytics/trackEvent'; // <-- IMPORTADO
 
 const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -77,6 +78,18 @@ export function LeadDetailView({ lead, onClose, onEdit, isAdmin, onApprove, onRe
   const [isTemplatesPopoverOpen, setIsTemplatesPopoverOpen] = useState(false);
 
   const isOwner = appUser?.uid === lead.userId;
+
+  // --- Track Event on View ---
+  useEffect(() => {
+    if (appUser && lead) {
+      trackEvent({
+        eventType: 'LEAD_VIEWED',
+        user: { id: appUser.uid, name: appUser.displayName || 'N/A', email: appUser.email || 'N/A' },
+        metadata: { leadId: lead.id, leadName: lead.name }
+      });
+    }
+  }, [appUser, lead]);
+
 
   useEffect(() => {
     if (!lead.id) return;

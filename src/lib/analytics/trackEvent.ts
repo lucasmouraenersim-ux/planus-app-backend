@@ -31,3 +31,7 @@ export const trackEvent = async ({ eventType, user, metadata = {}, page = '' }: 
       page: pageToLog,
       timestamp: serverTimestamp(),
     });
+  } catch (error) {
+    console.error("Erro ao rastrear evento:", error);
+  }
+};

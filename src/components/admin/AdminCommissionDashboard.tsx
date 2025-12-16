@@ -1,3 +1,4 @@
+
 // src/components/admin/AdminCommissionDashboard.tsx
 "use client";
 
@@ -16,6 +17,7 @@ import { STAGES_CONFIG } from '@/config/crm-stages';
 import CompanyCommissionsTable from './CompanyCommissionsTable';
 import { Textarea } from '../ui/textarea';
 import { importRecurrenceStatusFromCSV } from '@/actions/admin/commissionActions';
+import PartnersAnalytics from './PartnersAnalytics'; // <-- IMPORTADO
 
 
 import type { AppUser, FirestoreUser, UserType } from '@/types/user';
@@ -74,7 +76,7 @@ import {
 } from 'lucide-react';
 import type { DateRange } from "react-day-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider } from '../ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 
 const MOCK_WITHDRAWALS: WithdrawalRequestWithId[] = [
@@ -522,7 +524,7 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
                     <CalendarIcon className="h-4 w-4" />
                 </Button>
                 <h2 className="text-2xl font-semibold text-center text-primary capitalize">
-                    {format(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+                    {formatDateFns(selectedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
                 </h2>
                 <Button variant="outline" size="icon" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
                     <CalendarIcon className="h-4 w-4" />
@@ -591,7 +593,7 @@ function CompanyManagementTab({ leads, tableData }: { leads: LeadWithId[], table
             <div className="grid md:grid-cols-3 gap-4 text-center"><Card className="bg-blue-500/10 border-blue-500/50 p-4"><CardTitle className="text-sm font-medium text-blue-500">Total a Receber no Mês</CardTitle><p className="text-2xl font-bold text-blue-400">{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</p></Card><Card className="bg-red-500/10 border-red-500/50 p-4"><CardTitle className="text-sm font-medium text-red-500">Total de Custos no Mês</CardTitle><p className="text-2xl font-bold text-red-400">{formatCurrency((monthlyDashboardMetrics.totalOperationCosts || 0) + (monthlyDashboardMetrics.totalAdminCosts || 0))}</p></Card><Card className="bg-green-500/10 border-green-500/50 p-4"><CardTitle className="text-sm font-medium text-green-500">Lucro Líquido do Mês</CardTitle><p className="text-2xl font-bold text-green-400">{formatCurrency(monthlyDashboardMetrics.netProfit)}</p></Card></div>
             <div className="grid md:grid-cols-3 gap-4"><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><TrendingUpIcon className="mr-2 h-4 w-4"/>Lucro da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Comissões Imediatas:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.immediate)}</span></div><div className="flex justify-between"><span>2ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.second)}</span></div><div className="flex justify-between"><span>3ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.third)}</span></div><div className="flex justify-between"><span>4ªs Comissões:</span><span className="font-medium text-green-500">{formatCurrency(monthlyDashboardMetrics.revenueByType.fourth)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalReceivable)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Briefcase className="mr-2 h-4 w-4"/>Custos da Operação</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Juros:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.juros)}</span></div><div className="flex justify-between"><span>Garantia Churn:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.churn)}</span></div><div className="flex justify-between"><span>Comercializador:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.comercializador)}</span></div><div className="flex justify-between"><span>Nota Fiscal:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.operationCosts.nota)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalOperationCosts)}</span></div></CardContent></Card><Card><CardHeader className="p-3"><CardTitle className="text-base text-primary flex items-center"><Landmark className="mr-2 h-4 w-4"/>Custos Administrativos</CardTitle></CardHeader><CardContent className="p-3 text-sm space-y-1"><div className="flex justify-between"><span>Pró-labore:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.proLabore)}</span></div><div className="flex justify-between"><span>Impostos:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.tax)}</span></div><div className="flex justify-between"><span>Reinvestimento:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.reinvest)}</span></div><div className="flex justify-between"><span>Ajuda Missionária:</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.missionary)}</span></div><div className="flex justify-between"><span>Custos Fixos (Folha+Risco):</span><span className="font-medium text-red-500">{formatCurrency(monthlyDashboardMetrics.adminCosts.fixed)}</span></div><Separator className="my-1"/><div className="flex justify-between font-bold"><span>Total:</span><span>{formatCurrency(monthlyDashboardMetrics.totalAdminCosts)}</span></div></CardContent></Card></div>
         </CardContent>)}
-        <CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Empresa</TableHead><TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead></TableRow></TableHeader><TableBody>{paginatedReceivables.map(r => (<TableRow key={r.leadId}><TableCell>{r.clientName}</TableCell><TableCell>{r.company}</TableCell><TableCell>{formatCurrency(r.immediateCommission)}</TableCell><TableCell>{format(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.secondCommission)}</TableCell><TableCell>{r.isSecondPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>) : format(r.secondPaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.thirdCommission)}</TableCell><TableCell>{r.isThirdPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{format(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>) : format(r.thirdPaymentDate, 'dd/MM/yy')}</TableCell></TableRow>))}</TableBody></Table></CardContent>
+        <CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Empresa</TableHead><TableHead>1ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>2ª Comissão</TableHead><TableHead>Data Pagto.</TableHead><TableHead>3ª Comissão</TableHead><TableHead>Data Pagto.</TableHead></TableRow></TableHeader><TableBody>{paginatedReceivables.map(r => (<TableRow key={r.leadId}><TableCell>{r.clientName}</TableCell><TableCell>{r.company}</TableCell><TableCell>{formatCurrency(r.immediateCommission)}</TableCell><TableCell>{formatDateFns(r.immediatePaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.secondCommission)}</TableCell><TableCell>{r.isSecondPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{formatDateFns(r.secondPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.secondPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'second', date)} initialFocus/></PopoverContent></Popover>) : formatDateFns(r.secondPaymentDate, 'dd/MM/yy')}</TableCell><TableCell>{formatCurrency(r.thirdCommission)}</TableCell><TableCell>{r.isThirdPaymentDateEditable ? (<Popover><PopoverTrigger asChild><Button variant="outline" size="sm">{formatDateFns(r.thirdPaymentDate, 'dd/MM/yy')}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={r.thirdPaymentDate} onSelect={(date) => handleReceivableDateChange(r.leadId, 'third', date)} initialFocus/></PopoverContent></Popover>) : formatDateFns(r.thirdPaymentDate, 'dd/MM/yy')}</TableCell></TableRow>))}</TableBody></Table></CardContent>
         <CardFooter className="flex justify-end items-center gap-4"><span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button><Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próximo</Button></CardFooter>
       </Card>
       {/* ... (rest of the component) ... */}
@@ -1168,6 +1170,7 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
             {userAppRole === 'superadmin' && showSensitiveTabs && (
               <TabsTrigger value="personal_finance"><PiggyBank className="mr-2 h-4 w-4"/>Finanças Pessoais</TabsTrigger>
             )}
+             <TabsTrigger value="analytics"><BarChartHorizontalBig className="mr-2 h-4 w-4"/>Analytics</TabsTrigger>
             <TabsTrigger value="withdrawals"><WalletCards className="mr-2 h-4 w-4"/>Saques</TabsTrigger>
           </TabsList>
           
@@ -1239,15 +1242,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
                                   <TableCell>{user.lastSignInTime ? format(parseISO(user.lastSignInTime as string), "dd/MM/yy HH:mm") : 'Nunca'}</TableCell>
                                   <TableCell>
                                      {user.signedContractUrl ? (
-                                        <a href={user.signedContractUrl} target="_blank" rel="noopener noreferrer" title="Visualizar Contrato">
-                                           <Button variant="ghost" size="icon">
-                                               <FileSignature className="h-5 w-5 text-blue-500" />
-                                           </Button>
-                                        </a>
+                                        <TooltipProvider><Tooltip><TooltipTrigger asChild><a href={user.signedContractUrl} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon"><FileSignature className="h-5 w-5 text-blue-500" /></Button></a></TooltipTrigger><TooltipContent><p>Visualizar Contrato</p></TooltipContent></Tooltip></TooltipProvider>
                                      ) : (
-                                        <Button variant="ghost" size="icon" disabled title="Usuário não tem contrato">
-                                            <FileSignature className="h-5 w-5 text-muted-foreground/50" />
-                                        </Button>
+                                        <TooltipProvider><Tooltip><TooltipTrigger asChild><div><Button variant="ghost" size="icon" disabled><FileSignature className="h-5 w-5 text-muted-foreground/50" /></Button></div></TooltipTrigger><TooltipContent><p>Usuário não tem contrato</p></TooltipContent></Tooltip></TooltipProvider>
                                     )}
                                   </TableCell>
                                   <TableCell className="text-right">
@@ -1304,6 +1301,9 @@ export default function AdminCommissionDashboard({ loggedInUser, initialUsers, i
               {/* ... existing PersonalFinanceTab component ... */}
             </TabsContent>
           )}
+           <TabsContent value="analytics">
+              <PartnersAnalytics />
+          </TabsContent>
           <TabsContent value="withdrawals">
              {/* ... existing withdrawals tab content ... */}
           </TabsContent>
