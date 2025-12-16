@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,7 +24,6 @@ import { unlockContactAction } from '@/actions/unlockContact';
 import { TermsModal } from '@/components/TermsModal';
 import { CreditPurchaseModal } from '@/components/billing/CreditPurchaseModal';
 import { registerInvoiceAction } from '@/actions/registerInvoice';
-import { trackEvent } from '@/lib/analytics/trackEvent';
 
 // --- CONFIG ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -191,12 +191,6 @@ export default function FaturasPage() {
               }
               setClientes(prev => prev.map(c => c.id === clienteId ? { ...c, isUnlocked: true } : c));
               toast({ title: "Sucesso", description: result.message, className: "bg-emerald-500 text-white" });
-              // Track event
-              trackEvent({
-                eventType: 'LEAD_UNLOCKED',
-                user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
-                metadata: { leadId: clienteId }
-              });
           } else {
               toast({ title: "Erro", description: result.message, variant: "destructive" });
           }
@@ -231,14 +225,6 @@ export default function FaturasPage() {
             createdAt: Timestamp.now(), status: 'Nenhum', isUnlocked: false
         });
         setSelectedClienteId(docRef.id);
-        // Track event
-        if (appUser) {
-          trackEvent({
-            eventType: 'LEAD_CREATED',
-            user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
-            metadata: { leadId: docRef.id, creationMethod: 'manual' }
-          });
-        }
     } catch(e) { toast({ title: "Erro", variant: "destructive" }); }
   };
 
@@ -258,18 +244,6 @@ export default function FaturasPage() {
         if (res.ok) {
             dadosIA = await res.json();
             
-            trackEvent({
-                eventType: 'INVOICE_PROCESSED',
-                user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
-                metadata: { 
-                  leadId: clienteId, 
-                  valorTotal: dadosIA.valorTotal,
-                  consumoKwh: dadosIA.consumoKwh,
-                  gdEligibility: dadosIA.gdEligibility,
-                  tensaoType: dadosIA.tensaoType,
-                }
-              });
-
             if (dadosIA.gdEligibility === 'inelegivel') {
                 toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
             } else if (dadosIA.gdEligibility === 'oportunidade') {
@@ -377,17 +351,6 @@ export default function FaturasPage() {
     return points;
   }, [filteredClientes, isMapLoaded]);
 
-  const handleSetSelectedCliente = (cliente: FaturaCliente) => {
-    setSelectedClienteId(cliente.id);
-    if (appUser) {
-      trackEvent({
-        eventType: 'LEAD_VIEWED',
-        user: { id: appUser.uid, name: appUser.displayName || '', email: appUser.email || '' },
-        metadata: { leadId: cliente.id, leadName: cliente.nome }
-      });
-    }
-  };
-
   const selectedCliente = useMemo(() => {
     const cliente = clientes.find(c => c.id === selectedClienteId);
     return cliente;
@@ -459,7 +422,7 @@ export default function FaturasPage() {
                         
                         const style = getTensaoColors(c.tensao);
                         return (
-                           <tr key={c.id} onClick={() => handleSetSelectedCliente(c)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
+                           <tr key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`group hover:bg-white/[0.02] cursor-pointer border-l-[3px] ${getStatusStyle(c.status).border} ${selectedClienteId === c.id ? 'bg-white/[0.03]' : ''}`}>
                               <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center text-white font-bold shadow-lg text-sm`}>{c.nome.substring(0, 1).toUpperCase()}</div><div><p className="font-semibold text-white text-sm">{c.nome}</p><span className="text-[10px] px-1.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase">{c.tipoPessoa}</span></div></div></td>
                               <td className="p-5"><div className="flex flex-col gap-1"><span className="text-white font-medium text-sm">{total.toLocaleString('pt-BR')} kWh</span><div className="w-24 h-1 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full bg-gradient-to-r ${style.gradient}`} style={{ width: `${Math.min(total/500, 100)}%` }}></div></div></div></td>
                               <td className="p-5"><div className="flex items-center gap-2 text-slate-400 text-xs"><MapPin className="w-3 h-3" /> {c.unidades[0]?.cidade || '-'}</div></td>
@@ -491,7 +454,7 @@ export default function FaturasPage() {
                       const pinClass = isUnlocked ? style.pinColor : 'bg-slate-600'; 
                       return (
                         <OverlayView key={c.id} position={{ lat: uc.latitude, lng: uc.longitude! }} mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}>
-                          <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => handleSetSelectedCliente(c)}>
+                          <div className="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-10 hover:z-50" onClick={() => setSelectedClienteId(c.id)}>
                              <div className={`flex items-center justify-center rounded-full border-2 border-white/80 shadow-2xl transition-all duration-300 group-hover:scale-125 ${pinClass}`} style={{ width: `32px`, height: `32px` }}>
                                 <span className="text-[8px] font-bold text-white drop-shadow-md">{formatKwh(Number(uc.consumoKwh))}</span>
                              </div>
@@ -514,7 +477,7 @@ export default function FaturasPage() {
                         {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => {
                            const total = c.unidades.reduce((acc, u) => acc + Math.max(0, (Number(u.consumoKwh)||0) - (Number(u.injetadaMUC)||0)), 0);
                            return (
-                               <div key={c.id} onClick={() => handleSetSelectedCliente(c)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
+                               <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className="bg-slate-800/60 p-4 rounded-xl border border-white/5 hover:border-cyan-500/50 cursor-pointer group shadow-sm hover:shadow-cyan-900/20 transition-all">
                                   <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2"><div className={`w-6 h-6 rounded bg-gradient-to-br from-slate-600 to-slate-500 flex items-center justify-center text-white font-bold text-[10px]`}>{c.nome.charAt(0)}</div><span className="font-semibold text-sm text-white group-hover:text-cyan-400 truncate w-32">{c.nome}</span></div></div>
                                   <div className="flex justify-between items-end"><div className="text-xs text-slate-500 flex items-center gap-1">{(c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything) ? <Unlock className="w-3 h-3 text-emerald-500"/> : <Lock className="w-3 h-3 text-slate-600"/>}</div><div className="text-sm font-bold text-white">{total.toLocaleString()} kWh</div></div>
                                </div>
