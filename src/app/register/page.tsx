@@ -1,7 +1,8 @@
+
 "use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Mail, Lock, Loader2, User } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { registerUser } from '@/actions/auth/registerUser';
+import { db } from '@/lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -20,6 +24,14 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const referralCode = searchParams.get('ref');
+    if (referralCode) {
+      localStorage.setItem('sent_referral', referralCode);
+    }
+  }, [searchParams]);
 
   const handleRegister = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -34,13 +46,21 @@ export default function RegisterPage() {
     setIsLoading(true);
     try {
       const result = await registerUser({ name, email, password });
-      if (result.success) {
+      if (result.success && result.userId) {
+        const storedRef = localStorage.getItem('sent_referral');
+        const userDocRef = doc(db, 'users', result.userId);
+
+        // We need to update the newly created user doc with referral info
+        await setDoc(userDocRef, {
+            referredBy: storedRef || null,
+            myReferralCode: result.userId,
+            mlmBalance: 0,
+        }, { merge: true });
+
         toast({
           title: "Registro bem-sucedido!",
           description: "Você será redirecionado em breve.",
         });
-        // The onAuthStateChanged in AuthProvider will handle the redirect
-        // to the dashboard after the user is created and logged in.
       } else {
         toast({
           title: "Erro de Registro",
