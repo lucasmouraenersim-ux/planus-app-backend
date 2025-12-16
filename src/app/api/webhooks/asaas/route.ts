@@ -1,9 +1,7 @@
-
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase/admin'; 
 import { doc, updateDoc, increment, addDoc, collection, getDoc, Timestamp } from 'firebase/firestore';
 
-// Configuração de Comissão (Ex: 10% sobre o valor LÍQUIDO pago)
 const COMISSAO_PERCENTUAL = 0.10; 
 
 export async function POST(req: Request) {
@@ -15,7 +13,6 @@ export async function POST(req: Request) {
 
     const event = await req.json();
     
-    // Aceita pagamento único OU pagamento de assinatura
     if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
         return NextResponse.json({ received: true });
     }
@@ -32,25 +29,22 @@ export async function POST(req: Request) {
     const isSdrPlan = payment.description?.includes('Plano SDR');
 
     try {
-        // 1. Liberação de Créditos
         let creditsToAdd = 0;
         
         if (isSdrPlan) {
             creditsToAdd = 300;
             await updateDoc(doc(db, 'users', userId), { plan: 'sdr_pro', subscriptionId: payment.subscription });
         } else {
-            // Lógica anterior de pacotes avulsos
-            if (valorPago >= 900) creditsToAdd = 500;
-            else if (valorPago >= 200) creditsToAdd = 100;
+            if (valorPago >= 200) creditsToAdd = 100;
             else if (valorPago >= 125) creditsToAdd = 50;
             else if (valorPago >= 30) creditsToAdd = 10;
         }
 
         if(creditsToAdd > 0) {
-            await updateDoc(doc(db, 'users', userId), { credits: increment(creditsToAdd) });
+            const { FieldValue } = await import('firebase-admin/firestore');
+            await updateDoc(doc(db, 'users', userId), { credits: FieldValue.increment(creditsToAdd) });
         }
 
-        // 2. SISTEMA DE AFILIADOS (COMISSIONAMENTO)
         const userRef = doc(db, 'users', userId);
         const userDoc = await getDoc(userRef);
         const userData = userDoc.data();
@@ -60,13 +54,11 @@ export async function POST(req: Request) {
             const comissao = valorPago * COMISSAO_PERCENTUAL;
 
             if (comissao > 0) {
-                // No Firestore Admin SDK, use 'FieldValue.increment'
                 const { FieldValue } = await import('firebase-admin/firestore');
                 await updateDoc(doc(db, 'users', afiliadoId), {
                     mlmBalance: FieldValue.increment(comissao)
                 });
 
-                // Registra histórico
                 await addDoc(collection(db, 'commissions'), {
                     affiliateId: afiliadoId,
                     fromUser: userId,

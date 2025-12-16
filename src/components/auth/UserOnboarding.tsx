@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -12,6 +11,8 @@ import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Camera, FileText, CheckCircle, Clock, AlertTriangle, Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { CameraCapture } from '@/components/ui/camera-capture';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function WaitScreen() {
     return (
@@ -58,14 +59,12 @@ export function UserOnboarding() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // This effect ensures the step is correct based on the user's state
     if (appUser?.termsAcceptedAt) {
       setStep('docs');
     } else {
       setStep('terms');
     }
   }, [appUser]);
-
 
   if (!appUser) return null;
 
@@ -79,7 +78,7 @@ export function UserOnboarding() {
 
   const handleTermsAccepted = async () => {
     await acceptUserTerms();
-    await refreshUsers(); // Refresh to get the latest user data
+    await refreshUsers();
     setStep('docs');
   }
 
@@ -101,7 +100,7 @@ export function UserOnboarding() {
           });
 
           toast({ title: "Documentos Enviados!", description: "Aguarde a análise da nossa equipe.", className: "bg-green-600 text-white" });
-          await refreshUsers(); // This will trigger the WaitScreen to show
+          await refreshUsers();
       } catch (error) {
           console.error(error);
           toast({ title: "Erro no envio", description: "Não foi possível enviar seus documentos. Tente novamente.", variant: "destructive" });
@@ -127,22 +126,60 @@ export function UserOnboarding() {
           )}
 
           {step === 'docs' && (
-              <div className="space-y-6 animate-in fade-in">
-                  <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                      <Label className="text-white mb-2 block flex items-center gap-2"><FileText className="w-4 h-4 text-cyan-500"/> Documento (Frente e Verso)</Label>
-                      <Input type="file" accept="image/*,application/pdf" onChange={e => setDocFile(e.target.files?.[0] || null)} className="bg-slate-900 border-slate-700 text-slate-300" disabled={loading} />
-                      <p className="text-[10px] text-slate-500 mt-1">CNH ou RG (Legível)</p>
-                  </div>
+              <div className="space-y-6">
+                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                    <Label className="text-white mb-4 block flex items-center gap-2">
+                        <Camera className="w-4 h-4 text-cyan-500"/> Selfie de Validação
+                    </Label>
+                    
+                    <Tabs defaultValue="camera" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2 bg-slate-900">
+                        <TabsTrigger value="camera">Usar Câmera</TabsTrigger>
+                        <TabsTrigger value="upload">Fazer Upload</TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="camera">
+                          <CameraCapture 
+                              label="Tire uma foto do seu rosto agora" 
+                              onCapture={(file) => setSelfieFile(file)} 
+                          />
+                      </TabsContent>
+                      
+                      <TabsContent value="upload">
+                          <Input type="file" accept="image/*" onChange={e => setSelfieFile(e.target.files?.[0] || null)} className="bg-slate-900 border-slate-700 text-slate-300 mt-2" />
+                          <p className="text-[10px] text-slate-500 mt-1">Envie uma foto recente e nítida.</p>
+                      </TabsContent>
+                    </Tabs>
+                </div>
 
-                  <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                      <Label className="text-white mb-2 block flex items-center gap-2"><Camera className="w-4 h-4 text-cyan-500"/> Selfie com Documento</Label>
-                      <Input type="file" accept="image/*" capture="user" onChange={e => setSelfieFile(e.target.files?.[0] || null)} className="bg-slate-900 border-slate-700 text-slate-300" disabled={loading} />
-                      <p className="text-[10px] text-slate-500 mt-1">Segure o documento ao lado do rosto.</p>
-                  </div>
+                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                     <Label className="text-white mb-4 block flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-cyan-500"/> Documento (Frente)
+                    </Label>
+                    
+                    <Tabs defaultValue="upload" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2 bg-slate-900">
+                        <TabsTrigger value="upload">Upload PDF/Foto</TabsTrigger>
+                        <TabsTrigger value="camera">Usar Câmera</TabsTrigger>
+                      </TabsList>
 
-                  <Button onClick={handleUploadDocs} disabled={loading || !docFile || !selfieFile} className="w-full bg-cyan-600 hover:bg-cyan-500 h-12 text-lg">
-                      {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando...</> : "Enviar para Análise"}
-                  </Button>
+                       <TabsContent value="upload">
+                          <Input type="file" accept="image/*,application/pdf" onChange={e => setDocFile(e.target.files?.[0] || null)} className="bg-slate-900 border-slate-700 text-slate-300 mt-2" />
+                       </TabsContent>
+                       
+                       <TabsContent value="camera">
+                          <CameraCapture 
+                              label="Posicione o documento na câmera" 
+                              onCapture={(file) => setDocFile(file)} 
+                          />
+                      </TabsContent>
+                    </Tabs>
+                </div>
+
+                <Button onClick={handleUploadDocs} disabled={loading || !docFile || !selfieFile} className="w-full bg-cyan-600 hover:bg-cyan-500 h-12 text-lg mt-4">
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2"/> : null}
+                    {loading ? "Enviando..." : "Enviar para Análise"}
+                </Button>
               </div>
           )}
       </div>

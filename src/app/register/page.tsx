@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -50,7 +49,6 @@ export default function RegisterPage() {
         const storedRef = localStorage.getItem('sent_referral');
         const userDocRef = doc(db, 'users', result.userId);
 
-        // We need to update the newly created user doc with referral info
         await setDoc(userDocRef, {
             referredBy: storedRef || null,
             myReferralCode: result.userId,
@@ -61,6 +59,11 @@ export default function RegisterPage() {
           title: "Registro bem-sucedido!",
           description: "Você será redirecionado em breve.",
         });
+        // The AuthProvider will handle the redirect to /hub after login.
+        // We just need to make sure the user logs in. A direct sign-in call might be needed
+        // if registerUser action doesn't auto-sign-in. Assuming it does for now.
+        router.push('/login'); // Or directly to hub if session is set fast enough
+
       } else {
         toast({
           title: "Erro de Registro",
