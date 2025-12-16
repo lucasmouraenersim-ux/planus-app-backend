@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -14,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { sendFCMNotification } from '@/actions/notifications/sendFCMNotification';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import ActivityFeed from '@/components/admin/ActivityFeed'; // Import the new component
 
 // --- STYLES & ASSETS ---
 
@@ -364,16 +366,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Área de Gráfico/Extra (Opcional - Expandível) */}
-                    <div className="bg-slate-900/30 border border-white/5 rounded-2xl p-6 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-10 duration-1000">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-lg font-bold text-white">Volume de Acessos</h3>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="ghost" className="text-xs h-7 bg-white/5">7D</Button>
-                                <Button size="sm" variant="ghost" className="text-xs h-7 text-slate-500 hover:text-white">30D</Button>
-                            </div>
-                        </div>
-                        <MiniAreaChart color="#06b6d4" />
-                    </div>
+                    <ActivityFeed />
 
                 </div>
             ) : (
