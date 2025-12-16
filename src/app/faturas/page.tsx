@@ -75,6 +75,13 @@ export interface FaturaCliente {
   createdAt: string | Timestamp; 
 }
 
+const TENSAO_OPTIONS = [
+  { value: 'baixa', label: 'Baixa Tensão' },
+  { value: 'alta', label: 'Alta Tensão' },
+  { value: 'b_optante', label: 'B Optante' },
+  { value: 'baixa_renda', label: 'Baixa Renda' }
+];
+
 // --- HELPERS ---
 const formatKwh = (val: string | number) => {
     const num = Number(val);
