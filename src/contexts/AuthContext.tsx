@@ -45,6 +45,7 @@ interface AuthContextType {
   refreshUsers: () => Promise<void>; 
   fetchAllCrmLeadsGlobally: () => Promise<LeadWithId[]>;
   onlineStatus: Record<string, 'online' | 'offline'>;
+  updateAppUser: (data: Partial<AppUser>) => void; // Added for credit updates
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -121,8 +122,15 @@ const AppSidebar = () => {
                             <MenuItem href="/proposal-generator" icon={FileText} label="Gerador Proposta" active={currentPathname.includes('/proposal')} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                         </>
                     )}
-                    {(userAppRole === 'superadmin' || appUser.displayName?.toLowerCase() === 'jhonathas' || userAppRole === 'advogado') && (
-                        <MenuItem href="/faturas" icon={FileText} label="Faturas Inteligentes" active={currentPathname === '/faturas'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
+                    {(userAppRole === 'superadmin' || appUser.displayName?.toLowerCase() === 'jhonathas' || userAppRole === 'advogado' || userAppRole === 'vendedor') && (
+                        <MenuItem 
+                            href="/faturas" 
+                            icon={Zap} 
+                            label="Faturas Inteligentes" 
+                            active={currentPathname === '/faturas'} 
+                            getMenuClass={getMenuClass} 
+                            menuIconClass={menuIconClass} 
+                        />
                     )}
                     {userAppRole !== 'advogado' && (
                         <>
@@ -223,6 +231,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [originalAdminToken, setOriginalAdminToken] = useState<string | null>(null);
   const [onlineStatus, setOnlineStatus] = useState<Record<string, 'online' | 'offline'>>({});
 
+
+  const updateAppUser = useCallback((data: Partial<AppUser>) => {
+    setAppUser(prev => prev ? { ...prev, ...data } : null);
+  }, []);
 
   useEffect(() => {
     if (!firebaseUser?.uid) return;
@@ -333,7 +345,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           trainingProgress: firestoreUserData.trainingProgress,
           personalFinance: firestoreUserData.personalFinance,
           signedContractUrl: firestoreUserData.signedContractUrl,
-          disabled: firestoreUserData.disabled
+          disabled: firestoreUserData.disabled,
+          credits: firestoreUserData.credits || 0,
+          unlockedLeads: firestoreUserData.unlockedLeads || [],
         } as AppUser;
       } else {
         console.warn(`Firestore document for user ${user.uid} not found.`);
@@ -344,6 +358,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             type: 'pending_setup',
             personalBalance: 0,
             mlmBalance: 0,
+            credits: 0,
+            unlockedLeads: [],
         } as AppUser;
       }
     } catch (error) {
@@ -476,37 +492,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
   
 const impersonateUser = async (targetUserId: string) => {
-    // Validação de segurança básica
     if (!appUser || !firebaseUser || (appUser.type !== 'admin' && appUser.type !== 'superadmin')) {
       toast({ title: "Erro", description: "Apenas administradores podem usar esta função.", variant: "destructive" });
       return;
     }
 
     try {
-      // 1. Feedback visual apenas no Toast (Não bloqueia a tela inteira)
       toast({ title: "Iniciando Acesso...", description: "Preparando ambiente do usuário..." });
 
-      // 2. Salva o Admin atual na memória para poder voltar depois
       setOriginalAdminUser(appUser);
       const token = await firebaseUser.getIdToken();
       setOriginalAdminToken(token);
 
-      // 3. Gera o token de personificação no servidor
       const result = await generateImpersonationToken({ adminUserId: appUser.uid, targetUserId });
 
       if (!result.success || !result.customToken) {
-        // Se falhar, limpa o estado de admin salvo para não ficar preso
         setOriginalAdminUser(null);
         setOriginalAdminToken(null);
         throw new Error(result.message || "Falha ao gerar token.");
       }
 
-      // 4. Troca a sessão. 
-      // IMPORTANTE: signInWithCustomToken faz a troca direta sem passar pelo estado "deslogado".
-      // Isso evita que o layout redirecione para /login.
       await signInWithCustomToken(auth, result.customToken);
 
-      // 5. Marca flag local
       setIsImpersonating(true);
       
       toast({ 
@@ -519,7 +526,6 @@ const impersonateUser = async (targetUserId: string) => {
       console.error("Impersonation failed:", error);
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       
-      // Rollback dos estados em caso de erro
       setOriginalAdminUser(null);
       setOriginalAdminToken(null);
       setIsImpersonating(false);
@@ -528,7 +534,6 @@ const impersonateUser = async (targetUserId: string) => {
 
 
   const stopImpersonating = async () => {
-    // Se não tiver o token salvo, faz logout total por segurança
     if (!originalAdminToken) {
       await signOut(auth);
       router.replace('/login');
@@ -536,13 +541,10 @@ const impersonateUser = async (targetUserId: string) => {
     }
 
     try {
-      // 1. ATIVA O LOADING: Isso esconde a tela de "Acesso Negado" imediatamente
       setIsLoadingAuth(true);
 
-      // 2. Loga de volta como Admin
       await signInWithCustomToken(auth, originalAdminToken);
 
-      // 3. Limpa os estados de personificação
       setOriginalAdminUser(null);
       setOriginalAdminToken(null);
       setIsImpersonating(false);
@@ -553,13 +555,11 @@ const impersonateUser = async (targetUserId: string) => {
         className: "bg-emerald-500 text-white"
       });
 
-      // 4. Redireciona para o Dashboard Admin para garantir que saia da tela do vendedor
       router.push('/admin/dashboard');
 
     } catch (error) {
       console.error("Failed to stop impersonating:", error);
       toast({ title: "Sessão Expirada", description: "Por favor, faça login novamente.", variant: "destructive" });
-      // Se der erro, desloga tudo para segurança
       await signOut(auth);
       router.replace('/login');
     }
@@ -598,41 +598,33 @@ const impersonateUser = async (targetUserId: string) => {
     return () => unsubscribe();
   }, [refreshUsers, requestNotificationPermission, originalAdminUser]);
   
-  // --- INÍCIO DA ADIÇÃO: SISTEMA DE PRESENÇA (HEARTBEAT) ---
   useEffect(() => {
     if (!firebaseUser || !appUser) return;
 
     const userDocRef = doc(db, "users", firebaseUser.uid);
 
-    // Função para atualizar o 'lastSeen'
     const sendHeartbeat = async () => {
       try {
         await updateDoc(userDocRef, {
           lastSeen: new Date().toISOString(),
-          isOnline: true // Flag auxiliar opcional
+          isOnline: true 
         });
       } catch (err) {
-        // Silenciar erros de heartbeat para não poluir o console do usuário
-        // console.error("Heartbeat failed", err);
       }
     };
 
-    // Envia o primeiro batimento imediatamente
     sendHeartbeat();
 
-    // Configura intervalo de 2 minutos (120000ms)
-    // Isso evita custos excessivos de escrita no Firestore
     const intervalId = setInterval(sendHeartbeat, 120000);
 
     return () => clearInterval(intervalId);
-  }, [firebaseUser, appUser?.uid]); // Dependência apenas do UID para evitar loops
-  // --- FIM DA ADIÇÃO ---
+  }, [firebaseUser, appUser?.uid]);
 
   const contextValue = { 
     firebaseUser, appUser, isLoadingAuth, userAppRole, allFirestoreUsers, isLoadingAllUsers, 
     updateAppUserProfile, changeUserPassword, acceptUserTerms, refreshUsers, 
     fetchAllCrmLeadsGlobally, isImpersonating, impersonateUser, 
-    stopImpersonating, originalAdminUser, onlineStatus
+    stopImpersonating, originalAdminUser, onlineStatus, updateAppUser
   };
   
   const isPublicPage = ['/login', '/register', '/', '/sobre', '/politica-de-privacidade'].includes(pathname) || pathname.startsWith('/meteorologia');
@@ -696,5 +688,3 @@ const TermsDialogWrapper = () => {
     if (!appUser) return null;
     return <TermsDialog isOpen={!appUser.termsAcceptedAt} onAccept={acceptUserTerms} />;
 };
-
-    

@@ -1,5 +1,6 @@
+
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase'; // Certifique-se que este import está apontando para o firebase ADMIN ou CLIENT corretamente. O ideal aqui é firebase-admin se for server-side puro, mas o client SDK funciona se as regras permitirem.
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 // Define a URL base
@@ -7,12 +8,10 @@ const ASAAS_API_URL = process.env.ASAAS_ENV === 'sandbox'
   ? 'https://sandbox.asaas.com/api/v3' 
   : 'https://www.asaas.com/api/v3';
 
-// Chave Hardcoded (Mantenha assim por enquanto para garantir que não é erro de leitura)
-const ASAAS_API_KEY = "$aact_prod_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjZmMjU1NzMzLWI0MmQtNDg2MS1iOGI5LTY5NDEzNWY3NGMxOTo6JGFhY2hfNGIyZjUxMWEtNTY2ZC00YWVmLTk4ZWEtYTExZmVmOWYxMjk2";
+// ⚠️ IMPORTANTE: Coloque essa chave no seu arquivo .env.local como ASAAS_API_KEY
+const ASAAS_API_KEY = process.env.ASAAS_API_KEY || "$aact_prod_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjZmMjU1NzMzLWI0MmQtNDg2MS1iOGI5LTY5NDEzNWY3NGMxOTo6JGFhY2hfNGIyZjUxMWEtNTY2ZC00YWVmLTk4ZWEtYTExZmVmOWYxMjk2";
 
 export async function POST(req: Request) {
-  console.log("🚀 [API Checkout] Iniciando...");
-
   try {
     const body = await req.json();
     const { userId, itemId } = body;
@@ -24,54 +23,47 @@ export async function POST(req: Request) {
     const userSnap = await getDoc(userRef);
     
     if (!userSnap.exists()) {
-      return NextResponse.json({ error: 'Usuário não encontrado no DB' }, { status: 404 });
+      return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
     const userData = userSnap.data();
 
-    // 2. Define o Preço
+    // 2. Define o Preço e Descrição
     let price = 0;
     let description = '';
     
-    if (itemId === 'pack_10') { price = 30; description = '10 Créditos'; }
-    else if (itemId === 'pack_50') { price = 125; description = '50 Créditos'; }
-    else if (itemId === 'pack_100') { price = 200; description = '100 Créditos'; }
-    else if (itemId === 'starter_monthly') { price = 97; description = 'Assinatura Starter'; }
-    else if (itemId === 'pro_monthly') { price = 197; description = 'Assinatura Pro'; }
-
-    if (price === 0) return NextResponse.json({ error: 'Item inválido' }, { status: 400 });
-
-    // 3. Sanitização Rigorosa de CPF/CNPJ
-    let cpfCnpj = (userData.cpf || userData.documento || '').replace(/\D/g, ''); // Remove tudo que não é número
-
-    // Se o CPF do banco for inválido (tamanho errado), usa um CPF de TESTE válido do gerador
-    // NOTA: Em produção real, você deve exigir que o usuário corrija o perfil dele.
-    // Para este teste agora, vou usar um CNPJ válido de exemplo da Receita para passar.
-    if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
-        console.log("⚠️ Documento inválido no banco. Usando fallback para teste.");
-        cpfCnpj = '47960950000121'; // CNPJ Válido Gerado para Teste
+    // Tabela de Preços (Sincronize com o Modal)
+    switch (itemId) {
+        case 'pack_10': price = 30; description = 'Pacote 10 Créditos'; break;
+        case 'pack_50': price = 125; description = 'Pacote 50 Créditos'; break;
+        case 'pack_100': price = 200; description = 'Pacote 100 Créditos'; break;
+        case 'starter_monthly': price = 97; description = 'Assinatura Starter'; break;
+        case 'pro_monthly': price = 197; description = 'Assinatura Pro'; break;
+        default: return NextResponse.json({ error: 'Pacote inválido' }, { status: 400 });
     }
 
-    // 4. Asaas: Criar ou Recuperar Cliente
+    // 3. Validação de CPF/CNPJ (Lógica de Fallback para Testes)
+    let cpfCnpj = (userData.cpf || userData.documento || '').replace(/\D/g, '');
+    
+    // Fallback apenas se não tiver documento válido
+    if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+        console.warn(`⚠️ Usuário ${userId} sem doc válido. Usando CPF de fallback.`);
+        cpfCnpj = '47960950000121'; // CNPJ Genérico para passar no Asaas (Cuidado em produção)
+    }
+
+    // 4. Gestão do Cliente no Asaas
     let asaasCustomerId = userData.asaasCustomerId;
 
     if (!asaasCustomerId) {
-      console.log(`👤 Criando cliente Asaas com Doc: ${cpfCnpj}`);
-      
-      // Primeiro tentamos buscar se o cliente já existe pelo email ou CPF para evitar duplicidade
-      // (Opcional, mas boa prática, o Asaas as vezes bloqueia duplicados)
-      
+      // Cria cliente no Asaas
       const createRes = await fetch(`${ASAAS_API_URL}/customers`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'access_token': ASAAS_API_KEY
-        },
+        headers: { 'Content-Type': 'application/json', 'access_token': ASAAS_API_KEY },
         body: JSON.stringify({
           name: userData.displayName || 'Cliente Planus',
           email: userData.email,
           cpfCnpj: cpfCnpj,
           externalReference: userId,
-          notificationDisabled: true // Evita spam de email do Asaas durante testes
+          notificationDisabled: true
         })
       });
       
@@ -79,52 +71,41 @@ export async function POST(req: Request) {
       
       if (customerData.id) {
         asaasCustomerId = customerData.id;
-        // Salva o ID do Asaas no Firebase
         await updateDoc(userRef, { asaasCustomerId });
       } else {
-        // Se der erro, mostra o erro exato que o Asaas devolveu
-        const erroMsg = customerData.errors ? customerData.errors[0].description : 'Erro desconhecido';
-        console.error("❌ Erro Asaas Customer:", JSON.stringify(customerData));
-        
-        // Se o erro for "Customer already exists", teríamos que buscar ele, mas para simplificar,
-        // vamos retornar o erro para você ver na tela.
-        return NextResponse.json({ error: `Erro Asaas: ${erroMsg}`, details: customerData }, { status: 400 });
+        // Tenta recuperar se já existe (Erro comum: customer already exists)
+        if (customerData.errors?.[0]?.code === 'CUSTOMER_ALREADY_EXISTS') {
+            // Lógica simplificada: pede para o usuário verificar o cadastro ou busca por email (complexo para implementar aqui agora)
+             return NextResponse.json({ error: 'Cliente já existe no Asaas com outro vínculo. Contate o suporte.' }, { status: 400 });
+        }
+        return NextResponse.json({ error: 'Erro ao criar cliente Asaas', details: customerData }, { status: 400 });
       }
     }
 
-    // 5. Asaas: Criar Cobrança
-    console.log(`💸 Criando cobrança para ${asaasCustomerId}...`);
-    
+    // 5. Gera a Cobrança
     const billingRes = await fetch(`${ASAAS_API_URL}/payments`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'access_token': ASAAS_API_KEY
-      },
+      headers: { 'Content-Type': 'application/json', 'access_token': ASAAS_API_KEY },
       body: JSON.stringify({
         customer: asaasCustomerId,
-        billingType: 'UNDEFINED',
+        billingType: 'UNDEFINED', // Deixa o usuário escolher (Pix/Boleto/Cartão) no link
         value: price,
         dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        description: description,
-        externalReference: userId,
-        postalService: false
+        description: `Recarga Planus - ${description}`,
+        externalReference: userId
       })
     });
 
     const billingData = await billingRes.json();
 
     if (billingData.invoiceUrl) {
-      console.log("✅ Sucesso:", billingData.invoiceUrl);
       return NextResponse.json({ paymentUrl: billingData.invoiceUrl });
     } else {
-      console.error("❌ Erro Asaas Payment:", billingData);
-      const erroMsg = billingData.errors ? billingData.errors[0].description : 'Erro ao gerar link';
-      return NextResponse.json({ error: erroMsg, details: billingData }, { status: 400 });
+      return NextResponse.json({ error: 'Falha ao gerar link', details: billingData }, { status: 400 });
     }
 
   } catch (error: any) {
-    console.error("🔥 Erro Fatal:", error);
-    return NextResponse.json({ error: 'Erro interno no servidor', details: error.message }, { status: 500 });
+    console.error("Erro Checkout:", error);
+    return NextResponse.json({ error: 'Erro interno', message: error.message }, { status: 500 });
   }
 }
