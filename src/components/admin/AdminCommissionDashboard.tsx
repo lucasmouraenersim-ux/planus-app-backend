@@ -3,7 +3,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, differenceInDays, addMonths, subMonths, nextFriday, setDate as setDateFn } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Papa from 'papaparse';
 import { zodResolver } from "@hookform/resolvers/zod";

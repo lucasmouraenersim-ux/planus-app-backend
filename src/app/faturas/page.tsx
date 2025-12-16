@@ -520,7 +520,6 @@ export default function FaturasPage() {
                </div>
                
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  {/* ... (Blocos de Contato e Unidades mantidos iguais) ... */}
                   <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                       <div className="flex items-center justify-between mb-4">
                           <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2"><Phone className="w-4 h-4" /> Contatos</h3>
@@ -549,7 +548,6 @@ export default function FaturasPage() {
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) && (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           
-                          {/* GRÁFICO DE PERFORMANCE RESTAURADO */}
                           {(() => {
                               const uc = selectedCliente.unidades[0];
                               const consumo = Number(uc?.consumoKwh || 0);
