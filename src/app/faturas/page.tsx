@@ -168,29 +168,63 @@ export default function FaturasPage() {
   }, []);
 
   const handleUnlockLead = async (clienteId: string) => {
-      if (!appUser) return;
-      setLoadingUnlock(clienteId);
+    if (!appUser) return;
+    const lead = clientes.find(c => c.id === clienteId);
+    if (!lead) return;
 
-      const result = await unlockContactAction(appUser.uid, clienteId);
+    // 1. Verificação rápida no Front (UX)
+    const custoLead = calculateLeadCost(Number(lead.unidades?.[0]?.consumoKwh || 0));
+    if ((appUser.credits || 0) < custoLead) {
+        toast({
+            title: "Saldo Insuficiente 🔒",
+            description: "Você está sem saldo para desbloquear esse lead. Quer adicionar mais saldo para voltar a encontrar clientes para seu negócio?",
+            variant: "destructive",
+        });
+        setIsCreditModalOpen(true); // Abre o modal de compra automaticamente
+        return;
+    }
 
-      if (result.success) {
-          if (result.alreadyUnlocked !== true) {
-            const lead = clientes.find(c => c.id === clienteId);
-            const cost = calculateLeadCost(Number(lead?.unidades?.[0]?.consumoKwh || 0));
+    setLoadingUnlock(clienteId);
+
+    try {
+        // 2. Chama o Backend
+        const result = await unlockContactAction(appUser.uid, lead.id);
+
+        if (result.success) {
             updateAppUser({ 
-                credits: (appUser.credits || 0) - cost, 
+                credits: (appUser.credits || 0) - custoLead, 
                 unlockedLeads: [...(appUser.unlockedLeads || []), clienteId] 
             });
-          }
-          setClientes(prev => prev.map(c => c.id === clienteId ? { ...c, isUnlocked: true } : c));
-          toast({ title: "Sucesso", description: result.message, className: "bg-emerald-500 text-white" });
-      } else {
-          toast({ title: "Erro", description: result.message, variant: "destructive" });
-          if(result.code === 'no_credits') {
-            setIsCreditModalOpen(true);
-          }
-      }
-      setLoadingUnlock(null);
+            setClientes(prev => prev.map(c => c.id === clienteId ? { ...c, isUnlocked: true } : c));
+            toast({ 
+                title: "Sucesso!", 
+                description: "Lead desbloqueado. Bons negócios!", 
+                className: "bg-green-600 text-white border-none" 
+            });
+        } else {
+            // 3. Tratamento de Erro vindo do Backend
+            if (result.code === 'no_credits') {
+                toast({
+                    title: "Saldo Esgotado",
+                    description: "Você está sem saldo para desbloquear esse lead. Quer adicionar mais saldo para voltar a encontrar clientes para seu negócio?",
+                    variant: "destructive",
+                });
+                setIsCreditModalOpen(true); // Abre o modal de compra
+            } else {
+                // Erro real de sistema
+                toast({
+                    title: "Erro",
+                    description: result.message || "Erro ao processar o desbloqueio.",
+                    variant: "destructive",
+                });
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        toast({ title: "Erro", description: "Falha de comunicação.", variant: "destructive" });
+    } finally {
+        setLoadingUnlock(null);
+    }
   };
   
   const handleManualGeocode = async (clienteId: string, unidadeId: string, address: string) => {
@@ -255,7 +289,7 @@ export default function FaturasPage() {
             if (!cliente) return;
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
-            const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name, consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '', valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '', mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '', tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '', injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '', gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao', endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '', cidade: safeStr(dadosIA.cidade) || u.cidade || '', estado: safeStr(dadosIA.estado) || u.estado || '', latitude: dadosIA.latitude ?? u.latitude ?? null, longitude: dadosIA.longitude ?? u.longitude ?? null } : u);
+            const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { ...u, arquivoFaturaUrl: url, nomeArquivo: file.name, consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '', valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '', mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '', tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', injetadaMUC: safeStr(dadosIA.injetadaMUC) || u.injetadaMUC || '', injetadaOUC: safeStr(dadosIA.injetadaOUC) || u.injetadaOUC || '', gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao', endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '', cidade: safeStr(dadosIA.cidade) || u.cidade || '', estado: safeStr(dadosIA.estado) || u.estado || '', latitude: dadosIA.latitude ?? u.latitude ?? null, longitude: dadosIA.longitude ?? u.longitude ?? null } : u);
 
             await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
             const updates: any = {};
@@ -371,7 +405,6 @@ export default function FaturasPage() {
                      <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase px-1"><span className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${getStatusStyle(status as FaturaStatus).border.replace('border-l-', 'bg-')}`}></div>{status}</span><span className="bg-slate-800 px-2 py-0.5 rounded-full text-white font-mono">{filteredClientes.filter(c => (c.status||'Nenhum') === status).length}</span></div>
                      <div className="flex-1 space-y-3 overflow-y-auto pr-1 custom-scrollbar">
                         {filteredClientes.filter(c => (c.status||'Nenhum') === status).map(c => {
-                           const total = c.unidades.reduce((acc, u) => acc + Math.max(0, (Number(u.consumoKwh)||0) - (Number(u.injetadaMUC)||0)), 0);
                            const kwh = Number(c.unidades[0]?.consumoKwh || 0);
                            const cost = calculateLeadCost(kwh);
                            const tierName = getLeadTierName(cost);
@@ -380,7 +413,7 @@ export default function FaturasPage() {
                                <div key={c.id} onClick={() => setSelectedClienteId(c.id)} className={`relative border p-4 rounded-xl transition-all hover:shadow-lg ${border} ${bg} hover:border-opacity-100 border-opacity-50 cursor-pointer group`}>
                                  {cost >= 8 && (<div className="absolute -top-3 left-4 bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md"><Award className="w-3 h-3" /> {tierName}</div>)}
                                  <div className="flex justify-between items-start mb-4 mt-1">
-                                  <div className="overflow-hidden"><h3 className="font-bold text-white text-lg truncate" title={c.nome}>{c.nome}</h3><div className="flex items-center gap-2 mt-1"><span className={`text-xs font-mono px-2 py-0.5 rounded border ${border} ${color} bg-black/20 flex items-center gap-1`}><Zap className="w-3 h-3" />{total.toLocaleString('pt-BR')} kWh</span></div></div>
+                                  <div className="overflow-hidden"><h3 className="font-bold text-white text-lg truncate" title={c.nome}>{c.nome}</h3><div className="flex items-center gap-2 mt-1"><span className={`text-xs font-mono px-2 py-0.5 rounded border ${border} ${color} bg-black/20 flex items-center gap-1`}><Zap className="w-3 h-3" />{(Number(c.unidades[0]?.consumoKwh || 0)).toLocaleString('pt-BR')} kWh</span></div></div>
                                   {(c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything) ? <Unlock className="w-4 h-4 text-emerald-500"/> : <Lock className="w-4 h-4 text-slate-600"/>}
                                  </div>
                                  {!((c.isUnlocked || (appUser && (appUser.unlockedLeads?.includes(c.id))) || canSeeEverything)) && (
