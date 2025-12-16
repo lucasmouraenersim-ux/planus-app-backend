@@ -96,6 +96,13 @@ export type FirestoreUser = {
 
   // New field for signed contract
   signedContractUrl?: string;
+
+  // KYC Fields
+  status?: 'pending_docs' | 'pending_approval' | 'approved' | 'rejected';
+  documentUrl?: string;
+  selfieUrl?: string;
+  adminNotes?: string; // Reason for rejection
+  kycSubmittedAt?: Timestamp | string;
 };
 
 // User object available in the auth context or passed as props
@@ -141,4 +148,10 @@ export type AppUser = {
 
   // New field for signed contract
   signedContractUrl?: string;
+
+  // KYC Fields
+  status?: 'pending_docs' | 'pending_approval' | 'approved' | 'rejected';
+  documentUrl?: string;
+  selfieUrl?: string;
+  adminNotes?: string;
 };

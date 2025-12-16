@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CommandMenu } from '@/components/ui/command-menu';
 import { TermsDialog } from '@/components/auth/TermsDialog';
+import { UserOnboarding } from '@/components/auth/UserOnboarding';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -155,6 +156,7 @@ const AppSidebar = () => {
                                     <MenuItem href="/admin/proposals" icon={BarChart3} label="Histórico Propostas" active={currentPathname === '/admin/proposals'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                     <MenuItem href="/admin/goals" icon={Target} label="Metas & Objetivos" active={currentPathname === '/admin/goals'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                     <MenuItem href="/admin/training" icon={TrainingIcon} label="Treinamentos" active={currentPathname === '/admin/training'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
+                                     <MenuItem href="/admin/users" icon={UserCog} label="Aprovação de Usuários" active={currentPathname === '/admin/users'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
                                 </>
                             )}
                             <MenuItem href="/ranking" icon={Trophy} label="Ranking" active={currentPathname === '/ranking'} getMenuClass={getMenuClass} menuIconClass={menuIconClass} />
@@ -346,11 +348,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           personalFinance: firestoreUserData.personalFinance,
           signedContractUrl: firestoreUserData.signedContractUrl,
           disabled: firestoreUserData.disabled,
+          status: firestoreUserData.status || 'pending_docs',
+          documentUrl: firestoreUserData.documentUrl,
+          selfieUrl: firestoreUserData.selfieUrl,
+          adminNotes: firestoreUserData.adminNotes,
           credits: firestoreUserData.credits || 0,
           unlockedLeads: firestoreUserData.unlockedLeads || [],
         } as AppUser;
       } else {
-        console.warn(`Firestore document for user ${user.uid} not found.`);
+        console.warn(`Firestore document for user ${user.uid} not found. Creating with pending status.`);
         return {
             uid: user.uid,
             email: user.email,
@@ -358,6 +364,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             type: 'pending_setup',
             personalBalance: 0,
             mlmBalance: 0,
+            status: 'pending_docs',
             credits: 0,
             unlockedLeads: [],
         } as AppUser;
@@ -634,6 +641,14 @@ const impersonateUser = async (targetUserId: string) => {
         <div className="flex flex-col justify-center items-center h-screen bg-[#020617] text-primary">
             <Loader2 className="animate-spin h-12 w-12 text-cyan-500" />
         </div>
+    );
+  }
+
+  if (appUser && appUser.status !== 'approved' && appUser.type !== 'admin' && appUser.type !== 'superadmin' && !isPublicPage) {
+    return (
+        <AuthContext.Provider value={contextValue}>
+            <UserOnboarding />
+        </AuthContext.Provider>
     );
   }
 

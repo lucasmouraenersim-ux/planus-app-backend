@@ -49,11 +49,12 @@ export async function registerUser(input: RegisterUserInput): Promise<RegisterUs
       emailVerified: true, // Automatically verify email for simplicity
     });
 
-    // 3. Create user document in Firestore with 'vendedor' as default type
+    // 3. Create user document in Firestore with 'vendedor' as default type and 'pending_docs' status
     const newUserForFirestore: Omit<FirestoreUser, 'uid'> = {
       email: input.email,
       displayName: input.name,
       type: 'vendedor' as UserType, // Default new users to 'vendedor'
+      status: 'pending_docs', // Start with pending documents status
       createdAt: admin.firestore.Timestamp.now() as any,
       photoURL: `https://placehold.co/40x40.png?text=${input.name.charAt(0).toUpperCase()}`,
       phone: '',
@@ -67,12 +68,9 @@ export async function registerUser(input: RegisterUserInput): Promise<RegisterUs
     
     await adminDb.collection("users").doc(userRecord.uid).set(newUserForFirestore);
 
-    // Note: The client will automatically sign in the user via onAuthStateChanged
-    // after this server action successfully creates the user.
-
     return {
       success: true,
-      message: `Usuário ${input.email} criado com sucesso.`,
+      message: `Usuário ${input.email} criado com sucesso. Complete seu cadastro.`,
       userId: userRecord.uid,
     };
 

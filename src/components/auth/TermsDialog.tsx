@@ -25,7 +25,7 @@ export function TermsDialog({ isOpen, onAccept }: TermsDialogProps) {
   const handleAcceptClick = async () => {
     setIsSubmitting(true);
     await onAccept();
-    // No need to set isSubmitting to false, as the component will unmount
+    // No need to set isSubmitting to false, as the parent component will re-render and might close this dialog
   };
 
   return (
@@ -61,7 +61,7 @@ export function TermsDialog({ isOpen, onAccept }: TermsDialogProps) {
           <div className="flex items-center space-x-2">
             <Checkbox id="privacy" checked={privacyAccepted} onCheckedChange={(checked) => setPrivacyAccepted(Boolean(checked))} />
             <Label htmlFor="privacy" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Eu li e aceito a <Link href="/politica-de-privacidade" target="_blank" className="text-primary hover:underline"><strong>Política de Privacidade</strong></Link>.
+              Eu li e aceito a <Link href="/politica-de-privacidade.html" target="_blank" className="text-primary hover:underline"><strong>Política de Privacidade</strong></Link>.
             </Label>
           </div>
         </div>
