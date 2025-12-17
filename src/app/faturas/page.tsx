@@ -12,7 +12,7 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus, Info
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -27,6 +27,7 @@ import { registerInvoiceAction } from '@/actions/registerInvoice';
 import { calculateLeadCost, getLeadTierName } from '@/lib/billing/leadPricing';
 import { Badge } from "@/components/ui/badge";
 import { logUserActivity } from '@/lib/activityLogger'; // Import log function
+import { PricingGuideModal } from '@/components/billing/PricingGuideModal';
 
 // --- CONFIG ---
 const libraries: ("visualization" | "places" | "drawing" | "geometry" | "localContext")[] = ["visualization"];
@@ -145,6 +146,7 @@ export default function FaturasPage() {
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [showPromoBanner, setShowPromoBanner] = useState(true); 
+  const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -423,6 +425,7 @@ export default function FaturasPage() {
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
       <TermsModal />
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
+      <PricingGuideModal isOpen={isPricingGuideOpen} onClose={() => setIsPricingGuideOpen(false)} onOpenPurchase={() => setIsCreditModalOpen(true)} />
       <style jsx global>{` .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; } `}</style>
 
       <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
@@ -460,6 +463,14 @@ export default function FaturasPage() {
                 <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex"><button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><List className="w-4 h-4" /></button><button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setViewMode('map')} className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><MapIcon className="w-4 h-4" /></button></div>
                 <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
                 <Select value={filterCidade} onValueChange={setFilterCidade}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Cidades" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{cidadesDisponiveis.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                 <Button 
+                    variant="outline" 
+                    onClick={() => setIsPricingGuideOpen(true)}
+                    className="hidden md:flex gap-2 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white h-10"
+                >
+                    <Info className="w-4 h-4" />
+                    <span className="text-xs">Entenda os Custos</span>
+                </Button>
             </div>
             <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg"><PlusCircle className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
@@ -526,7 +537,7 @@ export default function FaturasPage() {
 
       {showPromoBanner && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="relative max-w-md md:max-w-lg w-full"> 
+          <div className="relative max-w-md md:max-w-lg w-full">
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -537,7 +548,6 @@ export default function FaturasPage() {
             >
               <X className="w-5 h-5 font-bold stroke-[3]" />
             </button>
-
             <img 
               src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
               alt="Promoção de Natal" 
@@ -547,7 +557,6 @@ export default function FaturasPage() {
                 setIsCreditModalOpen(true); 
               }}
             />
-            
             <p className="text-center text-slate-400 text-xs mt-2 animate-pulse">
               Toque na imagem para garantir os preços de 2024
             </p>
@@ -727,4 +736,4 @@ export default function FaturasPage() {
   );
 }
 
-    
+```
