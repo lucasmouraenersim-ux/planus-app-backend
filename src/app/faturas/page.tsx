@@ -12,7 +12,7 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus, Info
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -378,7 +378,7 @@ export default function FaturasPage() {
                 details: { 
                     leadId: clienteId, 
                     fileName: file.name,
-                    iaDetectedTensao: dadosIA.tensaoType 
+                    iaDetectedTensao: dadosIA.tensaoType || 'Não Detectado' 
                 }
             });
         }
