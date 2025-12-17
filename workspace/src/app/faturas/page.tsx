@@ -144,6 +144,7 @@ export default function FaturasPage() {
   
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [showPromoBanner, setShowPromoBanner] = useState(true); 
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -419,7 +420,7 @@ export default function FaturasPage() {
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
       <TermsModal />
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
       <style jsx global>{` .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; } `}</style>
@@ -447,20 +448,7 @@ export default function FaturasPage() {
           </div>
       </header>
 
-      {/* --- NOVO BANNER DE NATAL (IMAGEM) --- */}
-      <div className="w-full bg-slate-900 border-b border-white/10 relative shadow-2xl group cursor-pointer" onClick={() => setIsCreditModalOpen(true)}>
-          <div className="max-w-7xl mx-auto relative">
-              <img 
-                  src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
-                  alt="Promoção de Natal - Preços Congelados" 
-                  className="w-full h-auto object-cover max-h-[120px] md:max-h-[160px] opacity-90 group-hover:opacity-100 transition-opacity"
-              />
-              {/* Efeito de brilho ao passar o mouse */}
-              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-10 transition-opacity"></div>
-          </div>
-      </div>
-
-      <div className="p-6 pb-20 overflow-y-auto h-[calc(100vh-80px-120px)]"> 
+      <div className="flex-1 p-6 pb-20 overflow-y-auto"> 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
             <KPICard title="Alta Tensão" value={kpiData.alta} unit="kWh" color="blue" icon={Zap} trend="stable" trendValue="0%" />
@@ -535,6 +523,36 @@ export default function FaturasPage() {
             </div>
          )}
       </div>
+
+      {showPromoBanner && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="relative max-w-4xl w-full group">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPromoBanner(false);
+              }}
+              className="absolute -top-3 -right-3 md:-top-5 md:-right-5 bg-white text-slate-900 hover:bg-red-600 hover:text-white rounded-full p-2 shadow-xl border-2 border-slate-900 z-50 transition-all scale-100 hover:scale-110"
+              title="Fechar Propaganda"
+            >
+              <X className="w-5 h-5 md:w-6 md:h-6 font-bold" />
+            </button>
+            <img 
+              src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
+              alt="Promoção de Natal" 
+              className="w-full h-auto rounded-xl shadow-2xl border-2 border-white/10 cursor-pointer hover:brightness-110 transition-all"
+              onClick={() => {
+                setShowPromoBanner(false); 
+                setIsCreditModalOpen(true); 
+              }}
+            />
+            <p className="text-center text-slate-400 text-xs mt-4">
+              Clique na imagem para aproveitar a oferta • Promoção válida até 25/12
+            </p>
+          </div>
+        </div>
+      )}
+
 
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
