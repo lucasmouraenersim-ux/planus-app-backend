@@ -12,7 +12,8 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus,
+  Info
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
