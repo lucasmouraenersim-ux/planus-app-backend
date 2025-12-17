@@ -22,33 +22,42 @@ export async function POST(req: Request) {
     if (!userSnap.exists()) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     const userData = userSnap.data();
 
+    // TRAVA DE DATA: Verifica se já passou do Natal (25/12/2025)
+    const hoje = new Date();
+    const dataVirada = new Date('2025-12-26T00:00:00-03:00'); // Fuso horário Brasil
+    const isPrecoNovo = hoje >= dataVirada;
+
     let price = 0;
     let description = '';
     let isSubscription = false;
     let cycle: 'MONTHLY' | 'QUARTERLY' | null = null;
 
     switch (itemId) {
-        // PREÇOS CONGELADOS DE NATAL 2024
-        case 'pack_10': 
-            price = 30; 
-            description = 'Pacote 10 Créditos (Promo Natal)'; 
+        case 'pack_mini': // Antigo pack_10
+            price = isPrecoNovo ? 99.90 : 30.00; 
+            description = isPrecoNovo ? 'Pacote 20 Créditos' : 'Pacote 10 Créditos (Promo Natal)';
             break;
-        case 'pack_50': 
-            price = 125; 
-            description = 'Pacote 50 Créditos (Promo Natal)'; 
-            break;
-        case 'pack_100': 
-            price = 200; 
-            description = 'Pacote 100 Créditos (Promo Natal)'; 
-            break;
-        case 'pack_whale': price = 900; description = '500 Créditos (Atacado)'; break;
 
-        // PLANO EMPRESARIAL (FIDELIDADE)
-        case 'plan_sdr_quarterly': 
-            price = 200; // Mantido R$ 200,00 mensal
-            cycle = 'MONTHLY'; 
-            description = 'Plano Empresarial (200 Créditos/mês) - Promo Natal'; 
-            isSubscription = true; 
+        case 'pack_medio': // Antigo pack_50
+            price = isPrecoNovo ? 199.90 : 125.00; 
+            description = 'Pacote 50 Créditos'; 
+            break;
+
+        case 'pack_pro': // Antigo pack_100
+            price = isPrecoNovo ? 299.90 : 200.00; 
+            description = 'Pacote 100 Créditos'; 
+            break;
+        
+        case 'pack_whale': 
+            price = 900; 
+            description = '500 Créditos (Atacado)'; 
+            break;
+
+        case 'plan_bt_pro': // Antigo plan_sdr_quarterly
+            price = isPrecoNovo ? 399.90 : 200.00;
+            cycle = 'MONTHLY';
+            description = isPrecoNovo ? 'Plano Mensal Pro' : 'Plano Empresarial (200 Créditos/mês) - Promo Natal';
+            isSubscription = true;
             break;
             
         default: return NextResponse.json({ error: 'Item inválido' }, { status: 400 });

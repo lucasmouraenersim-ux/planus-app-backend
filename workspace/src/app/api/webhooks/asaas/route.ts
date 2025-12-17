@@ -29,21 +29,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No user ID' }, { status: 400 });
     }
 
-    const isSdrPlan = payment.description?.includes('Plano Empresarial') || payment.description?.includes('SDR');
+    const isSdrPlan = payment.description?.includes('Plano Empresarial') || payment.description?.includes('Plano Mensal Pro') || payment.description?.includes('SDR');
 
     try {
         const { FieldValue } = await import('firebase-admin/firestore');
         let creditsToAdd = 0;
         
         if (isSdrPlan) {
-            // ASSINATURA: Paga R$ 200, Leva 200 Créditos
+            // Se for plano, entrega 200 créditos (tanto no preço de 200 quanto de 399)
             creditsToAdd = 200; 
             await updateDoc(doc(db, 'users', userId), { plan: 'sdr_pro', subscriptionId: payment.subscription });
         } else {
-            // AVULSO:
-            if (valorPago >= 200) creditsToAdd = 100;      // Paga R$ 200, Leva 100 (Avulso)
-            else if (valorPago >= 125) creditsToAdd = 50;  // Paga R$ 125, Leva 50
-            else if (valorPago >= 30) creditsToAdd = 10;   // Paga R$ 30, Leva 10
+            // LÓGICA DE ENTREGA AVULSA (Híbrida)
+            // Se pagou valor alto (Tabela Nova)
+            if (valorPago >= 290) creditsToAdd = 100;      // R$ 299,90
+            else if (valorPago >= 190) creditsToAdd = 50;  // R$ 199,90
+            else if (valorPago >= 90) creditsToAdd = 20;   // R$ 99,90
+            
+            // Se pagou valor baixo (Tabela Natal - Fallback)
+            else if (valorPago >= 120) creditsToAdd = 50;  // R$ 125,00
+            else if (valorPago >= 25) creditsToAdd = 10;   // R$ 30,00
         }
 
         if(creditsToAdd > 0) {
