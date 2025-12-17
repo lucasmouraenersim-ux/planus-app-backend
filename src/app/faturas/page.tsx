@@ -146,7 +146,7 @@ export default function FaturasPage() {
   
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
-  const [showPromoBanner, setShowPromoBanner] = useState(true); 
+  const [showPromoBanner, setShowPromoBanner] = useState(true);
   const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
@@ -320,20 +320,39 @@ export default function FaturasPage() {
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
     
     try {
-        const formData = new FormData(); formData.append('file', file);
+        const formData = new FormData(); 
+        formData.append('file', file);
+        
         const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
         let dadosIA: any = {};
         
         if (res.ok) {
             dadosIA = await res.json();
-            if (dadosIA.gdEligibility === 'inelegivel') toast({ title: "Atenção: GD Existente", description: "Cliente já gera energia e sobra pouco saldo.", variant: "destructive", duration: 6000 });
-            else if (dadosIA.gdEligibility === 'oportunidade') toast({ title: "Oportunidade GD (oUC)", description: "Cliente recebe energia de fora. Pode migrar.", className: "bg-blue-600 text-white", duration: 6000 });
-            else if (dadosIA.gdEligibility === 'elegivel') toast({ title: "Lead Qualificado!", description: "Mesmo com GD, sobra saldo para vender!", className: "bg-emerald-600 text-white", duration: 6000 });
 
-            if (dadosIA.tensaoType) {
-                await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
-                toast({ title: "Classificação Atualizada", description: `IA detectou: ${dadosIA.tensaoType.toUpperCase().replace('_', ' ')}` });
+            // --- 1. MOSTRAR LOGS NO CONSOLE DO NAVEGADOR ---
+            if (dadosIA.debugLogs && Array.isArray(dadosIA.debugLogs)) {
+                console.group("🔍 DETALHES DA IA (DEBUG)");
+                dadosIA.debugLogs.forEach((log: string) => console.log(log));
+                console.groupEnd();
+            } else {
+                console.log("Nenhum log de debug retornado pela API.");
             }
+            // -----------------------------------------------
+
+            if (dadosIA.gdEligibility === 'inelegivel') toast({ title: "Atenção: GD Existente", description: "Sobra pouco saldo.", variant: "destructive" });
+            else if (dadosIA.gdEligibility === 'oportunidade') toast({ title: "Oportunidade oUC", className: "bg-blue-600 text-white" });
+            else if (dadosIA.gdEligibility === 'elegivel') toast({ title: "Lead Qualificado!", className: "bg-emerald-600 text-white" });
+            
+            // Atualiza Tensão Principal se for a primeira vez
+            const cliente = clientes.find(c => c.id === clienteId);
+            if (cliente && cliente.nome === 'Novo Lead' && dadosIA.tensaoType) {
+                 await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
+            }
+        } else {
+            const err = await res.json();
+            console.error("Erro API:", err);
+            toast({ title: "Erro na IA", description: err.error || "Falha ao processar", variant: "destructive" });
+            return;
         }
 
         const path = `faturas/${clienteId}/${unidadeId}/${file.name}`;
@@ -344,47 +363,62 @@ export default function FaturasPage() {
             if (!cliente) return;
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
+            
+            // --- 2. CORREÇÃO DO MAPEAMENTO DE DADOS ---
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { 
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name, 
+                
+                // Mapeamento correto: Backend (Inglês) -> Frontend (Português/Interface)
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '', 
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '', 
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '', 
-                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', 
-                injetadaMUC: safeStr(dadosIA.injetadaMUC) || u.injetadaMUC || '', 
-                injetadaOUC: safeStr(dadosIA.injetadaOUC) || u.injetadaOUC || '', 
+                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', // unitPrice vem do backend
+                
+                // Correção Crítica aqui: injectedEnergyMUC -> injetadaMUC
+                injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '', 
+                injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '', 
+                
                 gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao', 
                 endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '', 
                 cidade: safeStr(dadosIA.cidade) || u.cidade || '', 
                 estado: safeStr(dadosIA.estado) || u.estado || '', 
                 latitude: dadosIA.latitude ?? u.latitude ?? null, 
                 longitude: dadosIA.longitude ?? u.longitude ?? null,
-                tensao: dadosIA.tensaoType || u.tensao || 'baixa' 
+                tensao: dadosIA.tensaoType || u.tensao || 'baixa'
             } : u);
 
             await updateDoc(doc(db, 'faturas_clientes', clienteId), { unidades: novasUnidades });
-            const updates: any = {};
-            const isNewLead = cliente.nome === 'Novo Lead' || cliente.nome === 'Novo Cliente';
-            if (isNewLead && dadosIA.nomeCliente) updates.nome = dadosIA.nomeCliente;
-            if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
-            await registerInvoiceAction({ leadId: clienteId, leadName: updates.nome || cliente.nome, isNewLead, unidades: novasUnidades, user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type }, aiData: dadosIA });
-            toast({ title: "Sucesso!", description: "Dados atualizados com inteligência." });
             
-            logUserActivity({
-                userId: appUser.uid,
-                userName: appUser.displayName || 'Anônimo',
-                userRole: appUser.type || 'user',
-                action: 'UPLOAD_INVOICE',
+            const updates: any = {};
+            const isNewLead = cliente.nome === 'Novo Lead';
+            if (isNewLead && dadosIA.nomeCliente) updates.nome = dadosIA.nomeCliente;
+            
+            if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
+            
+            await registerInvoiceAction({ leadId: clienteId, leadName: updates.nome || cliente.nome, isNewLead, unidades: novasUnidades, user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type }, aiData: dadosIA });
+            
+            logUserActivity({ 
+                userId: appUser.uid, 
+                userName: appUser.displayName || 'Anônimo', 
+                userRole: appUser.type || 'user', 
+                action: 'UPLOAD_INVOICE', 
                 details: { 
                     leadId: clienteId, 
-                    fileName: file.name,
+                    fileName: file.name, 
                     iaDetectedTensao: dadosIA.tensaoType || 'Não Detectado' 
-                }
+                } 
             });
+            
+            toast({ title: "Sucesso!", description: "Dados atualizados." });
         }
-    } catch(e: any) { console.error(e); toast({ title: "Erro", description: "Falha no processo.", variant: "destructive" }); }
+    } catch(e: any) { 
+        console.error(e); 
+        toast({ title: "Erro", description: "Falha no upload.", variant: "destructive" }); 
+    } 
   };
+
 
   const { filteredClientes, kpiData, cidadesDisponiveis } = useMemo(() => {
     let result = [...clientes];
@@ -742,6 +776,7 @@ export default function FaturasPage() {
             </div>
          </div>
       )}
+
     </div>
   );
 }
