@@ -144,6 +144,7 @@ export default function FaturasPage() {
   
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [showPromoBanner, setShowPromoBanner] = useState(true); 
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -447,20 +448,6 @@ export default function FaturasPage() {
           </div>
       </header>
 
-      <div 
-        className="w-full bg-slate-900 border-b border-white/10 relative shadow-2xl group cursor-pointer shrink-0" 
-        onClick={() => setIsCreditModalOpen(true)}
-        style={{ minHeight: '120px' }}
-      >
-          <div className="max-w-7xl mx-auto relative h-full flex justify-center">
-              <img 
-                  src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
-                  alt="Promoção de Natal - Preços Congelados" 
-                  className="w-full h-auto object-cover max-h-[140px] opacity-90 group-hover:opacity-100 transition-opacity"
-              />
-          </div>
-      </div>
-
       <div className="flex-1 p-6 pb-20 overflow-y-auto"> 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
@@ -537,6 +524,39 @@ export default function FaturasPage() {
          )}
       </div>
 
+      {showPromoBanner && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+          
+          <div className="relative max-w-5xl w-full">
+            
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPromoBanner(false);
+              }}
+              className="absolute -top-4 -right-4 md:-top-6 md:-right-6 bg-red-600 text-white hover:bg-red-700 rounded-full w-10 h-10 flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] border-2 border-slate-900 z-50 transition-transform hover:scale-110"
+              title="Fechar Propaganda"
+            >
+              <X className="w-6 h-6 font-bold stroke-[3]" />
+            </button>
+
+            <img 
+              src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
+              alt="Promoção de Natal" 
+              className="w-full h-auto rounded-xl shadow-2xl border border-white/20 cursor-pointer hover:brightness-110 transition-all"
+              onClick={() => {
+                setShowPromoBanner(false);
+                setIsCreditModalOpen(true);
+              }}
+            />
+            
+            <p className="text-center text-slate-400 text-xs mt-4 animate-pulse">
+              Toque na imagem para garantir os preços de 2024
+            </p>
+          </div>
+        </div>
+      )}
+
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
@@ -554,7 +574,6 @@ export default function FaturasPage() {
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) ? (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-                          {/* --- INÍCIO DA SEÇÃO DE CONTATOS (SUBSTITUA A ATUAL POR ESTA) --- */}
                           <div className="bg-slate-800/30 p-5 rounded-xl border border-white/5 relative overflow-hidden">
                               <div className="flex items-center justify-between mb-4">
                                   <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
@@ -654,7 +673,6 @@ export default function FaturasPage() {
                                   )}
                               </div>
                           </div>
-                          {/* --- FIM DA SEÇÃO DE CONTATOS --- */}
                           {(() => { const uc = selectedCliente.unidades[0]; const consumo = Number(uc?.consumoKwh || 0); const media = Number(uc?.mediaConsumo || 0); if(consumo > 0 && media > 0) { const diff = consumo - media; const pct = ((diff/media)*100).toFixed(1); const isHigh = diff > 0; return (<div className="bg-slate-800/40 p-5 rounded-xl border border-white/5 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-5"><Zap className="w-24 h-24" /></div><div className="flex justify-between items-center mb-4 relative z-10"><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance de Consumo</span><span className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 border ${isHigh ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'}`}>{isHigh ? <TrendingUp className="w-3 h-3"/> : <TrendingDown className="w-3 h-3"/>} {Math.abs(Number(pct))}% {isHigh ? 'Acima' : 'Abaixo'} da média</span></div><div className="flex justify-between items-end text-xs text-slate-400 mb-1 relative z-10"><span>Média: {media.toLocaleString()} kWh</span><span className="text-white font-bold text-lg">{consumo.toLocaleString()} <small className="text-slate-500 font-normal">kWh Atual</small></span></div><div className="h-2 w-full bg-slate-700 rounded-full mt-2 overflow-hidden relative z-10"><div className={`h-full ${isHigh ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`} style={{width: `${Math.min((consumo/(media*1.5))*100, 100)}%`}}></div></div></div>) } return null; })()}
                           <div className="space-y-4">
                               <div className="flex justify-between items-center border-b border-white/5 pb-2"><h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Zap className="w-4 h-4" /> Unidades Consumidoras</h3><Button size="sm" variant="ghost" className="h-6 text-xs text-cyan-500 hover:text-cyan-400" onClick={() => { const n = [...selectedCliente.unidades, { id: crypto.randomUUID(), consumoKwh: '', temGeracao: false, arquivoFaturaUrl: null, nomeArquivo: null, tensao: 'baixa' }]; handleUpdateField(selectedCliente.id, 'unidades', n); }}>+ Adicionar UC</Button></div>
@@ -707,4 +725,3 @@ export default function FaturasPage() {
     </div>
   );
 }
-
