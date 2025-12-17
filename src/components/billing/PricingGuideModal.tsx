@@ -174,4 +174,11 @@ export function PricingGuideModal({ isOpen, onClose, onOpenPurchase }: PricingGu
 
         <DialogFooter className="mt-4">
           <Button variant="ghost" onClick={onClose}>Fechar</Button>
-          <Button onClick={() => { onClose(); onOpenPurchase(); }} className="bg-cyan-600 hover:bg-cyan-500 text-white font-
+          <Button onClick={() => { onClose(); onOpenPurchase(); }} className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold">
+            Quero Recarregar Agora
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
