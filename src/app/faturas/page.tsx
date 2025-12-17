@@ -1,6 +1,7 @@
 
 "use client";
 
+
 import * as React from "react";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,7 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus,
-  Info
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus, Info
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -147,7 +147,7 @@ export default function FaturasPage() {
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
-  const [showPromoBanner, setShowPromoBanner] = useState(true); 
+  const [showPromoBanner, setShowPromoBanner] = useState(false);
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -156,6 +156,11 @@ export default function FaturasPage() {
   const [filterTensao, setFilterTensao] = useState<TensaoType | 'all'>('all');
   const [filterCidade, setFilterCidade] = useState<string>('all');
   const [loadingUnlock, setLoadingUnlock] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowPromoBanner(true), 1000); // Aparece após 1 segundo
+    return () => clearTimeout(timer);
+  }, []);
 
   const { isLoaded: isMapLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -167,7 +172,6 @@ export default function FaturasPage() {
   useEffect(() => {
     if (!appUser) return;
 
-    // 1. Log de Entrada
     logUserActivity({
       userId: appUser.uid,
       userName: appUser.displayName || 'Anônimo',
@@ -178,10 +182,8 @@ export default function FaturasPage() {
 
     const startTime = Date.now();
 
-    // 2. Log de Saída (Tempo de Tela)
     return () => {
       const timeSpentSeconds = (Date.now() - startTime) / 1000;
-      // Só loga se ficou mais de 5 segundos (evita logs de refresh rápido)
       if (timeSpentSeconds > 5) {
         logUserActivity({
           userId: appUser.uid,
@@ -211,7 +213,6 @@ export default function FaturasPage() {
 
     const custoLead = calculateLeadCost(Number(lead.unidades?.[0]?.consumoKwh || 0));
     
-    // Verificação rápida no Front (UX)
     if ((appUser.credits || 0) < custoLead) {
         toast({
             title: "Saldo Insuficiente 🔒",
@@ -314,8 +315,8 @@ export default function FaturasPage() {
   const handleUpdateField = async (id: string, field: string, value: any) => {
       await updateDoc(doc(db, 'faturas_clientes', id), { [field]: value, lastUpdatedAt: Timestamp.now() });
   };
-
-  const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
+  
+const handleFileUpload = async (clienteId: string, unidadeId: string | null, file: File | null) => {
     if (!file || !appUser) return;
     toast({ title: "🤖 Analisando Fatura...", description: "IA identificando consumo, tarifas e GD..." });
     
@@ -328,21 +329,19 @@ export default function FaturasPage() {
         
         if (res.ok) {
             dadosIA = await res.json();
-
-            if (dadosIA._debug) {
-              console.group("🔍 DEBUG BACKEND (process-fatura)");
-              console.log(dadosIA._debug);
-              console.groupEnd();
-            } else {
-              console.log("ℹ️ API retornou sem _debug (debug desativado)");
-            }
             
+            if (dadosIA._debug) {
+                console.group("🔍 DEBUG BACKEND (process-fatura)");
+                console.log(dadosIA._debug);
+                console.groupEnd();
+            } else {
+                console.log("ℹ️ API retornou sem _debug (debug desativado)");
+            }
 
             if (dadosIA.gdEligibility === 'inelegivel') toast({ title: "Atenção: GD Existente", description: "Sobra pouco saldo.", variant: "destructive" });
             else if (dadosIA.gdEligibility === 'oportunidade') toast({ title: "Oportunidade oUC", className: "bg-blue-600 text-white" });
             else if (dadosIA.gdEligibility === 'elegivel') toast({ title: "Lead Qualificado!", className: "bg-emerald-600 text-white" });
             
-            // Atualiza Tensão Principal se for a primeira vez
             const cliente = clientes.find(c => c.id === clienteId);
             if (cliente && cliente.nome === 'Novo Lead' && dadosIA.tensaoType) {
                  await updateDoc(doc(db, 'faturas_clientes', clienteId), { tensao: dadosIA.tensaoType });
@@ -367,15 +366,12 @@ export default function FaturasPage() {
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name, 
-                
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '', 
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '', 
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '', 
-                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', 
-                
+                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '',
                 injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '', 
                 injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '', 
-                
                 gdEligibility: dadosIA.gdEligibility || u.gdEligibility || 'padrao', 
                 endereco: safeStr(dadosIA.enderecoCompleto) || u.endereco || '', 
                 cidade: safeStr(dadosIA.cidade) || u.cidade || '', 
@@ -393,8 +389,15 @@ export default function FaturasPage() {
             
             if (Object.keys(updates).length > 0) await updateDoc(doc(db, 'faturas_clientes', clienteId), updates);
             
-            await registerInvoiceAction({ leadId: clienteId, leadName: updates.nome || cliente.nome, isNewLead, unidades: novasUnidades, user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type }, aiData: dadosIA });
-            
+            await registerInvoiceAction({ 
+              leadId: clienteId, 
+              leadName: updates.nome || cliente.nome, 
+              isNewLead, 
+              unidades: novasUnidades, 
+              user: { uid: appUser!.uid, name: appUser!.displayName || 'Usuário', role: appUser!.type }, 
+              aiData: dadosIA 
+            });
+
             logUserActivity({ 
                 userId: appUser.uid, 
                 userName: appUser.displayName || 'Anônimo', 
@@ -407,11 +410,11 @@ export default function FaturasPage() {
                 } 
             });
             
-            toast({ title: "Sucesso!", description: "Dados atualizados." });
+            toast({ title: "Sucesso!", description: "Dados atualizados com inteligência." });
         }
     } catch(e: any) { 
-        console.error(e); 
-        toast({ title: "Erro", description: "Falha no upload.", variant: "destructive" }); 
+        console.error("Erro no upload e processamento:", e);
+        toast({ title: "Erro", description: "Falha no processo completo.", variant: "destructive" }); 
     } 
   };
 
@@ -456,16 +459,48 @@ export default function FaturasPage() {
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
       <TermsModal />
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
-      <PricingGuideModal 
-        isOpen={isPricingGuideOpen} 
-        onClose={() => setIsPricingGuideOpen(false)} 
-        onOpenPurchase={() => {
-            setIsPricingGuideOpen(false);
-            setIsCreditModalOpen(true);
-        }}
-      />
+      <PricingGuideModal isOpen={isPricingGuideOpen} onClose={() => setIsPricingGuideOpen(false)} onOpenPurchase={() => setIsCreditModalOpen(true)} />
+
       <style jsx global>{` .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; } `}</style>
 
+      {/* MODAL BANNER PROMOCIONAL */}
+      {showPromoBanner && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-500">
+          <div className="relative w-full max-w-2xl bg-slate-900 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(8,145,178,0.3)] border border-white/10">
+            
+            <button 
+              onClick={() => setShowPromoBanner(false)}
+              className="absolute top-4 right-4 z-20 p-2 bg-black/40 hover:bg-black/60 text-white/70 hover:text-white rounded-full transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div 
+              className="cursor-pointer group relative"
+              onClick={() => {
+                setShowPromoBanner(false);
+                setIsCreditModalOpen(true);
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
+              
+              <img 
+                src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
+                alt="Banner Promocional" 
+                className="w-full h-auto object-cover transform group-hover:scale-[1.02] transition-transform duration-700"
+              />
+
+              <div className="absolute bottom-8 left-0 right-0 flex justify-center">
+                  <span className="bg-cyan-600 text-white px-8 py-3 rounded-full font-bold shadow-xl group-hover:bg-cyan-500 group-hover:scale-105 transition-all">
+                      Aproveitar Agora
+                  </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
           <div className="flex items-center gap-3"><div className="p-2 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg shadow-lg"><FileText className="h-5 w-5 text-white" /></div><h2 className="text-xl font-bold text-white">Faturas Inteligentes</h2></div>
           <div className="flex items-center gap-6">
@@ -488,7 +523,7 @@ export default function FaturasPage() {
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
-      
+
       <div className="flex-1 p-6 pb-20 overflow-y-auto"> 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
@@ -501,14 +536,7 @@ export default function FaturasPage() {
                 <div className="bg-slate-900/50 p-1.5 rounded-xl border border-white/5 backdrop-blur-sm flex"><button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><List className="w-4 h-4" /></button><button onClick={() => setViewMode('kanban')} className={`p-2 rounded-lg ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><LayoutGrid className="w-4 h-4" /></button><button onClick={() => setViewMode('map')} className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}><MapIcon className="w-4 h-4" /></button></div>
                 <Select value={filterTensao} onValueChange={(v:any) => setFilterTensao(v)}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Tensão" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{TENSAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
                 <Select value={filterCidade} onValueChange={setFilterCidade}><SelectTrigger className="w-[140px] h-10 bg-slate-900/50 border-white/10 text-xs text-slate-300"><SelectValue placeholder="Cidades" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-800 text-slate-300"><SelectItem value="all">Todas</SelectItem>{cidadesDisponiveis.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
-                 <Button 
-                    variant="outline" 
-                    onClick={() => setIsPricingGuideOpen(true)}
-                    className="hidden md:flex gap-2 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white h-10"
-                >
-                    <Info className="w-4 h-4" />
-                    <span className="text-xs">Entenda os Custos</span>
-                </Button>
+                <Button variant="outline" onClick={() => setIsPricingGuideOpen(true)} className="hidden md:flex gap-2 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white h-10"><Info className="w-4 h-4" /><span className="text-xs">Entenda os Custos</span></Button>
             </div>
             <Button onClick={handleAddCliente} className="bg-cyan-600 hover:bg-cyan-500 text-white h-10 px-6 shadow-lg"><PlusCircle className="w-4 h-4 mr-2" /> Novo Lead</Button>
          </div>
@@ -573,41 +601,11 @@ export default function FaturasPage() {
          )}
       </div>
 
-      {showPromoBanner && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="relative max-w-md md:max-w-lg w-full"> 
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowPromoBanner(false);
-              }}
-              className="absolute -top-3 -right-3 bg-red-600 text-white hover:bg-red-700 rounded-full w-8 h-8 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.5)] border-2 border-slate-900 z-50 transition-transform hover:scale-110"
-              title="Fechar Propaganda"
-            >
-              <X className="w-5 h-5 font-bold stroke-[3]" />
-            </button>
-
-            <img 
-              src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
-              alt="Promoção de Natal" 
-              className="w-full h-auto max-h-[80vh] object-contain rounded-xl shadow-2xl border border-white/20 cursor-pointer hover:brightness-110 transition-all mx-auto"
-              onClick={() => {
-                setShowPromoBanner(false); 
-                setIsCreditModalOpen(true); 
-              }}
-            />
-            
-            <p className="text-center text-slate-400 text-xs mt-2 animate-pulse">
-              Toque na imagem para garantir os preços de 2024
-            </p>
-          </div>
-        </div>
-      )}
-
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
             <div className="relative w-full max-w-xl h-full bg-slate-900 border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+               
                <div className="px-6 py-6 border-b border-white/5 flex justify-between items-start bg-slate-800/50">
                   <div className="flex-1 mr-4">
                       <h2 className="text-xl font-bold text-white mb-2">{selectedCliente.nome}</h2>
@@ -617,8 +615,11 @@ export default function FaturasPage() {
                       </div>
                   </div>
                   <button onClick={() => setSelectedClienteId(null)} className="text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
-               </div>
+          </div>
+
+
                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                  
                   {((selectedCliente.isUnlocked || (appUser && appUser.unlockedLeads?.includes(selectedCliente.id))) || canSeeEverything) ? (
                       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
                           {/* --- INÍCIO DA SEÇÃO DE CONTATOS (SUBSTITUA A ATUAL POR ESTA) --- */}
