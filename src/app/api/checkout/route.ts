@@ -28,15 +28,26 @@ export async function POST(req: Request) {
     let cycle: 'MONTHLY' | 'QUARTERLY' | null = null;
 
     switch (itemId) {
-        case 'pack_10': price = 30; description = 'Pacote 10 Créditos'; break;
-        case 'pack_50': price = 125; description = 'Pacote 50 Créditos'; break;
-        case 'pack_100': price = 200; description = 'Pacote 100 Créditos'; break;
+        // PREÇOS CONGELADOS DE NATAL 2024
+        case 'pack_10': 
+            price = 30; 
+            description = 'Pacote 10 Créditos (Promo Natal)'; 
+            break;
+        case 'pack_50': 
+            price = 125; 
+            description = 'Pacote 50 Créditos (Promo Natal)'; 
+            break;
+        case 'pack_100': 
+            price = 200; 
+            description = 'Pacote 100 Créditos (Promo Natal)'; 
+            break;
         case 'pack_whale': price = 900; description = '500 Créditos (Atacado)'; break;
 
+        // PLANO EMPRESARIAL (FIDELIDADE)
         case 'plan_sdr_quarterly': 
             price = 200; // Valor mensal
             cycle = 'MONTHLY'; 
-            description = 'Plano Empresarial (200 Créditos/mês)'; 
+            description = 'Plano Empresarial (200 Créditos/mês) - Promo Natal'; 
             isSubscription = true; 
             break;
             

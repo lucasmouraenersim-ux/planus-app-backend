@@ -12,7 +12,7 @@ import {
   FileText, PlusCircle, Trash2, Upload, Eye, Loader2,
   TrendingUp, TrendingDown, Minus, LayoutGrid, List,
   Map as MapIcon, X, MapPin, LocateFixed, Check, 
-  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award
+  Flame, Lock, Unlock, Coins, Phone, Search, Sun, Zap, MoreHorizontal, ArrowUpRight, Award, Plus
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -206,6 +206,8 @@ export default function FaturasPage() {
     if (!lead) return;
 
     const custoLead = calculateLeadCost(Number(lead.unidades?.[0]?.consumoKwh || 0));
+    
+    // Verificação rápida no Front (UX)
     if ((appUser.credits || 0) < custoLead) {
         toast({
             title: "Saldo Insuficiente 🔒",
@@ -417,7 +419,7 @@ export default function FaturasPage() {
   if (isLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-cyan-500 w-10 h-10" /></div>;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
       <TermsModal />
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
       <style jsx global>{` .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; } `}</style>
@@ -427,25 +429,39 @@ export default function FaturasPage() {
           <div className="flex items-center gap-6">
              <button onClick={() => {
                 setIsCreditModalOpen(true);
-                if (appUser) {
-                  logUserActivity({
-                      userId: appUser.uid,
-                      userName: appUser.displayName || '',
-                      userRole: appUser.type || '',
-                      action: 'OPEN_CREDIT_MODAL',
-                      details: { currentBalance: currentBalance }
-                  });
+                if(appUser) {
+                    logUserActivity({
+                        userId: appUser.uid,
+                        userName: appUser.displayName || 'Anônimo',
+                        userRole: appUser.type || 'user',
+                        action: 'OPEN_CREDIT_MODAL',
+                        details: { currentBalance: currentBalance }
+                    });
                 }
               }} className="hidden md:flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-full border border-yellow-500/20 shadow-lg shadow-yellow-900/10 hover:bg-slate-800 hover:border-yellow-500/50 hover:scale-105 transition-all group">
                 <Coins className="w-4 h-4 text-yellow-400 group-hover:animate-bounce" />
                 <span className="text-sm font-bold text-yellow-100">{canSeeEverything ? "Ilimitado" : `${currentBalance} Créditos`}</span>
-                {!canSeeEverything && <PlusCircle className="w-4 h-4 text-yellow-500 ml-1" />}
+                {!canSeeEverything && <Plus className="w-4 h-4 text-yellow-500 ml-1" />}
              </button>
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
 
-      <div className="p-6 pb-20 overflow-y-auto h-[calc(100vh-80px)]">
+      <div 
+        className="w-full bg-slate-900 border-b border-white/10 relative shadow-2xl group cursor-pointer shrink-0" 
+        onClick={() => setIsCreditModalOpen(true)}
+        style={{ minHeight: '120px' }}
+      >
+          <div className="max-w-7xl mx-auto relative h-full flex justify-center">
+              <img 
+                  src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
+                  alt="Promoção de Natal - Preços Congelados" 
+                  className="w-full h-auto object-cover max-h-[140px] opacity-90 group-hover:opacity-100 transition-opacity"
+              />
+          </div>
+      </div>
+
+      <div className="flex-1 p-6 pb-20 overflow-y-auto"> 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
             <KPICard title="Alta Tensão" value={kpiData.alta} unit="kWh" color="blue" icon={Zap} trend="stable" trendValue="0%" />

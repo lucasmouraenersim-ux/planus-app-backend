@@ -29,20 +29,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No user ID' }, { status: 400 });
     }
 
-    const isSdrPlan = payment.description?.includes('Plano Empresarial');
+    const isSdrPlan = payment.description?.includes('Plano Empresarial') || payment.description?.includes('SDR');
 
     try {
         const { FieldValue } = await import('firebase-admin/firestore');
         let creditsToAdd = 0;
         
         if (isSdrPlan) {
-            creditsToAdd = 200; // Entrega 200 créditos todo mês que pagar
+            // ASSINATURA: Paga R$ 200, Leva 200 Créditos
+            creditsToAdd = 200; 
             await updateDoc(doc(db, 'users', userId), { plan: 'sdr_pro', subscriptionId: payment.subscription });
         } else {
-            // Lógica anterior de pacotes avulsos
-            if (valorPago >= 200) creditsToAdd = 100;
-            else if (valorPago >= 125) creditsToAdd = 50;
-            else if (valorPago >= 30) creditsToAdd = 10;
+            // AVULSO:
+            if (valorPago >= 200) creditsToAdd = 100;      // Paga R$ 200, Leva 100 (Avulso)
+            else if (valorPago >= 125) creditsToAdd = 50;  // Paga R$ 125, Leva 50
+            else if (valorPago >= 30) creditsToAdd = 10;   // Paga R$ 30, Leva 10
         }
 
         if(creditsToAdd > 0) {
