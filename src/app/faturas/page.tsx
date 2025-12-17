@@ -146,8 +146,8 @@ export default function FaturasPage() {
   
   // UI States
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
-  const [showPromoBanner, setShowPromoBanner] = useState(true);
   const [isPricingGuideOpen, setIsPricingGuideOpen] = useState(false);
+  const [showPromoBanner, setShowPromoBanner] = useState(true); 
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'map'>('list');
   const [mapLayer, setMapLayer] = useState<'pins' | 'heat'>('pins');
@@ -323,21 +323,20 @@ export default function FaturasPage() {
         const formData = new FormData(); 
         formData.append('file', file);
         
-        const res = await fetch('/api/process-fatura', { method: 'POST', body: formData });
+        const res = await fetch('/api/process-fatura?debug=1', { method: 'POST', body: formData });
         let dadosIA: any = {};
         
         if (res.ok) {
             dadosIA = await res.json();
 
-            // --- 1. MOSTRAR LOGS NO CONSOLE DO NAVEGADOR ---
-            if (dadosIA.debugLogs && Array.isArray(dadosIA.debugLogs)) {
-                console.group("🔍 DETALHES DA IA (DEBUG)");
-                dadosIA.debugLogs.forEach((log: string) => console.log(log));
-                console.groupEnd();
+            if (dadosIA._debug) {
+              console.group("🔍 DEBUG BACKEND (process-fatura)");
+              console.log(dadosIA._debug);
+              console.groupEnd();
             } else {
-                console.log("Nenhum log de debug retornado pela API.");
+              console.log("ℹ️ API retornou sem _debug (debug desativado)");
             }
-            // -----------------------------------------------
+            
 
             if (dadosIA.gdEligibility === 'inelegivel') toast({ title: "Atenção: GD Existente", description: "Sobra pouco saldo.", variant: "destructive" });
             else if (dadosIA.gdEligibility === 'oportunidade') toast({ title: "Oportunidade oUC", className: "bg-blue-600 text-white" });
@@ -364,19 +363,16 @@ export default function FaturasPage() {
             
             const safeStr = (val: any) => (val !== undefined && val !== null) ? String(val) : '';
             
-            // --- 2. CORREÇÃO DO MAPEAMENTO DE DADOS ---
             const novasUnidades = cliente.unidades.map(u => u.id === unidadeId ? { 
                 ...u, 
                 arquivoFaturaUrl: url, 
                 nomeArquivo: file.name, 
                 
-                // Mapeamento correto: Backend (Inglês) -> Frontend (Português/Interface)
                 consumoKwh: safeStr(dadosIA.consumoKwh) || u.consumoKwh || '', 
                 valorTotal: safeStr(dadosIA.valorTotal) || u.valorTotal || '', 
                 mediaConsumo: safeStr(dadosIA.mediaConsumo) || u.mediaConsumo || '', 
-                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', // unitPrice vem do backend
+                tarifaUnit: safeStr(dadosIA.unitPrice) || u.tarifaUnit || '', 
                 
-                // Correção Crítica aqui: injectedEnergyMUC -> injetadaMUC
                 injetadaMUC: safeStr(dadosIA.injectedEnergyMUC) || u.injetadaMUC || '', 
                 injetadaOUC: safeStr(dadosIA.injectedEnergyOUC) || u.injetadaOUC || '', 
                 
@@ -608,7 +604,6 @@ export default function FaturasPage() {
         </div>
       )}
 
-
       {selectedClienteId && selectedCliente && (
          <div className="fixed inset-0 z-50 flex justify-end">
             <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onClick={() => setSelectedClienteId(null)}></div>
@@ -776,7 +771,6 @@ export default function FaturasPage() {
             </div>
          </div>
       )}
-
     </div>
   );
 }
