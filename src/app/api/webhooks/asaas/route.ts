@@ -1,11 +1,13 @@
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase/admin'; 
-import { doc, updateDoc, increment, addDoc, collection, getDoc, Timestamp } from 'firebase/firestore';
+import { initializeAdmin } from '@/lib/firebase/admin'; 
+import { doc, updateDoc, getDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
 
 const COMISSAO_PERCENTUAL = 0.10; 
 
 export async function POST(req: Request) {
+  const { db } = await initializeAdmin(); 
+
   try {
     const token = req.headers.get('asaas-access-token');
     if (token !== process.env.ASAAS_WEBHOOK_SECRET) {
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
     const isSdrPlan = payment.description?.includes('Plano Empresarial');
 
     try {
+        const { FieldValue } = await import('firebase-admin/firestore');
         let creditsToAdd = 0;
         
         if (isSdrPlan) {
@@ -43,7 +46,6 @@ export async function POST(req: Request) {
         }
 
         if(creditsToAdd > 0) {
-            const { FieldValue } = await import('firebase-admin/firestore');
             await updateDoc(doc(db, 'users', userId), { credits: FieldValue.increment(creditsToAdd) });
         }
 
@@ -56,7 +58,6 @@ export async function POST(req: Request) {
             const comissao = valorPago * COMISSAO_PERCENTUAL;
 
             if (comissao > 0) {
-                const { FieldValue } = await import('firebase-admin/firestore');
                 await updateDoc(doc(db, 'users', afiliadoId), {
                     mlmBalance: FieldValue.increment(comissao)
                 });
