@@ -425,7 +425,14 @@ export default function FaturasPage() {
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden flex flex-col">
       <TermsModal />
       <CreditPurchaseModal isOpen={isCreditModalOpen} onClose={() => setIsCreditModalOpen(false)} />
-      <PricingGuideModal isOpen={isPricingGuideOpen} onClose={() => setIsPricingGuideOpen(false)} onOpenPurchase={() => setIsCreditModalOpen(true)} />
+      <PricingGuideModal 
+        isOpen={isPricingGuideOpen} 
+        onClose={() => setIsPricingGuideOpen(false)} 
+        onOpenPurchase={() => {
+            setIsPricingGuideOpen(false);
+            setIsCreditModalOpen(true);
+        }}
+      />
       <style jsx global>{` .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; } `}</style>
 
       <header className="h-20 shrink-0 flex items-center justify-between px-8 border-b border-white/5 bg-slate-900/50 backdrop-blur-md">
@@ -450,7 +457,7 @@ export default function FaturasPage() {
              <div className={`relative transition-all duration-300 ${searchOpen ? 'w-64' : 'w-10'}`}><button onClick={() => setSearchOpen(!searchOpen)} className="absolute left-0 top-0 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-white"><Search className="w-5 h-5" /></button><Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar..." className={`h-10 bg-slate-800/80 border-white/10 rounded-full pl-10 pr-4 text-sm text-white ${searchOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} /></div>
           </div>
       </header>
-
+      
       <div className="flex-1 p-6 pb-20 overflow-y-auto"> 
          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <KPICard title="Baixa Tensão" value={kpiData.baixa} unit="kWh" color="emerald" icon={Sun} trend="up" trendValue="+8%" />
@@ -537,7 +544,7 @@ export default function FaturasPage() {
 
       {showPromoBanner && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="relative max-w-md md:max-w-lg w-full">
+          <div className="relative max-w-md md:max-w-lg w-full"> 
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -548,6 +555,7 @@ export default function FaturasPage() {
             >
               <X className="w-5 h-5 font-bold stroke-[3]" />
             </button>
+
             <img 
               src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
               alt="Promoção de Natal" 
@@ -557,6 +565,7 @@ export default function FaturasPage() {
                 setIsCreditModalOpen(true); 
               }}
             />
+            
             <p className="text-center text-slate-400 text-xs mt-2 animate-pulse">
               Toque na imagem para garantir os preços de 2024
             </p>
@@ -735,5 +744,3 @@ export default function FaturasPage() {
     </div>
   );
 }
-
-```
