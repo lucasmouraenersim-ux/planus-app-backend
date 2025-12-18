@@ -514,19 +514,19 @@ export default function FaturasPage() {
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans relative overflow-hidden">
       <TermsModal />
       {showPromoBanner && (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-    <div className="relative max-w-2xl w-full bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="relative max-w-sm w-full bg-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
       {/* Botão X para fechar */}
       <button 
         onClick={() => setShowPromoBanner(false)}
-        className="absolute top-4 right-4 z-50 p-1 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors"
+        className="absolute top-2 right-2 z-50 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors"
       >
-        <X className="w-6 h-6" />
+        <X className="w-5 h-5" />
       </button>
 
       {/* Banner clicável que leva para recarga */}
       <div 
-        className="cursor-pointer"
+        className="cursor-pointer hover:opacity-95 transition-opacity"
         onClick={() => {
           setShowPromoBanner(false);
           setIsCreditModalOpen(true);
@@ -534,8 +534,8 @@ export default function FaturasPage() {
       >
         <img 
           src="https://raw.githubusercontent.com/lucasmouraenersim-ux/main/2b6dd6ade18af02b2a6e9dc24bbfc6ea167ef515/ChatGPT%20Image%2017%20de%20dez.%20de%202025%2C%2011_48_20.png" 
-          alt="Promoção" 
-          className="w-full h-auto display-block"
+          alt="Promoção de Natal" 
+          className="w-full h-auto block"
         />
       </div>
     </div>
