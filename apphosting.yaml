@@ -13,3 +13,10 @@ buildConfig:
   # explicitamente para garantir a compatibilidade com o sistema de build.
   installCommand: npm ci
   buildCommand: npm run build
+
+# Variáveis de ambiente (secrets do Firebase)
+env:
+  - variable: ASAAS_TOKEN
+    secret: ASAAS_TOKEN
+  - variable: ASAAS_ENV
+    secret: ASAAS_ENV
