@@ -28,18 +28,36 @@ export function CreditPurchaseModal({ isOpen, onClose }: CreditPurchaseModalProp
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: appUser.uid, itemId, couponCode: coupon }) // Envia o cupom
+        body: JSON.stringify({ userId: appUser.uid, itemId, couponCode: coupon })
       });
+
+      // Verifica se a resposta é JSON antes de parsear
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("O servidor retornou um erro inesperado (não-JSON).");
+      }
+
       const data = await res.json();
-      if (data.paymentUrl) {
+      
+      if (res.ok && data.paymentUrl) {
         window.open(data.paymentUrl, '_blank');
         onClose();
       } else {
-        toast({ title: "Erro ao gerar pagamento", description: data.error || "Desconhecido", variant: "destructive" });
+        // Extrai a descrição do erro do Asaas ou usa a mensagem padrão
+        const asaasError = data.details?.errors?.[0]?.description || data.error;
+        toast({ 
+          title: "Erro no Pagamento", 
+          description: asaasError, 
+          variant: "destructive" 
+        });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast({ title: "Erro de conexão", variant: "destructive" });
+      toast({ 
+        title: "Erro de Conexão", 
+        description: e.message || "Verifique sua internet ou as chaves de API.", 
+        variant: "destructive" 
+      });
     } finally {
       setLoading(null);
     }
