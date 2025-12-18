@@ -15,6 +15,8 @@ export async function POST(req: Request) {
     console.log("--- DEBUG CHECKOUT ---");
     console.log("Chave carregada (tamanho):", ASAAS_API_KEY.length);
     console.log("Começa com $aact?", ASAAS_API_KEY.startsWith('$aact'));
+    console.log("Ambiente:", process.env.ASAAS_ENV);
+    console.log("URL da API:", ASAAS_API_URL);
     
     if (!ASAAS_API_KEY || ASAAS_API_KEY.length < 10) {
       return NextResponse.json({ error: 'Configuração de pagamento ausente (API Key)' }, { status: 500 });
@@ -78,12 +80,22 @@ export async function POST(req: Request) {
         body: JSON.stringify({ name: userData.displayName || 'Cliente', email: userData.email, cpfCnpj, externalReference: userId, notificationDisabled: true })
       });
       
-      const customerData = await createRes.json();
+      const customerText = await createRes.text();
+      console.log("Resposta Asaas (criar cliente):", customerText);
+      let customerData;
+      try {
+        customerData = JSON.parse(customerText);
+      } catch (e) {
+        return NextResponse.json({ error: 'Resposta inválida ao criar cliente', details: customerText }, { status: 500 });
+      }
+      
       if (customerData.id) {
         asaasCustomerId = customerData.id;
         await updateDoc(userRef, { asaasCustomerId });
       } else {
-        return NextResponse.json({ error: 'Erro ao criar cliente no Asaas', details: customerData }, { status: 400 });
+        // Retorna erro detalhado
+        const errorMsg = customerData.errors?.[0]?.description || customerData.message || JSON.stringify(customerData);
+        return NextResponse.json({ error: `Erro ao criar cliente: ${errorMsg}`, details: customerData }, { status: 400 });
       }
     }
 
@@ -123,7 +135,10 @@ export async function POST(req: Request) {
         const paymentUrl = data.invoiceUrl || data.bankSlipUrl || `https://www.asaas.com/c/${data.id}`;
         return NextResponse.json({ paymentUrl });
     } else {
-        return NextResponse.json({ error: 'Erro no processamento do Asaas', details: data }, { status: 400 });
+        // Retorna erro detalhado
+        const errorMsg = data.errors?.[0]?.description || data.message || JSON.stringify(data);
+        console.log("Erro Asaas (pagamento):", data);
+        return NextResponse.json({ error: `Erro no Asaas: ${errorMsg}`, details: data }, { status: 400 });
     }
 
   } catch (error: any) {
